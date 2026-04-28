@@ -1,0 +1,93 @@
+[
+  {
+    "iata": "KHI",
+    "icao": "OPKC",
+    "name": "Jinnah International Airport",
+    "city": "Karachi",
+    "country": "PK"
+  },
+  {
+    "iata": "LHE",
+    "icao": "OPLA",
+    "name": "Allama Iqbal International Airport",
+    "city": "Lahore",
+    "country": "PK"
+  },
+  {
+    "iata": "ISB",
+    "icao": "OPIS",
+    "name": "Islamabad International Airport",
+    "city": "Islamabad",
+    "country": "PK"
+  },
+  {
+    "iata": "PEW",
+    "icao": "OPPS",
+    "name": "Bacha Khan International Airport",
+    "city": "Peshawar",
+    "country": "PK"
+  },
+  {
+    "iata": "MUX",
+    "icao": "OPMT",
+    "name": "Multan International Airport",
+    "city": "Multan",
+    "country": "PK"
+  },
+  {
+    "iata": "LYP",
+    "icao": "OPFA",
+    "name": "Faisalabad International Airport",
+    "city": "Faisalabad",
+    "country": "PK"
+  },
+  {
+    "iata": "SKT",
+    "icao": "OPST",
+    "name": "Sialkot International Airport",
+    "city": "Sialkot",
+    "country": "PK"
+  },
+  {
+    "iata": "UET",
+    "icao": "OPQT",
+    "name": "Quetta International Airport",
+    "city": "Quetta",
+    "country": "PK"
+  },
+  {
+    "iata": "GWD",
+    "icao": "OPGW",
+    "name": "New Gwadar International Airport",
+    "city": "Gwadar",
+    "country": "PK"
+  },
+  {
+    "iata": "KDU",
+    "icao": "OPSD",
+    "name": "Skardu International Airport",
+    "city": "Skardu",
+    "country": "PK"
+  },
+  {
+    "iata": "TUK",
+    "icao": "OPTU",
+    "name": "Turbat International Airport",
+    "city": "Turbat",
+    "country": "PK"
+  },
+  {
+    "iata": "RYK",
+    "icao": "OPRK",
+    "name": "Sheikh Zayed International Airport",
+    "city": "Rahim Yar Khan",
+    "country": "PK"
+  },
+  {
+    "iata": "CJL",
+    "icao": "OPCH",
+    "name": "Chitral Airport",
+    "city": "Chitral",
+    "country": "PK"
+  }
+]

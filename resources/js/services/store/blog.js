@@ -1,0 +1,157 @@
+// store/modules/blog.js
+import apiService from "./apiService"; // adjust path if needed
+import {
+  FETCH_BLOGS,
+  FETCH_BLOG,
+  SAVE_BLOG,
+  UPDATE_BLOG,
+  DELETE_BLOG,
+  PUBLISH_BLOG,
+} from "./actions.type";
+
+import {
+  IS_LOADING,
+  NOT_IS_LOADING,
+  SET_BLOGS,
+  SET_BLOG,
+  SET_API_ERROR,
+  CLEAR_API_ERRORS,
+} from "./mutations.type";
+
+import { toast } from "vue3-toastify";
+
+const state = {
+  blogs: [],
+  currentBlog: null,
+  isLoading: false,
+  apiErrors: null,
+};
+
+const getters = {
+  blogs: (state) => state.blogs,
+  currentBlog: (state) => state.currentBlog,
+  isLoading: (state) => state.isLoading,
+  apiErrors: (state) => state.apiErrors,
+};
+
+const actions = {
+  async [FETCH_BLOGS]({ commit }, params = {}) {
+    commit(IS_LOADING);
+    try {
+      const response = await apiService.fetchBlogs(params);
+      commit(SET_BLOGS, response.data);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to load blogs");
+      commit(SET_API_ERROR, error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [FETCH_BLOG]({ commit }, id) {
+    commit(IS_LOADING);
+    try {
+      console.log(id);
+      const response = await apiService.fetchBlog(id);
+      console.log(response.data);
+      commit(SET_BLOG, response.data);
+      return response;
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to load blog");
+      commit(SET_API_ERROR, error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [SAVE_BLOG]({ commit, dispatch }, params) {
+    commit(IS_LOADING);
+    try {
+      const response = await apiService.saveBlog(params);
+
+      toast.success("Blog post created successfully");
+      // dispatch(FETCH_BLOGS); // refresh list
+      return response.data; // useful if you want to redirect to edit
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to create blog");
+      commit(SET_API_ERROR, error?.response?.data?.errors || error?.response?.data);
+      throw error;
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [UPDATE_BLOG]({ commit, dispatch }, params) {
+    commit(IS_LOADING);
+    try {
+      await apiService.updateBlog(params);
+
+      toast.success("Blog updated successfully");
+      dispatch(FETCH_BLOGS);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to update blog");
+      commit(SET_API_ERROR, error?.response?.data?.errors || error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [DELETE_BLOG]({ commit, dispatch }, id) {
+    commit(IS_LOADING);
+    try {
+      await apiService.deleteBlog(id);
+      toast.success("Blog deleted successfully");
+      dispatch(FETCH_BLOGS);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to delete blog");
+      commit(SET_API_ERROR, error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [PUBLISH_BLOG]({ commit, dispatch }, { id, isPublished }) {
+    commit(IS_LOADING);
+    try {
+      await apiService.patch(`/admin/blogs/${id}/publish`, { is_published: isPublished });
+      toast.success(`Blog ${isPublished ? "published" : "unpublished"} successfully`);
+      dispatch(FETCH_BLOGS);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to change publish status");
+      commit(SET_API_ERROR, error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+};
+
+const mutations = {
+  [IS_LOADING](state) {
+    state.isLoading = true;
+  },
+  [NOT_IS_LOADING](state) {
+    state.isLoading = false;
+  },
+  [SET_BLOGS](state, data) {
+    state.blogs = data || data;
+    state.isLoading = false;
+  },
+  [SET_BLOG](state, data) {
+    state.currentBlog = data.data || data;
+    state.isLoading = false;
+  },
+  [SET_API_ERROR](state, errors) {
+    state.apiErrors = errors;
+  },
+  [CLEAR_API_ERRORS](state) {
+    state.apiErrors = null;
+  },
+};
+
+export default {
+  namespaced: true,
+  state,
+  getters,
+  actions,
+  mutations,
+};
