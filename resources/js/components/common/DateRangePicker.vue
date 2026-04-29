@@ -42,6 +42,7 @@ const props = defineProps<{
   minValue?: Date | string | null;
   maxValue?: Date | string | null;
   heading?: string; // New prop for custom heading
+  triggerClass?: string;
 }>();
 
 const emit = defineEmits<{
@@ -109,9 +110,13 @@ const displayText = () => {
   <div :class="cn('grid gap-2', $attrs.class ?? '')">
     <Popover v-model:open="isOpenPopover">
       <PopoverTrigger as-child>
-        <Button id="date" variant="outline" class="h-10 border-none bg-white/10">
+        <Button
+          id="date"
+          variant="outline"
+          :class="cn('h-10 border-none bg-white/10 justify-start px-4', props.triggerClass)"
+        >
           <CalendarIcon class="h-4 w-4 mr-2 text-white" />
-          <span class="text-white">{{ displayText() }}</span>
+          <span class="text-white truncate">{{ displayText() }}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent class="w-auto p-0 bg-white" align="end">

@@ -1335,7 +1335,7 @@ const modelValue = ref({
     adult: 1,
     child: 0,
     infant: 0,
-    classType: "",
+    classType: "Y",
     origin: "",
     destination: "",
     dateRange: {
@@ -1350,13 +1350,12 @@ const modelValue = ref({
 watch(
     () => modelValue.value.flightType,
     (newVal) => {
-        if (newVal == "single") {
+        if (newVal === "one-way") {
             modelValue.value.dateRange.end = null;
-        } else if (newVal == "multi-city") {
+        } else if (newVal === "multi-city") {
             modelValue.value.dateRange.start = null;
             modelValue.value.dateRange.end = null;
         }
-        initializeSearchParams();
     },
 );
 const setupFlightsParams = () => {
@@ -1423,1348 +1422,587 @@ watch(isLoggedIn, (newVal) => {
         <!-- Main Content -->
         <!-- BACKDROP + MODAL -->
         <LoginMini v-if="showLogin" @close="showLogin = false" />
-        <div class="bg-white shadow-sm overflow-hidden">
+         <div class="bg-white shadow-sm overflow-hidden">
+    <!-- Tab Navigation - RESPONSIVE -->
+    <div class="flex overflow-x-auto scrollbar-hide border-b border-gray-200">
+      <!-- Tabs would go here -->
+    </div>
 
-            <!-- Tab Navigation - RESPONSIVE -->
-            <div class="flex overflow-x-auto scrollbar-hide border-b border-gray-200">
-                <!-- Tabs would go here -->
-            </div>
-
-            <!-- Tab Content -->
-            <div class="">
-                <div v-if="activeTab === 'flights'" class="animate-fadeIn">
-                    <div v-if="isLoading"
-                        class="flex items-center gap-2 justify-center bg-white p-8 sm:p-24 rounded mt-4 sm:mt-8">
-                        <Spinner />
-                    </div>
-                    <div v-else>
-
-                        <div class="w-full -mx-2 sm:-mx-0">
-                            <!-- Negative margin to cancel container padding on mobile -->
-                            <div class="px-2 sm:px-0">
-                                <!-- Re-add padding only on mobile for inner content safety -->
-                                <FlightFilterCard :countdown="countdown" v-model="modelValue"
-                                    @search="setupFlightsParams" class="w-full"
-                                      />
-                            </div>
-                        </div>
-
-                        <!-- Progress Bar -->
-                        <div v-if="isSearching" class="w-full mt-2 container ">
-                            <!-- Message with loader and progress -->
-                            <div class="flex items-center justify-between mb-3">
-                                <!-- Left side: Loader + Message -->
-                                <div class="flex items-center gap-3 flex-1">
-                                    <!-- Loader circle -->
-                                    <div class="relative flex-shrink-0">
-                                        <!-- Outer circle -->
-                                        <div class="w-6 h-6 border-2 border-primary/20 rounded-full"></div>
-                                        <!-- Spinning arc -->
-                                        <div :class="[
-                                            'absolute top-0 left-0 w-6 h-6 border-2 rounded-full border-t-primary border-r-transparent border-b-transparent border-l-transparent',
-                                            progress > 0 ? 'animate-spin-slow' : 'animate-spin'
-                                        ]"></div>
-                                    </div>
-
-                                    <!-- Message text -->
-                                    <div class="flex-1 min-w-0">
-                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                                            {{ progress === 100 ? 'Found best flights!' : 'Searching for best flights...' }}
-                                        </span>
-
-                                    </div>
-                                </div>
-
-                                <!-- Right side: Progress percentage -->
-                                <div class="flex-shrink-0">
-                                    <span class="text-sm font-bold text-primary">{{ progress }}%</span>
-                                </div>
-                            </div>
-
-                            <!-- Progress bar -->
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-6 relative overflow-hidden">
-                                <!-- Background track -->
-                                <div
-                                    class="absolute inset-0 bg-gradient-to-r from-gray-300/50 to-gray-300/30 dark:from-gray-600/50 dark:to-gray-600/30">
-                                </div>
-
-                                <!-- Progress fill -->
-                                <div :class="[
-                                    'h-full rounded transition-all duration-700 ease-out relative overflow-hidden',
-                                    progress === 0 ? 'bg-primary' : 'bg-primary'
-                                ]" :style="{ width: progress > 0 ? progress + '%' : '25%' }">
-                                    <!-- Pulse effect -->
-                                    <div v-if="progress === 0"
-                                        class="absolute inset-0 bg-white/30 rounded animate-pulse"></div>
-
-                                    <!-- Shimmer effect -->
-                                    <div :class="[
-                                        'absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent',
-                                        progress === 0 ? 'animate-light-sweep-slow' : 'animate-light-sweep'
-                                    ]"></div>
-                                </div>
-
-                                <!-- Text inside progress bar -->
-                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Other Tab Contents -->
-                <div v-else-if="activeTab === 'importPnr'" class="animate-fadeIn">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">
-                        Enter PNR to import.
-                    </h3>
-                    <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 p-2 sm:p-4">
-                        <Input v-model="pnr" type="text" class="w-full sm:w-[200px]" placeholder="PNR" />
-                        <Button @click="importPnr(pnr)" class="w-full sm:w-auto">Import PNR</Button>
-                    </div>
-                </div>
-
-                <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">
-                        Find the perfect hotel
-                    </h3>
-                    <p class="text-gray-600 mb-4">Coming soon</p>
-                </div>
-
-                <div v-else-if="activeTab === 'cars'" class="animate-fadeIn">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">
-                        Rent a car
-                    </h3>
-                    <p class="text-gray-600 mb-4">Coming soon</p>
-                </div>
-
-                <div v-else-if="activeTab === 'activities'" class="animate-fadeIn">
-                    <p class="text-gray-600 mb-4">Coming soon</p>
-                </div>
-
-                <div v-else-if="activeTab === 'packages'" class="animate-fadeIn">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">
-                        Find travel packages
-                    </h3>
-                    <p class="text-gray-600 mb-4">Coming Soon.</p>
-                </div>
-            </div>
+    <!-- Tab Content -->
+    <div class="">
+      <div v-if="activeTab === 'flights'" class="animate-fadeIn">
+        <div v-if="isLoading"
+          class="flex items-center gap-2 justify-center bg-white p-8 sm:p-24 rounded mt-4 sm:mt-8">
+          <Spinner />
         </div>
-        <!-- FILTER STRIP -->
-        <!-- FILTER STRIP - PROFESSIONAL & FULLY WORKING -->
-        <div v-if="filteredFlights && !isLoading && allFlights.length > 0"
-            class="bg-white border hidden sm:block border-gray-200 px-3 py-2 mb-8 shadow-md">
-            <div class="flex flex-wrap  container justify-center items-center">
-                <!-- Main Visible Filters -->
-                <div
-                    class="flex w-full flex-wrap  justify-between items-center  rounded py-2 divide-x divide-gray-300">
-                    <!-- Price -->
-                    <div class="relative px-2">
-                        <button @click="
-                            activeFilter =
-                            activeFilter === 'price' ? null : 'price'
-                            "
-                            class="flex items-center gap-2.5 px-5 py-3 text-sm font-medium text-gray-700 hover:text-primary transition">
-                            <BadgeDollarSign class="w-5 h-5" />
-                            Price
-                            <ChevronDown class="w-4 h-4 transition-transform" :class="{
-                                'rotate-180': activeFilter === 'price',
-                            }" />
-                        </button>
-
-                        <div v-if="activeFilter === 'price'"
-                            class="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl p-6 z-50"
-                            @click.stop>
-                            <div class="flex justify-between mb-4">
-                                <span class="text-sm font-medium text-gray-600">Max Price</span>
-                                <span class="text-lg font-bold text-primary">{{
-                                    formatAmount(maxPrice || maxPriceLimit)
-                                    }}</span>
-                            </div>
-                            <input type="range" :min="minPriceLimit" :max="maxPriceLimit" v-model="maxPrice"
-                                @input="filterByPrice"
-                                class="w-full h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
-                            <div class="flex justify-between mt-3 text-xs text-gray-500">
-                                <span>{{ formatAmount(minPriceLimit) }}</span>
-                                <span>{{ formatAmount(maxPriceLimit) }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stops -->
-                    <div class="relative px-2">
-                        <button @click="
-                            activeFilter =
-                            activeFilter === 'stops' ? null : 'stops'
-                            "
-                            class="flex items-center gap-2.5 px-5 py-3 text-sm font-medium text-gray-700 hover:text-primary transition">
-                            <GitCommitHorizontal class="w-5 h-5" />
-                            Stops
-                            <ChevronDown class="w-4 h-4 transition-transform" :class="{
-                                'rotate-180': activeFilter === 'stops',
-                            }" />
-                        </button>
-
-                        <div v-if="activeFilter === 'stops'"
-                            class="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 bg-white border border-gray-200 rounded shadow-xl p-4 z-50"
-                            @click.stop>
-                            <p class="text-xs font-semibold text-gray-700 mb-3 text-center uppercase tracking-wide">
-                                Number of Stops
-                            </p>
-
-                            <div class="grid grid-cols-2 gap-2">
-                                <label class="flex items-center justify-center gap-1.5 py-2 px-2 border rounded cursor-pointer
-             text-xs font-semibold text-gray-700
-             hover:bg-primary/5 hover:border-primary/40 transition">
-                                    <input type="radio" value="all" v-model="selectedStops" @change="filterByStops"
-                                        class="accent-primary scale-90" />
-                                    <span>All</span>
-                                </label>
-
-                                <label class="flex items-center justify-center gap-1.5 py-2 px-2 border rounded cursor-pointer
-             text-xs font-medium text-gray-700
-             hover:bg-primary/5 hover:border-primary/40 transition">
-                                    <input type="radio" value="0" v-model="selectedStops" @change="filterByStops"
-                                        class="accent-primary scale-90" />
-                                    <span>Non-Stop</span>
-                                </label>
-
-                                <label class="flex items-center justify-center gap-1.5 py-2 px-2 border rounded cursor-pointer
-             text-xs font-medium text-gray-700
-             hover:bg-primary/5 hover:border-primary/40 transition">
-                                    <input type="radio" value="1" v-model="selectedStops" @change="filterByStops"
-                                        class="accent-primary scale-90" />
-                                    <span>1 Stop</span>
-                                </label>
-
-                                <label class="flex items-center justify-center gap-1.5 py-2 px-2 border rounded cursor-pointer
-             text-xs font-medium text-gray-700
-             hover:bg-primary/5 hover:border-primary/40 transition">
-                                    <input type="radio" value="2" v-model="selectedStops" @change="filterByStops"
-                                        class="accent-primary scale-90" />
-                                    <span>2+ Stops</span>
-                                </label>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <!-- Airlines -->
-                    <div class="relative px-2">
-                        <button @click="
-                            activeFilter =
-                            activeFilter === 'airline'
-                                ? null
-                                : 'airline'
-                            "
-                            class="flex items-center gap-2.5 px-5 py-3 text-sm font-medium text-gray-700 hover:text-primary transition">
-                            <Plane class="w-5 h-5" />
-                            Airlines
-                            {{
-                                selectedAirline.length
-                                    ? `(${selectedAirline.length})`
-                                    : ""
-                            }}
-                            <ChevronDown class="w-4 h-4 transition-transform" :class="{
-                                'rotate-180': activeFilter === 'airline',
-                            }" />
-                        </button>
-
-                        <!-- Airlines Dropdown -->
-                        <div v-if="activeFilter === 'airline'"
-                            class="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-80 bg-white border border-gray-200 rounded shadow-xl p-4 z-50 max-h-80 overflow-y-auto"
-                            @click.stop>
-                            <!-- Header -->
-                            <div class="flex items-center justify-between mb-3">
-                                <h4 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">
-                                    Airlines
-                                </h4>
-
-                                <button @click="
-                                    selectedAirline = [];
-                                filterByAirline();
-                                activeFilter = null;
-                                " class="text-xs text-primary font-medium hover:underline">
-                                    Clear
-                                </button>
-                            </div>
-
-                            <!-- Airline List -->
-                            <div class="space-y-2">
-                                <label v-for="airline in availableAirlines" :key="airline.id" class="flex items-center gap-3 px-3 py-2 bg-gray-50 border border-transparent rounded
-             cursor-pointer text-xs
-             hover:bg-primary/5 hover:border-primary/30 transition">
-                                    <input type="checkbox" v-model="selectedAirline" :value="airline.id"
-                                        @change="filterByAirline" class="accent-primary w-4 h-4" />
-
-                                    <span class="font-medium text-gray-800 flex-1 truncate">
-                                        {{ airline.name }}
-                                    </span>
-                                </label>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <!-- Duration -->
-                    <div class="relative px-2">
-                        <button @click="
-                            activeFilter =
-                            activeFilter === 'duration'
-                                ? null
-                                : 'duration'
-                            "
-                            class="flex items-center gap-2.5 px-5 py-3 text-sm font-medium text-gray-700 hover:text-primary transition">
-                            <ClockIcon class="w-5 h-5" />
-                            Duration
-                            {{
-                                maxDurationFilter
-                                    ? `
-                            < ${maxDurationFilter}h` : "" }} <ChevronDown class="w-4 h-4 transition-transform" :class="{
-                                'rotate-180': activeFilter === 'duration',
-                            }" />
-                        </button>
-
-                        <!-- Duration Dropdown -->
-                        <div v-if="activeFilter === 'duration'"
-                            class="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl p-6 z-50"
-                            @click.stop>
-                            <h4 class="text-lg font-semibold text-gray-800 mb-5">
-                                Maximum Flight Duration
-                            </h4>
-                            <div class="space-y-4">
-                                <input type="range" :min="minDuration" :max="maxDuration" v-model="maxDurationFilter"
-                                    @input="filterByDuration"
-                                    class="w-full h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-gray-600">{{ minDuration }} hours</span>
-                                    <span class="font-bold text-primary">{{
-                                        maxDurationFilter|| maxDuration
-                                    }}
-                                        hours</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Refundable -->
-                    <div class="relative px-2">
-                        <button @click="
-                            activeFilter =
-                            activeFilter === 'refundable'
-                                ? null
-                                : 'refundable'
-                            "
-                            class="flex items-center gap-2.5 px-5 py-3 text-sm font-medium text-gray-700 hover:text-primary transition">
-                            <SquareCheckBig class="w-5 h-5" />
-                            Refundable
-                            {{
-                                refundableFilter !== "all"
-                                    ? `(${refundableFilter})`
-                                    : ""
-                            }}
-                            <ChevronDown class="w-4 h-4 transition-transform" :class="{
-                                'rotate-180': activeFilter === 'refundable',
-                            }" />
-                        </button>
-
-                        <!-- Refundable Dropdown -->
-                        <div v-if="activeFilter === 'refundable'"
-                            class="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 bg-white border border-gray-200 rounded shadow-xl p-4 z-50"
-                            @click.stop>
-                            <!-- Header -->
-                            <h4 class="text-xs font-semibold text-gray-800 mb-3 text-center uppercase tracking-wide">
-                                Refund Policy
-                            </h4>
-
-                            <!-- Options -->
-                            <div class="space-y-2">
-                                <label class="flex items-center gap-2.5 px-3 py-2 bg-gray-50 border border-transparent rounded
-             cursor-pointer text-xs font-medium text-gray-800
-             hover:bg-primary/5 hover:border-primary/30 transition">
-                                    <input type="radio" value="all" v-model="refundableFilter"
-                                        @change="filterByRefundable" class="accent-primary w-4 h-4" />
-                                    <span>All Flights</span>
-                                </label>
-
-                                <label class="flex items-center gap-2.5 px-3 py-2 bg-gray-50 border border-transparent rounded
-             cursor-pointer text-xs font-medium text-gray-800
-             hover:bg-primary/5 hover:border-primary/30 transition">
-                                    <input type="radio" value="refundable" v-model="refundableFilter"
-                                        @change="filterByRefundable" class="accent-primary w-4 h-4" />
-                                    <span>Refundable Only</span>
-                                </label>
-
-                                <label class="flex items-center gap-2.5 px-3 py-2 bg-gray-50 border border-transparent rounded
-             cursor-pointer text-xs font-medium text-gray-800
-             hover:bg-primary/5 hover:border-primary/30 transition">
-                                    <input type="radio" value="non-refundable" v-model="refundableFilter"
-                                        @change="filterByRefundable" class="accent-primary w-4 h-4" />
-                                    <span>Non-Refundable Only</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        
-
-                    </div>
-                    <div class="flex items-end gap-3 pl-2">
-                        <Button variant="outline" @click="showMoreFilters = true"
-                            >
-                            <Ellipsis class="w-5 h-5" />
-                        </Button>
-
-                        <!-- Reset Button -->
-                        <Button variant="outline" @click="resetAllFilters"
-                            >
-                             <ListRestart class="w-5 h-5" />
-                        </Button>
-
-                         <Button variant="outline" @click="isShownMarginInput = !isShownMarginInput">
-                                <Zap class="w-5 h-5" />
-                            </Button>
-                    </div>
-                    
-                </div>
-                
-                <!-- More Filters Button -->
-                 
-
+        <div v-else>
+          <div class="w-full mx-2 sm:-mx-0">
+            <div class="px-2 sm:px-0">
+              <FlightFilterCard :countdown="countdown" v-model="modelValue" @search="setupFlightsParams" class="w-full" />
             </div>
-            <div class="flex container justify-end items-end">
-                <Input v-if="isShownMarginInput" v-model="priceMargin" type="number" class=" w-full sm:w-[200px] border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:border-none"
-                                placeholder="Price Margin" />
+          </div>
+
+          <!-- Progress Bar -->
+          <div v-if="isSearching" class="w-full mt-2 container">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3 flex-1">
+                <div class="relative flex-shrink-0">
+                  <div class="w-6 h-6 border-2 border-primary/20 rounded-full"></div>
+                  <div :class="[
+                    'absolute top-0 left-0 w-6 h-6 border-2 rounded-full border-t-primary border-r-transparent border-b-transparent border-l-transparent',
+                    progress > 0 ? 'animate-spin-slow' : 'animate-spin'
+                  ]"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                    {{ progress === 100 ? 'Found best flights!' : 'Searching for best flights...' }}
+                  </span>
+                </div>
+              </div>
+              <div class="flex-shrink-0">
+                <span class="text-sm font-bold text-primary">{{ progress }}%</span>
+              </div>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-6 relative overflow-hidden">
+              <div
+                class="absolute inset-0 bg-gradient-to-r from-gray-300/50 to-gray-300/30 dark:from-gray-600/50 dark:to-gray-600/30">
+              </div>
+              <div :class="[
+                'h-full rounded transition-all duration-700 ease-out relative overflow-hidden',
+                progress === 0 ? 'bg-primary' : 'bg-primary'
+              ]" :style="{ width: progress > 0 ? progress + '%' : '25%' }">
+                <div v-if="progress === 0"
+                  class="absolute inset-0 bg-white/30 rounded animate-pulse"></div>
+                <div :class="[
+                  'absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent',
+                  progress === 0 ? 'animate-light-sweep-slow' : 'animate-light-sweep'
+                ]"></div>
+              </div>
+            </div>
+          </div>
         </div>
-            </div>
+      </div>
 
-        <div v-if="filteredFlights && !isLoading && allFlights.length > 0"
-            class="bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
-            <div class="container mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <!-- Left: Showing results -->
-                <div class="text-lg font-bold text-gray-700">
-                    Showing
-                    <span class="font-semibold text-primary">{{
-                        filteredFlights.length
-                        }}</span>
-                    results of
-                    <span class="font-semibold">{{ allFlights.length }}</span>
-                </div>
-
-                <!-- Center: Cheapest | Fastest | Best Value -->
-                <div class="hidden sm:flex items-center justify-center bg-gray-100 rounded-full p-1">
-                    <Tabs default-value="cheapest" class="w-full">
-                        <TabsList class="grid grid-cols-3 w-full bg-transparent p-1 gap-1">
-                            <!-- Cheapest Tab -->
-                            <TabsTrigger value="cheapest"
-                                class="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
-                                @click="filteredFlights = [...allFlights].sort(
-                                    (a, b) =>
-                                        calculateTotalFare(a) -
-                                        calculateTotalFare(b),
-                                )">
-                                <BadgeDollarSign class="w-5 h-5 text-red-500" />
-                                <span>Cheapest</span>
-                                <span class="ml-1 font-bold">
-                                    PKR
-                                    {{
-                                        formatAmount(
-                                            Math.min(
-                                                ...allFlights.map((f) =>
-                                                    calculateTotalFare(f),
-                                                ),
-                                            ),
-                                        )
-                                    }}
-                                </span>
-                            </TabsTrigger>
-
-                            <!-- Fastest Tab -->
-                            <TabsTrigger value="fastest"
-                                class="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
-                                @click="filteredFlights = [...allFlights].sort((a, b) => {
-                                    const getDuration = (flight) =>
-                                        flight.leg.flights.reduce(
-                                            (sum, leg) =>
-                                                sum + (leg.travel_time || 0),
-                                            0,
-                                        );
-                                    return getDuration(a) - getDuration(b);
-                                })">
-                                <Zap class="w-5 h-5 text-red-500" />
-                                <span>Fastest</span>
-                                <span class="ml-1 font-bold">
-                                    PKR
-                                    {{
-                                        formatAmount(
-                                            calculateTotalFare(
-                                                [...allFlights].sort((a, b) => {
-                                                    const getDuration = (f) =>
-                                                        f.leg.flights.reduce(
-                                                            (s, l) =>
-                                                                s +
-                                                                (l.travel_time || 0),
-                                                            0,
-                                                        );
-                                                    return (
-                                                        getDuration(a) - getDuration(b)
-                                                    );
-                                                })[0],
-                                            ),
-                                        )
-                                    }}
-                                </span>
-                            </TabsTrigger>
-
-                            <!-- Best Value Tab -->
-                            <TabsTrigger value="bestvalue"
-                                class="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
-                                @click="filteredFlights = [...allFlights].sort(
-                                    (a, b) =>
-                                        calculateTotalFare(a) -
-                                        calculateTotalFare(b),
-                                )">
-                                <SquareCheckBig class="w-5 h-5 text-red-500" />
-                                <span>Best Value</span>
-                                <span class="ml-1 font-bold">
-                                    PKR
-                                    {{
-                                        formatAmount(
-                                            Math.min(
-                                                ...allFlights.map((f) =>
-                                                    calculateTotalFare(f),
-                                                ),
-                                            ),
-                                        )
-                                    }}
-                                </span>
-                            </TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-                </div>
-
-                <!-- Right: Sort dropdown -->
-                <div class="flex items-center gap-2 text-sm">
-                    <ArrowDownUp class="w-4 h-4 text-gray-500" />
-                    <span class="text-gray-600">Sort by:</span>
-                    <select @change="
-                            if ($event.target.value === 'low') {
-                        filteredFlights = [...allFlights].sort(
-                            (a, b) =>
-                                calculateTotalFare(a) -
-                                calculateTotalFare(b),
-                        );
-                    } else {
-                        filteredFlights = [...allFlights].sort(
-                            (a, b) =>
-                                calculateTotalFare(b) -
-                                calculateTotalFare(a),
-                        );
-                    }
-                        " class="font-medium text-gray-900 bg-transparent border-none outline-none cursor-pointer">
-                        <option value="low">Price - Low To High</option>
-                        <option value="high">Price - High To Low</option>
-                    </select>
-                </div>
-            </div>
+      <!-- Other Tab Contents -->
+      <div v-else-if="activeTab === 'importPnr'" class="animate-fadeIn">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+          Enter PNR to import.
+        </h3>
+        <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 p-2 sm:p-4">
+          <Input v-model="pnr" type="text" class="w-full sm:w-[200px]" placeholder="PNR" />
+          <Button @click="importPnr(pnr)" class="w-full sm:w-auto">Import PNR</Button>
         </div>
-        <!-- <button
-  @click="showMoreFilters = true"
-  class="fixed bottom-4 left-1/2 transform -translate-x-1/2 sm:hidden bg-primary text-white font-semibold px-6 py-3 rounded-full shadow-lg hover:bg-primary/90 transition z-50"
->
-  Filters
-</button>             -->
-        <!-- MORE FILTERS MODAL -->
-        <Dialog v-model:open="showMoreFilters">
-            <DialogContent
-                class="w-full max-w-md sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-white p-4 sm:p-8 rounded-2xl sm:rounded-3xl">
+      </div>
 
-                <!-- Header -->
-                <div
-                    class="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-8 py-4 sm:py-6 flex justify-between items-center z-10">
+      <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+          Find the perfect hotel
+        </h3>
+        <p class="text-gray-600 mb-4">Coming soon</p>
+      </div>
+
+      <div v-else-if="activeTab === 'cars'" class="animate-fadeIn">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+          Rent a car
+        </h3>
+        <p class="text-gray-600 mb-4">Coming soon</p>
+      </div>
+
+      <div v-else-if="activeTab === 'activities'" class="animate-fadeIn">
+        <p class="text-gray-600 mb-4">Coming soon</p>
+      </div>
+
+      <div v-else-if="activeTab === 'packages'" class="animate-fadeIn">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+          Find travel packages
+        </h3>
+        <p class="text-gray-600 mb-4">Coming Soon.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW LAYOUT: Filters Sidebar + Results -->
+  <div v-if="filteredFlights && !isLoading && allFlights.length > 0" class="container mx-auto px-4 py-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      
+      <!-- LEFT SIDEBAR FILTERS - Always visible, not accordion -->
+      <div class="lg:w-80 flex-shrink-0 space-y-6">
+        <!-- Price Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <BadgeDollarSign class="w-5 h-5 text-primary" />
+            Price
+          </h3>
+          <div class="flex justify-between mb-2 text-sm">
+            <span class="text-gray-600">{{ formatAmount(minPriceLimit) }}</span>
+            <span class="text-gray-600">{{ formatAmount(maxPrice || maxPriceLimit) }}</span>
+          </div>
+          <input type="range" :min="minPriceLimit" :max="maxPriceLimit" v-model="maxPrice" @input="filterByPrice"
+            class="w-full h-2 bg-gray-200 rounded-full accent-primary cursor-pointer" />
+        </div>
+
+        <!-- Stops Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <GitCommitHorizontal class="w-5 h-5 text-primary" />
+            Stops
+          </h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="all" v-model="selectedStops" @change="filterByStops" class="accent-primary" />
+              <span class="text-sm text-gray-700">All</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="0" v-model="selectedStops" @change="filterByStops" class="accent-primary" />
+              <span class="text-sm text-gray-700">Non-Stop</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="1" v-model="selectedStops" @change="filterByStops" class="accent-primary" />
+              <span class="text-sm text-gray-700">1 Stop</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="2" v-model="selectedStops" @change="filterByStops" class="accent-primary" />
+              <span class="text-sm text-gray-700">2+ Stops</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Airlines Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <Plane class="w-5 h-5 text-primary" />
+            Airlines
+            <span v-if="selectedAirline.length" class="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{{ selectedAirline.length }}</span>
+          </h3>
+          <div class="space-y-2 max-h-60 overflow-y-auto">
+            <div class="flex justify-between items-center mb-2">
+              <button @click="selectedAirline = []; filterByAirline();" class="text-xs text-primary hover:underline">Clear</button>
+            </div>
+            <label v-for="airline in availableAirlines" :key="airline.id" class="flex items-center gap-2 cursor-pointer py-1">
+              <input type="checkbox" v-model="selectedAirline" :value="airline.id" @change="filterByAirline" class="accent-primary" />
+              <span class="text-sm text-gray-700 truncate">{{ airline.name }}</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Duration Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <ClockIcon class="w-5 h-5 text-primary" />
+            Duration
+          </h3>
+          <div class="space-y-3">
+            <input type="range" :min="minDuration" :max="maxDuration" v-model="maxDurationFilter" @input="filterByDuration"
+              class="w-full h-2 bg-gray-200 rounded-full accent-primary cursor-pointer" />
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">{{ minDuration }}h</span>
+              <span class="font-semibold text-primary">{{ maxDurationFilter || maxDuration }}h max</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Refundable Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <SquareCheckBig class="w-5 h-5 text-primary" />
+            Refundable
+          </h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="all" v-model="refundableFilter" @change="filterByRefundable" class="accent-primary" />
+              <span class="text-sm text-gray-700">All Flights</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="refundable" v-model="refundableFilter" @change="filterByRefundable" class="accent-primary" />
+              <span class="text-sm text-gray-700">Refundable Only</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" value="non-refundable" v-model="refundableFilter" @change="filterByRefundable" class="accent-primary" />
+              <span class="text-sm text-gray-700">Non-Refundable Only</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Departure Time Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3">Departure Time</h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="departureTimes" value="morning" class="accent-primary" />
+              <span class="text-sm text-gray-700">12:00 AM - 06:00 AM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="departureTimes" value="morningLate" class="accent-primary" />
+              <span class="text-sm text-gray-700">06:00 AM - 12:00 PM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="departureTimes" value="afternoon" class="accent-primary" />
+              <span class="text-sm text-gray-700">12:00 PM - 06:00 PM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="departureTimes" value="night" class="accent-primary" />
+              <span class="text-sm text-gray-700">06:00 PM - 12:00 AM</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Arrival Time Filter -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 class="font-semibold text-gray-800 mb-3">Arrival Time</h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="arrivalTimes" value="morning" class="accent-primary" />
+              <span class="text-sm text-gray-700">12:00 AM - 06:00 AM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="arrivalTimes" value="morningLate" class="accent-primary" />
+              <span class="text-sm text-gray-700">06:00 AM - 12:00 PM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="arrivalTimes" value="afternoon" class="accent-primary" />
+              <span class="text-sm text-gray-700">12:00 PM - 06:00 PM</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="arrivalTimes" value="night" class="accent-primary" />
+              <span class="text-sm text-gray-700">06:00 PM - 12:00 AM</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3">
+          <button @click="resetAllFilters" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+            <ListRestart class="w-4 h-4 inline mr-1" /> Reset
+          </button>
+          <button @click="isShownMarginInput = !isShownMarginInput" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+            <Zap class="w-4 h-4" />
+          </button>
+        </div>
+        <div v-if="isShownMarginInput">
+          <Input v-model="priceMargin" type="number" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="Price Margin" />
+        </div>
+      </div>
+
+      <!-- RIGHT SECTION: Results Header + Flight List -->
+      <div class="flex-1 min-w-0">
+        <!-- Results Header with Cheapest | Fastest | Best Value -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="text-sm font-medium text-gray-700">
+              Showing <span class="font-bold text-primary">{{ filteredFlights.length }}</span> results of <span class="font-bold">{{ allFlights.length }}</span>
+            </div>
+
+            <!-- Cheapest | Fastest | Best Value Tabs -->
+            <div class="flex items-center justify-center bg-gray-100 rounded-full p-1">
+              <div class="flex gap-1">
+                <button @click="filteredFlights = [...allFlights].sort((a, b) => calculateTotalFare(a) - calculateTotalFare(b))"
+                  class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-white shadow-sm text-primary">
+                  <BadgeDollarSign class="w-4 h-4" />
+                  <span>Cheapest</span>
+                </button>
+                <button @click="filteredFlights = [...allFlights].sort((a, b) => {
+                  const getDuration = (flight) => flight.leg.flights.reduce((sum, leg) => sum + (leg.travel_time || 0), 0);
+                  return getDuration(a) - getDuration(b);
+                })"
+                  class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-gray-600 hover:bg-white/50">
+                  <Zap class="w-4 h-4" />
+                  <span>Fastest</span>
+                </button>
+                <button @click="filteredFlights = [...allFlights].sort((a, b) => calculateTotalFare(a) - calculateTotalFare(b))"
+                  class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-gray-600 hover:bg-white/50">
+                  <SquareCheckBig class="w-4 h-4" />
+                  <span>Best Value</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Sort Dropdown -->
+            <div class="flex items-center gap-2 text-sm">
+              <ArrowDownUp class="w-4 h-4 text-gray-500" />
+              <span class="text-gray-600">Sort by:</span>
+              <select @change="if ($event.target.value === 'low') {
+                filteredFlights = [...allFlights].sort((a, b) => calculateTotalFare(a) - calculateTotalFare(b));
+              } else {
+                filteredFlights = [...allFlights].sort((a, b) => calculateTotalFare(b) - calculateTotalFare(a));
+              }" class="font-medium text-gray-900 bg-transparent border-none outline-none cursor-pointer">
+                <option value="low">Price - Low To High</option>
+                <option value="high">Price - High To Low</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flight Results -->
+        <div v-if="filteredFlights?.length > 0 && !isLoading" class="space-y-4">
+          <div v-for="item in filteredFlights" :key="item?.leg?.ref_id"
+            class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+            
+            <!-- Single Flight (Direct) -->
+            <div v-if="item?.leg?.flights?.length === 1" class="p-4 sm:p-5">
+              <div class="flex flex-col lg:flex-row lg:items-center gap-5">
+                <div class="flex items-center gap-3 lg:w-48 shrink-0">
+                  <img class="w-10 h-10 object-contain" :src="item?.leg?.flights[0]?.marketing_carrier?.logo" :alt="item?.leg?.flights[0]?.marketing_carrier?.name" />
+                  <div>
+                    <span class="text-base font-bold text-gray-900">{{ item?.leg?.flights[0]?.marketing_carrier?.name }}</span>
+                    <span class="text-xs text-gray-500 block">{{ item?.leg?.flights[0]?.marketing_carrier?.iata }} {{ formatFlightNumber(item?.leg?.flights[0]?.flight_number) }}</span>
+                  </div>
+                </div>
+
+                <div class="flex-1 flex items-center justify-between gap-4">
+                  <div>
+                    <div class="text-2xl font-black text-gray-900">{{ moment.parseZone(item?.leg?.flights[0]?.departure_at).format("HH:mm") }}</div>
+                    <div class="font-semibold text-gray-800">{{ item?.leg?.flights[0]?.from?.city?.name }}</div>
+                    <div class="text-xs font-bold text-gray-400">{{ item?.leg?.flights[0]?.from?.city?.code }}</div>
+                  </div>
+
+                  <div class="flex-1 flex flex-col items-center px-2">
+                    <span class="text-xs font-medium text-gray-500">{{ Math.floor(moment.duration(item?.leg?.flights[0]?.travel_time, 'm').asHours()) }}h {{ moment.duration(item?.leg?.flights[0]?.travel_time, 'm').minutes() }}m</span>
+                    <div class="relative w-full flex items-center">
+                      <div class="h-[2px] w-full bg-emerald-400 rounded-full opacity-60"></div>
+                      <div class="absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"></div>
+                    </div>
+                    <span class="text-[10px] font-medium mt-1 text-gray-500">{{ item?.leg?.flights[0]?.has_layovers ? `${item?.leg?.flights[0]?.layovers_count} Stop` : 'Non stop' }}</span>
+                  </div>
+
+                  <div class="text-right">
+                    <div class="text-2xl font-black text-gray-900">{{ moment.parseZone(item?.leg?.flights[0]?.arrival_at).format("HH:mm") }}</div>
+                    <div class="font-semibold text-gray-800">{{ item?.leg?.flights[0]?.to?.city?.name }}</div>
+                    <div class="text-xs font-bold text-gray-400">{{ item?.leg?.flights[0]?.to?.city?.code }}</div>
+                  </div>
+                </div>
+
+                <div class="lg:w-48 flex lg:flex-col items-center lg:items-end justify-between gap-3 border-t lg:border-t-0 pt-3 lg:pt-0 lg:border-l border-gray-100 lg:pl-5">
+                  <div class="text-2xl font-black text-gray-900">{{ formatAmount(calculateTotalFare(item)) }}</div>
+                  <button @click="openSooperFlightDetails(item)" class="bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 text-white px-6 py-2 rounded-lg font-bold text-sm uppercase tracking-wide">
+                    Book Now
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi Flight (Round Trip / Connecting) -->
+            <div v-else class="p-4 sm:p-5">
+              <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <img class="w-10 h-10 object-contain" :src="item?.leg?.flights[0]?.marketing_carrier?.logo" :alt="item?.leg?.flights[0]?.marketing_carrier?.name" />
+                  <div>
+                    <p class="font-bold text-gray-900">{{ item?.leg?.flights[0]?.marketing_carrier?.name }}</p>
+                    <p class="text-xs text-gray-500">{{ (item?.leg?.flights || []).map(f => f?.marketing_carrier?.iata + ' ' + formatFlightNumber(f?.flight_number)).join(', ') }}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-2xl font-black text-gray-900">{{ formatAmount(calculateTotalFare(item)) }}</p>
+                  <button @click="openSooperFlightDetails(item)" class="mt-1 bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 text-white px-5 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wide">
+                    Book Now
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div v-for="(leg, legIndex) in item?.leg?.flights" :key="legIndex" class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <p class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full" :class="legIndex === 0 ? 'bg-blue-500' : 'bg-indigo-500'"></span>
+                    {{ legIndex === 0 ? 'Depart' : 'Return' }} • {{ moment(leg?.departure_at).format("ddd, DD MMM") }}
+                  </p>
+                  <div class="flex items-center justify-between gap-3">
                     <div>
-                        <DialogTitle class="text-xl sm:text-2xl font-bold text-gray-900">More Filters</DialogTitle>
-                        <DialogDescription class="text-sm sm:text-base text-gray-600 mt-1">
-                            Refine your flight search with additional options
-                        </DialogDescription>
+                      <p class="text-xl font-black text-gray-900">{{ moment.parseZone(leg?.departure_at).format("HH:mm") }}</p>
+                      <p class="font-semibold text-gray-800">{{ leg?.from?.city?.name }}</p>
+                      <p class="text-xs font-bold text-gray-400">{{ leg?.from?.city?.code }}</p>
                     </div>
-                    <button @click="resetAllFilters(); showMoreFilters = false;"
-                        class="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-primary text-white rounded text-xs sm:text-sm font-semibold hover:bg-primary/90 transition">
-                        Clear All
-                    </button>
-                </div>
-
-                <!-- Filters Grid -->
-                <div class="p-4 sm:p-8">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
-
-                        <!-- Departure Time -->
-                        <div>
-                            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Departure Time</h3>
-                            <div class="space-y-2 sm:space-y-3">
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="departureTimes" value="morning"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">12:00 AM - 06:00 AM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="departureTimes" value="morningLate"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">06:00 AM - 12:00 PM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="departureTimes" value="afternoon"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">12:00 PM - 06:00 PM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="departureTimes" value="night"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">06:00 PM - 12:00 AM</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Arrival Time -->
-                        <div>
-                            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Arrival Time</h3>
-                            <div class="space-y-2 sm:space-y-3">
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="arrivalTimes" value="morning"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">12:00 AM - 06:00 AM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="arrivalTimes" value="morningLate"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">06:00 AM - 12:00 PM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="arrivalTimes" value="afternoon"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">12:00 PM - 06:00 PM</span>
-                                </label>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="arrivalTimes" value="night"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700">06:00 PM - 12:00 AM</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Airlines -->
-                        <div>
-                            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Airlines</h3>
-                            <div class="space-y-2 sm:space-y-3 max-h-40 sm:max-h-64 overflow-y-auto pr-2">
-                                <label v-for="airline in availableAirlines" :key="airline.id"
-                                    class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="selectedAirline" :value="airline.id"
-                                        @change="filterByAirline"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-xs sm:text-sm text-gray-700 flex-1">{{ airline.name }}</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Price + Duration + Stops + Refundable -->
-                        <div class="space-y-6 sm:space-y-8">
-                            <!-- Price Range -->
-                            <div>
-                                <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Price Range</h3>
-                                <div class="space-y-2 sm:space-y-4">
-                                    <div class="flex justify-between text-xs sm:text-sm text-gray-600">
-                                        <span>{{ formatAmount(minPriceLimit) }}</span>
-                                        <span>{{ formatAmount(maxPriceLimit) }}</span>
-                                    </div>
-                                    <input type="range" :min="minPriceLimit" :max="maxPriceLimit" v-model="maxPrice"
-                                        @input="filterByPrice"
-                                        class="w-full h-2 sm:h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
-                                    <div class="text-center text-sm sm:text-lg font-bold text-primary">{{
-                                        formatAmount(maxPrice || maxPriceLimit) }}</div>
-                                </div>
-                            </div>
-
-                            <!-- Flight Duration -->
-                            <div>
-                                <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Flight Duration
-                                </h3>
-                                <div class="space-y-2 sm:space-y-4">
-                                    <input type="range" min="0" :max="maxDuration" v-model="maxDurationFilter"
-                                        @input="filterByDuration"
-                                        class="w-full h-2 sm:h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
-                                    <div class="text-center text-xs sm:text-sm text-primary">Up to {{ maxDurationFilter
-                                        || maxDuration }} hours</div>
-                                </div>
-                            </div>
-
-                            <!-- Stops -->
-                            <div>
-                                <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Stops</h3>
-                                <div class="space-y-2 sm:space-y-3">
-                                    <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                        <input type="checkbox" value="0" v-model="selectedStopsArray"
-                                            class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                        <span class="text-xs sm:text-sm text-gray-700">Non-Stop</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                        <input type="checkbox" value="1" v-model="selectedStopsArray"
-                                            class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                        <span class="text-xs sm:text-sm text-gray-700">1 Stop</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                        <input type="checkbox" value="2" v-model="selectedStopsArray"
-                                            class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                        <span class="text-xs sm:text-sm text-gray-700">2+ Stops</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Refundable -->
-                            <div>
-                                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
-                                    <input type="checkbox" v-model="onlyRefundable" @change="filterByRefundable"
-                                        class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
-                                    <span class="text-sm sm:text-base font-medium text-gray-800">Refundable Only</span>
-                                </label>
-                            </div>
-                        </div>
+                    <div class="flex-1 flex flex-col items-center px-1">
+                      <p class="text-[10px] font-bold text-gray-400">{{ Math.floor(moment.duration(leg?.travel_time, "m").asHours()) }}h {{ moment.duration(leg?.travel_time, "m").minutes() }}m</p>
+                      <div class="relative w-full flex items-center">
+                        <div class="h-[1px] w-full bg-emerald-400 rounded-full opacity-50"></div>
+                        <div class="absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+                      </div>
+                      <p class="text-[9px] font-bold mt-1 text-gray-400 text-center">{{ leg?.has_layovers ? `${leg?.layovers_count} stop` : 'Non stop' }}</p>
                     </div>
+                    <div class="text-right">
+                      <p class="text-xl font-black text-gray-900">{{ moment.parseZone(leg?.arrival_at).format("HH:mm") }}</p>
+                      <p class="font-semibold text-gray-800">{{ leg?.to?.city?.name }}</p>
+                      <p class="text-xs font-bold text-gray-400">{{ leg?.to?.city?.code }}</p>
+                    </div>
+                  </div>
                 </div>
-
-                <!-- Footer -->
-                <DialogFooter
-                    class="sticky bottom-0 bg-white border-t border-gray-200 px-4 sm:px-8 py-4 sm:py-6 flex justify-end gap-3 sm:gap-6">
-                    <Button @click="showMoreFilters = false" variant="outline"
-                        class="px-6 py-2 sm:px-8 sm:py-3 text-sm sm:text-base">Cancel</Button>
-                    <Button @click="showMoreFilters = false; applyAllFilters();"
-                        class="px-8 py-2 sm:px-10 sm:py-3 bg-primary text-white font-semibold text-sm sm:text-base">Apply
-                        Filters</Button>
-                </DialogFooter>
-
-            </DialogContent>
-        </Dialog>
-
-
-        <!-- Carousel Section -->
-        <!-- <div
-            v-if="!isLoading && allFlights"
-            class="mt-4 sm:mt-6 px-2 sm:px-0 container"
-        >
-            <Carousel
-                class="relative z-10 w-full overflow-hidden"
-                :opts="{ align: 'start', containScroll: 'trimSnaps' }"
-            >
-                <div class="absolute left-0 top-1/2 -translate-y-1/2 z-10">
-                    <CarouselPrevious
-                        class="bg-white/90 shadow-md rounded-full p-1.5 sm:p-2 hover:bg-white"
-                    />
-                </div>
-
-                <CarouselContent class="-ml-2 flex">
-                    <CarouselItem
-                        v-for="flight in cheapestFlightsByAirline"
-                        :key="flight.id"
-                        class="pl-2 flex-shrink-0 w-[88%] /* 1 card on xs */ sm:w-[48%] /* 2 cards on sm */ md:w-[31%] /* 3 cards on md */ lg:w-[15%] /* ~6 cards on lg */ max-w-[220px] /* upper bound */"
-                    >
-                        <div class="h-full">
-                            <div
-                                @click="openSooperFlightDetails(flight)"
-                                class="bg-white border border-gray-200 p-3 sm:p-4 rounded hover:shadow-md transition-all duration-200 cursor-pointer select-none h-full flex flex-col"
-                            >
-                                
-                                <div class="flex items-center gap-2">
-                                    <div
-                                        class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center"
-                                    >
-                                        <img
-                                            :src="
-                                                flight?.id
-                                                    ? flight?.legs[0]?.stops[0]
-                                                          ?.airline?.logo_url
-                                                    : flight?.leg?.flights[0]
-                                                          ?.marketing_carrier
-                                                          ?.logo
-                                            "
-                                            alt=""
-                                            class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 object-contain"
-                                        />
-                                    </div>
-                                    <span
-                                        class="text-xs font-light text-gray-800 line-clamp-1"
-                                    >
-                                        {{
-                                            flight?.id
-                                                ? flight?.legs[0]?.stops[0]
-                                                      ?.airline?.name
-                                                : flight?.leg?.flights[0]
-                                                      ?.marketing_carrier?.name
-                                        }}
-                                    </span>
-                                </div>
-
-                                <div
-                                    class="mt-auto pt-2 border-t border-gray-100"
-                                >
-                                    <p class="text-base font-bold text-primary">
-                                        {{
-                                            formatAmount(
-                                                calculateTotalFare(flight),
-                                            )
-                                        }}
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        Best available price
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </CarouselItem>
-                </CarouselContent>
-
-                <div class="absolute right-0 top-1/2 -translate-y-1/2 z-10">
-                    <CarouselNext
-                        class="bg-white/90 shadow-md rounded-full p-1.5 sm:p-2 hover:bg-white"
-                    />
-                </div>
-            </Carousel>
-        </div> -->
-
-        <!-- RESPONSIVE MAIN LAYOUT -->
-        <div class="px-2 sm:px-0 mt-4 sm:mt-6 container">
-            <!-- Added mobile filter toggle button -->
-            <div class="lg:hidden mb-4">
-                <Button @click="showMoreFilters = true" variant="outline" class="flex items-center gap-2 w-full">
-                    <SlidersHorizontal class="w-5 h-5" />
-                    <span>{{
-                        isFilterOpen ? "Hide Filters" : "Show Filters"
-                        }}</span>
-                </Button>
+              </div>
             </div>
 
-            <div class="flex flex-col lg:flex-row gap-4 lg:gap-x-10">
-
-                <!-- Main Flights List Section -->
-                <div class="w-full">
-                    <!-- Loading State -->
-                    <div v-if="isLoading" class="">
-                        <div v-for="(item, index) in 5" :key="index"
-                            class="bg-white border w-full rounded h-[200px] p-4 flex items-start justify-between">
-                            <div>
-                                <div class="flex items-center gap-x-3">
-                                    <Skeleton width="150px" height="30px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100}`" />
-                                </div>
-                                <Skeleton width="60px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 50}`" />
-                                <Skeleton width="90px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 100}`" />
-                                <Skeleton width="200px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 150}`" />
-                                <Skeleton width="150px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 200}`" />
-                            </div>
-                            <div class="flex flex-col items-end">
-                                <Skeleton width="150px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 250}`" />
-                                <Skeleton width="60px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 300}`" />
-                                <Skeleton width="90px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 350}`" />
-                                <Skeleton width="200px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 400}`" />
-                                <Skeleton width="150px" height="15px"
-                                    :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 450}`" />
-                            </div>
-                        </div>
-                    </div>
-
-                   
-                    <!-- Flight Results - RESPONSIVE GRID -->
-                    <div class="w-full container">
-                        
-                        <div v-if="filteredFlights?.length > 0 && !isLoading" class="mt-4 space-y-6">
-                            <div v-for="item in filteredFlights" :key="item?.leg?.ref_id"
-                                class="bg-white border border-gray-300 rounded transition-all duration-300 overflow-hidden">
-                                <!-- Top Header: Route, Dates, Price, Book Button - Mobile Responsive -->
-                                
-                                <div
-                                    class="px-3 sm:px-4 pt-3 pb-3 sm:pt-3 sm:pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b">
-                                    <!-- Airline Logo and Name - Mobile Stacked -->
-                                    <div v-if="item?.leg?.flights.length > 1"
-                                        class="flex items-center gap-3 sm:gap-5 min-w-0 sm:w-[320px] md:w-[360px] lg:w-[420px] flex-shrink-0">
-                                        <img class="w-10 h-10 sm:w-16 sm:h-16 md:w-16 md:h-16 object-contain p-1 bg-white rounded"
-                                            :src="item?.leg?.flights?.[0]?.marketing_carrier?.logo"
-                                            :alt="item?.leg?.flights?.[0]?.marketing_carrier?.name" />
-                                        <div class="text-left min-w-0">
-                                            <div class="text-sm sm:text-base md:text-lg font-semibold text-gray-900 truncate">
-                                                {{ item?.leg?.flights?.[0]?.marketing_carrier?.name }}
-                                            </div>
-                                            <!-- Flight Numbers - Mobile Hidden on small screens -->
-                                           <div
-  class="hidden sm:block text-xs sm:text-sm text-gray-600 mt-0.5 truncate overflow-hidden whitespace-nowrap"
-  v-html="
-    (item?.leg?.flights || [])
-      .map((flight) => {
-        return (flight?.segments || [])
-          .map((seg) => {
-            const code =
-              seg?.operating_carrier?.iata ||
-              flight?.marketing_carrier?.iata ||
-              '';
-            const num = formatFlightNumber(seg?.flight_number);
-            return code && num ? `${code}-${num}` : '';
-          })
-          .filter(Boolean)
-          .join(' / ');
-      })
-      .filter(Boolean)
-      .join(' • ')
-  "
-></div>
-                                        </div>
-                                    </div>
-
-                                    <div v-else class="flex flex-col sm:items-start gap-1 text-sm text-gray-700">
-                                        <div class="font-semibold text-base">
-                                            {{
-                                                item?.leg?.flights[0]?.from
-                                                    ?.city?.name
-                                            }}
-                                            to
-                                            {{
-                                                item?.leg?.flights[0]?.to?.city
-                                                    ?.name
-                                            }}
-                                          
-                                        </div>
-                                        <div class="text-gray-500">
-                                            {{
-                                                moment(
-                                                    item?.leg?.flights[0]
-                                                        ?.departure_at,
-                                                ).format("ddd, DD MMM YYYY")
-                                            }}
-                                            <span v-if="
-                                                item?.leg?.flights?.length >
-                                                1
-                                            ">
-                                                —
-                                                {{
-                                                    moment(
-                                                        item?.leg?.flights[1]
-                                                            ?.departure_at,
-                                                    ).format("ddd, DD MMM YYYY")
-                                                }}
-                                            </span>
-                                        </div>
-                                    </div>
-
-
-                                    <!-- Price and Button - Mobile Stacked Right -->
-                                    <div
-                                        class="flex flex-col sm:flex-row items-start sm:items-center justify-between sm:justify-end gap-3 sm:gap-4 mt-2 sm:mt-0 flex-shrink-0">
-                                        <div class="text-left sm:text-right">
-                                            <div class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                                                {{
-                                                    formatAmount(
-                                                        calculateTotalFare(item),
-                                                    )
-                                                }}
-                                            </div>
-                                            <!-- Per Person Price - Mobile Only -->
-                                            <div class="text-xs text-gray-500 sm:hidden mt-0.5">
-                                                Total
-                                            </div>
-                                        </div>
-                                        <button @click="openSooperFlightDetails(item)"
-                                            class="bg-primary text-white text-sm sm:text-md px-4 sm:px-6 md:px-8 py-2 sm:py-3 rounded-md font-semibold transition w-full sm:w-auto">
-                                            Select Flight
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- All Flight Legs (Outbound + Return) - Mobile Responsive -->
-                                <div class="px-2 sm:px-3 pt-4 pb-3">
-                                    <div class="flex flex-col lg:flex-row gap-4 sm:gap-6">
-                                        <div v-for="(leg, legIndex) in item?.leg?.flights" :key="legIndex"
-                                            class="mb-6 sm:mb-8 last:mb-0">
-
-                                            <!-- Professional Header Strip - Mobile Stacked -->
-                                            <div v-if="item?.leg?.flights.length !== 1"
-                                                class="flex flex-col sm:flex-row items-stretch bg-white rounded sm:rounded-r-xl overflow-hidden border border-gray-200 mx-auto">
-                                                <!-- Colored Label (Header) -->
-                                                <div class="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 text-white font-semibold bg-primary text-xs sm:text-sm relative overflow-hidden w-24 sm:w-28 md:w-32"
-                                                    :style="{
-                                                        clipPath: 'polygon(0% 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)'
-                                                    }">
-                                                    <!-- Icon -->
-                                                    <PlaneTakeoff
-                                                        v-if="route.query.flightType === 'multi-city' || legIndex === 0"
-                                                        class="w-3 h-3 sm:w-4 sm:h-4" />
-                                                    <PlaneLanding v-else class="w-3 h-3 sm:w-4 sm:h-4" />
-
-                                                    <!-- Label -->
-                                                    <span class="truncate text-sm">
-                                                        {{
-                                                            route.query.flightType === 'multi-city'
-                                                                ? `Trip ${legIndex + 1}`
-                                                        : legIndex === 0
-                                                        ? 'Departure'
-                                                        : 'Arrival'
-                                                        }}
-                                                    </span>
-                                                </div>
-
-                                                <!-- Route & Info Section -->
-                                                <div class="flex-1 px-3 sm:px-4 lg:px-5 py-2 sm:py-3 bg-gray-50">
-                                                    <div
-                                                        class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2 lg:gap-4">
-                                                        <!-- Route -->
-                                                        <div class="flex-1 min-w-0">
-                                                            <div
-                                                                class="text-sm sm:text-base font-semibold text-gray-900 leading-tight truncate">
-                                                                {{ leg?.from?.city?.name || leg?.from?.city?.code }}
-                                                                ({{ leg?.from?.city?.code }})
-                                                                →
-                                                                {{ leg?.to?.city?.name || leg?.to?.city?.code }}
-                                                                ({{ leg?.to?.city?.code }})
-                                                            </div>
-
-                                                            <div class="text-xs text-gray-600 mt-0.5">
-                                                                {{ formatDate(leg?.departure_at) }}
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- Right Meta - Mobile Stacked -->
-                                                        <div class="flex flex-wrap gap-1 sm:gap-1.5 mt-1 sm:mt-0">
-                                                            <!-- Stops -->
-                                                            <div class="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold border"
-                                                                :class="leg?.has_layovers
-                                                                    ? 'bg-orange-50 text-orange-700 border-orange-200'
-                                                                    : 'bg-green-50 text-green-700 border-green-200'">
-                                                                <component :is="leg?.has_layovers ? ArrowDownUp : Minus"
-                                                                    class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                                                <span>
-                                                                    {{ leg?.has_layovers
-                                                                        ? leg?.layovers_count === 1
-                                                                            ? '1 Stop'
-                                                                            : leg?.layovers_count + ' Stops'
-                                                                        : 'Non-stop'
-                                                                    }}
-                                                                </span>
-                                                            </div>
-
-                                                            <!-- Duration -->
-                                                            <div
-                                                                class="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold border bg-gray-50 text-gray-700 border-gray-200">
-                                                                <Timer
-                                                                    class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                                                                <span>
-                                                                    {{ Math.floor(moment.duration(leg?.travel_time,
-                                                                        'm').asHours()) }}h
-                                                                    {{ moment.duration(leg?.travel_time, 'm').minutes()
-                                                                    }}m
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Flight Details Grid - Mobile Stacked -->
-                                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 sm:gap-6 items-center mt-3 sm:mt-4"
-                                                :class="{
-                                                    'mt-4': item?.leg?.flights.length !== 1,
-                                                }">
-                                                <!-- Airline Info - Mobile Center -->
-                                                <div class="flex flex-col justify-center md:col-span-1" :class="{
-                                                    'ps-0 sm:ps-3': item?.leg?.flights.length === 1,
-                                                    'ps-0 sm:ps-2': item?.leg?.flights.length !== 1,
-                                                    }">
-                                                    <div
-                                                        class="flex items-center gap-3 sm:gap-5 justify-center sm:justify-start">
-                                                        <div v-if="item?.leg?.flights.length === 1"
-                                                            class="mt-2 flex-shrink-0 hidden md:block">
-                                                            <div
-                                                                class="w-3 h-3 sm:w-4 sm:h-4 bg-red-600 rounded-full ring-2 sm:ring-4 ring-red-100">
-                                                            </div>
-                                                        </div>
-                                                        <div class="flex items-center gap-3 sm:gap-5">
-                                                            <div class="flex flex-col flex-shrink-0 justify-center items-center">
-                                                                <img class="w-10 h-10 sm:w-14 sm:h-14 md:w-20 md:h-20 object-contain p-1 sm:p-1.5 bg-white rounded"
-                                                                :src="leg?.marketing_carrier?.logo"
-                                                                :alt="leg?.marketing_carrier?.name" />
-                                                                <div class="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold border"
-                                                                
-                                                                >
-                                                            
-                                                                <span>
-                                                                   {{ item?.provider?.contentSource || 'LCC' }}
-                                                                </span>
-                                                            </div>
-                                                            </div>
-                                                               
-                                                            <div class="text-center sm:text-left">
-                                                                <div
-                                                                    class="text-sm sm:text-base md:text-lg tex-left font-semibold text-gray-900"
-                                                                    :class="{
-                                                                        'sm:w-48 ': item?.leg?.flights.length === 1,
-                                                                    }">
-                                                                    {{ leg?.marketing_carrier?.name }}
-                                                                </div>
-                                                                <div class="text-xs sm:text-sm text-gray-600"
-                                                                    v-html="
-                                                                        (leg?.segments || [])
-                                                                            .map((seg) => {
-                                                                                const code =
-                                                                                    seg?.operating_carrier?.iata ||
-                                                                                    leg?.marketing_carrier?.iata ||
-                                                                                    '';
-                                                                                const num = formatFlightNumber(seg?.flight_number);
-                                                                                return code && num ? `${code}-${num}` : '';
-                                                                            })
-                                                                            .filter(Boolean)
-                                                                            .join('<br>')
-                                                                    ">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- Timeline Section - Mobile Stacked -->
-                                                <div
-                                                    class="col-span-1 md:col-span-3 grid grid-cols-3 gap-3 sm:gap-6 items-center mt-3 sm:mt-0">
-                                                    <!-- Departure -->
-                                                    <div class="text-center">
-                                                        <div
-                                                            class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-                                                            {{ moment.parseZone(leg?.departure_at).format("HH:mm") }}
-                                                        </div>
-                                                        <div
-                                                            class="text-sm sm:text-base md:text-lg font-semibold text-gray-700 mt-0.5 sm:mt-1">
-                                                            {{ leg?.from?.city?.code }}
-                                                        </div>
-                                                        <div class="text-sm text-gray-500">
-                                                            {{
-                                                                moment(
-                                                                    leg.departure_at,
-                                                                ).format("ddd, DD MMM YYYY")
-                                                            }}
-
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Duration & Stops - Mobile Compact -->
-                                                    <div class="flex flex-col items-center">
-                                                        <div v-if="item?.leg?.flights.length == 1"
-                                                            class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium text-gray-600 mb-2 sm:mb-3">
-                                                            <Timer class="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
-                                                            <span>
-                                                                {{ Math.floor(moment.duration(leg?.travel_time,
-                                                                    "m").asHours()) }}h
-                                                                {{ moment.duration(leg?.travel_time, "m").minutes() }}m
-                                                            </span>
-                                                        </div>
-
-                                                        <div class="relative w-full flex items-center justify-center">
-                                                            <div class="flex-1 border-t border-dashed border-gray-300">
-                                                            </div>
-                                                            <div
-                                                                class="mx-2 sm:mx-4 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-red-50 flex items-center justify-center shadow-sm">
-                                                                <Plane class="w-4 h-4 sm:w-5 sm:h-5 text-red-600"
-                                                                    strokeWidth="1.8" />
-                                                            </div>
-                                                            <div class="flex-1 border-t border-dashed border-gray-300">
-                                                            </div>
-                                                        </div>
-
-                                                        <div v-if="item?.leg?.flights.length == 1" class="mt-2 sm:mt-3">
-                                                            <div class="inline-flex items-center gap-1 px-2 py-0.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold border"
-                                                                :class="leg?.has_layovers ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-green-50 text-green-700 border-green-200'">
-                                                                <component :is="leg?.has_layovers ? ArrowDownUp : Minus"
-                                                                    class="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                                                <span>
-                                                                    {{ leg?.has_layovers
-                                                                        ? leg?.layovers_count === 1 ? "1 Stop" :
-                                                                            leg?.layovers_count + " Stops"
-                                                                        : "Non-stop" }}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Arrival -->
-                                                    <div class="text-center">
-                                                        <div
-                                                            class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-                                                            {{ moment.parseZone(leg?.arrival_at).format("HH:mm") }}
-                                                        </div>
-                                                        <div
-                                                            class="text-sm sm:text-base md:text-lg font-semibold text-gray-700 mt-0.5 sm:mt-1">
-                                                            {{ leg?.to?.city?.code }}
-                                                        </div>
-                                                        <div class="text-sm text-gray-500">
-                                                            {{
-                                                                moment(
-                                                                    leg.arrival_at,
-                                                                ).format("ddd, DD MMM YYYY")
-                                                            }}
-
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Mobile Actions - Bottom Section -->
-                                    <div class="border-t border-gray-200 px-1 pt-2" :class="{
-                                        'mt-4': item?.leg?.flights?.length === 1,
-                                        'mt-2': item?.leg?.flights?.length !== 1
-                                    }">
-                                        <div
-                                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-                                            <!-- Cabin Class Info - Mobile Stacked -->
-                                            <div class="flex flex-wrap gap-3 text-xs sm:text-sm text-gray-600">
-                                                <div class="flex items-center gap-1.5">
-                                                    <Armchair class="w-4 h-4 text-gray-500" />
-                                                    <span class="font-medium text-gray-700">
-                                                        {{ item?.leg?.flights?.[0]?.cabin_class || "Economy" }}
-                                                    </span>
-                                                </div>
-                                                <!-- Flight Numbers - Mobile Only -->
-                                                <div class="sm:hidden flex items-center gap-1.5">
-                                                    <Ticket class="w-4 h-4 text-gray-500" />
-                                                    <span class="font-medium text-gray-700">
-                                                        <span v-for="(flight, index) in item?.leg?.flights"
-                                                            :key="flight?.flight_number">
-                                                            {{ flight?.marketing_carrier?.iata }}-{{
-                                                                formatFlightNumber(flight?.flight_number) }}
-                                                            <span v-if="index < item?.leg?.flights.length - 1"> •
-                                                            </span>
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Right: Refundable Badge + Details Button -->
-                                            <div
-                                                class="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mt-3 sm:mt-0">
-                                                <!-- Refundable Badge -->
-                                                <span
-                                                    class="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold border"
-                                                    :class="item?.leg?.flights[0]?.is_refundable
-                                                        ? 'bg-green-50 border-green-200 text-green-700'
-                                                        : 'bg-red-50 border-red-200 text-red-700'
-                                                        ">
-                                                    {{
-                                                        item?.leg?.flights[0]?.is_refundable
-                                                            ? "Refundable"
-                                                            : "Non-Refundable"
-                                                    }}
-                                                </span>
-
-                                                <!-- Details Button -->
-                                                <button @click="openSooperFlightDetails(item)"
-                                                    class="bg-primary text-white px-4 py-2 sm:px-6 sm:py-2.5 rounded-md font-semibold transition shadow-md w-full sm:w-auto">
-                                                    Details
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-
-
-                        <div v-if="isFlightLoading" class="space-y-4 mt-8">
-                            <div v-for="(item, index) in 5" :key="index"
-                                class="bg-white border w-full rounded h-[200px] p-4 flex items-start justify-between">
-                                <div>
-                                    <div class="flex items-center gap-x-3">
-                                        <Skeleton width="150px" height="30px"
-                                            :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100}`" />
-                                    </div>
-                                    <Skeleton width="60px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 50}`" />
-                                    <Skeleton width="90px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 100}`" />
-                                    <Skeleton width="200px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 150}`" />
-                                    <Skeleton width="150px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 200}`" />
-                                </div>
-                                <div class="flex flex-col items-end">
-                                    <Skeleton width="150px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 250}`" />
-                                    <Skeleton width="60px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 300}`" />
-                                    <Skeleton width="90px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 350}`" />
-                                    <Skeleton width="200px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 400}`" />
-                                    <Skeleton width="150px" height="15px"
-                                        :class="`rounded-none bg-gray-300 mb-4 animate-pulse animation-delay-${index * 100 + 450}`" />
-                                </div>
-                            </div>
-
-
-                        </div>
-                    </div>
-
-                    <!-- No Results -->
-                    <div v-if="showNoFlightsState || showNoFilteredFlightsState"
-                        class="mt-4 sm:mt-8 bg-white border border-gray-200 rounded-2xl p-6 sm:p-10 text-center">
-                        <img src="/public/assets/no-data.webp" alt="No flights found"
-                            class="w-28 sm:w-36 h-auto mx-auto mb-4 sm:mb-6" />
-                        <h3 class="text-xl sm:text-2xl font-bold text-primary">
-                            {{ showNoFlightsState ? "No Flights Found" : "No Flights Match Filters" }}
-                        </h3>
-                        <p class="text-sm sm:text-base text-gray-600 mt-2 max-w-2xl mx-auto">
-                            {{
-                                showNoFlightsState
-                                    ? "We could not find flights for your selected route and date. Please try changing dates or nearby airports."
-                                    : "Your selected filters are too strict. Try clearing some filters to see more flight options."
-                            }}
-                        </p>
-                        <!-- <div class="mt-5 sm:mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-                            <button @click="resetAllFilters"
-                                class="px-5 py-2.5 rounded-md border border-primary text-primary font-semibold hover:bg-primary/5">
-                                Reset Filters
-                            </button>
-                            <button @click="scrollToSearchTop"
-                                class="px-5 py-2.5 rounded-md bg-primary text-white font-semibold hover:bg-primary/90">
-                                Modify Search
-                            </button>
-                        </div> -->
-                    </div>
-
-
-                </div>
+            <div class="px-5 py-2 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between text-xs">
+              <button @click="openSooperFlightDetails(item)" class="text-primary font-semibold hover:underline">View Flight Details</button>
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded bg-gray-200 text-gray-600">{{ item?.leg?.flights?.[0]?.cabin_class || "Economy" }}</span>
+                <span :class="item?.leg?.flights[0]?.is_refundable ? 'text-emerald-600' : 'text-rose-500'" class="font-semibold">
+                  {{ item?.leg?.flights[0]?.is_refundable ? "Refundable" : "Non-Refundable" }}
+                </span>
+              </div>
             </div>
+          </div>
         </div>
 
-        <!-- Search Expired Dialog -->
-        <div v-if="showDialog"
-            class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center z-30 justify-center p-8">
-            <div class="bg-white p-4 sm:p-6 rounded shadow-lg w-full sm:w-1/4 text-center">
-                <img src="/public/assets/clock.svg" alt="Logo" class="mx-auto mb-4 w-16 sm:w-32" />
-                <h2 class="text-lg font-bold">Still Arround?</h2>
-                <p class="mt-2">
-                    Your search has been inactive for more than 15 minutes.Please refresh the page to update.
-                </p>
-
-                <div class="mt-4 flex justify-center gap-2">
-                    <button @click="$router.push({ name: 'Home' })" class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90">
-                    Start new search
-                </button>
-                 <button @click="confirmReload" class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90">
-                    Refresh
-                </button>
-                </div>
-            </div>
+        <!-- No Results -->
+        <div v-if="showNoFlightsState || showNoFilteredFlightsState"
+          class="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <img src="/public/assets/no-data.webp" alt="No flights found" class="w-28 h-auto mx-auto mb-4" />
+          <h3 class="text-xl font-bold text-primary">{{ showNoFlightsState ? "No Flights Found" : "No Flights Match Filters" }}</h3>
+          <p class="text-sm text-gray-600 mt-2 max-w-md mx-auto">
+            {{ showNoFlightsState ? "We could not find flights for your selected route and date. Please try changing dates or nearby airports." : "Your selected filters are too strict. Try clearing some filters to see more flight options." }}
+          </p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MORE FILTERS MODAL (kept for compatibility, but filters are now in sidebar) -->
+  <Dialog v-model:open="showMoreFilters">
+    <DialogContent class="w-full max-w-md sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-white p-4 sm:p-8 rounded-2xl sm:rounded-3xl">
+      <div class="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-8 py-4 sm:py-6 flex justify-between items-center z-10">
+        <div>
+          <DialogTitle class="text-xl sm:text-2xl font-bold text-gray-900">More Filters</DialogTitle>
+          <DialogDescription class="text-sm sm:text-base text-gray-600 mt-1">
+            Refine your flight search with additional options
+          </DialogDescription>
+        </div>
+        <button @click="resetAllFilters(); showMoreFilters = false;" class="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-primary text-white rounded text-xs sm:text-sm font-semibold hover:bg-primary/90 transition">
+          Clear All
+        </button>
+      </div>
+
+      <div class="p-4 sm:p-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
+          <!-- Departure Time -->
+          <div>
+            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Departure Time</h3>
+            <div class="space-y-2 sm:space-y-3">
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="departureTimes" value="morning" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">12:00 AM - 06:00 AM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="departureTimes" value="morningLate" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">06:00 AM - 12:00 PM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="departureTimes" value="afternoon" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">12:00 PM - 06:00 PM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="departureTimes" value="night" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">06:00 PM - 12:00 AM</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Arrival Time -->
+          <div>
+            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Arrival Time</h3>
+            <div class="space-y-2 sm:space-y-3">
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="arrivalTimes" value="morning" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">12:00 AM - 06:00 AM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="arrivalTimes" value="morningLate" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">06:00 AM - 12:00 PM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="arrivalTimes" value="afternoon" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">12:00 PM - 06:00 PM</span>
+              </label>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="arrivalTimes" value="night" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700">06:00 PM - 12:00 AM</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Airlines -->
+          <div>
+            <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Airlines</h3>
+            <div class="space-y-2 sm:space-y-3 max-h-40 sm:max-h-64 overflow-y-auto pr-2">
+              <label v-for="airline in availableAirlines" :key="airline.id" class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="selectedAirline" :value="airline.id" @change="filterByAirline" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-xs sm:text-sm text-gray-700 flex-1">{{ airline.name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Price + Duration + Stops + Refundable -->
+          <div class="space-y-6 sm:space-y-8">
+            <div>
+              <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Price Range</h3>
+              <div class="space-y-2 sm:space-y-4">
+                <div class="flex justify-between text-xs sm:text-sm text-gray-600">
+                  <span>{{ formatAmount(minPriceLimit) }}</span>
+                  <span>{{ formatAmount(maxPriceLimit) }}</span>
+                </div>
+                <input type="range" :min="minPriceLimit" :max="maxPriceLimit" v-model="maxPrice" @input="filterByPrice" class="w-full h-2 sm:h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
+                <div class="text-center text-sm sm:text-lg font-bold text-primary">{{ formatAmount(maxPrice || maxPriceLimit) }}</div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Flight Duration</h3>
+              <div class="space-y-2 sm:space-y-4">
+                <input type="range" min="0" :max="maxDuration" v-model="maxDurationFilter" @input="filterByDuration" class="w-full h-2 sm:h-3 bg-gray-200 rounded-full accent-primary cursor-pointer" />
+                <div class="text-center text-xs sm:text-sm text-primary">Up to {{ maxDurationFilter || maxDuration }} hours</div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">Stops</h3>
+              <div class="space-y-2 sm:space-y-3">
+                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                  <input type="checkbox" value="0" v-model="selectedStopsArray" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                  <span class="text-xs sm:text-sm text-gray-700">Non-Stop</span>
+                </label>
+                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                  <input type="checkbox" value="1" v-model="selectedStopsArray" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                  <span class="text-xs sm:text-sm text-gray-700">1 Stop</span>
+                </label>
+                <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                  <input type="checkbox" value="2" v-model="selectedStopsArray" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                  <span class="text-xs sm:text-sm text-gray-700">2+ Stops</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="flex items-center gap-2 sm:gap-3 cursor-pointer">
+                <input type="checkbox" v-model="onlyRefundable" @change="filterByRefundable" class="accent-primary w-4 h-4 sm:w-5 sm:h-5 rounded" />
+                <span class="text-sm sm:text-base font-medium text-gray-800">Refundable Only</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter class="sticky bottom-0 bg-white border-t border-gray-200 px-4 sm:px-8 py-4 sm:py-6 flex justify-end gap-3 sm:gap-6">
+        <Button @click="showMoreFilters = false" variant="outline" class="px-6 py-2 sm:px-8 sm:py-3 text-sm sm:text-base">Cancel</Button>
+        <Button @click="showMoreFilters = false; applyAllFilters();" class="px-8 py-2 sm:px-10 sm:py-3 bg-primary text-white font-semibold text-sm sm:text-base">Apply Filters</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Mobile filter toggle button (visible on small screens) -->
+  <div class="lg:hidden fixed bottom-4 right-4 z-40">
+    <button @click="showMoreFilters = true" class="bg-primary text-white p-3 rounded-full shadow-lg">
+      <SlidersHorizontal class="w-5 h-5" />
+    </button>
+  </div>
+
+  <!-- Search Expired Dialog -->
+  <div v-if="showDialog" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center z-30 justify-center p-8">
+    <div class="bg-white p-4 sm:p-6 rounded shadow-lg w-full sm:w-1/4 text-center">
+      <img src="/public/assets/clock.svg" alt="Logo" class="mx-auto mb-4 w-16 sm:w-32" />
+      <h2 class="text-lg font-bold">Still Around?</h2>
+      <p class="mt-2">Your search has been inactive for more than 15 minutes. Please refresh the page to update.</p>
+      <div class="mt-4 flex justify-center gap-2">
+        <button @click="$router.push({ name: 'Home' })" class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90">Start new search</button>
+        <button @click="confirmReload" class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90">Refresh</button>
+      </div>
+    </div>
+  </div>
 
         <!-- Flight Details Side Panel - RESPONSIVE -->
         <Transition name="fade">

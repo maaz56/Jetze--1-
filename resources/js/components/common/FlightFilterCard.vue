@@ -1,6 +1,5 @@
 <script setup>
 import Autocomplete from "@/components/common/Autocomplete.vue";
-import DateRangePicker from "@/components/common/DateRangePicker.vue";
 import Button from "@/components/ui/button/Button.vue";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,14 +14,6 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDownIcon, Search, ArrowLeftRight, ArrowRight, Calendar } from "lucide-vue-next";
 import { FETCH_AIRPORTS, FETCH_PNR_DATA } from "@/services/store/actions.type";
 import { computed, onMounted, ref, watch } from "vue";
@@ -81,7 +72,49 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue", "search"]);
 
-const localValue = ref({ ...props.modelValue });
+const createDefaultModel = () => ({
+    flightType: "one-way",
+    adult: 1,
+    child: 0,
+    infant: 0,
+    classType: "Y",
+    origin: "",
+    destination: "",
+    dateRange: {
+        start: null,
+        end: null,
+    },
+    multiCityTrips: [
+        { origin: null, destination: null, date: "" },
+        { origin: null, destination: null, date: "" },
+    ],
+});
+
+const normalizeModelValue = (value = {}) => {
+    const defaults = createDefaultModel();
+    const dateRange = {
+        ...defaults.dateRange,
+        ...(value?.dateRange || {}),
+    };
+    const trips = Array.isArray(value?.multiCityTrips) && value.multiCityTrips.length
+        ? value.multiCityTrips.map((trip) => ({
+              origin: trip?.origin ?? null,
+              destination: trip?.destination ?? null,
+              date: trip?.date ?? "",
+          }))
+        : defaults.multiCityTrips.map((trip) => ({ ...trip }));
+
+    return {
+        ...defaults,
+        ...(value || {}),
+        classType: value?.classType || "Y",
+        dateRange,
+        multiCityTrips: trips,
+    };
+};
+
+const localValue = ref(normalizeModelValue(props.modelValue));
+const syncingFromParent = ref(false);
 const isSubmit = ref(false);
 const maxMultiCityTrips = 3;
 function validate() {
@@ -180,12 +213,9 @@ function handleSearch() {
     }
 }
 function swapOriginDestination() {
-    // Create a new object with swapped values
-    emit("update:modelValue", {
-        ...localValue.value,
-        origin: localValue.value.destination,
-        destination: localValue.value.origin,
-    });
+    const previousOrigin = localValue.value.origin;
+    localValue.value.origin = localValue.value.destination;
+    localValue.value.destination = previousOrigin;
 }
 // Hide error for date fields when a valid date is selected (one-way/return)
 watch(
@@ -277,17 +307,23 @@ watch(
 watch(
     () => props.modelValue,
     (val) => {
-        if (JSON.stringify(val) !== JSON.stringify(localValue.value)) {
-            localValue.value = { ...val };
+        const normalized = normalizeModelValue(val);
+        if (JSON.stringify(normalized) !== JSON.stringify(localValue.value)) {
+            syncingFromParent.value = true;
+            localValue.value = normalized;
+            syncingFromParent.value = false;
         }
     },
+    { deep: true, immediate: true },
 );
 
 watch(
     localValue,
     (val) => {
-        if (JSON.stringify(val) !== JSON.stringify(props.modelValue)) {
-            emit("update:modelValue", { ...val });
+        if (syncingFromParent.value) return;
+        const normalized = normalizeModelValue(val);
+        if (JSON.stringify(normalized) !== JSON.stringify(props.modelValue)) {
+            emit("update:modelValue", normalized);
         }
     },
     { deep: true },
@@ -446,10 +482,10 @@ const startCountdown = (remainingTime) => {
 </script>
 
 <template>
-    <div class="bg-gray-50">
+    <div class="bg-black">
         <div v-if="activeTab === 'flights'">
             <div v-if="showRoutePreview"
-                class="sm:hidden bg-secondary backdrop-blur-md border border-white/20  p-3 flex items-center justify-between gap-2 shadow-md"
+                class="sm:hidden bg-primary backdrop-blur-md border border-white/20  p-3 flex items-center justify-between gap-2 shadow-md"
             >
                 <!-- Locations -->
                 <div
@@ -476,352 +512,339 @@ const startCountdown = (remainingTime) => {
                     Change
                 </button>
             </div>
-            <div v-else class="p-4 bg-secondary ">
-                <div class="py-6 hidden sm:block">
-                    <div class="container">
-                        <h2 class="text-4xl font-light text-white">
-                            Search for Flights
-                        </h2>
-                        <p class="text-lg text-white/80 mt-1">
-                            Find the best deals for your air travel
-                        </p>
-                    </div>
-                </div>
+            <div v-else class="p-4 bg-gradient-to-b from-black to-primary backdrop-blur-sm">
+               
 
                 <!-- Header Section -->
                 <div
-                    class="flex flex-col container sm:flex-row justify-between gap-3 sm:gap-0"
+                    class="flex flex-col container sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-3"
                 >
                     <!-- Flight Type Tabs -->
                     <div class="w-full sm:w-auto">
-                        <Tabs v-model="localValue.flightType" class="w-full">
-                            <TabsList
-                                class="grid grid-cols-3 sm:mb-4 bg-white/10 text-white w-full"
+                        <div
+                            class="flex w-full sm:w-auto bg-gray-100 rounded-md p-1 flex-row sm:flex-row gap-1"
+                        >
+                            <button
+                                type="button"
+                                @click="localValue.flightType = 'return'"
+                                :class="[
+                                    'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                    localValue.flightType === 'return'
+                                        ? 'bg-white text-gray-900 border border-gray-200'
+                                        : 'text-gray-600 hover:bg-white',
+                                ]"
                             >
-                                <TabsTrigger
-                                    value="return"
-                                    class="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-2"
-                                    >Round Trip</TabsTrigger
-                                >
-                                <TabsTrigger
-                                    value="one-way"
-                                    class="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-2"
-                                    >One Way
-                                </TabsTrigger>
-                                <TabsTrigger
-                                    value="multi-city"
-                                    class="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-2"
-                                    >Multi-City
-                                </TabsTrigger>
-                            </TabsList>
-                        </Tabs>
+                                Round Trip
+                            </button>
+                            <button
+                                type="button"
+                                @click="
+                                    localValue.flightType = 'one-way';
+                                    localValue.dateRange.end = null;
+                                "
+                                :class="[
+                                    'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                    localValue.flightType === 'one-way'
+                                        ? 'bg-white text-gray-900 border border-gray-200'
+                                        : 'text-gray-600 hover:bg-white',
+                                ]"
+                            >
+                                One Way
+                            </button>
+                            <button
+                                type="button"
+                                @click="
+                                    localValue.flightType = 'multi-city';
+                                    localValue.dateRange.start = null;
+                                    localValue.dateRange.end = null;
+                                "
+                                :class="[
+                                    'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                    localValue.flightType === 'multi-city'
+                                        ? 'bg-white text-gray-900 border border-gray-200'
+                                        : 'text-gray-600 hover:bg-white',
+                                ]"
+                            >
+                                Multi-City
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Travel Options -->
-                    <div
-                        class="flex flex-row gap-3 items-stretch xs:items-center"
-                    >
-                        <!-- Countdown -->
-                        <!-- <div v-if="countdown !== null || countdown == '0'"
-             class="border bg-white py-1.5 px-2 rounded-md text-primary text-xs sm:text-sm flex items-center justify-center h-10">
-          {{ countdown }}
-        </div> -->
-
-                        <!-- Class Selection -->
-                        <Popover v-model:open="isPopoverOpen">
-                            <PopoverTrigger as-child>
-                                <button
-                                    type="button"
-                                    class="w-full h-11 px-3 sm:px-4 flex items-center justify-between rounded-md bg-white/10 hover:bg-white/15 text-white text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <!-- Left content -->
-                                    <div
-                                        class="flex items-center gap-2 truncate"
-                                    >
-                                        <!-- <ChevronDownIcon
-                                                class="w-4 h-4 opacity-80"
-                                            /> -->
-
-                                        <span
-                                            v-if="totalTravelers"
-                                            class="truncate"
-                                        >
-                                            <span class="font-semibold">
-                                                {{ travelersSummary }}
-                                            </span>
-                                            <span class="mx-1 opacity-60"
-                                                >•</span
-                                            >
-                                            <span class="opacity-90">
-                                                {{ classLabel }}
-                                            </span>
-                                        </span>
-
-                                        <span v-else class="text-gray-400">
-                                            Travellers & Class
-                                        </span>
-                                    </div>
-
-                                    <!-- Right arrow -->
-                                    <ChevronDownIcon
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                                class="w-80 p-6 rounded-lg border-0 shadow-xl"
-                            >
-                                <div class="space-y-6">
-                                    <!-- Cabin Class -->
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button
-                                            @click="localValue.classType = 'Y'"
-                                            :class="[
-                                                'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                localValue.classType === 'Y'
-                                                    ? 'bg-secondary text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                            ]"
-                                        >
-                                            {{ $t("economy") }}
-                                        </button>
-
-                                        <button
-                                            @click="localValue.classType = 'S'"
-                                            :class="[
-                                                'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                localValue.classType === 'S'
-                                                    ? 'bg-secondary text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                            ]"
-                                        >
-                                            {{ $t("premium_economy") }}
-                                        </button>
-
-                                        <button
-                                            @click="localValue.classType = 'C'"
-                                            :class="[
-                                                'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                localValue.classType === 'C'
-                                                    ? 'bg-secondary text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                            ]"
-                                        >
-                                            {{ $t("business") }}
-                                        </button>
-                                        <button
-                                            @click="localValue.classType = 'F'"
-                                            :class="[
-                                                'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                localValue.classType === 'F'
-                                                    ? 'bg-secondary text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                            ]"
-                                        >
-                                            {{ $t("first class") }}
-                                        </button>
-                                    </div>
-
-                                    <!-- Counters -->
-                                    <div class="space-y-5">
-                                        <div class="flex justify-between items-center">
-                                            <Label><b>Adult</b> <br>(12 Years) </Label>
-                                            <NumberField
-                                            class="w-1/2"
-                                                id="adult-field"
-                                                v-model="localValue.adult"
-                                                :max="maxAdults"
-                                                @update:modelValue="
-                                                    handleAdultChange
-                                                "
-                                            >
-                                                <NumberFieldContent>
-                                                    <NumberFieldDecrement />
-                                                    <NumberFieldInput />
-                                                    <NumberFieldIncrement />
-                                                </NumberFieldContent>
-                                            </NumberField>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <Label><b>Child</b> <br>(2-11 Years)</Label>
-                                            <NumberField
-                                                class="w-1/2"
-                                                id="child-field"
-                                                v-model="localValue.child"
-                                                :min="0"
-                                                :max="maxChildren"
-                                                @update:modelValue="
-                                                    handleChildChange
-                                                "
-                                            >
-                                                <NumberFieldContent>
-                                                    <NumberFieldDecrement />
-                                                    <NumberFieldInput />
-                                                    <NumberFieldIncrement />
-                                                </NumberFieldContent>
-                                            </NumberField>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <Label
-                                                ><b>Infant</b> <br>(Under 2 Years)</Label
-                                            >
-                                            <NumberField
-                                            class="w-1/2"
-                                                id="infant-field"
-                                                v-model="localValue.infant"
-                                                :min="0"
-                                                :max="maxInfants"
-                                                @update:modelValue="
-                                                    handleInfantChange
-                                                "
-                                            >
-                                                <NumberFieldContent>
-                                                    <NumberFieldDecrement />
-                                                    <NumberFieldInput />
-                                                    <NumberFieldIncrement />
-                                                </NumberFieldContent>
-                                            </NumberField>
-                                        </div>
-                                    </div>
-
-                                    <!-- Footer -->
-                                    <div class="flex justify-between">
-                                        <Button
-                                            @click="resetTravelers"
-                                            class="text-sm text-white font-medium hover:text-gray-800"
-                                        >
-                                            Reset
-                                        </Button>
-                                        <Button
-                                            @click="applyChanges"
-                                            class="px-5 py-1 bg-secondary text-white rounded-md font-sm"
-                                        >
-                                            Apply
-                                        </Button>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
                 </div>
 
                 <!-- Flight Search Form -->
                 <div
-                    class="gap-2 flex-col container my-2 sm:my-5"
+                    class="container my-2 sm:my-5"
                     v-if="
                         localValue.flightType === 'one-way' ||
                         localValue.flightType === 'return'
                     "
                 >
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <div class="w-full">
-                            <Autocomplete
-                                v-model="localValue.origin"
-                                placeholder="Origin"
-                                :source="airports"
-                                :icon="'PlaneTakeoff'"
-                                class="text-white"
-                                  :default-suggestions="headerDefaultAirportCodes"
-                            />
+                    <div class=" rounded-xl p-3 sm:p-0">
+                        <div
+                            class="flex flex-col gap-3 sm:gap-1 sm:flex-row items-stretch"
+                        >
+                            <div class="text-start relative w-full">
+                                <label
+                                    class="hidden  sm:block text-sm font-semibold text-white sm:mb-1"
+                                >
+                                    FROM
+                                </label>
+                                <Autocomplete
+                                    v-model="localValue.origin"
+                                    placeholder="Origin"
+                                    :source="airports"
+                                    :icon="'PlaneTakeoff'"
+                                    :default-suggestions="headerDefaultAirportCodes"
+                                    class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                />
+                                <div
+                                    v-if="errors.origin"
+                                    class="text-destructive mt-1 text-xs"
+                                >
+                                    {{ errors.origin }}
+                                </div>
+                            </div>
+
                             <div
-                                v-if="errors.origin"
-                                class="text-destructive mt-1 text-xs"
+                                class="relative hidden sm:flex items-center justify-center w-0 mt-5 py-2 sm:py-0 sm:px-0"
                             >
-                                {{ errors.origin }}
+                                <button
+                                    type="button"
+                                    @click="swapOriginDestination"
+                                    class="absolute z-10 w-11 h-11 bg-white text-black border border-gray-200 text-white rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
+                                    aria-label="Swap origin and destination"
+                                >
+                                    <ArrowLeftRight class="w-5 h-5 text-black" />
+                                </button>
+                            </div>
+
+                            <div class="text-start relative w-full">
+                                <label
+                                    class="hidden sm:block text-sm font-semibold text-white sm:mb-1"
+                                >
+                                    TO
+                                </label>
+                                <Autocomplete
+                                    v-model="localValue.destination"
+                                    placeholder="Destination"
+                                    :source="airports"
+                                    :icon="'PlaneLanding'"
+                                    :default-suggestions="headerDefaultAirportCodes"
+                                    class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                />
+                                <div
+                                    v-if="errors.destination"
+                                    class="text-destructive mt-1 text-xs"
+                                >
+                                    {{ errors.destination }}
+                                </div>
+                            </div>
+
+                            <div class="w-full mt-1 sm:mt-0 text-start">
+                                <label
+                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                >
+                                    Departure
+                                </label>
+                                <Calender
+                                    v-model="localValue.dateRange.start"
+                                    :minValue="new Date().toLocaleDateString('en-CA')"
+                                    class="w-full h-10 sm:h-auto"
+                                />
+                                <div
+                                    v-if="errors.start"
+                                    class="text-destructive mt-1 text-xs"
+                                >
+                                    {{ errors.start }}
+                                </div>
+                            </div>
+
+                            <div
+                                class="w-full mt-1 sm:mt-0 text-start"
+                                v-if="localValue.flightType === 'return'"
+                            >
+                                <label
+                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                >
+                                    Return
+                                </label>
+                                <Calender
+                                    v-model="localValue.dateRange.end"
+                                    :minValue="
+                                        localValue.dateRange.start ||
+                                        new Date().toLocaleDateString('en-CA')
+                                    "
+                                    class="w-full h-10 sm:h-auto"
+                                />
+                                <div
+                                    v-if="errors.end"
+                                    class="text-destructive mt-1 text-xs"
+                                >
+                                    {{ errors.end }}
+                                </div>
+                            </div>
+
+                            <div class="w-full mt-1 sm:mt-0 text-start">
+                                <label
+                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                >
+                                    Travellers & Class
+                                </label>
+                                <Popover v-model:open="isPopoverOpen">
+                                    <PopoverTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <div class="text-left">
+                                                <p class="font-bold text-lg">
+                                                    {{ travelersSummary }}
+                                                </p>
+                                                <p class="text-sm text-gray-500">
+                                                    {{ classLabel }}
+                                                </p>
+                                            </div>
+                                            <ChevronDownIcon class="w-4 h-4 opacity-70" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        class="w-80 p-6 rounded-lg border-0 shadow-xl"
+                                    >
+                                        <div class="space-y-6">
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <button
+                                                    @click="localValue.classType = 'Y'"
+                                                    :class="[
+                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                        localValue.classType === 'Y'
+                                                            ? 'bg-secondary text-white'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                    ]"
+                                                >
+                                                    {{ $t("economy") }}
+                                                </button>
+                                                <button
+                                                    @click="localValue.classType = 'S'"
+                                                    :class="[
+                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                        localValue.classType === 'S'
+                                                            ? 'bg-secondary text-white'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                    ]"
+                                                >
+                                                    {{ $t("premium_economy") }}
+                                                </button>
+                                                <button
+                                                    @click="localValue.classType = 'C'"
+                                                    :class="[
+                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                        localValue.classType === 'C'
+                                                            ? 'bg-secondary text-white'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                    ]"
+                                                >
+                                                    {{ $t("business") }}
+                                                </button>
+                                                <button
+                                                    @click="localValue.classType = 'F'"
+                                                    :class="[
+                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                        localValue.classType === 'F'
+                                                            ? 'bg-secondary text-white'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                    ]"
+                                                >
+                                                    {{ $t("first class") }}
+                                                </button>
+                                            </div>
+
+                                            <div class="space-y-5">
+                                                <div class="flex justify-between items-center">
+                                                    <Label><b>Adult</b> <br>(12 Years)</Label>
+                                                    <NumberField
+                                                        class="w-1/2"
+                                                        id="adult-field"
+                                                        v-model="localValue.adult"
+                                                        :max="maxAdults"
+                                                        @update:modelValue="handleAdultChange"
+                                                    >
+                                                        <NumberFieldContent>
+                                                            <NumberFieldDecrement />
+                                                            <NumberFieldInput />
+                                                            <NumberFieldIncrement />
+                                                        </NumberFieldContent>
+                                                    </NumberField>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <Label><b>Child</b> <br>(2-11 Years)</Label>
+                                                    <NumberField
+                                                        class="w-1/2"
+                                                        id="child-field"
+                                                        v-model="localValue.child"
+                                                        :min="0"
+                                                        :max="maxChildren"
+                                                        @update:modelValue="handleChildChange"
+                                                    >
+                                                        <NumberFieldContent>
+                                                            <NumberFieldDecrement />
+                                                            <NumberFieldInput />
+                                                            <NumberFieldIncrement />
+                                                        </NumberFieldContent>
+                                                    </NumberField>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <Label><b>Infant</b> <br>(Under 2 Years)</Label>
+                                                    <NumberField
+                                                        class="w-1/2"
+                                                        id="infant-field"
+                                                        v-model="localValue.infant"
+                                                        :min="0"
+                                                        :max="maxInfants"
+                                                        @update:modelValue="handleInfantChange"
+                                                    >
+                                                        <NumberFieldContent>
+                                                            <NumberFieldDecrement />
+                                                            <NumberFieldInput />
+                                                            <NumberFieldIncrement />
+                                                        </NumberFieldContent>
+                                                    </NumberField>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex justify-between">
+                                                <Button
+                                                    @click="resetTravelers"
+                                                    class="text-sm text-white font-medium hover:text-gray-800"
+                                                >
+                                                    Reset
+                                                </Button>
+                                                <Button
+                                                    @click="applyChanges"
+                                                    class="px-5 py-1 bg-secondary text-white rounded-md font-sm"
+                                                >
+                                                    Apply
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         </div>
 
-                        <!-- Swap Button -->
-                        <div class=" hidden sm:flex items-center justify-center">
-                            <button
-                                type="button"
-                                @click="swapOriginDestination"
-                                class="p-2 rounded-md hover:bg-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
-                                aria-label="Swap origin and destination"
-                            >
-                                <ArrowLeftRight class="w-8 h-6 text-white" />
-                            </button>
-                        </div>
-
-                        <div class="w-full">
-                            <Autocomplete
-                                v-model="localValue.destination"
-                                placeholder="Destination"
-                                :source="airports"
-                                :icon="'PlaneLanding'"
-                                class="text-white"
-                                :default-suggestions="headerDefaultAirportCodes"
-                            />
-                            <div
-                                v-if="errors.destination"
-                                class="text-destructive mt-1 text-xs"
-                            >
-                                {{ errors.destination }}
+                        <div class="flex justify-end mt-3 sm:mt-4">
+                            <div class="w-full sm:w-40">
+                                <button
+                                    @click="handleSearch"
+                                    class="w-full bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 rounded-full px-3 py-3 text-white font-bold flex items-center justify-center gap-2 text-lg sm:text-2xl"
+                                >
+                                    <Search class="w-4 h-4 sm:w-6 sm:h-6" />
+                                    <span class="rtl:text-right ltr:text-left">
+                                        {{ $t("search") }}
+                                    </span>
+                                </button>
                             </div>
                         </div>
-                        <div
-                            class="w-full"
-                            v-show="localValue.flightType === 'one-way'"
-                        >
-                            <!-- <label
-                                class="hidden sm:block text-sm font-semibold text-white mb-1"
-                                >Dates</label
-                            > -->
-                            <Calender
-                                class="mt-2"
-                                v-model="localValue.dateRange.start"
-                                :minValue="
-                                    new Date().toLocaleDateString('en-CA')
-                                "
-                                :prices="{
-                                    '2026-01-10': '120,200',
-                                    '2026-01-11': '100,200',
-                                    '2026-01-12': '200,489',
-                                }"
-                            />
-                            <div
-                                v-if="errors.start"
-                                class="text-destructive mt-1 text-xs"
-                            >
-                                {{ errors.start }}
-                            </div>
-                        </div>
-                        <div
-                            class="w-full"
-                            v-show="localValue.flightType === 'return'"
-                        >
-                            <!-- <label
-                                class="hidden sm:block text-sm font-semibold text-white mb-1"
-                                >Dates</label
-                            > -->
-                            <DateRangePicker
-                                class="mt-2"
-                                :minValue="
-                                    new Date().toLocaleDateString('en-CA')
-                                "
-                                v-model="localValue.dateRange"
-                            />
-                            <div
-                                v-if="errors.start"
-                                class="text-destructive mt-1 text-xs"
-                            >
-                                {{ errors.start }}
-                            </div>
-                            <div
-                                v-if="errors.end"
-                                class="text-destructive mt-1 text-xs"
-                            >
-                                {{ errors.end }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex justify-end mt-5">
-                        <Button
-                            class="text-white bg-primary h-10 gap-2 px-6"
-                            @click="handleSearch"
-                        >
-                            <Search class="w-5" /> Modify Search
-                        </Button>
                     </div>
                 </div>
 
@@ -830,23 +853,22 @@ const startCountdown = (remainingTime) => {
                     <div
                         v-for="(trip, index) in localValue.multiCityTrips"
                         :key="index"
-                        class="relative grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 items-end"
+                        class="space-y-1"
                     >
-                        <!-- ❌ Remove button (overlay, NOT a column) -->
-                        <button
-                            v-if="index >= 2"
-                            @click="removeTrip(index)"
-                            type="button"
-                            class="absolute -top-2 -right-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/60 hover:bg-white text-gray-600 hover:text-red-500"
-                        >
-                            ✕
-                        </button>
+                        <p class="text-xl sm:text-3xl font-semibold text-white">
+                            Trip {{ index + 1 }}
+                        </p>
 
+                        <div
+                            :class="[
+                                'relative grid grid-cols-1 gap-2 sm:gap-3 items-end',
+                                'sm:grid-cols-4',
+                            ]"
+                        >
                         <!-- From -->
                         <div class="w-full">
                             <Autocomplete
                                 v-model="trip.origin"
-                                :label="`From (Trip ${index + 1})`"
                                 :placeholder="$t('origin')"
                                 :source="airports"
                                 class="text-white"
@@ -864,7 +886,6 @@ const startCountdown = (remainingTime) => {
                         <div class="w-full">
                             <Autocomplete
                                 v-model="trip.destination"
-                                :label="`To (Trip ${index + 1})`"
                                 :placeholder="$t('destination')"
                                 :icon="'PlaneLanding'"
                                 :source="airports"
@@ -899,6 +920,164 @@ const startCountdown = (remainingTime) => {
                                 {{ errors.multiCityTrips[index].date }}
                             </div>
                         </div>
+
+                        <div v-if="index === 0" class="w-full mt-1 sm:mt-0 text-start">
+                            <label
+                                class="hidden sm:block text-sm font-semibold text-white mb-1"
+                            >
+                                Travellers & Class
+                            </label>
+                            <Popover v-model:open="isPopoverOpen">
+                                <PopoverTrigger as-child>
+                                    <button
+                                        type="button"
+                                        class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <div class="text-left">
+                                            <p class="font-bold text-lg">
+                                                {{ travelersSummary }}
+                                            </p>
+                                            <p class="text-sm text-gray-500">
+                                                {{ classLabel }}
+                                            </p>
+                                        </div>
+                                        <ChevronDownIcon class="w-4 h-4 opacity-70" />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    class="w-80 p-6 rounded-lg border-0 shadow-xl"
+                                >
+                                    <div class="space-y-6">
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button
+                                                @click="localValue.classType = 'Y'"
+                                                :class="[
+                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    localValue.classType === 'Y'
+                                                        ? 'bg-secondary text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                ]"
+                                            >
+                                                {{ $t("economy") }}
+                                            </button>
+                                            <button
+                                                @click="localValue.classType = 'S'"
+                                                :class="[
+                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    localValue.classType === 'S'
+                                                        ? 'bg-secondary text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                ]"
+                                            >
+                                                {{ $t("premium_economy") }}
+                                            </button>
+                                            <button
+                                                @click="localValue.classType = 'C'"
+                                                :class="[
+                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    localValue.classType === 'C'
+                                                        ? 'bg-secondary text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                ]"
+                                            >
+                                                {{ $t("business") }}
+                                            </button>
+                                            <button
+                                                @click="localValue.classType = 'F'"
+                                                :class="[
+                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    localValue.classType === 'F'
+                                                        ? 'bg-secondary text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                ]"
+                                            >
+                                                {{ $t("first class") }}
+                                            </button>
+                                        </div>
+
+                                        <div class="space-y-5">
+                                            <div class="flex justify-between items-center">
+                                                <Label><b>Adult</b> <br>(12 Years)</Label>
+                                                <NumberField
+                                                    class="w-1/2"
+                                                    id="adult-field-multicity"
+                                                    v-model="localValue.adult"
+                                                    :max="maxAdults"
+                                                    @update:modelValue="handleAdultChange"
+                                                >
+                                                    <NumberFieldContent>
+                                                        <NumberFieldDecrement />
+                                                        <NumberFieldInput />
+                                                        <NumberFieldIncrement />
+                                                    </NumberFieldContent>
+                                                </NumberField>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <Label><b>Child</b> <br>(2-11 Years)</Label>
+                                                <NumberField
+                                                    class="w-1/2"
+                                                    id="child-field-multicity"
+                                                    v-model="localValue.child"
+                                                    :min="0"
+                                                    :max="maxChildren"
+                                                    @update:modelValue="handleChildChange"
+                                                >
+                                                    <NumberFieldContent>
+                                                        <NumberFieldDecrement />
+                                                        <NumberFieldInput />
+                                                        <NumberFieldIncrement />
+                                                    </NumberFieldContent>
+                                                </NumberField>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <Label><b>Infant</b> <br>(Under 2 Years)</Label>
+                                                <NumberField
+                                                    class="w-1/2"
+                                                    id="infant-field-multicity"
+                                                    v-model="localValue.infant"
+                                                    :min="0"
+                                                    :max="maxInfants"
+                                                    @update:modelValue="handleInfantChange"
+                                                >
+                                                    <NumberFieldContent>
+                                                        <NumberFieldDecrement />
+                                                        <NumberFieldInput />
+                                                        <NumberFieldIncrement />
+                                                    </NumberFieldContent>
+                                                </NumberField>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex justify-between">
+                                            <Button
+                                                @click="resetTravelers"
+                                                class="text-sm text-white font-medium hover:text-gray-800"
+                                            >
+                                                Reset
+                                            </Button>
+                                            <Button
+                                                @click="applyChanges"
+                                                class="px-5 py-1 bg-secondary text-white rounded-md font-sm"
+                                            >
+                                                Apply
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div v-else class="w-full mt-1 sm:mt-0">
+                            <button
+                                type="button"
+                                @click="removeTrip(index)"
+                                :disabled="localValue.multiCityTrips.length <= 2"
+                                class="w-full h-11 rounded-md border border-red-200 bg-white text-red-600 font-medium text-sm transition-colors hover:bg-red-50 hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white flex items-center justify-center gap-2"
+                            >
+                                <span class="text-base leading-none">×</span>
+                                <span>Remove Trip</span>
+                            </button>
+                        </div>
+                        </div>
                     </div>
 
                     <!-- Bottom buttons -->
@@ -906,12 +1085,11 @@ const startCountdown = (remainingTime) => {
                         class="flex flex-col sm:flex-row justify-between gap-3 mt-2"
                     >
                         <Button
-                            variant="link"
                             @click="addTrip"
                             :disabled="localValue.multiCityTrips.length >= maxMultiCityTrips"
-                            class="w-full sm:w-auto justify-center text-white hover:text-gray-300 text-lg hover:underline hover:underline-offset-4 sm:justify-start"
+                            class="w-full sm:w-auto justify-center bg-white text-gray-900 hover:bg-gray-100 text-base sm:justify-start border border-gray-200 px-5 py-2 rounded-md shadow-sm"
                         >
-                            Add Trip
+                            Add Another City
                         </Button>
 
                         <Button class="" @click="handleSearch"> Search </Button>
