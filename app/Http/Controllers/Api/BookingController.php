@@ -19,6 +19,7 @@ use App\Models\Slice;
 use App\Models\User;
 use App\Services\AirBlueApiService;
 use App\Services\AirSialApiService;
+use App\Services\AtApiService;
 use App\Services\FlyDubaiApiService;
 use App\Services\OneApiService;
 use App\Services\PIAApiService;
@@ -210,14 +211,16 @@ class BookingController extends Controller
     public function store(Request $request)
     {
         Log::info($request);
-        
+
         $pnrResponse = null;
+        $localPnr = "null";
+
         $airlinePnr = null;
         $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
         $flightData = $request['flight'];
         $fareRefernce = $request['fare_reference'];
-        $sector = $flightData['provider']['sector'];
-        $travelDate = $flightData['provider']['travel_date'];
+        $sector = $flightData['provider']['sector'] ?? "NULL";
+        $travelDate = $flightData['provider']['travel_date'] ?? "NULL";
         $travelDate = substr($travelDate, 0, 10);
         $contentSource = $flightData['provider']['contentSource'];
         $expiryTime = now()->addMinutes(15);
@@ -399,15 +402,29 @@ class BookingController extends Controller
                     }
                     $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
                     $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][1]['Confirmation']['Locator']['value'] ?? null;
-                    if($flightData['provider']['contentSource'] == 'NDC'){
-                    $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][2]['Confirmation']['Locator']['value'] ?? null;
-                    $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
+                    if ($flightData['provider']['contentSource'] == 'NDC') {
+                        $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][2]['Confirmation']['Locator']['value'] ?? null;
+                        $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
 
                     }
                     if (!$itineraryRef) {
                         return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
                     }
                     $pnrResponse = json_encode($pnrResponse);
+                    $flightData = json_encode($flightData);
+                    break;
+                case 'at':
+                    $service = new AtApiService();
+                    $pnrResponse = $service->atBooking($request);
+                    $response = json_decode($pnrResponse, true);
+                    if (!isset($response['TransactionID']) || $response['TransactionID'] === 0) {
+                        return response()->json([
+                            'message' => 'AT reservation failed',
+                            'error' => 'No response from AT API'
+                        ], 400);
+                    }
+                    $itineraryRef = $response['TransactionID'];
+                     $pnrResponse = json_encode($pnrResponse);
                     $flightData = json_encode($flightData);
                     break;
                 case 'OneApi':
@@ -653,13 +670,12 @@ class BookingController extends Controller
             $airsialApiService = new AirSialApiService();
             $pnrData = $airsialApiService->getBookingDetails($request);
 
-        
+
         } else if ($request->flight_provider == 'OneApi') {
             $oneApiService = new OneApiService();
             $pnrData = $oneApiService->readBooking($request->pnr);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Log::info('OneApi PNR Details:', ['pnrData' => $pnrData]);
-        }
-         else if ($request->flight_provider == 'airblue') {
+            Log::info('OneApi PNR Details:', ['pnrData' => $pnrData]);
+        } else if ($request->flight_provider == 'airblue') {
             $pnrData = $this->airblueApiService->getBookingDetails($request->pnr);
             $pnrData = json_decode($pnrData, true);
         }
@@ -738,25 +754,25 @@ class BookingController extends Controller
             $pnrStatus = $this->travelportApiService->cancelReservation($request->pnr);
             Log::info($pnrStatus);
             if (!$pnrStatus) {
-               return response()->json([
+                return response()->json([
                     'message' => 'Booking cancellation failed',
                     'error' => 'Unable to cancel booking with Travelport API'
                 ], 400);
             }
-             $booking = FlightBookings::where('id', $request->bookingId)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-                $this->sendBookingCanceledMail($booking);
+            $booking = FlightBookings::where('id', $request->bookingId)->first();
+            $booking->status = 'canceled';
+            $booking->save();
+            $this->sendBookingCanceledMail($booking);
             return $pnrStatus;
-        }else if ($request->booking_source == 'OneApi') {
-              $booking = FlightBookings::where('id', $request->bookingId)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-                $this->sendBookingCanceledMail($booking);
-                return response()->json([
-                    'message' => 'Booking Canceled successfully',
-                    'booking' => $booking,
-                ]);
+        } else if ($request->booking_source == 'OneApi') {
+            $booking = FlightBookings::where('id', $request->bookingId)->first();
+            $booking->status = 'canceled';
+            $booking->save();
+            $this->sendBookingCanceledMail($booking);
+            return response()->json([
+                'message' => 'Booking Canceled successfully',
+                'booking' => $booking,
+            ]);
         }
         return;
 
@@ -806,10 +822,10 @@ class BookingController extends Controller
         } else if ($request->flight_provider == 'OneApi') {
             $res = '[]';
             $res = $this->oneApiService->confirmTicket($request);
-            if ( !$res) {
+            if (!$res) {
                 return response()->json([
-                    'message' =>  'Booking confirmation failed',
-                    
+                    'message' => 'Booking confirmation failed',
+
                 ], 400);
             }
         } else if ($request->flight_provider == 'airsial') {
@@ -1043,6 +1059,18 @@ class BookingController extends Controller
                     // 'error' => $response['error'] ?? 'Unknown error'
                 ], 400);
             }
+        } else if ($request->flight_provider == 'AT') {
+            $atApiService = new AtApiService();
+            $priceResponse = $atApiService->sendPriceRequest($request);
+            if (!$priceResponse) {
+                return response()->json([
+                    'message' => 'Failed to retrieve price',
+                ], 400);
+            }
+            return response()->json([
+            'message' => 'Price sent successfully',
+            'price_response' => $priceResponse,
+        ], 200);
         }
 
         // Log::info($quote['data']);
@@ -1188,7 +1216,7 @@ class BookingController extends Controller
             $res = $this->travelportApiService->voidReservation($pnr);
             $booking = FlightBookings::where('id', $request->bookingId)->first();
             // Update status and PNR
-            
+
             Log::info($booking->status);
             $booking->status = $request->booking_status;
             $booking->save();

@@ -74,9 +74,10 @@ class FlightController extends Controller
 
         $apiProviders = [
 
-            [
-                'identifier' => 'OneApi',
-            ],
+            // [
+            //     'identifier' => 'OneApi',
+            // ],
+            ['identifier' => 'AT'],
             // [
             //     'identifier' => 'PIA'
             // ],
@@ -89,15 +90,15 @@ class FlightController extends Controller
             // [
             //     'identifier' => 'AirSial'
             // ],
-            [
-                'identifier' => 'TravelPort-GDS'
-            ],
-            [
-                'identifier' => 'TravelPort-NDC'
-            ],
-            [
-                'identifier' => 'AirBlue',
-            ],
+            // [
+            //     'identifier' => 'TravelPort-GDS'
+            // ],
+            // [
+            //     'identifier' => 'TravelPort-NDC'
+            // ],
+            // [
+            //     'identifier' => 'AirBlue',
+            // ],
 
         ];
 

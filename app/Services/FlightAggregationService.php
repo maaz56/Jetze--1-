@@ -8,6 +8,7 @@ use App\Models\Airline;
 use App\Models\Airport;
 use App\Transformers\AirblueFlightTransformer;
 use App\Transformers\AirsialFlightTransformer;
+use App\Transformers\AtFlightTransformer;
 use App\Transformers\FlightTransformer;
 use App\Transformers\FlydubaiFlightTransformer;
 use App\Transformers\OneApiFlightTransformer;
@@ -38,19 +39,22 @@ class FlightAggregationService
 
     protected $travelPortService;
     protected $oneApiFlightTransformer;
+    protected $atApiService;
 
 
-    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, AirblueFlightTransformer $airblueFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer)
+
+    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, AirblueFlightTransformer $airblueFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService)
     {
         $this->sabreApiService = $sabreApiService;
         $this->sooperApiService = $sooperApiService;
         $this->flightTransformer = new FlightTransformer();
+
         $this->airsialFlightTransformer = $airsialFlightTransformer;
         $this->flyDubaiFlightTransformer = $flyDubaiFlightTransformer;
         $this->piaFlightTransformer = $piaFlightTransformer;
         $this->airBlueFlightTransformer = $airblueFlightTransformer;
         $this->oneApiFlightTransformer = $oneApiFlightTransformer;
-
+        $this->atApiService = $atApiService;
     }
 
 
@@ -58,9 +62,8 @@ class FlightAggregationService
     public function getFlights($params)
     {
 
+
         $sabreFlights = null;
-
-
 
         $transformedFlights = [];
         if (in_array($params['airline'], ['TravelPort', 'TravelPort-GDS', 'TravelPort-NDC'], true)) {
@@ -148,6 +151,17 @@ class FlightAggregationService
             $response = $piaApiService->searchFlights($params);
             $transformedFlights = $this->piaFlightTransformer->fromPIA($response, $params);
             Log::info(json_encode($transformedFlights));
+        }
+         if ($params['airline'] == 'AT') {
+            $atFlights = $this->atApiService->searchFlights($params);
+            // $ndcCurrency = $atFlights['cheapest']['priceDetails']['totalAmount']['currency'];
+            // $exchangeRate = $this->utilityService->getExchangeRate('INR', $params['currency_code']);
+            $atTransformer = new AtFlightTransformer();
+            $atFlights = $atTransformer->fromAT($atFlights, $params);
+            // if (!in_array($atFlights[0]['currencyCode'] ?? null, ['SAR', 'sar'])) {
+            //     // $atFlights = $this->utilityService->applyExchangeRateToFlights($atFlights, $exchangeRate);
+            // }
+            $transformedFlights = array_merge($transformedFlights, $atFlights);
         }
 
 
@@ -245,7 +259,7 @@ class FlightAggregationService
         // $transformedFlights = array_merge($transformedFlights ?? []);
         // }
 
-        return [
+        return [ 
             // 'sooperFlights' => $sooperFlights,
             'results' => $transformedFlights,
         ];

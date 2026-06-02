@@ -570,7 +570,7 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendPriceRequest(params);
-            // //console.log(response.data);
+            console.log(response.data);
             context.commit(SET_PRICE_RESPONSE, response.data.price_response);
                         context.commit(SET_FARE_RULES, response.data.fare_rules);
 

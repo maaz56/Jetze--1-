@@ -10,6 +10,7 @@ import { ref } from 'vue';
 import AirbluePublicBookingDetails from './airblue/AirbluePublicBookingDetails.vue';
 import TravelPortPublicBookingDetails from './Travelport/TravelPortPublicBookingDetails.vue';
 import OneApiPublicBookingDetails from './OneApi/OneApiPublicBookingDetails.vue';
+import ATPublicBookingDetails from './AT/ATPublicBookingDetails.vue';
 const router = useRouter();
 const route = useRoute();
 const provider = ref();
@@ -27,4 +28,5 @@ onMounted(() => {
     <AirbluePublicBookingDetails v-if="provider === 'airblue' && flight_mode === 'B2C'" />
     <TravelPortPublicBookingDetails v-if="provider === 'travelport' && flight_mode === 'B2C'" />
     <OneApiPublicBookingDetails v-if="provider === 'OneApi' && flight_mode === 'B2C'" />
+    <ATPublicBookingDetails v-if="provider === 'at' && flight_mode === 'B2C'" />
 </template>
