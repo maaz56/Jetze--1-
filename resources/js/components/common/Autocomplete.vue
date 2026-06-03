@@ -329,6 +329,9 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
+    if (search.value) {
+        clearSearch();
+    }
     // Show dropdown on focus, including default suggestions when input is empty.
     isOpen.value = true;
     eventBus.value = {

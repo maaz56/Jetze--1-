@@ -387,86 +387,86 @@ class AtFlightTransformer
     }
 
 
-   private function groupAllFares(array $journeys): array
-{
-    $final = [];
-    $processedFlights = [];
+    private function groupAllFares(array $journeys): array
+    {
+        $final = [];
+        $processedFlights = [];
 
-    foreach ($journeys as $baseJourney) {
+        foreach ($journeys as $baseJourney) {
 
-        $flightKey = implode('_', [
-            $baseJourney['VAC'],
-            $baseJourney['Provider'],
-            $baseJourney['OAC'],
-            $baseJourney['MAC'],
-            $baseJourney['FlightNo'],
-        ]);
+            $flightKey = implode('_', [
+                $baseJourney['VAC'],
+                $baseJourney['Provider'],
+                $baseJourney['OAC'],
+                $baseJourney['MAC'],
+                $baseJourney['FlightNo'],
+            ]);
 
-        if (isset($processedFlights[$flightKey])) {
-            continue;
-        }
+            if (isset($processedFlights[$flightKey])) {
+                continue;
+            }
 
-        $flight = $baseJourney;
+            $flight = $baseJourney;
 
-        unset(
-            $flight['FareClass'],
-            $flight['GrossFare'],
-            $flight['NetFare'],
-            $flight['TrendFare'],
-            $flight['TotalCommission'],
-            $flight['ActualFare'],
-            $flight['WPNetFare'],
-            $flight['TotalFare'],
-            $flight['FareType'],
-            $flight['FBC'],
-            $flight['FCType'],
-            $flight['FCGroup'],
-            $flight['Promo'],
-            $flight['Hold'],
-            $flight['RBD']
-        );
+            unset(
+                $flight['FareClass'],
+                $flight['GrossFare'],
+                $flight['NetFare'],
+                $flight['TrendFare'],
+                $flight['TotalCommission'],
+                $flight['ActualFare'],
+                $flight['WPNetFare'],
+                $flight['TotalFare'],
+                $flight['FareType'],
+                $flight['FBC'],
+                $flight['FCType'],
+                $flight['FCGroup'],
+                $flight['Promo'],
+                $flight['Hold'],
+                $flight['RBD']
+            );
 
-        $fares = [];
-        $processedFares = [];
+            $fares = [];
+            $processedFares = [];
 
-        foreach ($journeys as $fareJourney) {
+            foreach ($journeys as $fareJourney) {
 
-            if (
-                $fareJourney['VAC'] === $baseJourney['VAC'] &&
-                $fareJourney['Provider'] === $baseJourney['Provider'] &&
-                $fareJourney['OAC'] === $baseJourney['OAC'] &&
-                $fareJourney['MAC'] === $baseJourney['MAC'] &&
-                $fareJourney['FlightNo'] === $baseJourney['FlightNo']
-            ) {
+                if (
+                    $fareJourney['VAC'] === $baseJourney['VAC'] &&
+                    $fareJourney['Provider'] === $baseJourney['Provider'] &&
+                    $fareJourney['OAC'] === $baseJourney['OAC'] &&
+                    $fareJourney['MAC'] === $baseJourney['MAC'] &&
+                    $fareJourney['FlightNo'] === $baseJourney['FlightNo']
+                ) {
 
-                // Make fare unique key
-                $fareKey = implode('_', [
-                    $fareJourney['FareClass'] ?? '',
-                    $fareJourney['RBD'] ?? '',
-                    $fareJourney['FBC'] ?? '',
-                    $fareJourney['NetFare'] ?? '',
-                ]);
-                if (!isset($processedFares[$fareKey])) {
-                    $fares[] = $this->mapFare($fareJourney);
-                    $processedFares[$fareKey] = true;
+                    // Make fare unique key
+                    $fareKey = implode('_', [
+                        $fareJourney['FareClass'] ?? '',
+                        $fareJourney['RBD'] ?? '',
+                        $fareJourney['FBC'] ?? '',
+                        $fareJourney['NetFare'] ?? '',
+                    ]);
+                    if (!isset($processedFares[$fareKey])) {
+                        $fares[] = $this->mapFare($fareJourney);
+                        $processedFares[$fareKey] = true;
+                    }
                 }
             }
+
+            $processedFlights[$flightKey] = true;
+
+            $final[] = [
+                'type' => 'oneway',
+                'index' => $flightKey,
+                'legs' => [
+                    'flight' => $flight,
+                    'fares' => $fares
+                ]
+            ];
         }
 
-        $processedFlights[$flightKey] = true;
-
-        $final[] = [
-            'type' => 'oneway',
-            'index' => $flightKey,
-            'legs' => [
-                'flight' => $flight,
-                'fares' => $fares
-            ]
-        ];
+        return $final;
     }
-
-    return $final;
-}
     private function mapFare(array $journey): array
     {
         return [

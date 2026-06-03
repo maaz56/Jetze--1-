@@ -424,7 +424,7 @@ class BookingController extends Controller
                         ], 400);
                     }
                     $itineraryRef = $response['TransactionID'];
-                     $pnrResponse = json_encode($pnrResponse);
+                    $pnrResponse = json_encode($pnrResponse);
                     $flightData = json_encode($flightData);
                     break;
                 case 'OneApi':
@@ -1068,9 +1068,9 @@ class BookingController extends Controller
                 ], 400);
             }
             return response()->json([
-            'message' => 'Price sent successfully',
-            'price_response' => $priceResponse,
-        ], 200);
+                'message' => 'Price sent successfully',
+                'price_response' => $priceResponse,
+            ], 200);
         }
 
         // Log::info($quote['data']);

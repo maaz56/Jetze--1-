@@ -245,7 +245,8 @@ class AtApiService
         }
 
     }
-      public function getWebSettings($tui){
+    public function getWebSettings($tui)
+    {
 
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->signBaseUrl . '/Utils/WebSettings', [
@@ -255,7 +256,7 @@ class AtApiService
             ],
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
-        Log::info('GetWebSettings response: ', $responseBody);  
+        Log::info('GetWebSettings response: ', $responseBody);
 
 
 
@@ -266,7 +267,7 @@ class AtApiService
         Log::info('Sending Price Request with data: ', $request->all());
 
         $accessToken = $this->getAccessToken();
-        
+
         $headers = [
             'Content-Type' => 'application/json',
             'Authorization' => $accessToken['Token'],
@@ -371,7 +372,7 @@ class AtApiService
             if (!isset($responseBody['TUI']) && !$responseBody['TUI']) {
                 Log::warning('Price request did not return TUI. Response: ');
                 return null;
-            } 
+            }
             $this->travelerCheckList($responseBody);
             return $responseBody;
 
@@ -385,12 +386,13 @@ class AtApiService
             return null;
         }
     }
-     public function travelerCheckList($tui){
-        
-      
-            Log::info('Getting Traveler Checklist with TUI: ' , $tui);
-         $accessToken = $this->getAccessToken();
-        
+    public function travelerCheckList($tui)
+    {
+
+
+        Log::info('Getting Traveler Checklist with TUI: ', $tui);
+        $accessToken = $this->getAccessToken();
+
         $headers = [
             'Content-Type' => 'application/json',
             'Authorization' => $accessToken['Token'],
@@ -405,7 +407,7 @@ class AtApiService
             ]),
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
-        Log::info('Traveler Checklist response: ', $responseBody);  
+        Log::info('Traveler Checklist response: ', $responseBody);
     }
 
     public function atBooking($params)
