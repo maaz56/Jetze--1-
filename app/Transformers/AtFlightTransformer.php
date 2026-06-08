@@ -11,7 +11,6 @@ use Str;
 class AtFlightTransformer
 {
 
-
     public function fromAT($flightData, $params)
     {
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
@@ -27,17 +26,26 @@ class AtFlightTransformer
 
         foreach ($processed['flights'] ?? [] as $item) {
             $currency = $processed['meta']['CurrencyCode'] ?? 'PKR';
-            $legs = [];
-            $journeyLegs = $item['type'] === 'return'
-                ? [$item['onward'], $item['return']]
-                : [$item['legs']];
+            
+            // Handle different journey types
+            if ($item['type'] === 'return') {
+                // Return journey (2 legs)
+                $legs = [$item['onward'], $item['return']];
+            } elseif ($item['type'] === 'multicity') {
+                // Multi-city journey (3+ legs)
+                $legs = $item['legs'];
+            } else {
+                // One-way journey (1 leg)
+                $legs = [$item['legs']];
+            }
 
-            foreach ($journeyLegs as $legData) {
+            $transformedLegs = [];
+            
+            foreach ($legs as $legData) {
                 $segments = [];
                 $flight = $legData['flight'];
-                $deptAirport = $flight['From'];
+                $deptAirport = $flight['From'] ?? null;
                 $journeyKey = $flight['JourneyKey'] ?? null;
-
 
                 if ($journeyKey) {
                     // Split segments by ~
@@ -46,9 +54,10 @@ class AtFlightTransformer
                     foreach ($segmentStrings as $segStr) {
                         $fields = array_map('trim', explode(',', $segStr));
 
-                        $fromAirport = Airport::where('iata_code', $fields[2])->first();
-                        $toAirport = Airport::where('iata_code', $fields[3])->first();
-                        $airline = Airline::where('iata_code', $fields[0])->first();
+                        $fromAirport = Airport::where('iata_code', $fields[2] ?? '')->first();
+                        $toAirport = Airport::where('iata_code', $fields[3] ?? '')->first();
+                        $airline = Airline::where('iata_code', $fields[0] ?? '')->first();
+                        
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
                             "from" => $this->buildAirportData($fromAirport),
@@ -57,7 +66,7 @@ class AtFlightTransformer
                             "arrival_at" => $fields[5] ?? null,
                             "departure_at" => $fields[4] ?? null,
                             "flight_number" => ($fields[0] ?? '') . ($fields[1] ?? ''),
-                            "flight_time" => $fields[8] ?? null, // duration
+                            "flight_time" => $fields[8] ?? null,
                             "cabin_class" => $flight['Cabin'] ?? 'E',
                             "operating_carrier" => [
                                 "iata" => $fields[0] ?? $flight['VAC'] ?? null,
@@ -66,7 +75,6 @@ class AtFlightTransformer
                             ],
                         ];
 
-                        // Update deptAirport for next segment
                         $deptAirport = $fields[3] ?? $deptAirport;
                     }
                 } else {
@@ -74,11 +82,11 @@ class AtFlightTransformer
                     foreach ($flight['Connections'] ?? [] as $seg) {
                         $fromAirport = Airport::where('iata_code', $deptAirport)->first();
                         $toAirport = Airport::where('iata_code', $seg['Airport'])->first();
-                        $connectionDeparture = $flight['DepartureTime']; // 2026-02-16T01:55:00
-                        $connectionDuration = $seg['Duration'];  // "02h 30m"
-
+                        $connectionDeparture = $flight['DepartureTime'];
+                        $connectionDuration = $seg['Duration'];
                         $connectionArrival = $this->addDuration($connectionDeparture, $connectionDuration);
                         $airline = Airline::where('iata_code', $seg['VAC'])->first();
+                        
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
                             "from" => $this->buildAirportData($fromAirport),
@@ -96,6 +104,7 @@ class AtFlightTransformer
                         ];
                         $deptAirport = $seg['Airport'];
                     }
+                    
                     $airline = Airline::where('iata_code', $flight['VAC'])->first();
 
                     // Push main flight as last segment
@@ -119,9 +128,7 @@ class AtFlightTransformer
                 $connections = max(count($segments) - 1, 0);
                 $airline = Airline::where('iata_code', $segments[0]['operating_carrier']['iata'] ?? null)->first();
 
-                // ======================
-                // FARES
-                // ======================
+                // Process fares
                 $fares = [];
                 foreach ($legData['fares'] as $fare) {
                     $baggagePolicies = [];
@@ -131,29 +138,20 @@ class AtFlightTransformer
                     $pieces = 0;
                     $weight = null;
 
-                    // Detect type
                     if ($baggageText) {
-
-                        // If contains Kg or weight description
                         if (stripos($baggageText, 'kg') !== false || str_contains($pieceDescription, 'weight')) {
-
                             preg_match('/(\d+)/', $baggageText, $matches);
                             $weight = isset($matches[1]) ? (int) $matches[1] : null;
-
-                        }
-                        // If contains piece
-                        elseif (stripos($baggageText, 'piece') !== false || str_contains($pieceDescription, 'piece')) {
-
+                        } elseif (stripos($baggageText, 'piece') !== false || str_contains($pieceDescription, 'piece')) {
                             preg_match('/(\d+)/', $baggageText, $matches);
                             $pieces = isset($matches[1]) ? (int) $matches[1] : 0;
                         }
                     }
 
-                    $travelerTypes = ['ADT']; // extend if needed
+                    $travelerTypes = ['ADT'];
 
                     foreach ($travelerTypes as $travelerType) {
                         foreach ($segments as $segment) {
-
                             $baggagePolicies[] = [
                                 "type" => "checkIn",
                                 "pieces" => $pieces,
@@ -164,6 +162,7 @@ class AtFlightTransformer
                             ];
                         }
                     }
+                    
                     $fares[] = [
                         "ref_id" => (string) \Str::uuid(),
                         'index' => $fare['index'] ?? null,
@@ -202,7 +201,7 @@ class AtFlightTransformer
                     ];
                 }
 
-                $legs[] = [
+                $transformedLegs[] = [
                     "flight_index" => $flight['Index'] ?? null,
                     "ref_id" => (string) \Str::uuid(),
                     "from" => $segments[0]['from'],
@@ -212,7 +211,6 @@ class AtFlightTransformer
                     "departure_at" => $segments[0]['departure_at'] ?? null,
                     "arrival_at" => end($segments)['arrival_at'] ?? null,
                     "travel_time" => array_sum(array_map(function ($s) {
-                        // Convert "03h 05m" to minutes
                         if (preg_match('/(\d+)h\s*(\d+)m/', $s['flight_time'], $m)) {
                             return $m[1] * 60 + $m[2];
                         }
@@ -225,19 +223,19 @@ class AtFlightTransformer
                 ];
             }
 
-
             $results[] = [
                 "provider" => array_merge($provider, [
-                    'travel_date' => $legs[0]['departure_at'] ?? null,
+                    'travel_date' => $transformedLegs[0]['departure_at'] ?? null,
                 ]),
                 "currencyCode" => $currency,
                 "leg" => [
                     "ref_id" => (string) \Str::uuid(),
-                    "flights" => $legs,
-                    "trip_nature" => "international"
+                    "flights" => $transformedLegs,
+                    "trip_nature" => $this->detectTripNature($transformedLegs)
                 ]
             ];
         }
+        
         Log::info('final transformed results: ' . json_encode($results));
         return $results;
     }
@@ -277,103 +275,35 @@ class AtFlightTransformer
 
         $trips = $apiResponse['Trips'] ?? [];
         $final = [];
-        $processedPairs = [];
 
-        // =========================
-        // ONE WAY
-        // =========================
-        if (count($trips) === 1) {
+        $tripCount = count($trips);
+        
+        if ($tripCount === 0) {
+            return [
+                'meta' => [
+                    'TUI' => $apiResponse['TUI'] ?? null,
+                    'CurrencyCode' => $apiResponse['CurrencyCode'] ?? null,
+                    'Completed' => $apiResponse['Completed'] ?? null,
+                    'Notices' => $apiResponse['Notices'] ?? [],
+                ],
+                'flights' => []
+            ];
+        }
+        
+        // ONE WAY (1 trip)
+        if ($tripCount === 1) {
             $final = $this->groupAllFares($trips[0]['Journey']);
         }
-
-        // =========================
-        // RETURN
-        // =========================
-        // =========================
-// RETURN
-// =========================
-        if (count($trips) === 2) {
-            $onwardFlights = $this->groupAllFares($trips[0]['Journey']);
-            Log::info(json_encode($onwardFlights));
-            $returnFlights = $this->groupAllFares($trips[1]['Journey']);
-
-            foreach ($onwardFlights as $onward) {
-                foreach ($returnFlights as $return) {
-
-                    $oFlight = $onward['legs']['flight'];
-                    $rFlight = $return['legs']['flight'];
-
-                    if (
-                        $oFlight['VAC'] === $rFlight['VAC'] &&
-                        $oFlight['Provider'] === $rFlight['Provider']
-                    ) {
-
-                        // 🔹 Extract fares
-                        // 🔹 Extract fares separately
-                        $onwardFares = $onward['legs']['fares'];
-                        $returnFares = $return['legs']['fares'];
-
-                        // 🔹 Get identifiers from BOTH flights
-                        $onwardIdentifiers = collect($onwardFares)
-                            ->pluck('ReturnIdentifier')
-                            ->filter();
-
-                        $returnIdentifiers = collect($returnFares)
-                            ->pluck('ReturnIdentifier')
-                            ->filter();
-
-                        // 🔹 Find identifiers present in BOTH
-                        $commonIdentifiers = $onwardIdentifiers
-                            ->intersect($returnIdentifiers)
-                            ->values();
-                        // ❌ If no common fares → skip pairing
-                        if ($commonIdentifiers->isEmpty()) {
-                            continue;
-                        }
-
-                        // 🔹 Filter fares but KEEP THEM IN THEIR OWN FLIGHTS
-                        $filteredOnwardFares = collect($onwardFares)
-                            ->filter(function ($fare) use ($commonIdentifiers) {
-                                return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
-                            })
-                            ->values()
-                            ->toArray();
-
-                        $filteredReturnFares = collect($returnFares)
-                            ->filter(function ($fare) use ($commonIdentifiers) {
-                                return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
-                            })
-                            ->values()
-                            ->toArray();
-
-
-                        $pairKey = $oFlight['Provider'] . '_' . $oFlight['FlightNo'] . '_' . $rFlight['FlightNo'];
-
-                        if (isset($processedPairs[$pairKey])) {
-                            continue;
-                        }
-
-                        $processedPairs[$pairKey] = true;
-
-                        $final[] = [
-                            'type' => 'return',
-                            'index' => $pairKey,
-
-                            'onward' => [
-                                'flight' => $oFlight,
-                                'fares' => $filteredOnwardFares,
-                            ],
-
-                            'return' => [
-                                'flight' => $rFlight,
-                                'fares' => $filteredReturnFares,
-                            ],
-                        ];
-                    }
-                }
-            }
+        
+        // RETURN (2 trips)
+        elseif ($tripCount === 2) {
+            $final = $this->processReturnJourney($trips[0]['Journey'], $trips[1]['Journey']);
         }
-
+        
+        // MULTI-CITY (3+ trips)
+        else {
+            $final = $this->processMultiCityJourney($trips);
+        }
 
         return [
             'meta' => [
@@ -386,6 +316,250 @@ class AtFlightTransformer
         ];
     }
 
+    /**
+     * Process return journey (2 trips)
+     */
+    private function processReturnJourney(array $onwardJourneys, array $returnJourneys): array
+    {
+        $final = [];
+        $processedPairs = [];
+        
+        $onwardFlights = $this->groupAllFares($onwardJourneys);
+        $returnFlights = $this->groupAllFares($returnJourneys);
+
+        foreach ($onwardFlights as $onward) {
+            foreach ($returnFlights as $return) {
+                $oFlight = $onward['legs']['flight'];
+                $rFlight = $return['legs']['flight'];
+
+                // Check if airlines match for pairing
+                if ($oFlight['VAC'] === $rFlight['VAC'] && $oFlight['Provider'] === $rFlight['Provider']) {
+                    
+                    $onwardFares = $onward['legs']['fares'];
+                    $returnFares = $return['legs']['fares'];
+
+                    $onwardIdentifiers = collect($onwardFares)
+                        ->pluck('ReturnIdentifier')
+                        ->filter();
+
+                    $returnIdentifiers = collect($returnFares)
+                        ->pluck('ReturnIdentifier')
+                        ->filter();
+
+                    $commonIdentifiers = $onwardIdentifiers
+                        ->intersect($returnIdentifiers)
+                        ->values();
+
+                    if ($commonIdentifiers->isEmpty()) {
+                        continue;
+                    }
+
+                    $filteredOnwardFares = collect($onwardFares)
+                        ->filter(function ($fare) use ($commonIdentifiers) {
+                            return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
+                        })
+                        ->values()
+                        ->toArray();
+
+                    $filteredReturnFares = collect($returnFares)
+                        ->filter(function ($fare) use ($commonIdentifiers) {
+                            return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
+                        })
+                        ->values()
+                        ->toArray();
+
+                    $pairKey = $oFlight['Provider'] . '_' . $oFlight['FlightNo'] . '_' . $rFlight['FlightNo'];
+
+                    if (isset($processedPairs[$pairKey])) {
+                        continue;
+                    }
+
+                    $processedPairs[$pairKey] = true;
+
+                    $final[] = [
+                        'type' => 'return',
+                        'index' => $pairKey,
+                        'onward' => [
+                            'flight' => $oFlight,
+                            'fares' => $filteredOnwardFares,
+                        ],
+                        'return' => [
+                            'flight' => $rFlight,
+                            'fares' => $filteredReturnFares,
+                        ],
+                    ];
+                }
+            }
+        }
+        
+        return $final;
+    }
+
+    /**
+     * Process multi-city journey (3+ trips)
+     */
+    private function processMultiCityJourney(array $trips): array
+    {
+        $final = [];
+        $processedCombinations = [];
+        
+        // Extract all legs for each trip
+        $allTripLegs = [];
+        foreach ($trips as $tripIndex => $trip) {
+            $allTripLegs[$tripIndex] = $this->groupAllFares($trip['Journey']);
+        }
+        
+        // If only one trip has flights, return empty
+        if (empty($allTripLegs[0])) {
+            return [];
+        }
+        
+        // For multi-city, we need to find combinations where fare identifiers match across all legs
+        // Start with the first trip's flights
+        foreach ($allTripLegs[0] as $firstLeg) {
+            $this->findMatchingMultiCityCombinations($allTripLegs, 0, [$firstLeg], $final, $processedCombinations);
+        }
+        
+        return $final;
+    }
+
+    /**
+     * Recursively find matching fare combinations for multi-city journeys
+     */
+    private function findMatchingMultiCityCombinations(
+        array $allTripLegs, 
+        int $currentIndex, 
+        array $currentCombination, 
+        array &$final, 
+        array &$processedCombinations
+    ): void {
+        $nextIndex = $currentIndex + 1;
+        
+        // If we've processed all trips, we have a complete combination
+        if ($nextIndex >= count($allTripLegs)) {
+            $this->addMultiCityCombination($currentCombination, $final, $processedCombinations);
+            return;
+        }
+        
+        // Get the next trip's flights
+        $nextTripLegs = $allTripLegs[$nextIndex] ?? [];
+        
+        // Get the current leg's fare identifiers
+        $currentFlight = $currentCombination[$currentIndex]['legs']['flight'];
+        $currentFares = $currentCombination[$currentIndex]['legs']['fares'];
+        $currentIdentifiers = collect($currentFares)
+            ->pluck('ReturnIdentifier')
+            ->filter()
+            ->toArray();
+        
+        // If no identifiers, we can't match
+        if (empty($currentIdentifiers)) {
+            return;
+        }
+        
+        // Find matching flights in the next trip
+        foreach ($nextTripLegs as $nextLeg) {
+            $nextFlight = $nextLeg['legs']['flight'];
+            $nextFares = $nextLeg['legs']['fares'];
+            
+            // Check if airlines/providers match for continuity (optional, adjust as needed)
+            // For multi-city, we might want to allow different airlines
+            $nextIdentifiers = collect($nextFares)
+                ->pluck('ReturnIdentifier')
+                ->filter()
+                ->toArray();
+            
+            // Find common fare identifiers
+            $commonIdentifiers = array_intersect($currentIdentifiers, $nextIdentifiers);
+            
+            if (!empty($commonIdentifiers)) {
+                // Filter fares to only include matching ones
+                $filteredNextFares = collect($nextFares)
+                    ->filter(function ($fare) use ($commonIdentifiers) {
+                        return in_array($fare['ReturnIdentifier'], $commonIdentifiers);
+                    })
+                    ->values()
+                    ->toArray();
+                
+                if (!empty($filteredNextFares)) {
+                    $newCombination = $currentCombination;
+                    $newCombination[$nextIndex] = [
+                        'legs' => [
+                            'flight' => $nextFlight,
+                            'fares' => $filteredNextFares
+                        ]
+                    ];
+                    
+                    $this->findMatchingMultiCityCombinations(
+                        $allTripLegs, 
+                        $nextIndex, 
+                        $newCombination, 
+                        $final, 
+                        $processedCombinations
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Add a valid multi-city combination to the final results
+     */
+    private function addMultiCityCombination(array $combination, array &$final, array &$processedCombinations): void
+    {
+        // Create a unique key for this combination
+        $combinationKey = implode('|', array_map(function ($leg) {
+            return $leg['legs']['flight']['Provider'] . '_' . $leg['legs']['flight']['FlightNo'];
+        }, $combination));
+        
+        if (isset($processedCombinations[$combinationKey])) {
+            return;
+        }
+        
+        $processedCombinations[$combinationKey] = true;
+        
+        // Find common fare identifiers across all legs
+        $allIdentifiers = [];
+        foreach ($combination as $leg) {
+            $identifiers = collect($leg['legs']['fares'])
+                ->pluck('ReturnIdentifier')
+                ->filter()
+                ->toArray();
+            $allIdentifiers[] = $identifiers;
+        }
+        
+        // Find identifiers that exist in all legs
+        $commonIdentifiers = $allIdentifiers[0] ?? [];
+        for ($i = 1; $i < count($allIdentifiers); $i++) {
+            $commonIdentifiers = array_intersect($commonIdentifiers, $allIdentifiers[$i]);
+        }
+        
+        if (empty($commonIdentifiers)) {
+            return;
+        }
+        
+        // Build the multi-city structure
+        $legs = [];
+        foreach ($combination as $legIndex => $leg) {
+            $filteredFares = collect($leg['legs']['fares'])
+                ->filter(function ($fare) use ($commonIdentifiers) {
+                    return in_array($fare['ReturnIdentifier'], $commonIdentifiers);
+                })
+                ->values()
+                ->toArray();
+            
+            $legs[] = [
+                'flight' => $leg['legs']['flight'],
+                'fares' => $filteredFares
+            ];
+        }
+        
+        $final[] = [
+            'type' => 'multicity',
+            'index' => $combinationKey,
+            'legs' => $legs
+        ];
+    }
 
     private function groupAllFares(array $journeys): array
     {
@@ -393,13 +567,12 @@ class AtFlightTransformer
         $processedFlights = [];
 
         foreach ($journeys as $baseJourney) {
-
             $flightKey = implode('_', [
-                $baseJourney['VAC'],
-                $baseJourney['Provider'],
-                $baseJourney['OAC'],
-                $baseJourney['MAC'],
-                $baseJourney['FlightNo'],
+                $baseJourney['VAC'] ?? '',
+                $baseJourney['Provider'] ?? '',
+                $baseJourney['OAC'] ?? '',
+                $baseJourney['MAC'] ?? '',
+                $baseJourney['FlightNo'] ?? '',
             ]);
 
             if (isset($processedFlights[$flightKey])) {
@@ -430,22 +603,20 @@ class AtFlightTransformer
             $processedFares = [];
 
             foreach ($journeys as $fareJourney) {
-
                 if (
-                    $fareJourney['VAC'] === $baseJourney['VAC'] &&
-                    $fareJourney['Provider'] === $baseJourney['Provider'] &&
-                    $fareJourney['OAC'] === $baseJourney['OAC'] &&
-                    $fareJourney['MAC'] === $baseJourney['MAC'] &&
-                    $fareJourney['FlightNo'] === $baseJourney['FlightNo']
+                    ($fareJourney['VAC'] ?? '') === ($baseJourney['VAC'] ?? '') &&
+                    ($fareJourney['Provider'] ?? '') === ($baseJourney['Provider'] ?? '') &&
+                    ($fareJourney['OAC'] ?? '') === ($baseJourney['OAC'] ?? '') &&
+                    ($fareJourney['MAC'] ?? '') === ($baseJourney['MAC'] ?? '') &&
+                    ($fareJourney['FlightNo'] ?? '') === ($baseJourney['FlightNo'] ?? '')
                 ) {
-
-                    // Make fare unique key
                     $fareKey = implode('_', [
                         $fareJourney['FareClass'] ?? '',
                         $fareJourney['RBD'] ?? '',
                         $fareJourney['FBC'] ?? '',
                         $fareJourney['NetFare'] ?? '',
                     ]);
+                    
                     if (!isset($processedFares[$fareKey])) {
                         $fares[] = $this->mapFare($fareJourney);
                         $processedFares[$fareKey] = true;
@@ -467,11 +638,12 @@ class AtFlightTransformer
 
         return $final;
     }
+    
     private function mapFare(array $journey): array
     {
         return [
             'FareClass' => $journey['FareClass'] ?? null,
-            'ReturnIdentifier' => $journey['ReturnIdentifier'],
+            'ReturnIdentifier' => $journey['ReturnIdentifier'] ?? null,
             'index' => $journey['Index'] ?? null,
             'RBD' => $journey['RBD'] ?? null,
             'FBC' => $journey['FBC'] ?? null,
@@ -513,9 +685,27 @@ class AtFlightTransformer
 
         return $dt->format('Y-m-d H:i:s');
     }
-
-
-
-
-
+    
+    /**
+     * Detect trip nature based on legs
+     */
+    private function detectTripNature(array $legs): string
+    {
+        if (count($legs) === 1) {
+            return 'oneway';
+        } elseif (count($legs) === 2) {
+            // Check if it's a return journey (same cities but reversed)
+            $firstOrigin = $legs[0]['from']['iata'] ?? null;
+            $firstDestination = $legs[0]['to']['iata'] ?? null;
+            $secondOrigin = $legs[1]['from']['iata'] ?? null;
+            $secondDestination = $legs[1]['to']['iata'] ?? null;
+            
+            if ($firstOrigin === $secondDestination && $firstDestination === $secondOrigin) {
+                return 'return';
+            }
+            return 'multicity';
+        } else {
+            return 'multicity';
+        }
+    }
 }

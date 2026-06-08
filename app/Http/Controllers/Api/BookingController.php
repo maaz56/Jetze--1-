@@ -416,7 +416,7 @@ class BookingController extends Controller
                 case 'at':
                     $service = new AtApiService();
                     $pnrResponse = $service->atBooking($request);
-                    $response = json_decode($pnrResponse, true);
+                    $response = $pnrResponse;
                     if (!isset($response['TransactionID']) || $response['TransactionID'] === 0) {
                         return response()->json([
                             'message' => 'AT reservation failed',
@@ -424,7 +424,7 @@ class BookingController extends Controller
                         ], 400);
                     }
                     $itineraryRef = $response['TransactionID'];
-                    $pnrResponse = json_encode($pnrResponse);
+                    $pnrResponse = json_encode($response);
                     $flightData = json_encode($flightData);
                     break;
                 case 'OneApi':
@@ -643,7 +643,7 @@ class BookingController extends Controller
         Log::info($request);
         $booking = FlightBookings::where('id', $request->booking_id)->first();
         // Update status and PNR
-        if ($request->add_ones_amount) {
+        if ($request->has('add_ones_amount')) {
             $booking->add_ones_amount = $request->add_ones_amount;
         }
         $booking->amount = $request->amount;
@@ -846,6 +846,28 @@ class BookingController extends Controller
 
             }
 
+        } else if ($request->flight_provider === 'at') {
+
+            $atApiService = new AtApiService();
+            Log::info('Booking held, skipping confirmation step.');
+            $res = $atApiService->atPaymentRequest($request);
+
+            Log::info($res);
+            $res = json_decode($res, true);
+            if ($res == null) {
+                return response()->json([
+                    'message ' => 'Booking confirmation failed',
+                    'error ' => 'No response from NDC WT API'
+                ], 400);
+
+            }
+
+            if (($res['status'] ?? true) === false) {
+                return response()->json([
+                    'message' => 'Booking confirmation failed',
+                    'error' => $res['error'] ?? $res['message'] ?? 'Payment Failed !',
+                ], 400);
+            }
         }
         $request->validate([
             'booking_status' => 'required|string', // Example statuses
@@ -1125,6 +1147,10 @@ class BookingController extends Controller
                 "seats" => $seats,
             ];
 
+        } else if (strtolower($request->flight_provider) === 'at') {
+            $atApiService = new AtApiService();
+
+            $response = $atApiService->fetchAncillaries($request->body);
         }
 
         return response()->json([

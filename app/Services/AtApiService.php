@@ -1,5 +1,7 @@
 <?php
 namespace App\Services;
+use App\Models\Airport;
+use Cache;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Request;
@@ -82,14 +84,11 @@ class AtApiService
                 'TUI' => 'MOCK_TUI_123456'
             ];
 
-
             // still call result function (important for flow)
-
             return $this->getSearchFlightsRes($mockResponse['TUI']);
-
         }
 
-        // 🔴 REAL API CODE (UNCHANGED)
+        // 🔴 REAL API CODE
         $accessToken = $this->getAccessToken();
         Log::info($accessToken);
 
@@ -99,15 +98,21 @@ class AtApiService
         ];
 
         $searchUrl = "$this->flightBaseUrl/flights/ExpressSearch";
-        $fareType = $params['flight_type'] === 'return' ? 'RS' : 'ON';
+
+        // Determine FareType based on flight type and trip details
+        $fareType = $this->determineFareType($params);
+        $this->cacheFareType($fareType);
+
+        // Build trips array based on flight type
+        $trips = $this->buildTripsArray($params);
 
         $payload = [
             'FareType' => $fareType,
-            'ADT' => $params['adults'] ?? 1,
-            'CHD' => $params['children'] ?? 0,
-            'INF' => $params['infants'] ?? 0,
-            'Cabin' => 'E',
-            'Source' => 'LV',
+            'ADT' => (int) ($params['adults'] ?? 1),
+            'CHD' => (int) ($params['children'] ?? 0),
+            'INF' => (int) ($params['infants'] ?? 0),
+            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
+            'Source' => 'CF', // Changed from 'LV' to 'CF' for consistency
             'Mode' => 'AS',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
@@ -115,32 +120,24 @@ class AtApiService
             "RTFltNo" => "",
             'IsMultipleCarrier' => false,
             'IsRefundable' => false,
-            'preferedAirlines' => [],
-            'TUI' => "",
-            'SecType' => 'I',
-            'Trips' => [
-                [
-                    'From' => $params['origin'],
-                    'To' => $params['destination'],
-                    'ReturnDate' => $params['flight_type'] === 'return' ? $params['return_date'] : '',
-                    'OnwardDate' => $params['departure_date'],
-
-                ],
-            ],
+            'preferedAirlines' => $params['preferedAirlines'] ?? [],
+            'TUI' => $params['TUI'] ?? "",
+            'SecType' => $params['SecType'] ?? 'I',
+            'Trips' => $trips,
             'Parameters' => [
-                'IsDirect' => false,
-                'IsNearbyAirport' => false,
-                'IsStudentFare' => false,
-                "IsSeniorCitizen" => null,
-                'Airlines' => '',
-                'GroupType' => '',
-                "IsGDSSearch" => true,
-                "IsLCCSearch" => true,
-                'Refundable' => '',
-                'IsExtendedSearch' => false,
-
+                'IsDirect' => $params['is_direct'] ?? false,
+                'IsNearbyAirport' => $params['is_nearby_airport'] ?? true,
+                'IsStudentFare' => $params['is_student_fare'] ?? false,
+                "IsSeniorCitizen" => $params['is_senior_citizen'] ?? null,
+                'Airlines' => $params['airlines'] ?? '',
+                'GroupType' => $params['group_type'] ?? '',
+                "IsGDSSearch" => $params['is_gds_search'] ?? true,
+                "IsLCCSearch" => $params['is_lcc_search'] ?? true,
+                'Refundable' => $params['refundable'] ?? '',
+                'IsExtendedSearch' => $params['is_extended_search'] ?? false,
             ],
         ];
+
         try {
             $request = new Request(
                 'POST',
@@ -154,8 +151,8 @@ class AtApiService
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
             Log::info('Flight search response: ', $responseBody);
-            if ($responseBody['Msg'][0] === "Success") {
-                // $this->getWebSettings($responseBody['TUI']);
+
+            if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 return $this->getSearchFlightsRes($responseBody['TUI']);
             }
 
@@ -169,6 +166,166 @@ class AtApiService
             }
             return null;
         }
+    }
+
+    /**
+     * Determine FareType based on flight type and trip details
+     */
+    private function determineFareType(array $params): string
+    {
+        $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
+
+        // If explicitly set to multi-city
+        if ($flightType === 'multi-city') {
+            // Check if it's international or domestic
+            $trips = $params['trips'] ?? [];
+            if (!empty($trips)) {
+                $isInternational = $this->isInternationalMultiCity($trips);
+                return $isInternational ? 'DM' : 'DM';
+            }
+            return 'IM'; // Default to International Multi-city
+        }
+
+        // Handle return flights
+        if ($flightType === 'return') {
+            return 'RS';
+        }
+
+        // Handle one-way flights
+        return 'ON';
+    }
+
+    /**
+     * Store the resolved fare type in cache for later use in the AT flow.
+     */
+    private function cacheFareType(string $fareType): void
+    {
+        $cacheKey = "AT_Fare_type";
+        Cache::put($cacheKey, $fareType, now()->addHour());
+        Log::info('Cached AT fare type: ' . $fareType, ['cache_key' => $cacheKey]);
+    }
+
+    /**
+     * Build the same cache prefix used by the flight search controller.
+     */
+    private function getCacheKeyPrefix(): string
+    {
+        return auth()->id()
+            ? 'flights_' . auth()->id()
+            : 'flights_' . session()->getId();
+    }
+
+    /**
+     * Check if multi-city trip is international
+     */
+    private function isInternationalMultiCity(array $trips): bool
+    {
+        // Get all unique airport codes from all trips
+        $allAirports = [];
+        foreach ($trips as $trip) {
+            $allAirports[] = $trip['origin'];
+            $allAirports[] = $trip['destination'];
+        }
+        $allAirports = array_unique($allAirports);
+
+        if (empty($allAirports)) {
+            return true; // Default to international if no airports
+        }
+
+        // Get Pakistani airports from cache
+        $pakistaniAirports = $this->getPakistaniAirports();
+
+        // Check each airport - if ANY is not Pakistani, it's international
+        foreach ($allAirports as $airport) {
+            $airport = strtoupper($airport);
+
+            // If airport is NOT in Pakistani airports list, it's international
+            if (!in_array($airport, $pakistaniAirports)) {
+                return true; // International found
+            }
+        }
+
+        // All airports are in Pakistan → domestic multi-city
+        return false;
+    }
+    private function getPakistaniAirports(): array
+    {
+        // Cache for 24 hours to avoid repeated DB queries
+        return Cache::remember('pakistani_airports', 86400, function () {
+            return Airport::where('iata_country_code', 'PK')
+                ->pluck('iata_code')
+                ->map(fn($code) => strtoupper($code))
+                ->toArray();
+        });
+    }
+
+
+    /**
+     * Build trips array based on flight type
+     */
+    private function buildTripsArray(array $params): array
+    {
+        $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
+        $trips = [];
+
+        // Handle multi-city flights
+        if ($flightType === 'multi-city' && isset($params['trips']) && is_array($params['trips'])) {
+            foreach ($params['trips'] as $trip) {
+                $trips[] = [
+                    'From' => $trip['origin'],
+                    'To' => $trip['destination'],
+                    'ReturnDate' => '', // Empty for multi-city
+                    'OnwardDate' => $trip['date'],
+                    'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
+                ];
+            }
+            return $trips;
+        }
+
+        // Handle return flights
+        if ($flightType === 'return') {
+            $trips[] = [
+                'From' => $params['origin'],
+                'To' => $params['destination'],
+                'ReturnDate' => $params['return_date'] ?? '',
+                'OnwardDate' => $params['departure_date'],
+                'TUI' => $params['TUI'] ?? ''
+            ];
+            return $trips;
+        }
+
+        // Handle one-way flights
+        $trips[] = [
+            'From' => $params['origin'],
+            'To' => $params['destination'],
+            'ReturnDate' => '',
+            'OnwardDate' => $params['departure_date'],
+            'TUI' => $params['TUI'] ?? ''
+        ];
+
+        return $trips;
+    }
+
+    /**
+     * Map cabin class to API expected format
+     */
+    private function mapCabinClass(string $cabinClass): string
+    {
+        $cabinMap = [
+            'Y' => 'E',      // Economy
+            'E' => 'E',      // Economy
+            'Economy' => 'E',
+            'economy' => 'E',
+            'C' => 'B',      // Business
+            'J' => 'B',      // Business
+            'Business' => 'B',
+            'business' => 'B',
+            'F' => 'F',      // First
+            'First' => 'F',
+            'first' => 'F',
+        ];
+
+        return $cabinMap[$cabinClass] ?? 'E';
     }
 
 
@@ -283,6 +440,7 @@ class AtApiService
 
         $tui = $request->input('ref_id'); // main ref_id
         $legs = $request->input('legs', []);
+        $flightType = $request->input('flight_type', $request->input('flightType', 'one-way'));
 
         $trips = [];
 
@@ -298,14 +456,15 @@ class AtApiService
                 'TUI' => $tui,
             ];
         }
-
+        Log::info('Constructed trips for Price Request: ', $trips);
+       $tripType = Cache::get('AT_Fare_type', 'ON'); // Default to 'ON' if not set
         $payload = [
             'Trips' => $trips,
             'ClientID' => $accessToken['ClientID'], // you said you'll add this
             'Mode' => 'AS',
             'Options' => 'A',
             'Source' => 'SF',
-            'TripType' => count($trips) > 1 ? 'RS' : 'ON',
+            'TripType' => $tripType,
         ];
 
         Log::info('Price Request payload (final): ', $payload);
@@ -562,8 +721,8 @@ class AtApiService
 
             $responseBody = $this->client->send($request);
             $responseBody = json_decode($responseBody->getBody(), true);
-            $responseBody = json_encode($responseBody);
-            Log::info('AT Booking Response:' . $responseBody);
+            $response = json_encode($responseBody);
+            Log::info('AT Booking Response:' . $response);
 
             return $responseBody;
 
@@ -572,6 +731,270 @@ class AtApiService
 
             if ($e->hasResponse()) {
                 Log::error('AT Booking Response:', [
+                    'body' => (string) $e->getResponse()->getBody()
+                ]);
+            }
+
+            return null;
+        }
+    }
+  public function fetchAncillaries($request)
+    {
+        Log::info('Fetching ancillaries with data: ', $request);
+        $ssrData = $this->getSSR($request);
+        $seatLayout = $this->getSeatLayout($request);
+        $data = [
+            'ssrData' => $ssrData,
+            'seatLayout' => $seatLayout,
+        ];
+        Log::info('Fetched ancillaries data: ', $data);
+        return [
+            'data' => $data
+        ];
+
+
+    }
+    public function getSSR($request)
+    {
+        Log::info('Getting SSR with data: ', $request);
+        $accessToken = $this->getAccessToken();
+        Log::info($accessToken);
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => $accessToken['Token'],
+        ];
+
+        $priceRequestUrl = "{$this->flightBaseUrl}/Flights/SSR";
+
+        /*
+        |--------------------------------------------------------------------------
+        | BUILD SUPPLIER PAYLOAD
+        |--------------------------------------------------------------------------
+        */
+
+        $tui = $request['ref_id']; // main ref_id
+        $legs = $request['legs'] ?? [];
+
+        $trips = [];
+
+        foreach ($legs as $index => $leg) {
+            if (!isset($leg['selectedFare']['billable_price'])) {
+                continue;
+            }
+
+            $trips[] = [
+                'Amount' => 0,
+                'Index' => "", // 1, 2, 3...
+                'OrderID' => $index + 1, // keep static or change if needed
+                'TUI' => $tui,
+            ];
+        }
+
+        $payload = [
+            'Trips' => $trips,
+            'ClientID' => $accessToken['ClientID'], // you said you'll add this
+            'PaidSSR' => 'true',
+            'Source' => 'LV',
+            'TripType' => count($trips) > 1 ? 'RS' : 'ON',
+        ];
+
+        Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
+
+        try {
+            $req = new \GuzzleHttp\Psr7\Request(
+                'POST',
+                $priceRequestUrl,
+                $headers,
+                json_encode($payload)
+            );
+
+            $response = $this->client->send($req);
+            $responseBody = json_decode($response->getBody(), true);
+
+            Log::info('SSR request payload response: ' . json_encode($responseBody, JSON_PRETTY_PRINT));
+            return $responseBody;
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('Error sending SSR request: ' . $e->getMessage());
+
+            if ($e->hasResponse()) {
+                Log::error('Response: ' . $e->getResponse()->getBody());
+            }
+
+            return null;
+        }
+    }
+    public function getSeatLayout($request)
+    {
+        Log::info('Getting Seat Layout with data: ', $request);
+        $accessToken = $this->getAccessToken();
+        Log::info($accessToken);
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => $accessToken['Token'],
+        ];
+
+        $priceRequestUrl = "{$this->flightBaseUrl}/Flights/SeatLayout";
+
+        /*
+        |--------------------------------------------------------------------------
+        | BUILD SUPPLIER PAYLOAD
+        |--------------------------------------------------------------------------
+        */
+
+        $tui = $request['ref_id']; // main ref_id
+        $legs = $request['legs'] ?? [];
+
+        $trips = [];
+
+        foreach ($legs as $index => $leg) {
+            if (!isset($leg['selectedFare']['billable_price'])) {
+                continue;
+            }
+
+            $trips[] = [
+                'Amount' => 0,
+                'Index' => "", // 1, 2, 3...
+                'OrderID' => $index + 1, // keep static or change if needed
+                'TUI' => $tui,
+            ];
+        }
+
+        $payload = [
+            'Trips' => $trips,
+            'ClientID' => $accessToken['ClientID'], // you said you'll add this
+            'PaidSSR' => 'true',
+            'Source' => 'LV',
+            'TripType' => count($trips) > 1 ? 'RS' : 'ON',
+        ];
+
+        Log::info('SSR request payload (final): ', $payload);
+
+        try {
+            $req = new \GuzzleHttp\Psr7\Request(
+                'POST',
+                $priceRequestUrl,
+                $headers,
+                json_encode($payload)
+            );
+
+            $response = $this->client->send($req);
+            $responseBody = json_decode($response->getBody(), true);
+
+            Log::info($responseBody);
+            return $responseBody;
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('Error sending SSR request: ' . $e->getMessage());
+
+            if ($e->hasResponse()) {
+                Log::error('Response: ' . $e->getResponse()->getBody());
+            }
+
+            return null;
+        }
+    }
+
+     public function atPaymentRequest($params)
+    {
+
+        $accessToken = $this->getAccessToken();
+        $clientId = $accessToken['ClientID'] ?? null;
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => $accessToken['Token'],
+        ];
+
+        $paymentUrl = "{$this->flightBaseUrl}/Payment/StartPay";
+
+        /*
+        |--------------------------------------------------------------------------
+        | BUILD PAYMENT PAYLOAD
+        |--------------------------------------------------------------------------
+        */
+        $payload = [
+            'TransactionID' => (int) $params['TransactionID'],
+            'PaymentAmount' => 0,
+            'NetAmount' => (int) $params['net_amount'],
+            'BrowserKey' => $this->browserKey,
+            'ClientID' => $clientId,
+            'TUI' => $params['TUI'],
+            'Hold' => false,
+            'Promo' => null,
+            'PaymentType' => '',
+            'BankCode' => '',
+            'GateWayCode' => '',
+            'MerchantID' => '',
+            'PaymentCharge' => 0,
+            'ReleaseDate' => '',
+            'OnlinePayment' => false,
+            'DepositPayment' => true,
+
+            'Card' => [
+                'Number' => '',
+                'Expiry' => '',
+                'CVV' => '',
+                'CHName' => '',
+                'Address' => '',
+                'City' => '',
+                'State' => '',
+                'Country' => '',
+                'PIN' => '',
+                'International' => false,
+                'SaveCard' => false,
+                'FName' => '',
+                'LName' => '',
+                'EMIMonths' => '0',
+            ],
+
+            'VPA' => '',
+            'CardAlias' => '',
+            'QuickPay' => null,
+            'RMSSignature' => '',
+            'TargetCurrency' => '',
+            'TargetAmount' => 0,
+            'ServiceType' => 'ITI',
+            'BookingType' => 'HB', // HB = Hold Booking
+        ];
+
+        Log::info('AT Payment Payload (final):', $payload);
+
+        try {
+            $request = new \GuzzleHttp\Psr7\Request(
+                'POST',
+                $paymentUrl,
+                $headers,
+                json_encode($payload)
+            );
+
+            $response = $this->client->send($request);
+            $responseBody = $response->getBody();
+            $responseBodyString = (string) $responseBody;
+            $responseData = json_decode($responseBodyString, true);
+
+            Log::info('AT Payment Response:' . $responseBodyString);
+
+            $message = $responseData['Msg'][0] ?? null;
+            if (in_array($message, ['Payment Failed !', 'Payment Failed'], true)) {
+                Log::error('AT Payment failed with API message', [
+                    'message' => $message,
+                    'response' => $responseData,
+                ]);
+
+                return json_encode([
+                    'status' => false,
+                    'message' => $message,
+                    'error' => $message,
+                ]);
+            }
+
+            return $responseBodyString;
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('AT Payment Error: ' . $e->getMessage());
+
+            if ($e->hasResponse()) {
+                Log::error('AT Payment Response:', [
                     'body' => (string) $e->getResponse()->getBody()
                 ]);
             }

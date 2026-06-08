@@ -1024,9 +1024,6 @@ onMounted(() => {
             <div v-if="route?.query?.booking_source == 1">
                 <div v-for="booking in bookingDetails" :key="booking?.id"
                     class="bg-white rounded-lg shadow-sm p-3 py-4 mb-4 flex flex-wrap gap-1 justify-end print:hidden">
-                    <p v-if="bookingDetails?.[0]?.is_ancillaries_selected == 'false'" class="text-sm bg-yellow-50 text-yellow-700 px-3 py-2 rounded-md border border-yellow-200">
-                        ⚠ Seat selection is mandatory. Please select seats before payment.
-                    </p>
                     <button @click="printBooking"
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2">
                         <PrinterIcon class="h-4 w-4" />
@@ -1041,7 +1038,7 @@ onMounted(() => {
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         Modify Request
                     </button>
-                    <button :disabled="(bookingDetails?.[0]?.status === 'ticketed') || (bookingDetails?.[0]?.status === 'canceled') || (bookingDetails?.[0]?.is_ancillaries_selected === 'false')" @click="goToPaymentView"
+                    <button :disabled="(bookingDetails?.[0]?.status === 'ticketed') || (bookingDetails?.[0]?.status === 'canceled')" @click="goToPaymentView"
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <DollarSign class="h-4 w-4" />
                         Pay Now
