@@ -5,6 +5,7 @@ use App\Models\Airline;
 use App\Models\Airport;
 use DateTime;
 use GuzzleHttp\Psr7\Request;
+use Illuminate\Support\Facades\Cache;
 use Log;
 use Str;
 
@@ -13,15 +14,18 @@ class AtFlightTransformer
 
     public function fromAT($flightData, $params)
     {
+        Log::info('AT Flight Data Received for Transformation: ' . json_encode($flightData));
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
-        $processed = $this->atFlightProcessor($flightData);
+        $processed = $this->atFlightProcessor($flightData, $params);
         $results = [];
+        $fareType = $this->resolveFareType($flightData, $params);
 
         $provider = [
             "name" => "at",
             "identifier" => "AT",
-            "TUI" => $flightData['TUI'] ?? null,
+            "TUI" => $flightData['TUIList'] ??$flightData['TUI'] ?? null,
             "contentSource" => "AT",
+            "fare_type" => $fareType,
         ];
 
         foreach ($processed['flights'] ?? [] as $item) {
@@ -240,6 +244,79 @@ class AtFlightTransformer
         return $results;
     }
 
+    private function resolveFareType(array $flightData, array $params): ?string
+    {
+        return $params['fare_type']
+            ?? $params['fareType']
+            ?? $params['FareType']
+            ?? $flightData['fare_type']
+            ?? $flightData['FareType']
+            ?? Cache::get('AT_Fare_type');
+    }
+
+    /**
+     * Determine FareType based on flight type and trip details.
+     */
+    public function determineFareType(array $params): string
+    {
+        $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
+
+        if ($flightType === 'multi-city') {
+            $trips = $params['trips'] ?? [];
+            if (is_array($trips) && !empty($trips)) {
+                return $this->isInternationalMultiCity($trips) ? 'DM' : 'DM';
+            }
+
+            return 'IM';
+        }
+
+        if ($flightType === 'return') {
+            return 'RS';
+        }
+
+        return 'ON';
+    }
+
+    private function isInternationalMultiCity(array $trips): bool
+    {
+        $allAirports = [];
+        foreach ($trips as $trip) {
+            if (!empty($trip['origin'])) {
+                $allAirports[] = $trip['origin'];
+            }
+
+            if (!empty($trip['destination'])) {
+                $allAirports[] = $trip['destination'];
+            }
+        }
+
+        $allAirports = array_unique($allAirports);
+
+        if (empty($allAirports)) {
+            return true;
+        }
+
+        $pakistaniAirports = $this->getPakistaniAirports();
+
+        foreach ($allAirports as $airport) {
+            if (!in_array(strtoupper($airport), $pakistaniAirports)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getPakistaniAirports(): array
+    {
+        return Cache::remember('pakistani_airports', 86400, function () {
+            return Airport::where('iata_country_code', 'PK')
+                ->pluck('iata_code')
+                ->map(fn($code) => strtoupper($code))
+                ->toArray();
+        });
+    }
+
     public static function buildAirportData($airport)
     {
         if (!$airport) {
@@ -269,7 +346,7 @@ class AtFlightTransformer
         ];
     }
 
-    public function atFlightProcessor(array $apiResponse): array
+    public function atFlightProcessor(array $apiResponse, array $params = []): array
     {
         Log::info('AT Flights Raw API Response: ' . json_encode($apiResponse));
 
@@ -277,6 +354,7 @@ class AtFlightTransformer
         $final = [];
 
         $tripCount = count($trips);
+        $flightType = str_replace('_', '-', strtolower((string) ($params['flight_type'] ?? $params['flightType'] ?? '')));
         
         if ($tripCount === 0) {
             return [
@@ -290,20 +368,21 @@ class AtFlightTransformer
             ];
         }
         
-        // ONE WAY (1 trip)
-        if ($tripCount === 1) {
+        if ($flightType === 'multi-city') {
+            Log::info('Processing multi-city journey with ' . $tripCount . ' trips');
+            $final = $tripCount === 1
+                ? $this->groupAllFares($trips[0]['Journey'])
+                : $this->processMultiCityJourney($trips);
+        }
+        elseif ($flightType === 'return') {
+            $final = $tripCount === 2
+                ? $this->processReturnJourney($trips[0]['Journey'], $trips[1]['Journey'])
+                : $this->groupAllFares($trips[0]['Journey']);
+        }
+        elseif ($flightType === 'one-way') {
             $final = $this->groupAllFares($trips[0]['Journey']);
         }
-        
-        // RETURN (2 trips)
-        elseif ($tripCount === 2) {
-            $final = $this->processReturnJourney($trips[0]['Journey'], $trips[1]['Journey']);
-        }
-        
-        // MULTI-CITY (3+ trips)
-        else {
-            $final = $this->processMultiCityJourney($trips);
-        }
+       
 
         return [
             'meta' => [
@@ -401,164 +480,38 @@ class AtFlightTransformer
     private function processMultiCityJourney(array $trips): array
     {
         $final = [];
-        $processedCombinations = [];
-        
-        // Extract all legs for each trip
+        Log::info('Processing multi-city journey with ' . count($trips) . ' trips');
+
         $allTripLegs = [];
         foreach ($trips as $tripIndex => $trip) {
-            $allTripLegs[$tripIndex] = $this->groupAllFares($trip['Journey']);
+            $allTripLegs[$tripIndex] = $this->groupAllFares($trip['Journey'] ?? []);
         }
-        
-        // If only one trip has flights, return empty
-        if (empty($allTripLegs[0])) {
+
+        Log::info('Extracted legs for all trips: ' . json_encode($allTripLegs));
+
+        if (empty($allTripLegs) || in_array(0, array_map('count', $allTripLegs), true)) {
+            Log::info('No flights found in one or more multi-city trips.');
             return [];
         }
-        
-        // For multi-city, we need to find combinations where fare identifiers match across all legs
-        // Start with the first trip's flights
-        foreach ($allTripLegs[0] as $firstLeg) {
-            $this->findMatchingMultiCityCombinations($allTripLegs, 0, [$firstLeg], $final, $processedCombinations);
-        }
-        
-        return $final;
-    }
 
-    /**
-     * Recursively find matching fare combinations for multi-city journeys
-     */
-    private function findMatchingMultiCityCombinations(
-        array $allTripLegs, 
-        int $currentIndex, 
-        array $currentCombination, 
-        array &$final, 
-        array &$processedCombinations
-    ): void {
-        $nextIndex = $currentIndex + 1;
-        
-        // If we've processed all trips, we have a complete combination
-        if ($nextIndex >= count($allTripLegs)) {
-            $this->addMultiCityCombination($currentCombination, $final, $processedCombinations);
-            return;
-        }
-        
-        // Get the next trip's flights
-        $nextTripLegs = $allTripLegs[$nextIndex] ?? [];
-        
-        // Get the current leg's fare identifiers
-        $currentFlight = $currentCombination[$currentIndex]['legs']['flight'];
-        $currentFares = $currentCombination[$currentIndex]['legs']['fares'];
-        $currentIdentifiers = collect($currentFares)
-            ->pluck('ReturnIdentifier')
-            ->filter()
-            ->toArray();
-        
-        // If no identifiers, we can't match
-        if (empty($currentIdentifiers)) {
-            return;
-        }
-        
-        // Find matching flights in the next trip
-        foreach ($nextTripLegs as $nextLeg) {
-            $nextFlight = $nextLeg['legs']['flight'];
-            $nextFares = $nextLeg['legs']['fares'];
-            
-            // Check if airlines/providers match for continuity (optional, adjust as needed)
-            // For multi-city, we might want to allow different airlines
-            $nextIdentifiers = collect($nextFares)
-                ->pluck('ReturnIdentifier')
-                ->filter()
-                ->toArray();
-            
-            // Find common fare identifiers
-            $commonIdentifiers = array_intersect($currentIdentifiers, $nextIdentifiers);
-            
-            if (!empty($commonIdentifiers)) {
-                // Filter fares to only include matching ones
-                $filteredNextFares = collect($nextFares)
-                    ->filter(function ($fare) use ($commonIdentifiers) {
-                        return in_array($fare['ReturnIdentifier'], $commonIdentifiers);
-                    })
-                    ->values()
-                    ->toArray();
-                
-                if (!empty($filteredNextFares)) {
-                    $newCombination = $currentCombination;
-                    $newCombination[$nextIndex] = [
-                        'legs' => [
-                            'flight' => $nextFlight,
-                            'fares' => $filteredNextFares
-                        ]
-                    ];
-                    
-                    $this->findMatchingMultiCityCombinations(
-                        $allTripLegs, 
-                        $nextIndex, 
-                        $newCombination, 
-                        $final, 
-                        $processedCombinations
-                    );
-                }
+        $mappedFlightsCount = min(array_map('count', $allTripLegs));
+
+        for ($flightIndex = 0; $flightIndex < $mappedFlightsCount; $flightIndex++) {
+            $legs = [];
+
+            foreach ($allTripLegs as $tripLegs) {
+                $legs[] = $tripLegs[$flightIndex]['legs'];
             }
-        }
-    }
 
-    /**
-     * Add a valid multi-city combination to the final results
-     */
-    private function addMultiCityCombination(array $combination, array &$final, array &$processedCombinations): void
-    {
-        // Create a unique key for this combination
-        $combinationKey = implode('|', array_map(function ($leg) {
-            return $leg['legs']['flight']['Provider'] . '_' . $leg['legs']['flight']['FlightNo'];
-        }, $combination));
-        
-        if (isset($processedCombinations[$combinationKey])) {
-            return;
-        }
-        
-        $processedCombinations[$combinationKey] = true;
-        
-        // Find common fare identifiers across all legs
-        $allIdentifiers = [];
-        foreach ($combination as $leg) {
-            $identifiers = collect($leg['legs']['fares'])
-                ->pluck('ReturnIdentifier')
-                ->filter()
-                ->toArray();
-            $allIdentifiers[] = $identifiers;
-        }
-        
-        // Find identifiers that exist in all legs
-        $commonIdentifiers = $allIdentifiers[0] ?? [];
-        for ($i = 1; $i < count($allIdentifiers); $i++) {
-            $commonIdentifiers = array_intersect($commonIdentifiers, $allIdentifiers[$i]);
-        }
-        
-        if (empty($commonIdentifiers)) {
-            return;
-        }
-        
-        // Build the multi-city structure
-        $legs = [];
-        foreach ($combination as $legIndex => $leg) {
-            $filteredFares = collect($leg['legs']['fares'])
-                ->filter(function ($fare) use ($commonIdentifiers) {
-                    return in_array($fare['ReturnIdentifier'], $commonIdentifiers);
-                })
-                ->values()
-                ->toArray();
-            
-            $legs[] = [
-                'flight' => $leg['legs']['flight'],
-                'fares' => $filteredFares
+            $final[] = [
+                'type' => 'multicity',
+                'index' => 'multicity_' . ($flightIndex + 1),
+                'legs' => $legs
             ];
         }
-        
-        $final[] = [
-            'type' => 'multicity',
-            'index' => $combinationKey,
-            'legs' => $legs
-        ];
+
+        Log::info('Completed loop-based multi-city mapping. Total mapped results found: ' . count($final));
+        return $final;
     }
 
     private function groupAllFares(array $journeys): array

@@ -95,7 +95,6 @@ import {
     Ellipsis
 } from "lucide-vue-next";
 import moment from "moment";
-import Skeleton from "primevue/skeleton";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
@@ -819,6 +818,28 @@ const showNoFilteredFlightsState = computed(() => {
     );
 });
 
+const hasFlightResults = computed(() => {
+    return Array.isArray(allFlights.value) && allFlights.value.length > 0;
+});
+
+const showFlightResultsSkeleton = computed(() => {
+    return (
+        !showNoFlightsState.value &&
+        !showNoFilteredFlightsState.value &&
+        !hasFlightResults.value &&
+        (isLoading.value || isFlightLoading.value || isSearching.value)
+    );
+});
+
+const showFlightResultsShell = computed(() => {
+    return (
+        hasFlightResults.value ||
+        showFlightResultsSkeleton.value ||
+        showNoFlightsState.value ||
+        showNoFilteredFlightsState.value
+    );
+});
+
 function scrollToSearchTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1431,11 +1452,7 @@ watch(isLoggedIn, (newVal) => {
     <!-- Tab Content -->
     <div class="">
       <div v-if="activeTab === 'flights'" class="animate-fadeIn">
-        <div v-if="isLoading"
-          class="flex items-center gap-2 justify-center bg-white p-8 sm:p-24 rounded mt-4 sm:mt-8">
-          <Spinner />
-        </div>
-        <div v-else>
+        <div>
           <div class="w-full mx-2 sm:-mx-0">
             <div class="px-2 sm:px-0">
               <FlightFilterCard :countdown="countdown" v-model="modelValue" @search="setupFlightsParams" class="w-full" />
@@ -1522,11 +1539,11 @@ watch(isLoggedIn, (newVal) => {
   </div>
 
   <!-- NEW LAYOUT: Filters Sidebar + Results -->
-  <div v-if="filteredFlights && !isLoading && allFlights.length > 0" class="container mx-auto px-4 py-6">
+  <div v-if="showFlightResultsShell" class="container mx-auto px-4 py-6">
     <div class="flex flex-col lg:flex-row gap-6">
       
       <!-- LEFT SIDEBAR FILTERS - Always visible, not accordion -->
-      <div class="lg:w-80 flex-shrink-0 space-y-6">
+      <div v-if="hasFlightResults" class="lg:w-80 flex-shrink-0 space-y-6">
         <!-- Price Filter -->
         <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -1686,10 +1703,10 @@ watch(isLoggedIn, (newVal) => {
       <!-- RIGHT SECTION: Results Header + Flight List -->
       <div class="flex-1 min-w-0">
         <!-- Results Header with Cheapest | Fastest | Best Value -->
-        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
+        <div v-if="hasFlightResults" class="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="text-sm font-medium text-gray-700">
-              Showing <span class="font-bold text-primary">{{ filteredFlights.length }}</span> results of <span class="font-bold">{{ allFlights.length }}</span>
+              Showing <span class="font-bold text-primary">{{ filteredFlights?.length || 0 }}</span> results of <span class="font-bold">{{ allFlights.length }}</span>
             </div>
 
             <!-- Cheapest | Fastest | Best Value Tabs -->
@@ -1732,8 +1749,81 @@ watch(isLoggedIn, (newVal) => {
           </div>
         </div>
 
+        <!-- Loading Skeletons -->
+        <div v-if="showFlightResultsSkeleton" class="space-y-4 flight-loading-skeleton">
+          <div class="flight-skeleton-card bg-white border border-gray-200 rounded-xl p-4 shadow-sm overflow-hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div class="space-y-2">
+                <div class="flight-skeleton-block h-4 w-44"></div>
+                <div class="flight-skeleton-block h-3 w-28"></div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <div class="flight-skeleton-pill h-8 w-24"></div>
+                <div class="flight-skeleton-pill h-8 w-24"></div>
+                <div class="flight-skeleton-pill h-8 w-24"></div>
+              </div>
+              <div class="flight-skeleton-block h-6 w-36"></div>
+            </div>
+          </div>
+
+          <div v-for="index in 4" :key="`flight-skeleton-${index}`"
+            class="flight-skeleton-card bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="p-4 sm:p-5">
+              <div class="flex flex-col lg:flex-row lg:items-center gap-5">
+                <div class="flex items-center gap-3 lg:w-48 shrink-0">
+                  <div class="flight-skeleton-circle w-10 h-10"></div>
+                  <div class="space-y-2">
+                    <div class="flight-skeleton-block h-4 w-32"></div>
+                    <div class="flight-skeleton-block h-3 w-20"></div>
+                  </div>
+                </div>
+
+                <div class="flex-1 grid grid-cols-[1fr_1.5fr_1fr] items-center gap-4 min-w-0">
+                  <div class="space-y-2 min-w-0">
+                    <div class="flight-skeleton-block h-7 w-20"></div>
+                    <div class="flight-skeleton-block h-4 w-28 max-w-full"></div>
+                    <div class="flight-skeleton-block h-3 w-12"></div>
+                  </div>
+
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="flight-skeleton-block h-3 w-20"></div>
+                    <div class="flight-skeleton-route w-full">
+                      <span class="flight-skeleton-dot"></span>
+                      <span class="flight-skeleton-line"></span>
+                      <span class="flight-skeleton-plane">
+                        <Plane class="w-4 h-4" />
+                      </span>
+                      <span class="flight-skeleton-line"></span>
+                      <span class="flight-skeleton-dot"></span>
+                    </div>
+                    <div class="flight-skeleton-block h-3 w-16"></div>
+                  </div>
+
+                  <div class="space-y-2 text-right min-w-0">
+                    <div class="flight-skeleton-block h-7 w-20 ml-auto"></div>
+                    <div class="flight-skeleton-block h-4 w-28 max-w-full ml-auto"></div>
+                    <div class="flight-skeleton-block h-3 w-12 ml-auto"></div>
+                  </div>
+                </div>
+
+                <div class="lg:w-48 flex lg:flex-col items-center lg:items-end justify-between gap-3 border-t lg:border-t-0 pt-3 lg:pt-0 lg:border-l border-gray-100 lg:pl-5">
+                  <div class="flight-skeleton-block h-7 w-28"></div>
+                  <div class="flight-skeleton-button h-9 w-28"></div>
+                </div>
+              </div>
+            </div>
+            <div class="px-5 py-3 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between">
+              <div class="flight-skeleton-block h-3.5 w-28"></div>
+              <div class="flex items-center gap-3">
+                <div class="flight-skeleton-pill h-5 w-20"></div>
+                <div class="flight-skeleton-block h-3.5 w-28"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Flight Results -->
-        <div v-if="filteredFlights?.length > 0 && !isLoading" class="space-y-4">
+        <div v-if="filteredFlights?.length > 0 && !showFlightResultsSkeleton" class="space-y-4">
           <div v-for="item in filteredFlights" :key="item?.leg?.ref_id"
             class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
             
@@ -3591,5 +3681,132 @@ segment, segmentIndex
 
 .animate-light-sweep {
     animation: light-sweep 1.5s ease-in-out infinite;
+}
+
+.flight-loading-skeleton {
+    --skeleton-base: #edf0f3;
+    --skeleton-mid: #e1e5ea;
+    --skeleton-glow: rgba(255, 255, 255, 0.72);
+}
+
+.flight-skeleton-card {
+    position: relative;
+    isolation: isolate;
+    animation: skeleton-card-glow 2.8s ease-in-out infinite;
+}
+
+.flight-skeleton-block,
+.flight-skeleton-pill,
+.flight-skeleton-button,
+.flight-skeleton-circle,
+.flight-skeleton-line {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton-base);
+}
+
+.flight-skeleton-block::after,
+.flight-skeleton-pill::after,
+.flight-skeleton-button::after,
+.flight-skeleton-circle::after,
+.flight-skeleton-line::after {
+    content: "";
+    position: absolute;
+    top: -35%;
+    bottom: -35%;
+    left: -30%;
+    width: 18%;
+    background: var(--skeleton-glow);
+    box-shadow: 0 0 22px 12px var(--skeleton-glow);
+    transform: translateX(-220%);
+    animation: skeleton-flow 1.45s ease-in-out infinite;
+}
+
+.flight-skeleton-block,
+.flight-skeleton-button,
+.flight-skeleton-line {
+    border-radius: 8px;
+}
+
+.flight-skeleton-pill,
+.flight-skeleton-circle {
+    border-radius: 9999px;
+}
+
+.flight-skeleton-button {
+    background: var(--skeleton-mid);
+    box-shadow: 0 0 14px rgba(148, 163, 184, 0.12);
+}
+
+.flight-skeleton-route {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+}
+
+.flight-skeleton-line {
+    height: 3px;
+    border-radius: 9999px;
+}
+
+.flight-skeleton-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 9999px;
+    background: var(--skeleton-mid);
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.1);
+}
+
+.flight-skeleton-plane {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: rgba(100, 116, 139, 0.46);
+    background: var(--skeleton-base);
+    box-shadow: 0 0 16px rgba(148, 163, 184, 0.14);
+    animation: skeleton-plane-glow 1.45s ease-in-out infinite;
+}
+
+@keyframes skeleton-flow {
+    0% {
+        transform: translateX(-220%);
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateX(760%);
+    }
+}
+
+@keyframes skeleton-card-glow {
+    0%,
+    100% {
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    50% {
+        box-shadow: 0 8px 24px rgba(148, 163, 184, 0.16);
+    }
+}
+
+@keyframes skeleton-plane-glow {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+
+    50% {
+        transform: scale(1.06);
+        opacity: 1;
+    }
 }
 </style>

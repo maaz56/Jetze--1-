@@ -1,6 +1,6 @@
 <?php
 namespace App\Services;
-use App\Models\Airport;
+use App\Transformers\AtFlightTransformer;
 use Cache;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
@@ -22,6 +22,7 @@ class AtApiService
     protected $password;
     protected $agentCode;
     protected $browserKey;
+    protected $atFlightTransformer;
     private bool $useMockApi = false;
 
 
@@ -37,6 +38,7 @@ class AtApiService
         $this->password = config('at.password');
         $this->agentCode = config('at.agent_code');
         $this->browserKey = config('at.browser_key');
+        $this->atFlightTransformer = new AtFlightTransformer();
     }
 
 
@@ -100,11 +102,11 @@ class AtApiService
         $searchUrl = "$this->flightBaseUrl/flights/ExpressSearch";
 
         // Determine FareType based on flight type and trip details
-        $fareType = $this->determineFareType($params);
+        $fareType = $this->atFlightTransformer->determineFareType($params);
         $this->cacheFareType($fareType);
 
-        // Build trips array based on flight type
-        $trips = $this->buildTripsArray($params);
+        // Build trips array based on flight type and resolved FareType
+        $trips = $this->buildTripsArray($params, $fareType);
 
         $payload = [
             'FareType' => $fareType,
@@ -138,6 +140,10 @@ class AtApiService
             ],
         ];
 
+        if ($fareType === 'DM' && !empty($trips)) {
+            return $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl);
+        }
+
         try {
             $request = new Request(
                 'POST',
@@ -168,31 +174,70 @@ class AtApiService
         }
     }
 
-    /**
-     * Determine FareType based on flight type and trip details
-     */
-    private function determineFareType(array $params): string
+    private function searchTripsOneByOne(array $payload, array $trips, array $headers, string $searchUrl): ?array
     {
-        $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
+        $combinedResponse = null;
+        $combinedTrips = [];
+        $tuis = [];
 
-        // If explicitly set to multi-city
-        if ($flightType === 'multi-city') {
-            // Check if it's international or domestic
-            $trips = $params['trips'] ?? [];
-            if (!empty($trips)) {
-                $isInternational = $this->isInternationalMultiCity($trips);
-                return $isInternational ? 'DM' : 'DM';
+        foreach ($trips as $index => $trip) {
+            $tripPayload = $payload;
+            $tripPayload['Trips'] = [$trip];
+
+            try {
+                $request = new Request(
+                    'POST',
+                    $searchUrl,
+                    $headers,
+                    json_encode($tripPayload)
+                );
+
+                Log::info('DM flight search request payload for trip ' . ($index + 1) . ': ', $tripPayload);
+
+                $response = $this->client->send($request);
+                $responseBody = json_decode($response->getBody(), true);
+                Log::info('DM flight search response for trip ' . ($index + 1) . ': ', $responseBody);
+
+                if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
+                    Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
+                    return null;
+                }
+
+                $tuis[] = $responseBody['TUI'];
+                $tripResult = $this->getSearchFlightsRes($responseBody['TUI']);
+
+                if (empty($tripResult) || !is_array($tripResult)) {
+                    Log::warning('DM flight search result is empty for trip ' . ($index + 1));
+                    return null;
+                }
+
+                if ($combinedResponse === null) {
+                    $combinedResponse = $tripResult;
+                }
+
+                foreach ($tripResult['Trips'] ?? [] as $resultTrip) {
+                    $combinedTrips[] = $resultTrip;
+                }
+            } catch (RequestException $e) {
+                Log::error('Error searching DM flight trip ' . ($index + 1) . ': ' . $e->getMessage());
+                if ($e->hasResponse()) {
+                    Log::error('Response: ' . $e->getResponse()->getBody());
+                }
+                return null;
             }
-            return 'IM'; // Default to International Multi-city
         }
 
-        // Handle return flights
-        if ($flightType === 'return') {
-            return 'RS';
+        if ($combinedResponse === null) {
+            return null;
         }
 
-        // Handle one-way flights
-        return 'ON';
+        $combinedResponse['Trips'] = $combinedTrips;
+        $combinedResponse['TUI'] = $tuis[0] ?? ($combinedResponse['TUI'] ?? null);
+        $combinedResponse['TUIList'] = $tuis;
+
+        Log::info('Combined DM flight search response: ', $combinedResponse);
+
+        return $combinedResponse;
     }
 
     /**
@@ -216,70 +261,19 @@ class AtApiService
     }
 
     /**
-     * Check if multi-city trip is international
-     */
-    private function isInternationalMultiCity(array $trips): bool
-    {
-        // Get all unique airport codes from all trips
-        $allAirports = [];
-        foreach ($trips as $trip) {
-            $allAirports[] = $trip['origin'];
-            $allAirports[] = $trip['destination'];
-        }
-        $allAirports = array_unique($allAirports);
-
-        if (empty($allAirports)) {
-            return true; // Default to international if no airports
-        }
-
-        // Get Pakistani airports from cache
-        $pakistaniAirports = $this->getPakistaniAirports();
-
-        // Check each airport - if ANY is not Pakistani, it's international
-        foreach ($allAirports as $airport) {
-            $airport = strtoupper($airport);
-
-            // If airport is NOT in Pakistani airports list, it's international
-            if (!in_array($airport, $pakistaniAirports)) {
-                return true; // International found
-            }
-        }
-
-        // All airports are in Pakistan → domestic multi-city
-        return false;
-    }
-    private function getPakistaniAirports(): array
-    {
-        // Cache for 24 hours to avoid repeated DB queries
-        return Cache::remember('pakistani_airports', 86400, function () {
-            return Airport::where('iata_country_code', 'PK')
-                ->pluck('iata_code')
-                ->map(fn($code) => strtoupper($code))
-                ->toArray();
-        });
-    }
-
-
-    /**
      * Build trips array based on flight type
      */
-    private function buildTripsArray(array $params): array
+    private function buildTripsArray(array $params, string $fareType): array
     {
         $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
         $trips = [];
 
-        // Handle multi-city flights
+        if ($fareType === 'DM' && isset($params['trips']) && is_array($params['trips'])) {
+            return $this->buildMultiCityTrips($params);
+        }
+
         if ($flightType === 'multi-city' && isset($params['trips']) && is_array($params['trips'])) {
-            foreach ($params['trips'] as $trip) {
-                $trips[] = [
-                    'From' => $trip['origin'],
-                    'To' => $trip['destination'],
-                    'ReturnDate' => '', // Empty for multi-city
-                    'OnwardDate' => $trip['date'],
-                    'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
-                ];
-            }
-            return $trips;
+            return $this->buildMultiCityTrips($params);
         }
 
         // Handle return flights
@@ -302,6 +296,23 @@ class AtApiService
             'OnwardDate' => $params['departure_date'],
             'TUI' => $params['TUI'] ?? ''
         ];
+
+        return $trips;
+    }
+
+    private function buildMultiCityTrips(array $params): array
+    {
+        $trips = [];
+
+        foreach ($params['trips'] as $trip) {
+            $trips[] = [
+                'From' => $trip['origin'],
+                'To' => $trip['destination'],
+                'ReturnDate' => '',
+                'OnwardDate' => $trip['date'],
+                'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
+            ];
+        }
 
         return $trips;
     }
@@ -438,9 +449,17 @@ class AtApiService
         |--------------------------------------------------------------------------
         */
 
+        $tripType = strtoupper((string) $request->input('fareType', $request->input('fare_type', Cache::get('AT_Fare_type', 'ON'))));
+
+        if ($tripType === 'DM') {
+            return $this->sendDmMultiCityPriceRequests($request, $accessToken, $headers, $priceRequestUrl, $tripType);
+        }
+
         $tui = $request->input('ref_id'); // main ref_id
+        if (is_array($tui)) {
+            $tui = $tui[0] ?? '';
+        }
         $legs = $request->input('legs', []);
-        $flightType = $request->input('flight_type', $request->input('flightType', 'one-way'));
 
         $trips = [];
 
@@ -457,7 +476,6 @@ class AtApiService
             ];
         }
         Log::info('Constructed trips for Price Request: ', $trips);
-       $tripType = Cache::get('AT_Fare_type', 'ON'); // Default to 'ON' if not set
         $payload = [
             'Trips' => $trips,
             'ClientID' => $accessToken['ClientID'], // you said you'll add this
@@ -895,7 +913,7 @@ class AtApiService
         }
     }
 
-     public function atPaymentRequest($params)
+    public function atPaymentRequest($params)
     {
 
         $accessToken = $this->getAccessToken();
@@ -1001,6 +1019,139 @@ class AtApiService
 
             return null;
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AT DM Multi-city Pricing
+    |--------------------------------------------------------------------------
+    */
+
+    private function sendDmMultiCityPriceRequests($request, array $accessToken, array $headers, string $priceRequestUrl, string $tripType): ?array
+    {
+        $legs = $request->input('legs', []);
+        $tuis = $this->normalizeDmTuiList($request->input('ref_id'));
+
+        if (empty($legs) || empty($tuis)) {
+            Log::warning('DM price request missing legs or TUI list.', [
+                'legs' => $legs,
+                'tuis' => $tuis,
+            ]);
+            return null;
+        }
+
+        $pricedResponses = [];
+        $smartPricerResponses = [];
+
+        foreach ($legs as $index => $leg) {
+            $selectedFare = $leg['selectedFare'] ?? [];
+            $tui = $tuis[$index] ?? null;
+
+            if (empty($tui) || !isset($selectedFare['billable_price'])) {
+                Log::warning('Skipping invalid DM selected fare pricing item.', [
+                    'leg_index' => $index,
+                    'tui' => $tui,
+                    'selected_fare' => $selectedFare,
+                ]);
+                return null;
+            }
+
+            $payload = [
+                'Trips' => [
+                    [
+                        'Amount' => (float) $selectedFare['billable_price'],
+                        'Index' => $selectedFare['index'] ?? ($leg['Index'] ?? ''),
+                        'OrderID' => $index + 1,
+                        'TUI' => $tui,
+                    ]
+                ],
+                'ClientID' => $accessToken['ClientID'],
+                'Mode' => 'AS',
+                'Options' => 'A',
+                'Source' => 'SF',
+                'TripType' => $tripType,
+            ];
+
+            Log::info('DM SmartPricer payload for selected fare ' . ($index + 1) . ': ', $payload);
+
+            try {
+                $req = new \GuzzleHttp\Psr7\Request(
+                    'POST',
+                    $priceRequestUrl,
+                    $headers,
+                    json_encode($payload)
+                );
+
+                $response = $this->client->send($req);
+                $responseBody = json_decode($response->getBody(), true);
+                Log::info('DM SmartPricer response for selected fare ' . ($index + 1) . ': ', $responseBody);
+
+                $smartPricerResponses[] = $responseBody;
+                $pricedResponse = $this->getPricer($responseBody);
+
+                if (!$pricedResponse) {
+                    Log::warning('DM GetSPricer returned empty response for selected fare ' . ($index + 1));
+                    return null;
+                }
+
+                $pricedResponses[] = $pricedResponse;
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                Log::error('Error sending DM SmartPricer request for selected fare ' . ($index + 1) . ': ' . $e->getMessage());
+
+                if ($e->hasResponse()) {
+                    Log::error('Response: ' . $e->getResponse()->getBody());
+                }
+
+                return null;
+            }
+        }
+
+        return $this->combineDmPricerResponses($pricedResponses, $smartPricerResponses, $tripType);
+    }
+
+    private function normalizeDmTuiList($refIds): array
+    {
+        if (is_array($refIds)) {
+            return array_values($refIds);
+        }
+
+        if (is_string($refIds) && $refIds !== '') {
+            return [$refIds];
+        }
+
+        return [];
+    }
+
+    private function combineDmPricerResponses(array $pricedResponses, array $smartPricerResponses, string $tripType): array
+    {
+        $combined = $pricedResponses[0] ?? [];
+        $tuis = [];
+        $trips = [];
+        $netAmount = 0;
+
+        foreach ($pricedResponses as $pricedResponse) {
+            if (!empty($pricedResponse['TUI'])) {
+                $tuis[] = $pricedResponse['TUI'];
+            }
+
+            foreach ($pricedResponse['Trips'] ?? [] as $trip) {
+                $trips[] = $trip;
+            }
+
+            $netAmount += (float) ($pricedResponse['NetAmount'] ?? 0);
+        }
+
+        $combined['FareType'] = $tripType;
+        $combined['TUI'] = $tuis[0] ?? ($combined['TUI'] ?? null);
+        $combined['TUIList'] = $tuis;
+        $combined['Trips'] = $trips;
+        $combined['NetAmount'] = $netAmount ?: ($combined['NetAmount'] ?? 0);
+        $combined['PricedResponses'] = $pricedResponses;
+        $combined['SmartPricerResponses'] = $smartPricerResponses;
+
+        Log::info('Combined DM GetSPricer response: ', $combined);
+
+        return $combined;
     }
 
 }

@@ -1081,6 +1081,7 @@ function sendSooperQoute() {
         ref_id: flight?.value?.provider?.TUI,
         flight_provider: "AT",
         provider: "AT",
+        fareType:flight?.value?.provider?.fare_type,
         legs: flight?.value?.leg?.flights
             .map(flightItem => {
                 // Match fare from selectedFares.value
@@ -2036,6 +2037,7 @@ watch(flight, () => {
     </div>
     <!-- Main Content - Flight Source 1 -->
     <div v-if="route?.query?.flight_source == 1 && !showPreview" class="min-h-screen bg-gray-50 py-4">
+        <pre>{{quote}}</pre>
         <div class="max-w-7xl  mx-auto px-3 sm:px-4">
             <div v-if="!isLoading && flight">
                 <!-- Header -->

@@ -800,6 +800,7 @@ function sendSooperQoute() {
         ref_id: flight?.value?.provider?.TUI,
         flight_provider: "AT",
         provider: "AT",
+        fareType: flight?.value?.provider?.fare_type,
         legs: flight?.value?.leg?.flights
             .map(flightItem => {
                 // Match fare from selectedFares.value
