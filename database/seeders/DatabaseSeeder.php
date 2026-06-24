@@ -46,13 +46,13 @@ class DatabaseSeeder extends Seeder
 
 
         $this->call([
-            // AirportSeeder::class,
-            // AircraftSeeder::class,
-            // AirlineSeeder::class,
-            // airportMarginSeeder::class,
-            // CountryStateCityTableSeeder::class,
-            // CustomerMarginSeeder::class,
-            // CustomerSettingSeeder::class,
+            AirportSeeder::class,
+            AircraftSeeder::class,
+            AirlineSeeder::class,
+            airportMarginSeeder::class,
+            CountryStateCityTableSeeder::class,
+            CustomerMarginSeeder::class,
+            CustomerSettingSeeder::class,
         ]);
     }
 }
