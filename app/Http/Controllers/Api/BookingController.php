@@ -423,7 +423,9 @@ class BookingController extends Controller
                             'error' => 'No response from AT API'
                         ], 400);
                     }
-                    $itineraryRef = $response['TransactionID'];
+                    $itineraryRef = !empty($response['TransactionIDList'])
+                        ? implode(',', $response['TransactionIDList'])
+                        : $response['TransactionID'];
                     $pnrResponse = json_encode($response);
                     $flightData = json_encode($flightData);
                     break;

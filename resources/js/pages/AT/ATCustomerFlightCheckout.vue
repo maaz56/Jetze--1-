@@ -1340,6 +1340,7 @@ async function saveBooking(type) {
             flight: flight.value,
             TUI:quote.value?.TUI,
             NetAmount: quote.value?.NetAmount,
+            fareType: quote.value?.FareType || flight.value?.provider?.fare_type,
             agent_markup: savedMarginBreakdown.customerMarkupTotal,
             agent_discount: savedMarginBreakdown.customerDiscountTotal,
             agent_margin: savedMarginBreakdown.otherChargesTotal,

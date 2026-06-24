@@ -9,7 +9,9 @@ import {
     Receipt,
     MoveRight,
     CircleChevronRight,
-    ChevronRight
+    ChevronRight,
+    CirclePause,
+    Ban
 } from "lucide-vue-next";
 
 import {

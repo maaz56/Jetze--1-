@@ -1,3 +1,4 @@
+
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
 import { Switch } from "@/components/ui/switch";
@@ -7,6 +8,8 @@ import {
     Receipt,
     MoveRight,
     CircleChevronRight,
+     CirclePause,
+    Ban
 } from "lucide-vue-next";
 
 import {

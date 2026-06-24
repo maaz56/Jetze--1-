@@ -8,11 +8,14 @@ use GuzzleHttp\Psr7\Request;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 
 
 class AtApiService
 {
+    private const DM_VALIDATION_CACHE_PREFIX = 'AT_DM_VALIDATION_';
+
     protected $signBaseUrl;
     protected $flightBaseUrl;
     protected $merchantId;
@@ -174,72 +177,6 @@ class AtApiService
         }
     }
 
-    private function searchTripsOneByOne(array $payload, array $trips, array $headers, string $searchUrl): ?array
-    {
-        $combinedResponse = null;
-        $combinedTrips = [];
-        $tuis = [];
-
-        foreach ($trips as $index => $trip) {
-            $tripPayload = $payload;
-            $tripPayload['Trips'] = [$trip];
-
-            try {
-                $request = new Request(
-                    'POST',
-                    $searchUrl,
-                    $headers,
-                    json_encode($tripPayload)
-                );
-
-                Log::info('DM flight search request payload for trip ' . ($index + 1) . ': ', $tripPayload);
-
-                $response = $this->client->send($request);
-                $responseBody = json_decode($response->getBody(), true);
-                Log::info('DM flight search response for trip ' . ($index + 1) . ': ', $responseBody);
-
-                if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
-                    Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
-                    return null;
-                }
-
-                $tuis[] = $responseBody['TUI'];
-                $tripResult = $this->getSearchFlightsRes($responseBody['TUI']);
-
-                if (empty($tripResult) || !is_array($tripResult)) {
-                    Log::warning('DM flight search result is empty for trip ' . ($index + 1));
-                    return null;
-                }
-
-                if ($combinedResponse === null) {
-                    $combinedResponse = $tripResult;
-                }
-
-                foreach ($tripResult['Trips'] ?? [] as $resultTrip) {
-                    $combinedTrips[] = $resultTrip;
-                }
-            } catch (RequestException $e) {
-                Log::error('Error searching DM flight trip ' . ($index + 1) . ': ' . $e->getMessage());
-                if ($e->hasResponse()) {
-                    Log::error('Response: ' . $e->getResponse()->getBody());
-                }
-                return null;
-            }
-        }
-
-        if ($combinedResponse === null) {
-            return null;
-        }
-
-        $combinedResponse['Trips'] = $combinedTrips;
-        $combinedResponse['TUI'] = $tuis[0] ?? ($combinedResponse['TUI'] ?? null);
-        $combinedResponse['TUIList'] = $tuis;
-
-        Log::info('Combined DM flight search response: ', $combinedResponse);
-
-        return $combinedResponse;
-    }
-
     /**
      * Store the resolved fare type in cache for later use in the AT flow.
      */
@@ -296,23 +233,6 @@ class AtApiService
             'OnwardDate' => $params['departure_date'],
             'TUI' => $params['TUI'] ?? ''
         ];
-
-        return $trips;
-    }
-
-    private function buildMultiCityTrips(array $params): array
-    {
-        $trips = [];
-
-        foreach ($params['trips'] as $trip) {
-            $trips[] = [
-                'From' => $trip['origin'],
-                'To' => $trip['destination'],
-                'ReturnDate' => '',
-                'OnwardDate' => $trip['date'],
-                'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
-            ];
-        }
 
         return $trips;
     }
@@ -398,7 +318,7 @@ class AtApiService
                 $body = json_decode($response->getBody(), true);
                 $isComplete = strtolower($body['Completed'] ?? 'false');
             }
-
+            Log::info('GetExpSearch completed successfully. Response: ', $body);
             return $body;
 
         } catch (RequestException $e) {
@@ -597,6 +517,16 @@ class AtApiService
         ];
 
         $bookingUrl = "{$this->flightBaseUrl}/Flights/CreateItinerary";
+        $cachedValidationResponse = $this->getCachedDmValidationResponse($params['TUI'] ?? null);
+        $fareType = strtoupper((string) (
+            $params['fareType']
+            ?? $params['FareType']
+            ?? $params['fare_type']
+            ?? $cachedValidationResponse['FareType']
+            ?? ''
+        ));
+        $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
+        $netAmount = $cachedValidationResponse['NetAmount'] ?? $params['NetAmount'] ?? 0;
 
         /*
         |--------------------------------------------------------------------------
@@ -705,6 +635,18 @@ class AtApiService
             }
         }
 
+        if ($fareType === 'DM') {
+            return $this->bookDmMultiCityTrips(
+                $params,
+                $cachedValidationResponse,
+                $headers,
+                $bookingUrl,
+                $clientId,
+                $contactInfo,
+                $travellers
+            );
+        }
+
 
 
         /*
@@ -713,13 +655,13 @@ class AtApiService
         |--------------------------------------------------------------------------
         */
         $payload = [
-            'TUI' => $params['TUI'],
+            'TUI' => $bookingTui,
             'ContactInfo' => $contactInfo,
             'Travellers' => $travellers,
             'PLP' => [],
             'SSR' => $SSR,
             'CrossSell' => [],
-            'NetAmount' => $params['NetAmount'],
+            'NetAmount' => $netAmount,
             'SSRAmount' => $totalAmount,
             'ClientID' => $clientId,
             'DeviceID' => '',
@@ -791,6 +733,7 @@ class AtApiService
         */
 
         $tui = $request['ref_id']; // main ref_id
+        $cachedValidationResponse = $this->getCachedDmValidationResponse($tui);
         $legs = $request['legs'] ?? [];
 
         $trips = [];
@@ -804,7 +747,7 @@ class AtApiService
                 'Amount' => 0,
                 'Index' => "", // 1, 2, 3...
                 'OrderID' => $index + 1, // keep static or change if needed
-                'TUI' => $tui,
+                'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
             ];
         }
 
@@ -861,6 +804,7 @@ class AtApiService
         */
 
         $tui = $request['ref_id']; // main ref_id
+        $cachedValidationResponse = $this->getCachedDmValidationResponse($tui);
         $legs = $request['legs'] ?? [];
 
         $trips = [];
@@ -874,7 +818,7 @@ class AtApiService
                 'Amount' => 0,
                 'Index' => "", // 1, 2, 3...
                 'OrderID' => $index + 1, // keep static or change if needed
-                'TUI' => $tui,
+                'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
             ];
         }
 
@@ -1023,9 +967,328 @@ class AtApiService
 
     /*
     |--------------------------------------------------------------------------
-    | AT DM Multi-city Pricing
+    |========================= AT DM MULTI-CITY ===============================
+    |--------------------------------------------------------------------------
+    | Everything below this border belongs to the AT DM multi-city flow.
+    | This keeps multi-city search, validation cache, and pricing separate
+    | from the standard one-way / return AT service flow above.
     |--------------------------------------------------------------------------
     */
+
+    private function buildMultiCityTrips(array $params): array
+    {
+        $trips = [];
+
+        foreach ($params['trips'] as $trip) {
+            $trips[] = [
+                'From' => $trip['origin'],
+                'To' => $trip['destination'],
+                'ReturnDate' => '',
+                'OnwardDate' => $trip['date'],
+                'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
+            ];
+        }
+
+        return $trips;
+    }
+
+    private function searchTripsOneByOne(array $payload, array $trips, array $headers, string $searchUrl): ?array
+    {
+        $combinedResponse = null;
+        $combinedTrips = [];
+        $tuis = [];
+
+        foreach ($trips as $index => $trip) {
+            $tripPayload = $payload;
+            $tripPayload['Trips'] = [$trip];
+
+            try {
+                $request = new Request(
+                    'POST',
+                    $searchUrl,
+                    $headers,
+                    json_encode($tripPayload)
+                );
+
+                Log::info('DM flight search request payload for trip ' . ($index + 1) . ': ', $tripPayload);
+
+                $response = $this->client->send($request);
+                $responseBody = json_decode($response->getBody(), true);
+                Log::info('DM flight search response for trip ' . ($index + 1) . ': ', $responseBody);
+
+                if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
+                    Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
+                    return null;
+                }
+
+                $tuis[] = $responseBody['TUI'];
+                $tripResult = $this->getSearchFlightsRes($responseBody['TUI']);
+
+                if (empty($tripResult) || !is_array($tripResult)) {
+                    Log::warning('DM flight search result is empty for trip ' . ($index + 1));
+                    return null;
+                }
+
+                if ($combinedResponse === null) {
+                    $combinedResponse = $tripResult;
+                }
+
+                foreach ($tripResult['Trips'] ?? [] as $resultTrip) {
+                    $combinedTrips[] = $resultTrip;
+                }
+            } catch (RequestException $e) {
+                Log::error('Error searching DM flight trip ' . ($index + 1) . ': ' . $e->getMessage());
+                if ($e->hasResponse()) {
+                    Log::error('Response: ' . $e->getResponse()->getBody());
+                }
+                return null;
+            }
+        }
+
+        if ($combinedResponse === null) {
+            return null;
+        }
+
+        $combinedResponse['Trips'] = $combinedTrips;
+        $combinedResponse['TUI'] = $tuis[0] ?? ($combinedResponse['TUI'] ?? null);
+        $combinedResponse['TUIList'] = $tuis;
+
+        Log::info('Combined DM flight search response: ', $combinedResponse);
+
+        return $combinedResponse;
+    }
+
+    private function getDmValidationCacheKey(string $frontendTui): string
+    {
+        return self::DM_VALIDATION_CACHE_PREFIX . $frontendTui;
+    }
+
+    private function generateDmValidationFrontendTui(): string
+    {
+        return 'ATDM-' . Str::upper(Str::random(32));
+    }
+
+    private function cacheDmValidationCombinedResponse(array $combinedResponse): array
+    {
+        $frontendTui = $this->generateDmValidationFrontendTui();
+        $cacheKey = $this->getDmValidationCacheKey($frontendTui);
+
+        Cache::put($cacheKey, $combinedResponse, now()->addHour());
+
+        Log::info('Cached AT DM validation combined response.', [
+            'cache_key' => $cacheKey,
+            'frontend_tui' => $frontendTui,
+            'original_tuis' => $combinedResponse['TUIList'] ?? [],
+        ]);
+
+        return [
+            'TUI' => $frontendTui,
+            'NetAmount' => $combinedResponse['NetAmount'] ?? 0,
+            'FareType' => $combinedResponse['FareType'] ?? 'DM',
+            'Msg' => $combinedResponse['Msg'] ?? ['Success'],
+            'IsCachedValidationResponse' => true,
+        ];
+    }
+
+    private function getCachedDmValidationResponse($frontendTui): ?array
+    {
+        if (!is_string($frontendTui) || !Str::startsWith($frontendTui, 'ATDM-')) {
+            return null;
+        }
+
+        $cacheKey = $this->getDmValidationCacheKey($frontendTui);
+        $cachedResponse = Cache::get($cacheKey);
+
+        if (!$cachedResponse) {
+            Log::warning('AT DM validation cache key was not found.', [
+                'frontend_tui' => $frontendTui,
+                'cache_key' => $cacheKey,
+            ]);
+            return null;
+        }
+
+        return $cachedResponse;
+    }
+
+    private function resolveActualTui($frontendTui, ?array $cachedResponse = null, int $index = 0): string
+    {
+        if (is_array($frontendTui)) {
+            return (string) ($frontendTui[$index] ?? $frontendTui[0] ?? '');
+        }
+
+        $cachedResponse ??= $this->getCachedDmValidationResponse($frontendTui);
+
+        if ($cachedResponse) {
+            return (string) (
+                $cachedResponse['TUIList'][$index]
+                ?? $cachedResponse['TUI']
+                ?? ''
+            );
+        }
+
+        return (string) ($frontendTui ?? '');
+    }
+
+    private function buildDmSsrPayload($params, int $tripIndex): array
+    {
+        $SSR = [];
+        $totalAmount = 0;
+        $selectedExtras = $params['selectedExtras'][$tripIndex] ?? [];
+
+        if (!is_array($selectedExtras)) {
+            return ['SSR' => $SSR, 'SSRAmount' => $totalAmount];
+        }
+
+        foreach ($selectedExtras as $group => $segments) {
+            if (!is_array($segments)) {
+                continue;
+            }
+
+            foreach ($segments as $journey) {
+                if (!is_array($journey)) {
+                    continue;
+                }
+
+                foreach ($journey as $segment) {
+                    if (!is_array($segment)) {
+                        continue;
+                    }
+
+                    foreach ($segment as $pax) {
+                        if (!is_array($pax)) {
+                            continue;
+                        }
+
+                        if (isset($pax['FUID'], $pax['PaxID'], $pax['SSID'])) {
+                            $items = [$pax];
+                        } else {
+                            $items = $pax;
+                        }
+
+                        foreach ($items as $item) {
+                            if (!is_array($item) || !isset($item['FUID'], $item['PaxID'], $item['SSID'])) {
+                                continue;
+                            }
+
+                            $totalAmount += (float) ($item['Charge'] ?? $item['SSRNetAmount'] ?? $item['Fare'] ?? 0);
+                            $SSR[] = [
+                                'FUID' => (int) $item['FUID'],
+                                'PaxID' => (int) $item['PaxID'],
+                                'SSID' => (int) $item['SSID'],
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return ['SSR' => $SSR, 'SSRAmount' => $totalAmount];
+    }
+
+    private function bookDmMultiCityTrips($params, ?array $cachedValidationResponse, array $headers, string $bookingUrl, $clientId, array $contactInfo, array $travellers): ?array
+    {
+        if (!$cachedValidationResponse) {
+            Log::warning('Cannot book AT DM multi-city without cached validation response.', [
+                'frontend_tui' => $params['TUI'] ?? null,
+            ]);
+            return null;
+        }
+
+        $pricedResponses = $cachedValidationResponse['PricedResponses'] ?? [];
+
+        if (empty($pricedResponses)) {
+            Log::warning('AT DM cached validation response does not include priced responses.', [
+                'frontend_tui' => $params['TUI'] ?? null,
+                'cached_response' => $cachedValidationResponse,
+            ]);
+            return null;
+        }
+
+        $bookingResponses = [];
+        $transactionIds = [];
+
+        foreach ($pricedResponses as $index => $validatedResponse) {
+            $tui = $validatedResponse['TUI'] ?? $cachedValidationResponse['TUIList'][$index] ?? null;
+            $netAmount = $validatedResponse['NetAmount'] ?? 0;
+
+            if (empty($tui)) {
+                Log::warning('Skipping AT DM booking request because validated TUI is missing.', [
+                    'trip_index' => $index,
+                    'validated_response' => $validatedResponse,
+                ]);
+                return null;
+            }
+
+            $ssrPayload = $this->buildDmSsrPayload($params, $index);
+            $payload = [
+                'TUI' => $tui,
+                'SequenceID' => $index + 1,
+                'ContactInfo' => $contactInfo,
+                'Travellers' => $travellers,
+                'PLP' => [],
+                'SSR' => $ssrPayload['SSR'],
+                'CrossSell' => [],
+                'NetAmount' => $netAmount,
+                'SSRAmount' => $ssrPayload['SSRAmount'],
+                'ClientID' => $clientId,
+                'DeviceID' => '',
+                'AppVersion' => '',
+                'CrossSellAmount' => 0,
+            ];
+
+            Log::info('AT DM Booking Payload for trip ' . ($index + 1) . ':', $payload);
+
+            try {
+                $request = new \GuzzleHttp\Psr7\Request(
+                    'POST',
+                    $bookingUrl,
+                    $headers,
+                    json_encode($payload)
+                );
+
+                $responseBody = $this->client->send($request);
+                $responseBody = json_decode($responseBody->getBody(), true);
+                Log::info('AT DM Booking Response for trip ' . ($index + 1) . ':', $responseBody);
+
+                $bookingResponses[] = $responseBody;
+
+                if (!empty($responseBody['TransactionID'])) {
+                    $transactionIds[] = $responseBody['TransactionID'];
+                }
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                Log::error('AT DM Booking Error for trip ' . ($index + 1) . ': ' . $e->getMessage());
+
+                if ($e->hasResponse()) {
+                    Log::error('AT DM Booking Response:', [
+                        'body' => (string) $e->getResponse()->getBody()
+                    ]);
+                }
+
+                return null;
+            }
+        }
+
+        if (empty($transactionIds)) {
+            Log::warning('AT DM booking did not return any transaction IDs.', [
+                'booking_responses' => $bookingResponses,
+            ]);
+            return [
+                'TransactionID' => 0,
+                'FareType' => 'DM',
+                'BookingResponses' => $bookingResponses,
+            ];
+        }
+
+        return [
+            'TransactionID' => $transactionIds[0],
+            'TransactionIDList' => $transactionIds,
+            'FareType' => 'DM',
+            'TUI' => $params['TUI'] ?? null,
+            'TUIList' => $cachedValidationResponse['TUIList'] ?? [],
+            'NetAmount' => $cachedValidationResponse['NetAmount'] ?? 0,
+            'BookingResponses' => $bookingResponses,
+        ];
+    }
 
     private function sendDmMultiCityPriceRequests($request, array $accessToken, array $headers, string $priceRequestUrl, string $tripType): ?array
     {
@@ -1151,7 +1414,7 @@ class AtApiService
 
         Log::info('Combined DM GetSPricer response: ', $combined);
 
-        return $combined;
+        return $this->cacheDmValidationCombinedResponse($combined);
     }
 
 }

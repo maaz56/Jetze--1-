@@ -33,6 +33,8 @@ import {
   Plus,
   Eye,
   X,
+  Badge,
+  Filter
 } from "lucide-vue-next";
 
 import { toast } from "vue3-toastify";

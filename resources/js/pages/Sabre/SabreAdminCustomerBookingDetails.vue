@@ -1394,12 +1394,12 @@ onMounted(() => {
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 3111711123"
+                                            "+(+92) 0000000000"
                                         }}
                                     <p class="line-clamp-2">
                                         {{
                                             agentData?.agent_data?.address ||
-                                            "F-16 AliZai Tower Mardan Road Charsadda.Pakistan"
+                                            "F-16 AliZai Tower Address1234Pakistan"
                                         }}
                                        
                                     </p>

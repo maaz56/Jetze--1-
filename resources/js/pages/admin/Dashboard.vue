@@ -18,6 +18,7 @@ import {
   Hourglass,
   Plus,
   Eye,
+  Badge,
   CircleDollarSign,
   CircleChevronRight, 
   CirclePause,

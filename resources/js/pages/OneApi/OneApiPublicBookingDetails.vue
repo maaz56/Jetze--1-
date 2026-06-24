@@ -1741,7 +1741,7 @@ onMounted(() => {
                                     Thank you for choosing {{ agentData?.agent_data?.company_name || 'Jetze Travels' }}
                                 </p>
                                 <p class="text-xs text-gray-500 print:text-gray-600">
-                                    For assistance, contact us at {{ agentData?.agent_data?.mobile || '+92 3111711123'
+                                    For assistance, contact us at {{ agentData?.agent_data?.mobile || '+92 0000000000'
                                     }} or {{
                                         agentData?.agent_data?.company_email || 'support@Jetze.pk' }}
                                 </p>

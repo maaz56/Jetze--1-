@@ -1010,13 +1010,13 @@ onMounted(() => {
                                 <p class="">
                                     {{
                                         agentData?.agent_data?.mobile ||
-                                        "+(+92) 3111711123"
+                                        "+(+92) 0000000000"
                                     }}
                                 </p>
                                 <p class="line-clamp-2">
                                     {{
                                         agentData?.agent_data?.address ||
-                                        "F-16 AliZai Tower,Sheikhpura Road,Lahore,Pakistan" }}
+                                        "Address1234567" }}
                                 </p>
                                 <p class="">
                                     {{
@@ -1927,13 +1927,13 @@ onMounted(() => {
                                 <p class="">
                                     {{
                                         agentData?.agent_data?.mobile ||
-                                        "+(+92) 3111711123"
+                                        "+(+92) 0000000000"
                                     }}
                                 </p>
                                 <p class="line-clamp-2">
                                     {{
                                         agentData?.agent_data?.address ||
-                                        "F-16 AliZai Tower,Sheikhpura Road,Lahore,Pakistan" }}
+                                        "Address1234567" }}
                                 </p>
                                 <p class="">
                                     {{

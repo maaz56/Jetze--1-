@@ -162,6 +162,16 @@ html{
     }
 }
 
+@layer components {
+  .admin-icon-primary {
+    @apply text-primary;
+  }
+
+  .admin-icon-secondary {
+    @apply text-secondary;
+  }
+}
+
 /* iOS Toast Look */
 .Toastify__toast {
   background: rgba(30,30,30,0.9);

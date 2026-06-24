@@ -921,6 +921,8 @@ const testimonialWidth = ref(100) // will be updated based on screen size
 let testimonialInterval = null
 
 const startTestimonialScroll = () => {
+  if (testimonialInterval) return
+
   testimonialInterval = setInterval(() => {
     nextTestimonial()
   }, autoScrollDelay)
@@ -934,11 +936,15 @@ const pauseTestimonialScroll = () => {
 }
 
 const nextTestimonial = async () => {
+  if (!reviews.value.length) return
+
   testimonialIndex.value++
 
   if (testimonialIndex.value >= reviews.value.length) {
     testimonialIndex.value = 0
     const track = document.getElementById('testimonial-track')
+    if (!track) return
+
     track.style.transition = 'none'
     await nextTick()
     track.style.transition = 'transform 500ms ease-in-out'
@@ -946,9 +952,16 @@ const nextTestimonial = async () => {
 }
 
 const prevTestimonial = () => {
+  if (!reviews.value.length) return
+
   if (testimonialIndex.value <= 0) {
     testimonialIndex.value = reviews.value.length
     const track = document.getElementById('testimonial-track')
+    if (!track) {
+      testimonialIndex.value--
+      return
+    }
+
     track.style.transition = 'none'
     nextTick(() => {
       testimonialIndex.value--
@@ -1034,6 +1047,8 @@ const autoScrollDelay = 4000 // 4 seconds
 
 // Start auto-scroll
 const startAutoScroll = () => {
+  if (autoScrollInterval) return
+
   autoScrollInterval = setInterval(() => {
     nextSlide()
   }, autoScrollDelay)
@@ -1049,6 +1064,8 @@ const pauseAutoScroll = () => {
 
 // Go to next slide
 const nextSlide = async () => {
+  if (!hotDeals.value.length) return
+
   currentIndex.value++
 
   // Seamless loop: when reaching cloned items, jump back instantly
@@ -1056,6 +1073,8 @@ const nextSlide = async () => {
     currentIndex.value = 0
     // Disable transition for instant jump
     const track = document.getElementById('carousel-track')
+    if (!track) return
+
     track.style.transition = 'none'
     await nextTick()
     track.style.transition = 'transform 500ms ease-in-out'
@@ -1064,10 +1083,17 @@ const nextSlide = async () => {
 
 // Go to previous slide
 const prevSlide = () => {
+  if (!hotDeals.value.length) return
+
   if (currentIndex.value <= 0) {
     // Jump to the cloned part at the end
     currentIndex.value = hotDeals.value.length
     const track = document.getElementById('carousel-track')
+    if (!track) {
+      currentIndex.value--
+      return
+    }
+
     track.style.transition = 'none'
     nextTick(() => {
       currentIndex.value--

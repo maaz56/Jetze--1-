@@ -6,7 +6,7 @@ const companyInfo = ref({
   founded: '2019',
   tagline: 'Book Flights Smarter. Fly Cheaper.',
   description:
-    'APNTicket is a leading flight booking platform that helps millions of travelers find the best deals instantly. We search hundreds of airlines and travel sites to bring you the lowest prices with zero hidden fees.',
+    'Jetze is a leading flight booking platform that helps millions of travelers find the best deals instantly. We search hundreds of airlines and travel sites to bring you the lowest prices with zero hidden fees.',
   mission:
     'To make flight booking fast, transparent, and affordable for everyone — whether you’re traveling for business, family, or adventure.',
 });
@@ -103,11 +103,11 @@ const companyInfo = ref({
       </div>
     </section>
 
-    <!-- Why Choose APNTicket -->
+    <!-- Why Choose Jetze -->
     <section class="py-20 bg-white">
       <div class="container mx-auto px-6 text-center">
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-12">
-          {{ $t('Why Millions Choose APNTicket') }}
+          {{ $t('Why Millions Choose Jetze') }}
         </h2>
         <div class="grid md:grid-cols-3 gap-10 max-w-5xl mx-auto">
           <div class="bg-primary/5 rounded-2xl p-8 border border-primary/10">
@@ -133,7 +133,7 @@ const companyInfo = ref({
           {{ $t('Ready to Book Your Next Flight?') }}
         </h2>
         <p class="text-xl mb-10 max-w-2xl mx-auto opacity-90">
-          {{ $t('Join millions of smart travelers who save time and money with APNTicket.') }}
+          {{ $t('Join millions of smart travelers who save time and money with Jetze.') }}
         </p>
         <a
           href="/"

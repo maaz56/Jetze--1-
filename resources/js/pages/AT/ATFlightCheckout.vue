@@ -576,6 +576,7 @@ async function saveBooking(type) {
             flight: flight.value,
             TUI:quote.value?.TUI,
             NetAmount: quote.value?.NetAmount,
+            fareType: quote.value?.FareType || flight.value?.provider?.fare_type,
             booking_status_setting: bookingStatusSetting?.value.bookingStatus,
             flight_source: route?.query.flight_source,
             flight_provider: route?.query.flight_provider,

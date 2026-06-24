@@ -104,8 +104,8 @@ const handleSubmit = async () => {
                 <Phone class="h-6 w-6 mt-1 flex-shrink-0" />
                 <div>
                   <h3 class="font-medium">Phone</h3>
-                  <p class="mt-1">(+92) 3111711123</p>
-                  <p class="mt-1">(+92) 3111711123</p>
+                  <p class="mt-1">(+92) 0000000000</p>
+                  <p class="mt-1">(+92) 0000000000</p>
                 </div>
               </div>
 
@@ -121,8 +121,8 @@ const handleSubmit = async () => {
                 <MapPin class="h-6 w-6 mt-1 flex-shrink-0" />
                 <div>
                   <h3 class="font-medium">Address</h3>
-                  <p class="mt-1"> F-16 AliZai Tower,<br>
-                    Mardan Road Charsadda.</p>
+                  <p class="mt-1"> Address1234<br>
+                    Address1234</p>
                 </div>
               </div>
 

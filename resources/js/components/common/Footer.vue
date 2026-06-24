@@ -55,10 +55,10 @@ onMounted(() => {
             </div>
             <div class="space-y-2">
               <p class="text-gray-600">
-                <span class="font-medium">UAN:</span> (+92) 3111711123
+                <span class="font-medium">UAN:</span> (+92) 0000000000
               </p>
               <p class="text-gray-600">
-                <span class="font-medium">Complaints:</span> (+92) 3111711123
+                <span class="font-medium">Complaints:</span> (+92) 0000000000
               </p>
             </div>
           </div>
@@ -72,8 +72,8 @@ onMounted(() => {
               <h3 class="text-lg font-bold text-gray-900">Address</h3>
             </div>
             <p class="text-gray-600">
-              F-16 AliZai Tower,<br>
-              Mardan Road Charsadda.
+              Address1234<br>
+              Address1234
             </p>
           </div>
           

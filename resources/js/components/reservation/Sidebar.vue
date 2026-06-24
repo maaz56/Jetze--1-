@@ -3,7 +3,7 @@
     class="w-64 h-screen bg-gradient-to-r from-[#dbcaa4] to-[#a89666] border-r border-gray-200 shadow-sm flex flex-col">
     <!-- Logo and App Name -->
     <div class="p-4 border-b border-gray-100 bg-white/30">
-      <router-link  class="flex items-center space-x-3">
+      <router-link :to="{ name: 'Dashboard' }" class="flex items-center space-x-3">
         <img src="/public/assets/logo.png" alt="logo" class="w-auto h-10" />
       </router-link>
     </div>

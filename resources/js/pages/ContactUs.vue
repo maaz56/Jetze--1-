@@ -249,7 +249,7 @@ const handleSubmit = async () => {
           <div class="mt-16">
             <h3 class="text-xl font-bold text-gray-900 mb-6">Other Ways to Contact Us</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <a href="https://wa.me/923111711123" target="_blank"
+              <a href="https://wa.me/920000000000" target="_blank"
                 class="p-5 bg-green-50 hover:bg-green-100 border border-green-100 flex items-center gap-3 transition-colors duration-200">
                 <div class="w-10 h-10 bg-green-600 text-white flex items-center justify-center">
                   <MessageCircle class="w-5 h-5" />
@@ -271,7 +271,7 @@ const handleSubmit = async () => {
                 </div>
               </a>
               
-              <a href="tel:+923111711123"
+              <a href="tel:+920000000000"
                 class="p-5 bg-purple-50 hover:bg-purple-100 border border-purple-100 flex items-center gap-3 transition-colors duration-200">
                 <div class="w-10 h-10 bg-purple-600 text-white flex items-center justify-center">
                   <Phone class="w-5 h-5" />
