@@ -1,0 +1,1 @@
+import{a9 as s}from"./moment-BaPOEWAn.js";import{o,g as t,w as l,aQ as p,aX as n,aY as u,u as c}from"./app-C5-Rh41J.js";const m={__name:"SelectValue",props:{placeholder:{type:String,required:!1},asChild:{type:Boolean,required:!1},as:{type:null,required:!1}},setup(e){const a=e;return(r,i)=>(o(),t(c(s),n(u(a)),{default:l(()=>[p(r.$slots,"default")]),_:3},16))}};export{m as _};

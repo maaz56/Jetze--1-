@@ -1,0 +1,1 @@
+import{o}from"./moment-BaPOEWAn.js";import{o as s,g as t,w as l,aQ as p,aX as n,aY as u,u as i}from"./app-C5-Rh41J.js";const m={__name:"DialogTrigger",props:{asChild:{type:Boolean,required:!1},as:{type:null,required:!1}},setup(a){const e=a;return(r,c)=>(s(),t(i(o),n(u(e)),{default:l(()=>[p(r.$slots,"default")]),_:3},16))}};export{m as _};

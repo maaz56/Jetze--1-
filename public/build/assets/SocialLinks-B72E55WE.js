@@ -1,0 +1,1 @@
+/* empty css                                                                    */import{_ as o}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{o as c,c as e}from"./app-C5-Rh41J.js";const s={},r={class:"social-bar"};function t(a,_){return c(),e("div",r)}const f=o(s,[["render",t],["__scopeId","data-v-e32641fd"]]);export{f as S};
