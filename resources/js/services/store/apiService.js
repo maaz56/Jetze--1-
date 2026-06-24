@@ -145,7 +145,7 @@ export default {
     // },
 
     getAgentData(params) {
-        return apiClient.get("/agentsData/", {
+        return apiClient.get("/agentsData", {
             params: params, // Use the 'params' object to send query parameters
         });
     },
@@ -161,17 +161,17 @@ export default {
         return apiClient.post("/deposit-data", params);
     },
     getDepositData(params) {
-        return apiClient.get("/get-deposit-data/", {
+        return apiClient.get("/get-deposit-data", {
             params: params, // Use the 'params' object to send query parameters
         });
     },
     getTotalApprovedDeposits(params) {
-        return apiClient.get("approved-deposits-total/", {
+        return apiClient.get("approved-deposits-total", {
             params: params, // Use the 'params' object to send query parameters
         });
     },
     updateDepositStatus(params) {
-        return apiClient.put(`/update-deposit-status/`, params);
+        return apiClient.put(`/update-deposit-status`, params);
     },
     saveAgentMargin(params) {
         return apiClient.post("/save-agent-margin", params);
