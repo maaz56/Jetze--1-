@@ -1,0 +1,1 @@
+import{c as a}from"./utils-D7UfyoO7.js";import{o as r,c as n,aQ as o,n as c,u as l}from"./app-D5tlRRh8.js";const i={__name:"inputMessage",props:{class:{type:null,required:!1}},setup(e){const s=e;return(t,p)=>(r(),n("p",{class:c(l(a)("font-medium text-sm text-destructive select-none",s.class))},[o(t.$slots,"default")],2))}};export{i as _};

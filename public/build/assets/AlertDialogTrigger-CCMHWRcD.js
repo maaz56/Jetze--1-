@@ -1,0 +1,1 @@
+import{ay as s}from"./moment-5lDQELkH.js";import{o,g as t,w as l,aQ as p,aX as n,aY as i,u}from"./app-D5tlRRh8.js";const m={__name:"AlertDialogTrigger",props:{asChild:{type:Boolean,required:!1},as:{type:null,required:!1}},setup(a){const e=a;return(r,c)=>(o(),t(u(s),n(i(e)),{default:l(()=>[p(r.$slots,"default")]),_:3},16))}};export{m as _};

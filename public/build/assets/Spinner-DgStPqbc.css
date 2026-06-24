@@ -1,0 +1,1 @@
+@keyframes beat{50%{transform:scale(.75);opacity:.3}to{transform:scale(1);opacity:1}}.animate-beat{animation:beat .7s infinite linear}.delay-150{animation-delay:.35s}

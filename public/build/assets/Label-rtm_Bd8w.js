@@ -1,0 +1,1 @@
+import{o as r,c as o,t as a}from"./app-D5tlRRh8.js";const s=["for"],l={__name:"Label",props:{title:{type:String,required:!0}},setup(t){return(e,c)=>(r(),o("label",{for:e.$attrs.for,class:"block mb-2 text-sm font-medium text-gray-900 dark:text-white"},a(t.title),9,s))}};export{l as _};
