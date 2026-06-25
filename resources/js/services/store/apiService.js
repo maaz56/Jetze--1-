@@ -13,7 +13,7 @@ export default {
     },
 
     getUser() {
-        return apiClient.get("/user");
+        return apiClient.get("user");
     },
 
     forgotPassword(params) {
