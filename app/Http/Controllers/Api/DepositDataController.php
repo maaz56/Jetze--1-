@@ -339,16 +339,18 @@ class DepositDataController extends Controller
             $totalPendingDeposits = DepositData::where('deposit_status', 'pending') // Filter deposits by approved status
                 ->sum('amount');
         } else {
-            // Fetch approved deposits for the agent and calculate the total
-            $totalApprovedDeposits = DepositData::where('agent_id', $agentId)
-                ->where('deposit_status', 'approved') // Filter deposits by approved status
-                ->sum('amount'); // Calculate the total amount of approved deposits
+            $agentDeposits = DepositData::where('agent_id', $agentId);
 
-            $totalPendingDeposits = DepositData::where('agent_id', $agentId)
-                ->where('deposit_status', 'pending') // Filter deposits by approved status
+            $totalDeposits = (clone $agentDeposits)->sum('amount');
+            $totalApprovedDeposits = (clone $agentDeposits)
+                ->where('deposit_status', 'approved')
                 ->sum('amount');
-                $totalDeposits = 0;
-                $totalRejectedDeposits = 0;
+            $totalPendingDeposits = (clone $agentDeposits)
+                ->where('deposit_status', 'pending')
+                ->sum('amount');
+            $totalRejectedDeposits = (clone $agentDeposits)
+                ->where('deposit_status', 'rejected')
+                ->sum('amount');
         }
 
         

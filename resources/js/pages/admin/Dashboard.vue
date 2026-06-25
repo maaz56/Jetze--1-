@@ -53,6 +53,16 @@ const emit = defineEmits(['filter-change'])
 const activeFilter = ref('all');
 const DASHBOARD_BOOKING_LIMIT = 15;
 
+const toNumber = (value) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getTimestamp = (date) => {
+  const timestamp = new Date(date || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
 function fetchUsers() {
   userStore.fetchUsers({
     role: 'agent',
@@ -90,10 +100,66 @@ const bookingsData = computed(() => {
   };
 });
 
+const latestBookings = computed(() => {
+  const rows = Array.isArray(bookings.value?.bookings) ? bookings.value.bookings : [];
+
+  return [...rows]
+    .sort((current, next) => getTimestamp(next?.created_at) - getTimestamp(current?.created_at))
+    .slice(0, DASHBOARD_BOOKING_LIMIT);
+});
+
 const depositRows = computed(() => agentsDepositData.value?.deposits || []);
 
+const calculatedDepositTotals = computed(() => {
+  return depositRows.value.reduce((totals, deposit) => {
+    const amount = toNumber(deposit?.amount);
+    const status = getDepositStatus(deposit);
+
+    totals.totalDeposits += amount;
+
+    if (status === "approved") {
+      totals.totalApprovedDeposits += amount;
+    } else if (status === "pending") {
+      totals.totalPendingDeposits += amount;
+    } else if (status === "rejected") {
+      totals.totalRejectedDeposits += amount;
+    }
+
+    return totals;
+  }, {
+    totalDeposits: 0,
+    totalApprovedDeposits: 0,
+    totalPendingDeposits: 0,
+    totalRejectedDeposits: 0,
+  });
+});
+
+const depositTotals = computed(() => {
+  const apiTotals = agentDepositTotals.value || {};
+  const fallbackTotals = calculatedDepositTotals.value;
+
+  return {
+    totalDeposits: apiTotals.totalDeposits != null
+      ? toNumber(apiTotals.totalDeposits)
+      : fallbackTotals.totalDeposits,
+    totalApprovedDeposits: apiTotals.totalApprovedDeposits != null
+      ? toNumber(apiTotals.totalApprovedDeposits)
+      : fallbackTotals.totalApprovedDeposits,
+    totalPendingDeposits: apiTotals.totalPendingDeposits != null
+      ? toNumber(apiTotals.totalPendingDeposits)
+      : fallbackTotals.totalPendingDeposits,
+    totalRejectedDeposits: apiTotals.totalRejectedDeposits != null
+      ? toNumber(apiTotals.totalRejectedDeposits)
+      : fallbackTotals.totalRejectedDeposits,
+  };
+});
+
 function getCustomerFullName(customer) {
-  return [customer?.name, customer?.last_name].filter(Boolean).join(" ");
+  return [
+    customer?.name,
+    customer?.first_name,
+    customer?.last_name,
+  ].filter(Boolean).join(" ");
 }
 
 function getDepositName(deposit) {
@@ -269,7 +335,7 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                  <tr v-for="booking in bookings?.bookings" :key="booking.id" class="hover:bg-gray-50 transition-colors">
+                  <tr v-for="booking in latestBookings" :key="booking.id" class="hover:bg-gray-50 transition-colors">
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-900">
                       {{ booking.created_at ? moment(booking.created_at).format('DD-MM-YYYY') : '' }}
                     </td>
@@ -574,7 +640,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-blue-600">Total Deposits</p>
-                <p class="text-xl font-bold text-blue-800">{{ formatAmount(agentDepositTotals?.totalDeposits || 0) }}</p>
+                <p class="text-xl font-bold text-blue-800">{{ formatAmount(depositTotals.totalDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -590,7 +656,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-green-600">Approved Deposits</p>
-                <p class="text-xl font-bold text-green-800">{{ formatAmount(agentDepositTotals?.totalApprovedDeposits) }}</p>
+                <p class="text-xl font-bold text-green-800">{{ formatAmount(depositTotals.totalApprovedDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -606,7 +672,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-amber-600">Pending Deposits</p>
-                <p class="text-xl font-bold text-amber-800">{{ formatAmount(agentDepositTotals?.totalPendingDeposits) }}</p>
+                <p class="text-xl font-bold text-amber-800">{{ formatAmount(depositTotals.totalPendingDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -622,7 +688,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-red-600">Rejected Deposits</p>
-                <p class="text-xl font-bold text-red-800">{{ formatAmount(agentDepositTotals?.totalRejectedDeposits) }}</p>
+                <p class="text-xl font-bold text-red-800">{{ formatAmount(depositTotals.totalRejectedDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -700,7 +766,7 @@ onMounted(() => {
           
           <!-- Chart -->
           <div class="col-span-2 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
-            <depositChart  :deposits="agentDepositTotals" />
+            <depositChart  :deposits="depositTotals" />
           </div>
       </div>
 

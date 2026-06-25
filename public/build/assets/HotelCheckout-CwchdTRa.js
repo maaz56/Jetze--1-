@@ -1,1 +1,0 @@
-import{_ as e}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{c as o,o as t}from"./app-4GxAXXgF.js";const c={};function r(n,s){return t(),o("div",null," Hotel Checkout ")}const l=e(c,[["render",r]]);export{l as default};

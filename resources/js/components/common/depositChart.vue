@@ -21,7 +21,7 @@
               </span>
               <div>
                 <p class="text-sm text-blue-700 font-medium">Total</p>
-                <p class="text-xl font-bold text-blue-900">{{ deposits?.totalDeposits || 0 }}</p>
+                <p class="text-xl font-bold text-blue-900">{{ formatAmount(depositTotals.totalDeposits) }}</p>
               </div>
             </div>
             
@@ -31,7 +31,7 @@
               </span>
               <div>
                 <p class="text-sm text-green-700 font-medium">Approved</p>
-                <p class="text-xl font-bold text-green-900">{{ deposits?.totalApprovedDeposits || 0 }}</p>
+                <p class="text-xl font-bold text-green-900">{{ formatAmount(depositTotals.totalApprovedDeposits) }}</p>
               </div>
             </div>
             
@@ -41,7 +41,7 @@
               </span>
               <div>
                 <p class="text-sm text-yellow-700 font-medium">Pending</p>
-                <p class="text-xl font-bold text-yellow-900">{{ deposits?.totalPendingDeposits || 0 }}</p>
+                <p class="text-xl font-bold text-yellow-900">{{ formatAmount(depositTotals.totalPendingDeposits) }}</p>
               </div>
             </div>
             
@@ -50,8 +50,8 @@
                 <span class="text-white font-bold">✕</span>
               </span>
               <div>
-                <p class="text-sm text-red-700 font-medium">Canceled</p>
-                <p class="text-xl font-bold text-red-900"> {{ deposits?.totalRejectedDeposits || 0 }}</p>
+                <p class="text-sm text-red-700 font-medium">Rejected</p>
+                <p class="text-xl font-bold text-red-900"> {{ formatAmount(depositTotals.totalRejectedDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -64,6 +64,7 @@
   import { computed, onMounted } from 'vue'
   import { Doughnut } from 'vue-chartjs'
   import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+  import { formatAmount } from '@/lib/utils'
   
   // Register Chart.js components
   ChartJS.register(ArcElement, Tooltip, Legend)
@@ -80,6 +81,18 @@
           }),
       },
   })
+
+  const toNumber = (value) => {
+      const parsed = Number.parseFloat(value)
+      return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  const depositTotals = computed(() => ({
+      totalDeposits: toNumber(props.deposits?.totalDeposits),
+      totalApprovedDeposits: toNumber(props.deposits?.totalApprovedDeposits),
+      totalPendingDeposits: toNumber(props.deposits?.totalPendingDeposits),
+      totalRejectedDeposits: toNumber(props.deposits?.totalRejectedDeposits),
+  }))
   
   // Compute chart data
   const chartData = computed(() => ({
@@ -88,9 +101,9 @@
           {
               data: [
 
-                props.deposits?.totalApprovedDeposits || 0,
-                props.deposits?.totalPendingDeposits || 0,
-                props.deposits?.totalRejectedDeposits || 0,
+                depositTotals.value.totalApprovedDeposits,
+                depositTotals.value.totalPendingDeposits,
+                depositTotals.value.totalRejectedDeposits,
               ],
               backgroundColor: ['#58d68d', '#f7dc6f', '#ec7063'],
               borderWidth: 0,
@@ -107,8 +120,8 @@
   
   // Compute the percentage for the center of the chart
   const calculatePercentage = computed(() => {
-      const total = props.deposits?.totalDeposits || 0
-      const ticketed = props.deposits?.totalApprovedDeposits || 0
+      const total = depositTotals.value.totalDeposits
+      const ticketed = depositTotals.value.totalApprovedDeposits
       if (total === 0) return 0
       return Math.round((ticketed / total) * 100)
   })
@@ -135,10 +148,10 @@
               callbacks: {
                   label: function(context) {
                       const label = context.label || '';
-                      const value = context.raw || 0;
-                      const total = props.bookings?.total_count || 0;
+                      const value = toNumber(context.raw);
+                      const total = depositTotals.value.totalDeposits;
                       const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                      return `${label}: ${value} (${percentage}%)`;
+                      return `${label}: ${formatAmount(value)} (${percentage}%)`;
                   }
               }
           },

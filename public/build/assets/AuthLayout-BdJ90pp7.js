@@ -1,0 +1,1 @@
+import{W as t}from"./WhatsappButton-BIzoKd6L.js";import{c as a,a as r,b as e,i as n,o as s}from"./app-w6-7sYti.js";import"./_plugin-vue_export-helper-DlAUqK2U.js";const l={__name:"AuthLayout",setup(c){return(p,m)=>{const o=n("router-view");return s(),a("section",null,[r("main",null,[e(o),e(t)])])}}};export{l as default};

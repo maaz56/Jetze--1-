@@ -35,7 +35,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000'), 'https://Jetze.pk'],
+    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000'), 'https://www.jetze.ae'],
     
 
     'allowed_origins_patterns' => [],

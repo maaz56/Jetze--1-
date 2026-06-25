@@ -1,0 +1,1 @@
+import{c as r}from"./utils-DWNVgNuU.js";import{o as t,c as l,aw as o,n as c,u as n}from"./app-w6-7sYti.js";const u={__name:"DialogHeader",props:{class:{type:null,required:!1}},setup(e){const s=e;return(a,p)=>(t(),l("div",{class:c(n(r)("flex flex-col gap-y-1.5 text-center sm:text-left",s.class))},[o(a.$slots,"default")],2))}};export{u as _};
