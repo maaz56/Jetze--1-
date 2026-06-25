@@ -1,0 +1,1 @@
+import{o as e,c as o,t as s,n}from"./app-Dwwg8KwV.js";const a={class:n("py-2 px-4 rounded-full border-2 border-fb-primary text-fb-primary font-medium")},l={__name:"Button",props:{title:{type:String,required:!0}},setup(t){const r=t;return(p,i)=>(e(),o("button",a,s(r.title),1))}};export{l as _};
