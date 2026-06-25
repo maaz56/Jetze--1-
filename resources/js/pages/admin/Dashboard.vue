@@ -18,13 +18,13 @@ import {
   Hourglass,
   Plus,
   Eye,
-  Badge,
   CircleDollarSign,
   CircleChevronRight, 
   CirclePause,
   BarChart3,
   Plane
 } from "lucide-vue-next";
+import { Badge } from "@/components/ui/badge";
 import {
   FETCH_USER_SUMMARY,
   FETCH_BOOKING_DATA,
@@ -51,6 +51,7 @@ const agentsDepositData = computed(() => store.getters["deposit/depositDataWithA
 const user = computed(() => authStore.user);
 const emit = defineEmits(['filter-change'])
 const activeFilter = ref('all');
+const DASHBOARD_BOOKING_LIMIT = 15;
 
 function fetchUsers() {
   userStore.fetchUsers({
@@ -67,6 +68,7 @@ function fetchBookings() {
   store.dispatch("flight/" + FETCH_BOOKING_DATA, {
     user_role: user.value.role,
     bookingFilter: activeFilter.value,
+    dashboard_limit: DASHBOARD_BOOKING_LIMIT,
   });
 }
 
@@ -87,6 +89,44 @@ const bookingsData = computed(() => {
     total_booked: bookings?.value?.total_booked,
   };
 });
+
+const depositRows = computed(() => agentsDepositData.value?.deposits || []);
+
+function getCustomerFullName(customer) {
+  return [customer?.name, customer?.last_name].filter(Boolean).join(" ");
+}
+
+function getDepositName(deposit) {
+  return deposit?.agent?.agent_data?.company_name
+    || deposit?.agent?.customer?.company_name
+    || getCustomerFullName(deposit?.agent?.customer)
+    || deposit?.agent?.name
+    || deposit?.agent?.email
+    || "-";
+}
+
+function getDepositStatus(deposit) {
+  return String(deposit?.deposit_status || deposit?.status || "pending").toLowerCase();
+}
+
+function getDepositStatusLabel(deposit) {
+  const status = getDepositStatus(deposit);
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function getDepositStatusClass(deposit) {
+  const status = getDepositStatus(deposit);
+
+  if (status === "approved") {
+    return "py-2 px-3 rounded-full text-xs uppercase bg-green-100 text-green-800 border-green-200 cursor-default";
+  }
+
+  if (status === "rejected") {
+    return "py-2 px-3 rounded-full text-xs uppercase bg-red-100 text-red-800 border-red-200 cursor-default";
+  }
+
+  return "py-2 px-3 rounded-full text-xs uppercase bg-amber-100 text-amber-800 border-amber-200 cursor-default";
+}
 
 function fetchTotalApprovedDepost() {
   store.dispatch("deposit/" + FETCH_TOTAL_APPROVED_DEPOSIT);
@@ -616,25 +656,20 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                  <tr v-for="deposit in agentsDepositData?.deposits" :key="deposit?.id" class="hover:bg-gray-50 transition-colors">
+                  <tr v-for="deposit in depositRows" :key="deposit?.id" class="hover:bg-gray-50 transition-colors">
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-900">
                       {{ deposit?.date? moment(deposit?.date).format('DD-MM-YYYY'):'-' }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900">
-                      {{ deposit?.agent?.agent_data?.company_name }}
+                      {{ getDepositName(deposit) }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                      {{ deposit?.amount }}
+                      {{ formatAmount(deposit?.amount) }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                        <Badge v-if="deposit?.deposit_status == 'pending'"
-                      class="py-2 px-3 rounded-full text-xs uppercase bg-destructive/20 hover:bg-destructive/20 text-red-800 border-destructive/50 cursor-default">
-                      Pending
-                    </Badge>
-                    <Badge v-else
-                      class="py-2 px-3 rounded-full text-xs uppercase bg-green-100 text-green-800 border-destructive/50 cursor-default">
-                      Approved
-                    </Badge>
+                      <Badge :class="getDepositStatusClass(deposit)">
+                        {{ getDepositStatusLabel(deposit) }}
+                      </Badge>
                     </td>
                     <!-- <td class="px-6 py-3 whitespace-nowrap">
                       <span class="px-3 uppercase text-xs leading-5 py-1 rounded-full" :class="{

@@ -23,89 +23,21 @@ class FlightController extends Controller
 
         $this->sooperApiService = $sooperApiService;
     }
-    public function fetchProviders(Request $request)
+     public function fetchProviders()
     {
 
-        Log::info($request);
-        $searchParams = $request->input('searchParams', $request->all()); // fallback to whole request
-        //Log::info("Fetching Flight Providers", $searchParams);
 
-        $flightType = $searchParams['flightType'] ?? null;
-        $currencyCode = $searchParams['currencyCode'];
-
-        // Initialize params array
-        $params = [
-            'cabin_class' => $searchParams['cabin_class'] ?? 'Y',
-            'adults' => $searchParams['adults'] ?? 1,
-            'children' => $searchParams['children'] ?? 0,
-            'infants' => $searchParams['infants'] ?? 0,
-            'flight_type' => $flightType,
-            'currency_code' => $currencyCode,
-        ];
-
-        // Handle params based on flight type
-        if ($flightType === 'multi-city') {
-            $params['trips'] = $searchParams['trips'] ?? [];
-        } else {
-            $params['origin'] = $searchParams['origin'] ?? null;
-            $params['destination'] = $searchParams['destination'] ?? null;
-            $params['departure_date'] = $searchParams['departure_date'] ?? null;
-            $params['return_date'] = $searchParams['return_date'] ?? null; // Will be null for one-way
-        }
-
-        // Generate a unique cache key prefix
-        $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
-        Cache::forget($cacheKeyPrefix . '_PIA_flights');
-        Cache::forget($cacheKeyPrefix . '_previous_search');
-        Cache::forget($cacheKeyPrefix . '_flights');
-        Cache::forget($cacheKeyPrefix . '_sooper_flights');
-        Cache::forget($cacheKeyPrefix . '_available_airlines');
-        Cache::forget($cacheKeyPrefix . '_currency_code');
-
-        // Store previous search parameters in the cache
-        Cache::put($cacheKeyPrefix . '_previous_search', $params, now()->addHour());
-        Cache::put($cacheKeyPrefix . '_currency_code', $currencyCode, now()->addHour());
-
-        // Log::info("Previous Search Parameters: " . json_encode(Cache::get($cacheKeyPrefix . '_previous_search'), JSON_PRETTY_PRINT));
-
-        // Fetch flight providers
-        // $providers = $this->sooperApiService->getProviders($params);
-        // $sooperProviders = $providers['data']['providers'] ?? [];
 
         $apiProviders = [
-
-            // [
-            //     'identifier' => 'OneApi',
-            // ],
-            ['identifier' => 'AT'],
-            // [
-            //     'identifier' => 'PIA'
-            // ],
-            // [
-            //     'identifier' => 'Sabre'
-            // ],
-            // [
-            //     'identifier' => 'flydubai'
-            // ],
-            // [
-            //     'identifier' => 'AirSial'
-            // ],
-            // [
-            //     'identifier' => 'TravelPort-GDS'
-            // ],
-            // [
-            //     'identifier' => 'TravelPort-NDC'
-            // ],
-            // [
-            //     'identifier' => 'AirBlue',
-            // ],
-
+            // ['identifier' => 'AirBlue', 'name' => 'AirBlue'],
+            // ['identifier' => 'OneApi', 'name' => 'OneApi'],
+            // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
+            // ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
+            ['identifier' => 'AT', 'name' => 'Akbar Travels'],
         ];
-
         // $apiProviders = array_merge($apiProviders, $sooperProviders);
         return response()->json($apiProviders);
     }
-
     public function index(Request $request)
     {
         Log::info("Flight Search Request: " . json_encode($request->all(), JSON_PRETTY_PRINT));

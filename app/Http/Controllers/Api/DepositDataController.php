@@ -95,7 +95,7 @@ class DepositDataController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            $deposits = DepositData::with('agent.agentData')
+            $deposits = DepositData::with(['agent.agentData', 'agent.customer'])
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -117,7 +117,7 @@ class DepositDataController extends Controller
             }
 
             $deposits = DepositData::where('agent_id', $agentId)
-                ->with('agent.agentData') // Include agent and agentData relationship
+                ->with(['agent.agentData', 'agent.customer']) // Include agent, agentData, and customer relationship
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -141,7 +141,7 @@ class DepositDataController extends Controller
     public function getAllDepositsWithAgentData()
     {
         // Fetch all deposits, include agent and their agentData
-        $deposits = DepositData::with(['agent.agentData'])
+        $deposits = DepositData::with(['agent.agentData', 'agent.customer'])
             ->orderBy('date', 'desc')
             ->get();
 

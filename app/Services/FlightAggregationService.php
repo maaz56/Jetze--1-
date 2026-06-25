@@ -40,10 +40,12 @@ class FlightAggregationService
     protected $travelPortService;
     protected $oneApiFlightTransformer;
     protected $atApiService;
+        protected $segmentMarginService;
+    protected $promotionService;
 
 
 
-    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, AirblueFlightTransformer $airblueFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService)
+    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, AirblueFlightTransformer $airblueFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService,SegmentMarginService $segmentMarginService, PromotionService $promotionService)
     {
         $this->sabreApiService = $sabreApiService;
         $this->sooperApiService = $sooperApiService;
@@ -55,6 +57,8 @@ class FlightAggregationService
         $this->airBlueFlightTransformer = $airblueFlightTransformer;
         $this->oneApiFlightTransformer = $oneApiFlightTransformer;
         $this->atApiService = $atApiService;
+        $this->segmentMarginService = $segmentMarginService;
+        $this->promotionService = $promotionService;
     }
 
 
@@ -258,7 +262,8 @@ class FlightAggregationService
         // $transformedFlights = array_merge($transformedFlights, $airsialResponse ?? []);
         // $transformedFlights = array_merge($transformedFlights ?? []);
         // }
-
+        $transformedFlights = $this->segmentMarginService->applySegmentMargins($transformedFlights, $params);
+        $transformedFlights = $this->promotionService->applyPromotions($transformedFlights, $params);
         return [ 
             // 'sooperFlights' => $sooperFlights,
             'results' => $transformedFlights,

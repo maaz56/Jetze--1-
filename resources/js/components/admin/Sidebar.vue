@@ -103,6 +103,7 @@ import {
   DollarSign,
   GalleryHorizontal,
   Landmark,
+  LandmarkIcon,
   LayoutDashboard,
   Notebook,
   Package,
@@ -111,6 +112,7 @@ import {
   PlaneIcon,
   Settings,
   ShoppingCart,
+  TagIcon,
   Ticket,
   Truck,
   UserPlus,
@@ -204,9 +206,23 @@ const menuSections = [
         icon: Plane,
       },
       {
+        name: "Promotions",
+        to: { name: "Promotions" },
+        icon: TagIcon,
+        permission: ["airlines_view"]
+      },
+      {
         name: "Airport Markups",
         to: { name: "AirportMarkups" },
         icon: Plane,
+        permission: 'manage-airports'
+      },
+      // add
+      {
+        name: "Segment Margins",
+        to: { name: "SegmentMargins" },
+        icon: LandmarkIcon,
+        permission: ["airlines_view"]
       },
     ],
   },

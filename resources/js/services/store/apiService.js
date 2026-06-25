@@ -631,6 +631,44 @@ export default {
         });
     },
 
+
+     getPromotions(params) {
+        return apiClient.get("/promotions", { params });
+    },
+    getPromotion(id) {
+        return apiClient.get(`/promotions/${id}`);
+    },
+    savePromotion(params) {
+        return apiClient.post("/promotions", params);
+    },
+    updatePromotion(id, params) {
+        return apiClient.put(`/promotions/${id}`, params);
+    },
+    deletePromotion(id) {
+        return apiClient.delete(`/promotions/${id}`);
+    },
+    getPromotionProviders() {
+        return apiClient.get("/promotions/providers");
+    },
+
+    getSegmentMargins(params) {
+        return apiClient.get("/segment-margins", { params });
+    },
+    getSegmentMargin(id) {
+        return apiClient.get(`/segment-margins/${id}`);
+    },
+    saveSegmentMargin(params) {
+        return apiClient.post("/segment-margins", params);
+    },
+    updateSegmentMarginById(id, params) {
+        return apiClient.put(`/segment-margins/${id}`, params);
+    },
+    deleteSegmentMargin(id) {
+        return apiClient.delete(`/segment-margins/${id}`);
+    },
+    getSegmentMarginProviders() {
+        return apiClient.get("/segment-margins/providers");
+    },
     sendEmail(params) {
         return apiClient.post("/send-email", params);
     },
@@ -696,6 +734,7 @@ export default {
             params: params,
         });
     },
+
     updateCustomerSettings(params) {
         return apiClient.post("/update-customer-settings", params);
     },

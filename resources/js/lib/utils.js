@@ -7,13 +7,17 @@ export function cn(...inputs) {
 }
 
 export function formatAmount(amount) {
+    const numericAmount = Number.parseFloat(amount);
+    const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+
     const formatter = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "PKR",
         minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     });
 
-    return formatter.format(amount);
+    return formatter.format(safeAmount);
 }
 // export function formatAmount(amount) {
 //   if (isNaN(amount)) return "₨0.00";

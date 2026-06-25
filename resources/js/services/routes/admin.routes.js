@@ -34,7 +34,56 @@ export const adminRoutes = [
                 name: "CustomerMargin",
                 component: () => import("@/pages/admin/CustomerSettings.vue"),
             },
+ {
+                path: "promotions",
+                name: "Promotions",
+                component: () => import("@/pages/admin/Promotions.vue"),
+                meta: {
+                    requiredPermissions: ["airlines_view"],
+                },
+            },
+            {
+                path: "segment-margins",
+                name: "SegmentMargins",
+                component: () => import("@/pages/admin/SegmentMargins.vue"),
+                meta: {
+                    requiredPermissions: ["airlines_view"],
+                },
+            },
+             {
+                path: "update-segment-margin/:id",
+                name: "UpdateSegmentMargin",
+                component: () => import("@/pages/admin/UpdateSegmentMargin.vue"),
+                meta: {
+                    requiredPermissions: ["airlines_view"],
+                },
+            },
 
+            {
+                path: "new-promotion",
+                name: "NewPromotion",
+                component: () => import("@/pages/admin/NewPromotion.vue"),
+                meta: {
+                    requiredPermissions: ["airlines_view"],
+                },
+            },
+            {
+                path: "update-promotion/:id",
+                name: "UpdatePromotion",
+                component: () => import("@/pages/admin/UpdatePromotion.vue"),
+                meta: {
+                    requiredPermissions: ["booking_settings_view"],
+                },
+            },
+
+            {
+                path: "new-segment-margin",
+                name: "NewSegmentMargin",
+                component: () => import("@/pages/admin/NewSegmentMargin.vue"),
+                meta: {
+                    requiredPermissions: ["airlines_view"],
+                },
+            },
             {
                 path: "new-user",
                 name: "NewUser",

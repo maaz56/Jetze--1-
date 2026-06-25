@@ -23,6 +23,7 @@ class AtFlightTransformer
         $provider = [
             "name" => "at",
             "identifier" => "AT",
+
             "TUI" => $flightData['TUIList'] ??$flightData['TUI'] ?? null,
             "contentSource" => "AT",
             "fare_type" => $fareType,

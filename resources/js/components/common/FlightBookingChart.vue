@@ -81,17 +81,31 @@
       },
   })
   
-  // Compute chart data
+  const toNumber = (value) => {
+      const numericValue = Number.parseFloat(value)
+      return Number.isFinite(numericValue) ? numericValue : 0
+  }
+
+  const buildVisibleSlices = (values) => {
+      const maxValue = Math.max(...values)
+      const minVisibleValue = maxValue > 0 ? Math.max(maxValue * 0.04, 1) : 0
+
+      return values.map((value) => value > 0 && value < minVisibleValue ? minVisibleValue : value)
+  }
+
+  const bookingValues = computed(() => [
+      toNumber(props.bookings?.total_ticketed),
+      toNumber(props.bookings?.total_booked),
+      toNumber(props.bookings?.total_canceled),
+  ])
+
   const chartData = computed(() => ({
-      labels: ['Ticketed', 'Booked (Not Ticketed)', 'Canceled'],
+      labels: ['Ticketed', 'On Hold', 'Canceled'],
       datasets: [
           {
-              data: [
-                  props.bookings?.total_ticketed || 0,
-                  props.bookings?.total_booked || 0,
-                  props.bookings?.total_canceled || 0,
-              ],
-              backgroundColor: ['#10b981', '#3b82f6', '#ef4444'],
+              data: buildVisibleSlices(bookingValues.value),
+              actualData: bookingValues.value,
+              backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
               borderWidth: 0,
               borderRadius: 5,
               hoverOffset: 3,
@@ -119,7 +133,14 @@
       cutout: '70%',
       plugins: {
           legend: {
-              display: false, // Hide default legend
+              display: true,
+              position: 'bottom',
+              labels: {
+                  boxWidth: 10,
+                  boxHeight: 10,
+                  padding: 12,
+                  usePointStyle: true,
+              },
           },
           tooltip: {
               enabled: true,
@@ -134,7 +155,7 @@
               callbacks: {
                   label: function(context) {
                       const label = context.label || '';
-                      const value = context.raw || 0;
+                      const value = context.dataset.actualData?.[context.dataIndex] || 0;
                       const total = props.bookings?.total_count || 0;
                       const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                       return `${label}: ${value} (${percentage}%)`;
@@ -155,22 +176,23 @@
           id: 'centerText',
           beforeDraw(chart) {
               const { ctx, chartArea } = chart
+              const centerTextOptions = chart.options.plugins.centerText || {}
               const centerX = (chartArea.left + chartArea.right) / 2
               const centerY = (chartArea.top + chartArea.bottom) / 2
-  
+
               ctx.save()
               ctx.textAlign = 'center'
               ctx.textBaseline = 'middle'
               
               // Draw percentage
-              ctx.font = 'bold 24px Inter, sans-serif'
+              ctx.font = centerTextOptions.font || 'bold 24px Inter, sans-serif'
               ctx.fillStyle = '#1f2937'
-              ctx.fillText(chart.options.plugins.centerText.text, centerX, centerY - 10)
+              ctx.fillText(centerTextOptions.text, centerX, centerY - 10)
               
               // Draw label
-              ctx.font = '14px Inter, sans-serif'
+              ctx.font = centerTextOptions.subTextFont || '14px Inter, sans-serif'
               ctx.fillStyle = '#6b7280'
-              ctx.fillText(chart.options.plugins.centerText.subText, centerX, centerY + 15)
+              ctx.fillText(centerTextOptions.subText, centerX, centerY + 15)
               
               ctx.restore()
           },

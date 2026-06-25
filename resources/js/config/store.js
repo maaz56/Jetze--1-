@@ -29,6 +29,8 @@ import modifyRequest from "@/services/store/modifyRequest";
 import cms from "@/services/store/cms";
 import blog from "@/services/store/blog";
 import payment from "@/services/store/payment";
+import promotion from "@/services/store/promotion";
+import segmentMargin from "@/services/store/segmentMargin";
 
 
 export default createStore({
@@ -63,5 +65,8 @@ export default createStore({
         cms: cms,
         blog: blog,
         payment:payment,
+        segmentMargin: segmentMargin,
+        promotion: promotion,
+
     },
 });

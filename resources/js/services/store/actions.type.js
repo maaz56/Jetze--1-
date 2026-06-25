@@ -221,6 +221,20 @@ export const DELETE_ACTIVITY_LOG = "deleteActivityLog";
 
 export const UPDATE_BOOKING_AMOUNT = "updateBookingAmount";
 
+export const FETCH_PROMOTIONS = "fetchPromotions";
+export const FETCH_PROMOTION = "fetchPromotion";
+export const SAVE_PROMOTION = "savePromotion";
+export const UPDATE_PROMOTION = "updatePromotion";
+export const DELETE_PROMOTION = "deletePromotion";
+export const FETCH_PROMOTION_PROVIDERS = "fetchPromotionProviders";
+
+export const FETCH_SEGMENT_MARGINS = "fetchSegmentMargins";
+export const FETCH_SEGMENT_MARGIN = "fetchSegmentMargin";
+export const SAVE_SEGMENT_MARGIN = "saveSegmentMargin";
+export const UPDATE_SEGMENT_MARGIN = "updateSegmentMargin";
+export const DELETE_SEGMENT_MARGIN = "deleteSegmentMargin";
+export const FETCH_SEGMENT_MARGIN_PROVIDERS = "fetchSegmentMarginProviders";
+
 export const SAVE_REQUEST = "saveRequest";
 export const FETCH_REQUESTS = "fetchRequests";
 export const FETCH_MODIFY_REQUEST_DATA = "fetchModifyRequestData";

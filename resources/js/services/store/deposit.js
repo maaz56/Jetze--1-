@@ -6,6 +6,8 @@ import {
     NOT_IS_LOADING,
     SET_API_ERROR,
     SET_DEPOSIT_DATA,
+    SET_DEPOSIT_DATA_WITH_AGENTS,
+    SET_DEPOSIT_DETAILS,
     SET_DEPOSIT_TOTAL_DATA,
 
 
@@ -64,7 +66,7 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getDepositDataWithAgents(params);
-            context.commit(SET_DEPOSIT_DATA, response.data);
+            context.commit(SET_DEPOSIT_DATA_WITH_AGENTS, response.data);
 
         } catch (error) {
             //console.log(error);
@@ -81,7 +83,7 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getDepositDetails(params);
-            context.commit(SET_DEPOSIT_DATA, response.data);
+            context.commit(SET_DEPOSIT_DETAILS, response.data);
         } catch (error) {
             //console.log(error);
             toast("Something went wrong.", {
@@ -176,8 +178,13 @@ const mutations = {
     },
     [SET_DEPOSIT_DATA](state, data) {
         state.depositData = data;
+        state.isLoading = false;
+    },
+    [SET_DEPOSIT_DATA_WITH_AGENTS](state, data) {
         state.depositDataWithAgents = data;
-        state.totalApprovedDeposit = data;
+        state.isLoading = false;
+    },
+    [SET_DEPOSIT_DETAILS](state, data) {
         state.depositDetails = data;
         state.isLoading = false;
     },

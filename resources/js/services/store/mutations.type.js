@@ -52,6 +52,8 @@ export const SET_UMRAH_PACKAGES = "setUmrahPackages";
 export const SET_UMRAH_HEADER_IMAGES = "setUmrahHeaderImages";
 export const SET_GROUP_TICKETS = "setGroupTickets";
 export const SET_DEPOSIT_DATA = "setDepositData";
+export const SET_DEPOSIT_DATA_WITH_AGENTS = "setDepositDataWithAgents";
+export const SET_DEPOSIT_DETAILS = "setDepositDetails";
 
 export const SET_ANCILLARIES_RESPONSE = "setAncillariesResponse";
 export const SET_QOUTE_ERROR = "setQuoteError";
@@ -96,6 +98,14 @@ export const REMOVE_NOTIFICATION = "removeNotification";
 export const MARK_NOTIFICATION_READ = "markNotificationRead";
 
 
+export const SET_PROMOTIONS = "setPromotions";
+export const SET_PROMOTION = "setPromotion";
+export const SET_PROMOTION_PROVIDERS = "setPromotionProviders";
+
+export const SET_SEGMENT_MARGINS = "setSegmentMargins";
+export const SET_SEGMENT_MARGIN = "setSegmentMargin";
+export const SET_SEGMENT_MARGIN_PROVIDERS = "setSegmentMarginProviders";
+
 export const SET_REQUESTS = "setRequests";
 export const SET_REQUEST_DATA = "setRequestData";
 
@@ -104,4 +114,3 @@ export const SET_POPULAR_ROUTES = "setPopularRoutes";
 export const SET_BLOGS = "setBlogs";
 export const SET_BLOG = "setBlog";
 export const CLEAR_API_ERRORS = "clearApiErrors";
-

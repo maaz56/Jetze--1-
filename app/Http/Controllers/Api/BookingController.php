@@ -120,7 +120,12 @@ class BookingController extends Controller
         }
 
 
-        // Get paginated bookings
+        if ($request->filled('dashboard_limit')) {
+            $limit = min(max((int) $request->dashboard_limit, 1), 15);
+            $query->limit($limit);
+        }
+
+        // Get bookings
         $bookings = $query->get();
 
         // Count different statuses

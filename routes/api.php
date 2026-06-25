@@ -26,6 +26,8 @@ use App\Http\Controllers\Api\ModifyRequestController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PromoImageController;
+use App\Http\Controllers\Api\PromotionController;
+use App\Http\Controllers\Api\SegmentMarginController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisaController;
@@ -255,7 +257,10 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('zoho-organization', [ZohoController::class, 'getOrganization']);
     Route::get('zoho-contacts', [ZohoController::class, 'fetchOrCreateCustomer']);
     Route::get('create-invoice', [ZohoController::class, 'createInvoice']);
-
+Route::get('promotions/providers', [FlightController::class, 'fetchProviders']);
+Route::resource('promotions', PromotionController::class);
+Route::get('segment-margins/providers', [FlightController::class, 'fetchProviders']);
+Route::resource('segment-margins', SegmentMarginController::class);
     Route::get('/test-email', function () {
         Mail::raw('This is a test email', function ($message) {
             $message->to('recipient@example.com')->subject('Test Email');
@@ -313,7 +318,8 @@ Route::post('zoho-token', [ZohoController::class, 'getToken']);
 Route::get('zoho-organization', [ZohoController::class, 'getOrganization']);
 Route::get('zoho-contacts', [ZohoController::class, 'fetchOrCreateCustomer']);
 Route::get('create-invoice', [ZohoController::class, 'createInvoice']);
-
+Route::get('segment-margins/providers', [FlightController::class, 'fetchProviders']);
+Route::resource('segment-margins', SegmentMarginController::class);
 Route::post('save-request', [ModifyRequestController::class, 'store']);
 Route::get('fetch-requests', [ModifyRequestController::class, 'index']);
 Route::get('fetch-modify-request-data', [ModifyRequestController::class, 'fetchModifyRequestData']);
