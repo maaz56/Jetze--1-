@@ -1042,6 +1042,111 @@ class AtApiService
             return null;
         }
     }
+      public function getItineraryStatus($paymentResponse)
+{
+    try {
+
+        // 🔹 Extract required values
+        $tui = $paymentResponse['TUI'] ?? null;
+        $transactionId = $paymentResponse['TransactionID'] ?? null;
+
+        if (!$tui || !$transactionId) {
+            Log::error('Missing TUI or TransactionID for itinerary status', $paymentResponse);
+            return null;
+        }
+
+        // 🔹 Build payload
+        $payload = [
+            "TUI" => $tui,
+            "TransactionID" => $transactionId
+        ];
+
+        Log::info('Get Itinerary Request Payload:', $payload);
+
+        $url = "{$this->flightBaseUrl}/Payment/GetItineraryStatus";       
+         $accessToken = $this->getAccessToken();
+        $clientId = $accessToken['ClientID'] ?? null;
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => $accessToken['Token'],
+        ];
+
+        $request = new \GuzzleHttp\Psr7\Request(
+            'POST',
+            $url,
+            $headers,
+            json_encode($payload)
+        );
+
+        $response = $this->client->send($request);
+
+        $body = json_decode($response->getBody(), true);
+
+        Log::info('Get Itinerary Response:', $body);
+
+        return $body;
+
+    } catch (\Exception $e) {
+
+        Log::error('Get Itinerary Status Error: ' . $e->getMessage());
+        return null;
+    }
+}
+ public function getBookingDetails($request)
+    {
+        Log::info('Getting booking details with PNR: ' . $request->pnr);
+        $accessToken = $this->getAccessToken();
+        Log::info($accessToken);
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => $accessToken['Token'],
+        ];
+
+        $bookingDetailsUrl = "{$this->flightBaseUrl}/Utils/RetrieveBooking";
+
+        $payload = [
+            "ReferenceType" => "T",
+            "TUI" => "",
+            "ReferenceNumber" => $request->pnr ?? "",
+            'ClientID' => $accessToken['ClientID'],
+        ];
+
+        Log::info('Get Booking Details payload (final): ', $payload);
+
+        try {
+            $req = new \GuzzleHttp\Psr7\Request(
+                'POST',
+                $bookingDetailsUrl,
+                $headers,
+                json_encode($payload)
+            );
+
+            $response = $this->client->send($req);
+            $responseBody = json_decode($response->getBody(), true);
+           
+            Log::info('Get Booking Details response: ', $responseBody);
+            $statusResponse = $this->getItineraryStatus($responseBody);
+
+            return [
+                'bookingDetails' => $responseBody,
+                'itineraryStatus' => $statusResponse
+            ];
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('Error getting Booking Details: ' . $e->getMessage());
+
+            if ($e->hasResponse()) {
+                Log::error('Response: ' . $e->getResponse()->getBody());
+            }
+
+            return null;
+        }
+    }
+
+    public function cancelBooking($request)
+    {
+        Log::info('Cancelling booking with PNR: ' . $request);
+    }
 
     /*
     |--------------------------------------------------------------------------

@@ -685,6 +685,9 @@ class BookingController extends Controller
         } else if ($request->flight_provider == 'airblue') {
             $pnrData = $this->airblueApiService->getBookingDetails($request->pnr);
             $pnrData = json_decode($pnrData, true);
+        } else if( $request->flight_provider == 'at') {
+            $atApiService = new AtApiService();
+            $pnrData = $atApiService->getBookingDetails($request);
         }
         return response()->json([
             'message' => 'PNR Details fetched successfully',
