@@ -161,7 +161,6 @@ class AtApiService
             $responseBody = json_decode($response->getBody(), true);
             Log::info('Express search response: ', $responseBody);
 
-            $this->getWebSettings($responseBody['TUI'] ?? '');
 
 
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
@@ -362,6 +361,10 @@ class AtApiService
                 'TUI' => $tui,
             ],
         ]);
+        Log::info(json_encode([
+            'ClientID' => $this->clientId,
+            'TUI' => $tui,
+        ], JSON_PRETTY_PRINT));
         $responseBody = json_decode($response->getBody()->getContents(), true);
         Log::info('GetWebSettings response: ', $responseBody);  
 
