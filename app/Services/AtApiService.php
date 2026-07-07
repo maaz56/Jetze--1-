@@ -182,9 +182,24 @@ class AtApiService
      */
     private function cacheFareType(string $fareType): void
     {
-        $cacheKey = "AT_Fare_type";
+        $cacheKey = $this->getFareTypeCacheKey();
         Cache::put($cacheKey, $fareType, now()->addHour());
         Log::info('Cached AT fare type: ' . $fareType, ['cache_key' => $cacheKey]);
+    }
+
+    private function getFareTypeCacheKey(): string
+    {
+        return $this->getCacheKeyPrefix() . '_at_fare_type';
+    }
+
+    private function resolveFareType(array $params = []): string
+    {
+        return strtoupper((string) (
+            $params['fareType']
+            ?? $params['FareType']
+            ?? $params['fare_type']
+            ?? Cache::get($this->getFareTypeCacheKey(), 'ON')
+        ));
     }
 
     /**
@@ -369,7 +384,7 @@ class AtApiService
         |--------------------------------------------------------------------------
         */
 
-        $tripType = strtoupper((string) $request->input('fareType', $request->input('fare_type', Cache::get('AT_Fare_type', 'ON'))));
+        $tripType = $this->resolveFareType($request->all());
 
         if ($tripType === 'DM') {
             return $this->sendDmMultiCityPriceRequests($request, $accessToken, $headers, $priceRequestUrl, $tripType);
@@ -509,6 +524,7 @@ class AtApiService
 
     public function atBooking($params)
     {
+
         $accessToken = $this->getAccessToken();
         $clientId = $accessToken['ClientID'] ?? null;
         $headers = [
@@ -525,7 +541,8 @@ class AtApiService
             ?? $cachedValidationResponse['FareType']
             ?? ''
         ));
-        $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
+        $holdInfo = $params['flight']['leg']['flights'][0]['HoldInfo']  ?? null;
+         $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
         $netAmount = $cachedValidationResponse['NetAmount'] ?? $params['NetAmount'] ?? 0;
 
         /*
@@ -664,6 +681,8 @@ class AtApiService
             'NetAmount' => $netAmount,
             'SSRAmount' => $totalAmount,
             'ClientID' => $clientId,
+            'HoldInfo' => $holdInfo,
+            'BookingType' => 'HB',
             'DeviceID' => '',
             'AppVersion' => '',
             'CrossSellAmount' => 0,
@@ -751,13 +770,13 @@ class AtApiService
             ];
         }
 
-        $payload = [
-            'Trips' => $trips,
-            'ClientID' => $accessToken['ClientID'], // you said you'll add this
-            'PaidSSR' => 'true',
-            'Source' => 'LV',
-            'TripType' => count($trips) > 1 ? 'RS' : 'ON',
-        ];
+        $tripType = $this->resolveFareType($request);
+
+        if ($tripType === 'DM') {
+            return $this->fetchDmAncillaryTrips($priceRequestUrl, $headers, $accessToken['ClientID'], $trips, $tripType, 'SSR');
+        }
+
+        $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
 
         Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
 
@@ -814,6 +833,7 @@ class AtApiService
                 continue;
             }
 
+
             $trips[] = [
                 'Amount' => 0,
                 'Index' => "", // 1, 2, 3...
@@ -822,13 +842,13 @@ class AtApiService
             ];
         }
 
-        $payload = [
-            'Trips' => $trips,
-            'ClientID' => $accessToken['ClientID'], // you said you'll add this
-            'PaidSSR' => 'true',
-            'Source' => 'LV',
-            'TripType' => count($trips) > 1 ? 'RS' : 'ON',
-        ];
+        $tripType = $this->resolveFareType($request);
+
+        if ($tripType === 'DM') {
+            return $this->fetchDmAncillaryTrips($priceRequestUrl, $headers, $accessToken['ClientID'], $trips, $tripType, 'SeatLayout');
+        }
+
+        $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
 
         Log::info('SSR request payload (final): ', $payload);
 
@@ -857,6 +877,63 @@ class AtApiService
         }
     }
 
+    private function buildAncillaryPayload(array $trips, $clientId, string $tripType): array
+    {
+        return [
+            'Trips' => $trips,
+            'ClientID' => $clientId,
+            'PaidSSR' => 'true',
+            'Source' => 'LV',
+            'TripType' => $tripType,
+        ];
+    }
+
+    /**
+     * DM uses an independent TUI for each searched trip, so SSR and seat-layout
+     * are requested one trip at a time and merged back in their original order.
+     */
+    private function fetchDmAncillaryTrips(string $url, array $headers, $clientId, array $trips, string $tripType, string $resource): ?array
+    {
+        $combined = null;
+        $combinedTrips = [];
+
+        foreach ($trips as $index => $trip) {
+            $supplierTrip = array_merge($trip, ['OrderID' => 1]);
+            $payload = $this->buildAncillaryPayload([$supplierTrip], $clientId, $tripType);
+
+            try {
+                Log::info("AT DM {$resource} request for trip " . ($index + 1), $payload);
+                $req = new Request('POST', $url, $headers, json_encode($payload));
+                $response = json_decode($this->client->send($req)->getBody(), true);
+                Log::info("AT DM {$resource} response for trip " . ($index + 1), $response ?? []);
+
+                if (!is_array($response)) {
+                    return null;
+                }
+
+                $combined ??= $response;
+                foreach (($response['Trips'] ?? []) as $responseTrip) {
+                    $combinedTrips[] = $responseTrip;
+                }
+            } catch (RequestException $e) {
+                Log::error("AT DM {$resource} failed for trip " . ($index + 1) . ': ' . $e->getMessage());
+                if ($e->hasResponse()) {
+                    Log::error('Response: ' . $e->getResponse()->getBody());
+                }
+                return null;
+            }
+        }
+
+        if ($combined === null) {
+            return null;
+        }
+
+        $combined['Trips'] = $combinedTrips;
+        $combined['FareType'] = $tripType;
+
+        return $combined;
+    }
+
     public function atPaymentRequest($params)
     {
 
@@ -868,19 +945,20 @@ class AtApiService
         ];
 
         $paymentUrl = "{$this->flightBaseUrl}/Payment/StartPay";
-
+        $transactionID = $params['pnrData']['TransactionID'] ?? null;
+        $TUI = $params['FareType'] === 'DM' ? $params['pnrData']['BookingResponses'][0]['TUI'] ?? null : $params['pnrData']['TUI'] ?? null;
         /*
         |--------------------------------------------------------------------------
         | BUILD PAYMENT PAYLOAD
         |--------------------------------------------------------------------------
         */
         $payload = [
-            'TransactionID' => (int) $params['TransactionID'],
+            'TransactionID' => $transactionID,
             'PaymentAmount' => 0,
             'NetAmount' => (int) $params['net_amount'],
             'BrowserKey' => $this->browserKey,
             'ClientID' => $clientId,
-            'TUI' => $params['TUI'],
+            'TUI' => $TUI,
             'Hold' => false,
             'Promo' => null,
             'PaymentType' => '',
@@ -1228,13 +1306,26 @@ class AtApiService
                 'PLP' => [],
                 'SSR' => $ssrPayload['SSR'],
                 'CrossSell' => [],
-                'NetAmount' => $netAmount,
+                'NetAmount' => $netAmount + $ssrPayload['SSRAmount'],
                 'SSRAmount' => $ssrPayload['SSRAmount'],
                 'ClientID' => $clientId,
                 'DeviceID' => '',
                 'AppVersion' => '',
                 'CrossSellAmount' => 0,
             ];
+
+            if ($index === 1) {
+                $refTransactionId = $bookingResponses[0]['TransactionID'] ?? null;
+
+                if (empty($refTransactionId)) {
+                    Log::warning('Cannot book the second AT DM multi-city trip without the first trip transaction ID.', [
+                        'first_booking_response' => $bookingResponses[0] ?? null,
+                    ]);
+                    return null;
+                }
+
+                $payload['RefTransactionID'] = $refTransactionId;
+            }
 
             Log::info('AT DM Booking Payload for trip ' . ($index + 1) . ':', $payload);
 

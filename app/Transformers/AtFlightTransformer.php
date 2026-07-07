@@ -45,7 +45,6 @@ class AtFlightTransformer
             }
 
             $transformedLegs = [];
-            
             foreach ($legs as $legData) {
                 $segments = [];
                 $flight = $legData['flight'];
@@ -212,6 +211,7 @@ class AtFlightTransformer
                     "from" => $segments[0]['from'],
                     "to" => end($segments)['to'],
                     "segments" => $segments,
+                    "hold_info" => $flight['HoldInfo'] ?? null,
                     "fares" => $fares,
                     "departure_at" => $segments[0]['departure_at'] ?? null,
                     "arrival_at" => end($segments)['arrival_at'] ?? null,
@@ -252,7 +252,9 @@ class AtFlightTransformer
             ?? $params['FareType']
             ?? $flightData['fare_type']
             ?? $flightData['FareType']
-            ?? Cache::get('AT_Fare_type');
+            ?? Cache::get((auth()->id()
+                ? 'flights_' . auth()->id()
+                : 'flights_' . session()->getId()) . '_at_fare_type');
     }
 
     /**
