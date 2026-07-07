@@ -155,12 +155,15 @@ class AtApiService
                 json_encode($payload)
             );
 
-            Log::info('Flight search request payload: ', $payload);
+            Log::info('Express Search request payload: ', $payload);
 
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
-            Log::info('Flight search response: ', $responseBody);
+            Log::info('Express search response: ', $responseBody);
 
+            $this->getWebSettings($responseBody['TUI'] ?? '');
+
+            
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 return $this->getSearchFlightsRes($responseBody['TUI']);
             }
@@ -354,8 +357,8 @@ class AtApiService
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->signBaseUrl . '/Utils/WebSettings', [
             'json' => [
-                'ClientID' => $this->clientId,
-                'TUI' => $tui,
+                'ClientID' => '',
+                'TUI' => '',
             ],
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
