@@ -117,7 +117,7 @@ class AtApiService
             'CHD' => (int) ($params['children'] ?? 0),
             'INF' => (int) ($params['infants'] ?? 0),
             'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
-            'Source' => 'CF', // Changed from 'LV' to 'CF' for consistency
+            'Source' => 'LV', // Changed from 'LV' to 'CF' for consistency
             'Mode' => 'AS',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
@@ -163,8 +163,10 @@ class AtApiService
 
             $this->getWebSettings($responseBody['TUI'] ?? '');
 
-            
+
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
+                $this->getWebSettings($responseBody['TUI']);
+            
                 return $this->getSearchFlightsRes($responseBody['TUI']);
             }
 
@@ -351,23 +353,21 @@ class AtApiService
         }
 
     }
-    public function getWebSettings($tui)
-    {
+    public function getWebSettings($tui){
 
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->signBaseUrl . '/Utils/WebSettings', [
             'json' => [
-                'ClientID' => '',
-                'TUI' => '',
+                'ClientID' => $this->clientId,
+                'TUI' => $tui,
             ],
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
-        Log::info('GetWebSettings response: ', $responseBody);
+        Log::info('GetWebSettings response: ', $responseBody);  
 
 
 
     }
-
     public function sendPriceRequest($request)
     {
         Log::info('Sending Price Request with data: ', $request->all());
@@ -513,6 +513,8 @@ class AtApiService
             'Authorization' => $accessToken['Token'],
         ];
         Log::info('Getting Traveler Checklist Payload: ' . $tui['TUI']);
+        Log::info('Getting Traveler Checklist Payload (client_id): ' . $this->clientId);
+
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
             'headers' => $headers,
