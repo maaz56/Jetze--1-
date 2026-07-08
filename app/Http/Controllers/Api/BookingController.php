@@ -215,7 +215,7 @@ class BookingController extends Controller
 
     public function store(Request $request)
     {
-        Log::info($request);
+        // Log::info($request);
 
         $pnrResponse = null;
         $localPnr = "null";
@@ -486,6 +486,9 @@ class BookingController extends Controller
         $validated = Validator::make($request->all(), [
             'main_contact.email' => 'required|email',
             'main_contact.phone' => 'required|string',
+            'main_contact.phoneNationalNumber' => 'nullable|string',
+            'main_contact.phoneCountryCode' => 'nullable|string|size:2',
+            'main_contact.mobileCountryCode' => 'nullable|string|max:10',
             'main_contact.country' => 'required|string',
             'agency_mobile' => 'nullable|string',
             'agency_email' => 'nullable|email',
@@ -503,6 +506,8 @@ class BookingController extends Controller
             'travellers.*.documentNo' => 'nullable|string',
             'travellers.*.expiryDate' => 'nullable|date',
             'travellers.*.issueCountry' => 'nullable|string',
+            'travellers.*.state' => 'nullable|string',
+            'travellers.*.city' => 'nullable|string',
             'travellers.*.gender' => 'nullable|string',
             'travellers.*.dob' => 'nullable|string'
         ])->validate();
@@ -566,6 +571,8 @@ class BookingController extends Controller
                 'cnic' => $traveller['cnic'] ?? null,
                 'expiry_date' => $traveller['expiryDate'],
                 'issue_country' => $traveller['issueCountry'],
+                'state' => $traveller['state'] ?? null,
+                'city' => $traveller['city'] ?? null,
                 'gender' => $traveller['gender'],
                 'dob' => $traveller['dob'],
 

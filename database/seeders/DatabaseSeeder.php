@@ -13,16 +13,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
-            ['email' => 'Jetze.pk@gmail.com'],
-            [
-                'role' => 'admin',
-                'is_approved' => true,
-                'email_verified_at' => now(),
-                'name' => 'admin',
-                'password' => '901c7cfe@@',
-            ]
-        );
+        // User::updateOrCreate(
+        //     ['email' => 'Jetze.pk@gmail.com'],
+        //     [
+        //         'role' => 'admin',
+        //         'is_approved' => true,
+        //         'email_verified_at' => now(),
+        //         'name' => 'admin',
+        //         'password' => '901c7cfe@@',
+        //     ]
+        // );
 
         //        User::updateOrCreate(
 //     ['email' => 'admin@Jetze.pk'],
@@ -46,13 +46,15 @@ class DatabaseSeeder extends Seeder
 
 
         $this->call([
-            AirportSeeder::class,
-            AircraftSeeder::class,
-            AirlineSeeder::class,
-            airportMarginSeeder::class,
-            CountryStateCityTableSeeder::class,
-            CustomerMarginSeeder::class,
-            CustomerSettingSeeder::class,
+            // AirportSeeder::class,
+            // AircraftSeeder::class,
+            // AirlineSeeder::class,
+            // airportMarginSeeder::class,
+            // CountryStateCityTableSeeder::class,
+            MobileCountryCodeSeeder::class,
+            // CustomerMarginSeeder::class,
+            // CustomerSettingSeeder::class,
+
         ]);
     }
 }

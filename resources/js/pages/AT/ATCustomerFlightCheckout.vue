@@ -90,6 +90,8 @@ import { toast } from "vue3-toastify";
 import Tesseract from "tesseract.js";
 import CountryDropdown from "@/components/common/CountryDropdown.vue";
 import Calender from '@/components/common/CheckoutCalender.vue';
+import { VueTelInput } from 'vue-tel-input';
+import 'vue-tel-input/vue-tel-input.css';
 
 const route = useRoute();
 const store = useStore();
@@ -632,8 +634,23 @@ const isOpenCountryDropdown = ref(false);
 const mainContact = ref({
     email: user?.customer?.email,
     phone: user?.customer?.phone,
+    phoneNationalNumber: "",
+    phoneCountryCode: "PK",
+    mobileCountryCode: "92",
+    phoneValid: false,
     country: localStorage.getItem("country") || "",
 });
+
+const handlePhoneValidation = (phoneData) => {
+    mainContact.value.phoneNationalNumber = phoneData.nationalNumber || "";
+    mainContact.value.phoneCountryCode = phoneData.countryCode || "";
+    mainContact.value.phoneValid = Boolean(phoneData.valid);
+};
+
+const handlePhoneCountryChange = (country) => {
+    mainContact.value.phoneCountryCode = country?.iso2 || "";
+    mainContact.value.mobileCountryCode = country?.dialCode || "";
+};
 
 const agencyContact = computed(() => ({
     email: "customer@gmail.com",
@@ -714,6 +731,8 @@ const initializeTravellers = () => {
         cnic: "",
         expiryDate: "",
         issueCountry: "",
+        state: "",
+        city: "",
         dob: "",
         isOpenCountryDropdown: false,
         isOpenIssueCountryDropdown: false,
@@ -739,6 +758,8 @@ const initializeTravellers = () => {
         documentNo: "",
         expiryDate: "",
         issueCountry: "",
+        state: "",
+        city: "",
         dob: "",
         gender: "",
     }));
@@ -852,7 +873,7 @@ const validateForm = () => {
     if (!mainContact.value.phone) {
         errors.mainContact.phone = "Phone number is required";
         isValid = false;
-    } else if (!validatePhone(mainContact.value.phone)) {
+    } else if (!mainContact.value.phoneValid && !validatePhone(mainContact.value.phone)) {
         errors.mainContact.phone = "Please enter a valid phone number";
         isValid = false;
     }
@@ -2115,11 +2136,19 @@ watch(flight, () => {
                                             errors.mainContact.email }}</div>
                                     </div>
                                     <div>
-                                        <Label for="main-phone" class="text-xs font-medium text-gray-600">Phone <span
+                                        <Label for="main-phone" class="text-xs font-medium text-gray-600 mt-1">Phone <span
                                                 class="text-red-500">*</span></Label>
-                                        <Input v-model="mainContact.phone" id="main-phone" type="tel"
-                                            placeholder="Enter your phone" class="mt-1 text-sm"
-                                            :class="{ 'border-red-300': errors.mainContact.phone }" />
+                                        <VueTelInput v-model="mainContact.phone"
+                                            class="phone-input mt-1"
+                                            :class="{ 'phone-input-error': errors.mainContact.phone }"
+                                            mode="international"
+                                            default-country="PK"
+                                            :auto-default-country="false"
+                                            :valid-characters-only="true"
+                                            :input-options="{ id: 'main-phone', placeholder: 'Enter your phone', required: true }"
+                                            :dropdown-options="{ showDialCodeInList: true, showDialCodeInSelection: true, showSearchBox: true }"
+                                            @validate="handlePhoneValidation"
+                                            @country-changed="handlePhoneCountryChange" />
                                         <div v-if="errors.mainContact.phone" class="text-red-500 text-xs mt-1">{{
                                             errors.mainContact.phone }}</div>
                                     </div>
@@ -2456,6 +2485,26 @@ watch(flight, () => {
                                                                     getErrorPath(`travellers.${index}.expiryDate`) }}</div>
                                                         </div>
 
+                                                    </div>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                                        <div>
+                                                            <Label :for="`state-${index}`"
+                                                                class="text-sm font-medium text-gray-700 mb-2 block">
+                                                                State
+                                                            </Label>
+                                                            <Input v-model="traveller.state" :id="`state-${index}`"
+                                                                type="text" placeholder="Enter state"
+                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
+                                                        </div>
+                                                        <div>
+                                                            <Label :for="`city-${index}`"
+                                                                class="text-sm font-medium text-gray-700 mb-2 block">
+                                                                City
+                                                            </Label>
+                                                            <Input v-model="traveller.city" :id="`city-${index}`"
+                                                                type="text" placeholder="Enter city name"
+                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3720,6 +3769,14 @@ watch(flight, () => {
                                         <div class="text-gray-500">Issue Country</div>
                                         <div class="font-medium">{{ traveller.issueCountry }}</div>
                                     </div>
+                                    <div>
+                                        <div class="text-gray-500">State</div>
+                                        <div class="font-medium">{{ traveller.state || '-' }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-500">City</div>
+                                        <div class="font-medium">{{ traveller.city || '-' }}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -4274,6 +4331,88 @@ label {
     color: #e53e3e;
     font-size: 12px;
     margin-top: 4px;
+}
+
+.phone-input {
+    width: 100%;
+    height: 2.25rem;
+    overflow: visible;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    background: #ffffff;
+    box-shadow: none;
+    font-size: 0.875rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.phone-input:hover {
+    border-color: #d1d5db;
+}
+
+.phone-input:focus-within {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+.phone-input.phone-input-error {
+    border-color: #fca5a5;
+}
+
+.phone-input.phone-input-error:focus-within {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+}
+
+.phone-input :deep(.vti__dropdown) {
+    min-width: 5.25rem;
+    padding: 0 0.625rem;
+    border-radius: 0.375rem 0 0 0.375rem;
+    background: #ffffff;
+    color: #374151;
+}
+
+.phone-input :deep(.vti__dropdown:hover),
+.phone-input :deep(.vti__dropdown.open) {
+    background: #f9fafb;
+}
+
+.phone-input :deep(.vti__input) {
+    min-width: 0;
+    height: 100%;
+    padding: 0 0.75rem;
+    border-radius: 0 0.375rem 0.375rem 0;
+    background: transparent;
+    color: #111827;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.phone-input :deep(.vti__input::placeholder) {
+    color: #9ca3af;
+}
+
+.phone-input :deep(.vti__input:focus) {
+    outline: none;
+    box-shadow: none;
+}
+
+.phone-input :deep(.vti__dropdown-list) {
+    z-index: 60;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    background: #ffffff;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+}
+
+.phone-input :deep(.vti__dropdown-item) {
+    padding: 0.5rem 0.75rem;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.phone-input :deep(.vti__dropdown-item.highlighted) {
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
 }
 
 .global-error {

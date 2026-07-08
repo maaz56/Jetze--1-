@@ -117,7 +117,7 @@ class AtApiService
             'CHD' => (int) ($params['children'] ?? 0),
             'INF' => (int) ($params['infants'] ?? 0),
             'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
-            'Source' => 'LV', // Changed from 'LV' to 'CF' for consistency
+            'Source' => 'CF', // Changed from 'LV' to 'CF' for consistency
             'Mode' => 'AS',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
@@ -165,7 +165,7 @@ class AtApiService
 
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 $this->getWebSettings($responseBody['TUI']);
-            
+
                 return $this->getSearchFlightsRes($responseBody['TUI']);
             }
 
@@ -352,7 +352,8 @@ class AtApiService
         }
 
     }
-    public function getWebSettings($tui){
+    public function getWebSettings($tui)
+    {
 
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->signBaseUrl . '/Utils/WebSettings', [
@@ -361,12 +362,12 @@ class AtApiService
                 'TUI' => $tui,
             ],
         ]);
-        Log::info('getwebSettinfs Request:'.json_encode([
+        Log::info('getwebSettinfs Request:' . json_encode([
             'ClientID' => $this->clientId,
             'TUI' => $tui,
         ], JSON_PRETTY_PRINT));
         $responseBody = json_decode($response->getBody()->getContents(), true);
-        Log::info('GetWebSettings response: ', $responseBody);  
+        Log::info('GetWebSettings response: ', $responseBody);
 
 
 
@@ -457,7 +458,7 @@ class AtApiService
     public function getPricer($request)
     {
         $accessToken = $this->getAccessToken();
-        Log::info($accessToken);
+        // Log::info($accessToken);
         $headers = [
             'Content-Type' => 'application/json',
             'Authorization' => $accessToken['Token'],
@@ -508,15 +509,20 @@ class AtApiService
     {
 
 
-        Log::info('Getting Traveler Checklist with TUI: ', $tui);
+        // Log::info('Getting Traveler Checklist with TUI: ', $tui);
         $accessToken = $this->getAccessToken();
 
         $headers = [
             'Content-Type' => 'application/json',
             'Authorization' => $accessToken['Token'],
         ];
-        Log::info('Getting Traveler Checklist Payload: ' . $tui['TUI']);
-        Log::info('Getting Traveler Checklist Payload (client_id): ' . $this->clientId);
+        Log::info('Getting Traveler Checklist Payload: ' . json_encode(
+            [
+                'ClientID' => $this->clientId,
+                'TUI' => $tui['TUI'],
+            ],
+            JSON_PRETTY_PRINT
+        ));
 
         $guzzleClient = new Client();
         $response = $guzzleClient->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
@@ -549,8 +555,8 @@ class AtApiService
             ?? $cachedValidationResponse['FareType']
             ?? ''
         ));
-        $holdInfo = $params['flight']['leg']['flights'][0]['HoldInfo']  ?? null;
-         $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
+        $holdInfo = $params['flight']['leg']['flights'][0]['hold_info'] ?? null;
+        $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
         $netAmount = $cachedValidationResponse['NetAmount'] ?? $params['NetAmount'] ?? 0;
 
         /*
@@ -560,19 +566,24 @@ class AtApiService
         */
         $contact = $params['main_contact'] ?? [];
         $firstTraveller = $params['travellers'][0] ?? [];
+        $mobile = preg_replace('/\D+/', '', (string) (
+            $contact['phoneNationalNumber'] ?? $contact['phone'] ?? ''
+        ));
+        $mobileCountryCode = ltrim((string) ($contact['mobileCountryCode'] ?? '92'), '+');
 
         $contactInfo = [
             'Title' => $firstTraveller['title'] ?? 'Mr',
             'FName' => $firstTraveller['firstName'] ?? 'Guest',
             'LName' => $firstTraveller['lastName'] ?? 'User',
-            'Mobile' => str_replace(' ', '', $contact['phone']) ?? '',
+            'Mobile' => $mobile,
             'Phone' => '',
             'Email' => $contact['email'] ?? '',
             'Address' => 'N/A',
-            'CountryCode' => 'PK',
-            'State' => '',
-            'City' => '',
-            'PIN' => substr($contact['phone'], -6),
+            'CountryCode' => strtoupper((string) ($contact['phoneCountryCode'] ?? 'PK')),
+            'MobileCountryCode' => '+' . $mobileCountryCode,
+            'State' => $firstTraveller['state'] ?? '',
+            'City' => $firstTraveller['city'] ?? '',
+            'PIN' => substr($mobile, -6),
             'GSTCompanyName' => '',
             'GSTTIN' => '',
             'GSTMobile' => '',
@@ -725,9 +736,9 @@ class AtApiService
             return null;
         }
     }
-  public function fetchAncillaries($request)
+    public function fetchAncillaries($request)
     {
-        Log::info('Fetching ancillaries with data: ', $request);
+        // Log::info('Fetching ancillaries with data: ', $request);
         $ssrData = $this->getSSR($request);
         $seatLayout = $this->getSeatLayout($request);
         $data = [
@@ -814,7 +825,7 @@ class AtApiService
     }
     public function getSeatLayout($request)
     {
-        Log::info('Getting Seat Layout with data: ', $request);
+        // Log::info('Getting Seat Layout with data: ', $request);
         $accessToken = $this->getAccessToken();
         Log::info($accessToken);
         $headers = [
@@ -858,7 +869,7 @@ class AtApiService
 
         $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
 
-        Log::info('SSR request payload (final): ', $payload);
+        // Log::info('Seat request payload (final): ', $payload);
 
         try {
             $req = new \GuzzleHttp\Psr7\Request(
@@ -871,7 +882,7 @@ class AtApiService
             $response = $this->client->send($req);
             $responseBody = json_decode($response->getBody(), true);
 
-            Log::info($responseBody);
+            // Log::info($responseBody);
             return $responseBody;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -1050,57 +1061,57 @@ class AtApiService
             return null;
         }
     }
-      public function getItineraryStatus($paymentResponse)
-{
-    try {
+    public function getItineraryStatus($paymentResponse)
+    {
+        try {
 
-        // 🔹 Extract required values
-        $tui = $paymentResponse['TUI'] ?? null;
-        $transactionId = $paymentResponse['TransactionID'] ?? null;
+            // 🔹 Extract required values
+            $tui = $paymentResponse['TUI'] ?? null;
+            $transactionId = $paymentResponse['TransactionID'] ?? null;
 
-        if (!$tui || !$transactionId) {
-            Log::error('Missing TUI or TransactionID for itinerary status', $paymentResponse);
+            if (!$tui || !$transactionId) {
+                Log::error('Missing TUI or TransactionID for itinerary status', $paymentResponse);
+                return null;
+            }
+
+            // 🔹 Build payload
+            $payload = [
+                "TUI" => $tui,
+                "TransactionID" => $transactionId
+            ];
+
+            Log::info('Get Itinerary Request Payload:', $payload);
+
+            $url = "{$this->flightBaseUrl}/Payment/GetItineraryStatus";
+            $accessToken = $this->getAccessToken();
+            $clientId = $accessToken['ClientID'] ?? null;
+            $headers = [
+                'Content-Type' => 'application/json',
+                'Authorization' => $accessToken['Token'],
+            ];
+
+            $request = new \GuzzleHttp\Psr7\Request(
+                'POST',
+                $url,
+                $headers,
+                json_encode($payload)
+            );
+
+            $response = $this->client->send($request);
+
+            $body = json_decode($response->getBody(), true);
+
+            Log::info('Get Itinerary Response:', $body);
+
+            return $body;
+
+        } catch (\Exception $e) {
+
+            Log::error('Get Itinerary Status Error: ' . $e->getMessage());
             return null;
         }
-
-        // 🔹 Build payload
-        $payload = [
-            "TUI" => $tui,
-            "TransactionID" => $transactionId
-        ];
-
-        Log::info('Get Itinerary Request Payload:', $payload);
-
-        $url = "{$this->flightBaseUrl}/Payment/GetItineraryStatus";       
-         $accessToken = $this->getAccessToken();
-        $clientId = $accessToken['ClientID'] ?? null;
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token'],
-        ];
-
-        $request = new \GuzzleHttp\Psr7\Request(
-            'POST',
-            $url,
-            $headers,
-            json_encode($payload)
-        );
-
-        $response = $this->client->send($request);
-
-        $body = json_decode($response->getBody(), true);
-
-        Log::info('Get Itinerary Response:', $body);
-
-        return $body;
-
-    } catch (\Exception $e) {
-
-        Log::error('Get Itinerary Status Error: ' . $e->getMessage());
-        return null;
     }
-}
- public function getBookingDetails($request)
+    public function getBookingDetails($request)
     {
         Log::info('Getting booking details with PNR: ' . $request->pnr);
         $accessToken = $this->getAccessToken();
@@ -1131,7 +1142,7 @@ class AtApiService
 
             $response = $this->client->send($req);
             $responseBody = json_decode($response->getBody(), true);
-           
+
             Log::info('Get Booking Details response: ', $responseBody);
             $statusResponse = $this->getItineraryStatus($responseBody);
 
