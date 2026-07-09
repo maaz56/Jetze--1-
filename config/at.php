@@ -10,5 +10,6 @@ return [
     'password'    => env('AT_PASSWORD'),
     'agent_code'  => env('AT_AGENT_CODE'),
     'browser_key' => env('AT_BROWSER_KEY'),
+    'ca_bundle'   => env('AT_CA_BUNDLE', storage_path('certs/server_chain.pem')),
 
 ];

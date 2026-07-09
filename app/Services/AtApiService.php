@@ -32,7 +32,10 @@ class AtApiService
     public function __construct()
     {
 
-        $this->client = new Client();
+        $this->client = new Client([
+            'verify' => config('at.ca_bundle'),
+        ]);
+        Log::info('AT API CA bundle configured: ' . config('at.ca_bundle'));
         $this->signBaseUrl = config('at.sign_base_url');
         $this->flightBaseUrl = config('at.flight_base_url');
         $this->merchantId = config('at.merchant_id');
@@ -355,8 +358,7 @@ class AtApiService
     public function getWebSettings($tui)
     {
 
-        $guzzleClient = new Client();
-        $response = $guzzleClient->post($this->signBaseUrl . '/Utils/WebSettings', [
+        $response = $this->client->post($this->signBaseUrl . '/Utils/WebSettings', [
             'json' => [
                 'ClientID' => $this->clientId,
                 'TUI' => $tui,
@@ -524,8 +526,7 @@ class AtApiService
             JSON_PRETTY_PRINT
         ));
 
-        $guzzleClient = new Client();
-        $response = $guzzleClient->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
+        $response = $this->client->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
             'headers' => $headers,
             'body' => json_encode([
                 'ClientID' => $this->clientId,
