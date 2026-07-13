@@ -645,6 +645,7 @@ const fetchFlights = () => {
 
 const showMoreFilters = ref(false);
 const maxDurationFilter = ref(null);
+const minDuration = 0;
 const refundableFilter = ref("all"); // 'all', 'refundable', 'non-refundable'
 const calculateDuration = (departure, arrival) => {
     const dep = moment(departure)

@@ -55,15 +55,21 @@ class AgentLedgerController extends Controller
                     $q->whereNull('t_status')
                         ->orWhere('t_status', '!=', 'approved');
                 })
+                // If booking is issued and has external transaction id,
+                // treat it as externally paid (card/bank) and skip wallet debit.
+                ->where(function ($q) {
+                    $q->whereNull('tid')
+                        ->orWhere('status', '!=', 'issued');
+                })
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
-                    'amount as debit',
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN 0 ELSE amount END as debit'),
                     DB::raw('NULL as credit'),
-                    DB::raw('"booking" as transaction_type'),
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually_issued" ELSE "booking" END as transaction_type'),
                     'id as reference_id',
-                    'flight_id as details',
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually issued" ELSE flight_id END as details'),
                     DB::raw('id as record_id'),
                     'booking_source',
                     'flight_provider',
@@ -152,15 +158,21 @@ class AgentLedgerController extends Controller
                     $q->whereNull('t_status')
                         ->orWhere('t_status', '!=', 'approved');
                 })
+                // If booking is issued and has external transaction id,
+                // treat it as externally paid (card/bank) and skip wallet debit.
+                ->where(function ($q) {
+                    $q->whereNull('tid')
+                        ->orWhere('status', '!=', 'issued');
+                })
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
-                    'amount as debit',
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN 0 ELSE amount END as debit'),
                     DB::raw('NULL as credit'),
-                    DB::raw('"booking" as transaction_type'),
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually_issued" ELSE "booking" END as transaction_type'),
                     'id as reference_id',
-                    'flight_id as details',
+                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually issued" ELSE flight_id END as details'),
                     DB::raw('id as record_id'),
                     'booking_source',
                     'flight_provider',

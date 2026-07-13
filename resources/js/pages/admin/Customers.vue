@@ -49,6 +49,8 @@ import {
   X,
   Eye,
   Download,
+  Mail,
+  Loader2,
 } from "lucide-vue-next";
 
 import { toast } from "vue3-toastify";
@@ -60,7 +62,7 @@ import Spinner from "@/components/common/Spinner.vue";
 import NothingFound from "@/components/common/NothingFound.vue";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { FETCH_CUSTOMERS, UPDATE_CUSTOMER_TYPE } from "@/services/store/actions.type";
+import { FETCH_CUSTOMERS, UPDATE_CUSTOMER_TYPE, RESEND_VERIFICATION_EMAIL } from "@/services/store/actions.type";
 import { useStore } from "vuex";
 import { useAuthStore } from "@/services/stores/auth";
 
@@ -75,6 +77,7 @@ const rawCustomers = computed(() => store.getters["customer/customers"]); // { d
 const isLoading = computed(() => userStore.isLoading);
 const showDeleteDialog = ref(false);
 const customerToDelete = ref(null);
+const sendingVerificationId = ref(null);
 
 // ---------- FILTERS ----------
 const approvalFilter = ref('all');   // 'all' | '1' | '0'
@@ -98,6 +101,17 @@ function updateMode(cust) {
     mode: cust.user.mode,
   });
   console.log("Updating mode for customer:", cust.user.email, "to", cust.user.mode);
+}
+
+async function resendVerification(userId) {
+  sendingVerificationId.value = userId;
+  try {
+    await store.dispatch("customer/" + RESEND_VERIFICATION_EMAIL, {
+      user_id: userId,
+    });
+  } finally {
+    sendingVerificationId.value = null;
+  }
 }
 
 
@@ -344,7 +358,7 @@ onMounted(() => {
         <div class="relative overflow-hidden">
           <div class="overflow-x-auto">
             <Table>
-              <TableHeader class="bg-muted">
+              <TableHeader class="bg-primary">
                 <TableRow>
                   <TableHead class="px-4 py-3">Sr no</TableHead>
                   <TableHead class="px-4 py-3">Name</TableHead>
@@ -399,15 +413,42 @@ onMounted(() => {
 
                   <!-- Email Verification -->
                   <TableCell class="px-4 py-2">
-                    <Badge v-if="cust.user.email_verified_at"
-                      class="uppercase bg-green-300 hover:bg-green-200 text-gray-800 border-green-300 cursor-default">
-                      Verified
-                    </Badge>
-                    <Badge v-else
-                      class="uppercase bg-destructive/20 hover:bg-destructive/20 text-red-800 border-destructive/50 cursor-default">
-                      Unverified
-                    </Badge>
-                  </TableCell>
+  <div class="flex items-center gap-2">
+
+    <Badge
+      v-if="cust.user.email_verified_at"
+      class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 border border-emerald-200 cursor-default"
+    >
+      Verified
+    </Badge>
+
+    <template v-else>
+      <Badge
+        class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-100 border border-red-200 cursor-default"
+      >
+        Unverified
+      </Badge>
+
+      <Button 
+        @click="resendVerification(cust.user.id)" 
+        :disabled="sendingVerificationId === cust.user.id"
+        variant="link" 
+        size="sm" 
+        class="h-auto p-0 text-[10px] text-blue-600 hover:text-blue-800 disabled:opacity-50"
+      >
+        <template v-if="sendingVerificationId === cust.user.id">
+          <Loader2 class="w-3 h-3 mr-1 animate-spin" />
+          Sending...
+        </template>
+        <template v-else>
+          <Mail class="w-3 h-3 mr-1" />
+          Resend Link
+        </template>
+      </Button>
+    </template>
+
+  </div>
+</TableCell>
 
                   <!-- Approval Status -->
                   <TableCell class="px-4 py-2">

@@ -1334,7 +1334,7 @@ onMounted(() => {
                                         </p>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
-                                        <p class="">GDS PNR:</p>
+                                        <p class="">PNR:</p>
                                         <!-- {{ pnrDetails?.bookingId ? pnrDetails?.bookingId : booking?.pnr || "-" }} -->
                                         <p class="font-semibold">
                                             {{ pnrDetails?.Response?.Data?.pnrDetail?.PNRN ?? pnrDetails?.bookingId ??
@@ -2117,7 +2117,7 @@ date, dateIndex
                                         </p>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
-                                        <p class="">GDS PNR:</p>
+                                        <p class="">PNR:</p>
                                         <p class="font-semibold">
                                             {{
                                                 pnrDetails?.bookingId

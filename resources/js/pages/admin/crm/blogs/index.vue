@@ -1,5 +1,6 @@
 <script setup>
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,9 +20,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Checkbox from "@/components/ui/checkbox/Checkbox.vue";
 import Input from "@/components/ui/input/Input.vue";
 import Pagination from "@/components/Pagination.vue";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   Calendar as CalendarIcon,
@@ -33,8 +42,8 @@ import {
   Plus,
   Eye,
   X,
-  Badge,
-  Filter
+  Filter,
+  Send,
 } from "lucide-vue-next";
 
 import { toast } from "vue3-toastify";
@@ -48,6 +57,7 @@ import {
   FETCH_BLOGS,
   DELETE_BLOG,
   PUBLISH_BLOG, // if you have publish/unpublish action
+  SEND_BLOG_MAIL,
 } from "@/services/store/actions.type";
 import NothingFound from "@/components/common/NothingFound.vue";
 import Spinner from "@/components/common/Spinner.vue";
@@ -63,6 +73,9 @@ const isLoading = computed(() => store.getters["blog/isLoading"]);
 
 const showDeleteDialog = ref(false);
 const blogToDelete = ref(null);
+const selectedBlogIds = ref([]);
+const mailAudience = ref('customers');
+const isSendingBlogMail = ref(false);
 
 // Filter states
 
@@ -77,11 +90,12 @@ function formatDate(date) {
 }
 
 const statusFilter = ref('all'); // 'all', 'published', 'draft'
+const searchQuery = ref(route.query.search || '');
 
 // Fetch blogs with filters
 const fetchBlogs = debounce(() => {
   store.dispatch("blog/" + FETCH_BLOGS, {
-    search: route.query.search || undefined,
+    search: searchQuery.value || undefined,
     page: route.query.page || 1,
     status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
   });
@@ -90,6 +104,51 @@ const fetchBlogs = debounce(() => {
 const filteredBlogs = computed(() => {
   return blogs.value.data || [];
 });
+
+const selectedBlogCount = computed(() => selectedBlogIds.value.length);
+const isAllVisibleSelected = computed(() => {
+  return filteredBlogs.value.length > 0 && filteredBlogs.value.every((blog) => selectedBlogIds.value.includes(blog.id));
+});
+
+function setBlogSelected(blogId, checked) {
+  if (checked) {
+    selectedBlogIds.value = Array.from(new Set([...selectedBlogIds.value, blogId]));
+    return;
+  }
+
+  selectedBlogIds.value = selectedBlogIds.value.filter((id) => id !== blogId);
+}
+
+function toggleVisibleSelection(checked) {
+  const visibleIds = filteredBlogs.value.map((blog) => blog.id);
+
+  if (checked) {
+    selectedBlogIds.value = Array.from(new Set([...selectedBlogIds.value, ...visibleIds]));
+    return;
+  }
+
+  selectedBlogIds.value = selectedBlogIds.value.filter((id) => !visibleIds.includes(id));
+}
+
+async function sendSelectedBlogsMail() {
+  if (!selectedBlogIds.value.length) {
+    toast.error("Please select at least one blog.");
+    return;
+  }
+
+  isSendingBlogMail.value = true;
+  try {
+    await store.dispatch("blog/" + SEND_BLOG_MAIL, {
+      blog_ids: selectedBlogIds.value,
+      audience: mailAudience.value,
+    });
+    selectedBlogIds.value = [];
+  } catch (error) {
+    // The store action already shows the API error toast.
+  } finally {
+    isSendingBlogMail.value = false;
+  }
+}
 
 function confirmDelete(blog) {
   blogToDelete.value = blog;
@@ -141,13 +200,13 @@ onMounted(() => {
         <!-- Search -->
         <div class="relative w-full max-w-sm">
           <Input
-            v-model="route.query.search"
+            v-model="searchQuery"
             @input="
               $router.push({
                 path: $route.path,
                 query: {
                   ...$route.query,
-                  search: $event.target.value || undefined,
+                  search: searchQuery || undefined,
                   page: undefined,
                 },
               });
@@ -171,13 +230,7 @@ onMounted(() => {
           </PopoverTrigger>
           <PopoverContent class="w-56 p-2">
             <div class="space-y-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="w-full justify-start"
-                :class="{ 'bg-muted': statusFilter === 'all' }"
-                @click="statusFilter = 'all'; fetchBlogs()"
-              >
+              <Button variant="ghost" size="sm" class="w-full justify-start" :class="{ 'bg-muted': statusFilter === 'all' }" @click="statusFilter = 'all'; fetchBlogs()">
                 All
               </Button>
               <Button
@@ -204,12 +257,13 @@ onMounted(() => {
 
         <!-- Clear Filters -->
         <Button
-          v-if="statusFilter !== 'all' || route.query.search"
+          v-if="statusFilter !== 'all' || searchQuery"
           variant="ghost"
           size="sm"
           class="h-9"
           @click="
             statusFilter = 'all';
+            searchQuery = '';
             $router.push({ path: $route.path, query: { page: undefined } });
             fetchBlogs();
           "
@@ -219,15 +273,37 @@ onMounted(() => {
         </Button>
       </div>
 
-      <!-- Add New Blog Button -->
-      <Button
-        v-if="authUser?.role === 'admin'"
-        @click="$router.push({ name: 'NewBlog' })"
-        class="flex items-center gap-2"
-      >
-        <Plus class="h-4 w-4" />
-        Add Blog
-      </Button>
+      <div v-if="authUser?.role === 'admin'" class="flex flex-wrap items-center gap-3">
+        <Select v-model="mailAudience">
+          <SelectTrigger class="h-9 w-[170px] bg-white">
+            <SelectValue placeholder="Send to" />
+          </SelectTrigger>
+          <SelectContent class="bg-white">
+            <SelectItem value="customers">Customers</SelectItem>
+            <SelectItem value="subscribers">Subscribers</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          class="h-9 flex items-center gap-2"
+          :disabled="selectedBlogCount === 0 || isSendingBlogMail"
+          @click="sendSelectedBlogsMail"
+        >
+          <Send class="h-4 w-4" />
+          {{ isSendingBlogMail ? 'Queuing...' : `Send Mail (${selectedBlogCount})` }}
+        </Button>
+
+        <!-- Add New Blog Button -->
+        <Button
+          @click="$router.push({ name: 'NewBlog' })"
+          class="flex items-center gap-2"
+        >
+          <Plus class="h-4 w-4" />
+          Add Blog
+        </Button>
+      </div>
     </div>
 
     <!-- Loading / Empty / Content -->
@@ -243,6 +319,13 @@ onMounted(() => {
       <Table>
         <TableHeader class="bg-muted/50">
           <TableRow>
+            <TableHead v-if="authUser?.role === 'admin'" class="w-12">
+              <Checkbox
+                :checked="isAllVisibleSelected"
+                aria-label="Select visible blogs"
+                @update:checked="(checked) => toggleVisibleSelection(checked === true)"
+              />
+            </TableHead>
             <TableHead>Title</TableHead>
             <TableHead>Slug</TableHead>
             <TableHead>Status</TableHead>
@@ -253,6 +336,13 @@ onMounted(() => {
         </TableHeader>
         <TableBody>
           <TableRow v-for="blog in filteredBlogs" :key="blog.id" class="hover:bg-gray-50/80">
+            <TableCell v-if="authUser?.role === 'admin'" class="w-12">
+              <Checkbox
+                :checked="selectedBlogIds.includes(blog.id)"
+                :aria-label="`Select ${blog.title || 'blog'}`"
+                @update:checked="(checked) => setBlogSelected(blog.id, checked === true)"
+              />
+            </TableCell>
             <TableCell class="font-medium">
               {{ blog.title || '—' }}
             </TableCell>
@@ -268,7 +358,7 @@ onMounted(() => {
               </Badge>
             </TableCell>
             <TableCell>
-              {{ blog.user?.name || 'Admin' }}
+              {{ blog.author?.name || 'Admin' }}
             </TableCell>
             <TableCell class="text-muted-foreground">
               {{ blog.published_at ? formatDate(blog.published_at) : '—' }}
@@ -277,7 +367,7 @@ onMounted(() => {
               <Button
                 variant="ghost"
                 size="sm"
-                @click="$router.push({ name: 'BlogDetails', params: { id: blog.id } })"
+                @click="$router.push({ name: 'Blog', params: { id: blog.id, slug: blog.slug } })"
               >
                 <Eye class="h-4 w-4 mr-1" />
                 View

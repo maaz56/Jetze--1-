@@ -1,5 +1,6 @@
 import apiService from "@/config/axios";
 import router from "@/config/router";
+import { getUserHomeRoute } from "@/services/routes/authorizedRoute";
 import {
     handleError,
     handleResponse,
@@ -7,6 +8,18 @@ import {
 } from "@/lib/apiResponseHandler";
 import { defineStore } from "pinia";
 import { toast } from "vue3-toastify";
+
+function getBrowserId() {
+    const storageKey = "browser_id";
+    let browserId = localStorage.getItem(storageKey);
+
+    if (!browserId) {
+        browserId = `br_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+        localStorage.setItem(storageKey, browserId);
+    }
+
+    return browserId;
+}
 
 export const useAuthStore = defineStore("auth", {
     state: () => ({
@@ -16,6 +29,7 @@ export const useAuthStore = defineStore("auth", {
         isLoading: false,
         success: false,
         validationMessages: null,
+        generalError: null,
     }),
 
     // getters: {
@@ -25,6 +39,12 @@ export const useAuthStore = defineStore("auth", {
     getters: {
         isAuthenticated: (state) => !!state.user,
         isEmailVerified: (state) => state.user?.email_verified ?? false,
+        hasPermission: (state) => (permission) => {
+            if (state.user?.role === 'admin') return true;
+
+            const permissions = Array.isArray(permission) ? permission : [permission];
+            return permissions.some((item) => state.user?.permissions?.includes(item)) ?? false;
+        }
     },
 
     actions: {
@@ -79,10 +99,24 @@ export const useAuthStore = defineStore("auth", {
         async requestLoginOtp(params) {
             this.isLoading = true;
             try {
+                const browserId = getBrowserId();
                 const response = await apiService.post(
                     "/login/request-otp",
-                    params,
+                    {
+                        ...params,
+                        browser_id: browserId,
+                    },
+                    {
+                        headers: {
+                            "X-Browser-Id": browserId,
+                        },
+                    }
                 );
+                if (response?.data?.skip_otp && response?.data?.token?.plainTextToken) {
+                    localStorage.setItem("access_token", response.data.token.plainTextToken);
+                    await this.fetchUser();
+                    router.push(getUserHomeRoute(this));
+                }
                 this.success = response?.status===200 || false;
                 return response;
             } catch (error) {
@@ -114,32 +148,9 @@ export const useAuthStore = defineStore("auth", {
                 this.user = response?.data?.data?.user;
 
                 if (this.success) {
-                    const role = this.user?.role;
-                    const approved = this.user?.is_approved;
-                    const filled = this.user?.is_formFilled;
-
-                    if (role === "admin") {
-                        router.push({ name: "Dashboard" });
-                    } else if (
-                        role === "agent" &&
-                        approved == "0" &&
-                        filled == "0"
-                    ) {
-                        router.push({ name: "AddAgentDetails" });
-                    } else if (role === "agent") {
-                        this.isLoggedIn = true;
-                        router.push({ name: "DashboardFlights" });
-                    } else if (role === "salesman" && approved == "1") {
-                        router.push({ name: "SalesmanUsers" });
-                    } else if (role === "reservation" && approved == "1") {
-                        router.push({ name: "ReservationUsers" });
-                    } else if (role === "customer") {
-                        this.isLoggedIn = true;
-                        this.isDialogOpen = false;
-                        // router.push({ name: "CustomerProfile" });
-                    } else {
-                        router.push({ name: "Login" });
-                    }
+                    this.isLoggedIn = true;
+                    this.isDialogOpen = false;
+                    router.push(getUserHomeRoute(this));
                 }
 
                 return response.data;
@@ -161,7 +172,8 @@ export const useAuthStore = defineStore("auth", {
                 );
                 localStorage.setItem("access_token", response.data.token.plainTextToken);
                 
-                this.fetchUser();
+                await this.fetchUser();
+                router.push(getUserHomeRoute(this));
                 
                 return response;
             } catch (error) {
@@ -176,6 +188,8 @@ export const useAuthStore = defineStore("auth", {
         async register(params) {
             console.log(params);
             this.isLoading = true;
+            this.generalError = null;
+            this.validationMessages = null;
             try {
                 const response = await apiService.post("/register", params);
                 console.log(response);
@@ -234,9 +248,17 @@ export const useAuthStore = defineStore("auth", {
                 }
             } catch (error) {
                 this.success = false;
-                console.log(error.response.data.message);
-                // toast(error.response.data.message.details);
-                // handleError(error);
+                console.error(error);
+                
+                const description = error?.response?.data?.message?.description 
+                    || error?.response?.data?.message 
+                    || "Registration failed. Please check the fields and try again.";
+                const details = error?.response?.data?.message?.details;
+                
+                const finalMessage = details ? `${description}: ${details}` : description;
+                toast.error(finalMessage);
+                
+                this.generalError = finalMessage;
                 this.validationMessages = handleValidationMessage(error);
             } finally {
                 this.isLoading = false;

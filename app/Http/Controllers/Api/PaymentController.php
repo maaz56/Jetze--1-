@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\CustomerSetting;
 use App\Models\DepositData;
 use App\Models\FlightBookings;
 use Auth;
@@ -22,6 +23,20 @@ class PaymentController extends Controller
     protected $abhiPaySecretKey;
     protected $abhiPayMerchant;
     protected $abhiPayInvoiceSecretKey;
+
+    private function resolveOneBillCharge(float $amount): float
+    {
+        $customerSetting = CustomerSetting::first();
+        if (!$customerSetting) {
+            return 0;
+        }
+
+        $fixedCharge = (float) ($customerSetting->one_bill_fixed_charge ?? 0);
+
+
+        return $fixedCharge;
+    }
+
     public function __construct()
     {
         $this->abhiPayBaseURl = env(
@@ -81,13 +96,14 @@ class PaymentController extends Controller
     {
         Log::info('AbhiPay Deposit Init Request:', $request->all());
         $user = Auth::user();
+        $charges = $this->resolveOneBillCharge((float) $request->amount);
+        $request->merge([
+            'amount' => (int) round((float) $request->amount + $charges),
+        ]);
         $customer = Customer::where('user_id', $user->id)->first();
         Log::info($customer);
         $tid = Str::random(10) . time();
         $depositDataController = new DepositDataController();
-        $request->merge([
-            'amount' => (int) $request->amount + 500,
-        ]);
 
         $depositData = $depositDataController->store($request);
         $depositData = json_decode($depositData->getContent(), true);
@@ -185,6 +201,10 @@ class PaymentController extends Controller
     {
         Log::info('AbhiPay Bank Init Request:', $request->all());
         $user = Auth::user();
+        $charges = $this->resolveOneBillCharge((float) $request->amount);
+        $request->merge([
+            'amount' => (int) round((float) $request->amount + $charges),
+        ]);
         $customer = Customer::where('user_id', $user->id)->first();
         Log::info($customer);
         $tid = Str::random(10) . time();
@@ -203,7 +223,7 @@ class PaymentController extends Controller
             ->addMinutes(20)
             ->format('Y-m-d\TH:i:s.000');
         $payload = [
-            "amount" => (int) $request->amount + 500,
+            "amount" => (int) $request->amount ,
             "merchantId" => $this->abhiPayMerchant,
             "currency" => $request->currency ?? "PKR",
             "firstName" => $customer->name,

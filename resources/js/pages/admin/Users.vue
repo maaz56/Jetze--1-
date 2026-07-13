@@ -103,6 +103,7 @@ const fetchUsers = debounce(() => {
         page: route.query.page,
         approval_status: approvalFilter.value !== 'all' ? approvalFilter.value : undefined,
         role: effectiveRole,
+        type: 'customer'
     });
 }, 300);
 
@@ -288,7 +289,7 @@ onMounted(() => {
                 <div class="relative overflow-hidden">
                     <div class="overflow-x-auto">
                         <Table>
-                            <TableHeader class="bg-muted">
+                            <TableHeader class="bg-primary">
                                 <TableRow>
                                     <TableHead scope="col" class="px-4 py-3">Agent Uid</TableHead>
                                     <TableHead scope="col" class="px-4 py-3">Role</TableHead>

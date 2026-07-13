@@ -1296,12 +1296,12 @@ onMounted(() => {
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="line-clamp-2">
                                         {{
                                             agentData?.agent_data?.address ||
-                                            "Address1234SheikhpuraRoad, Lahore,Pakistan"
+                                            "Address line 1,SheikhpuraRoad, Lahore,Pakistan"
                                         }}
                                        
                                     </p>
@@ -1337,7 +1337,7 @@ onMounted(() => {
                                         </p>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
-                                        <p class="">GDS PNR:</p>
+                                        <p class="">PNR:</p>
                                         <!-- {{ pnrDetails?.bookingId ? pnrDetails?.bookingId : booking?.pnr || "-" }} -->
                                         <p class="font-semibold">
                                             {{ booking?.itinerary_ref }}
@@ -2041,7 +2041,7 @@ segment, segmentIndex
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="">
                                         {{
@@ -2085,7 +2085,7 @@ date, dateIndex
                                         </p>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
-                                        <p class="">GDS PNR:</p>
+                                        <p class="">PNR:</p>
                                         <p class="font-semibold">
                                             {{
                                                 pnrDetails?.bookingId

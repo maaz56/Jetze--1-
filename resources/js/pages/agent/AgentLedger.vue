@@ -92,7 +92,7 @@ function getReferenceLabel(transaction) {
 function getDetailsLabel(transaction) {
     if (!transaction) return "-";
     const type = (transaction.transaction_type || "").toLowerCase();
-    if (type === "booking") {
+    if (type === "booking" || type === "manually_issued") {
         const pnr = transaction.pnr_ref || transaction.details || transaction.reference_id;
         return `Flight booking details (${pnr || "-"})`;
     }
@@ -112,7 +112,7 @@ function getReferenceRoute(transaction) {
     if (!transaction) return null;
     const type = (transaction.transaction_type || "").toLowerCase();
 
-    if (type === "booking") {
+    if (type === "booking" || type === "manually_issued") {
         const flightProvider = normalizeFlightProvider(transaction.flight_provider);
         if (!flightProvider) return null;
 
@@ -134,7 +134,7 @@ function getReferenceRoute(transaction) {
 function canOpenReference(transaction) {
     if (!transaction) return false;
     const type = (transaction.transaction_type || "").toLowerCase();
-    return type === "deposit" || type === "booking";
+    return type === "deposit" || type === "booking" || type === "manually_issued";
 }
 
 async function openDepositDialog(transaction) {
@@ -274,6 +274,11 @@ const formatCurrency = (value) => {
 const capitalize = (string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
 };
+const formatTransactionType = (transactionType) => {
+    if (!transactionType) return "-";
+    if (transactionType === "manually_issued") return "Manually Issued";
+    return capitalize(transactionType.replaceAll("_", " "));
+};
 watch(user_id, (newUserId) => {
     if (newUserId) {
         fetchAgent();
@@ -400,7 +405,11 @@ onMounted(() => {
                     {{ formatDate(transaction.date) }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
-                    {{ capitalize(transaction?.transaction_type) }}
+                    <div>{{ formatTransactionType(transaction?.transaction_type) }}</div>
+                    <p v-if="transaction?.transaction_type === 'manually_issued'"
+                      class="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Manually issued (no ledger deduction)
+                    </p>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
                     <button

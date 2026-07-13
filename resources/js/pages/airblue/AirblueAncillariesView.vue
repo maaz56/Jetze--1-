@@ -78,7 +78,11 @@ const selectedAncillariesList = ref([])
 const bookingDetails = ref(null)
 const timerInterval = ref();
 const expiryTime = ref(null);
-
+// Add this with your other ref declarations (around line 50-60)
+const isSeatSelectionDialogOpen = ref(false);
+const missingSeatsList = ref([]);
+const isAncillaryErrorDialogOpen = ref(false);
+const ancillaryPatchErrors = ref([]);
 const pnrData = ref(null)
 const countdown = ref(null)
 const ancillaries = ref(null)
@@ -434,6 +438,18 @@ const isSeatSelected = (segmentIndex, passengerIndex, rowNumber, seatNumber) => 
     return selectedSeats.value[key]?.row === rowNumber && selectedSeats.value[key]?.seat === seatNumber
 }
 
+const isSeatTakenByAnotherPassenger = (segmentRPH, travelerRefNumber, rowNumber, seatNumber) => {
+    return Object.entries(selectedSeats.value).some(([key, seat]) => {
+        const [selectedSegmentRPH, selectedTravelerRef] = key.split('-')
+        return (
+            String(selectedSegmentRPH) === String(segmentRPH) &&
+            String(selectedTravelerRef) !== String(travelerRefNumber) &&
+            String(seat?.row) === String(rowNumber) &&
+            String(seat?.seat) === String(seatNumber)
+        )
+    })
+}
+
 const getSelectedSeatFeatures = (segmentIndex, passengerIndex) => {
     const key = `${segmentIndex}-${passengerIndex}`
     return selectedSeats.value[key]?.features || ''
@@ -477,6 +493,12 @@ const selectSeat = (segmentRPH, traveler, rowNumber, seatNumber, seatData) => {
     }
 
     const TravelerRefNumber = traveler?.TravelerRefNumber?.["@attributes"]?.RPH || null
+    if (!TravelerRefNumber) return
+
+    if (isSeatTakenByAnotherPassenger(segmentRPH, TravelerRefNumber, rowNumber, seatNumber)) {
+        return
+    }
+
     const key = `${segmentRPH}-${TravelerRefNumber}`
 
     // If already selected, deselect it
@@ -607,7 +629,7 @@ const getSegmentFromKey = (key) => {
 }
 
 // Patch ancillary charges
-function patchAncillaryCharges() {
+async function patchAncillaryCharges() {
     if (!bookingDetails.value?.[0]?.id) return
 
     const seatData = {
@@ -621,7 +643,7 @@ function patchAncillaryCharges() {
         }))
     }
 
-    store.dispatch(`flight/${PATCH_ANCILLARIES}`, {
+    return await store.dispatch(`flight/${PATCH_ANCILLARIES}`, {
         booking_id: bookingDetails.value[0].id,
         flight_provider: flightProvider.value,
         pnr: pnrData.value,
@@ -640,9 +662,9 @@ function patchAncillaryCharges() {
 }
 
 // Update booking amount
-function updateBookingAmount() {
+async function updateBookingAmount() {
     if (!bookingDetails.value?.[0]?.id) return
-    store.dispatch(`flight/${UPDATE_BOOKING_AMOUNT}`, {
+    return await store.dispatch(`flight/${UPDATE_BOOKING_AMOUNT}`, {
         booking_id: bookingDetails.value[0].id,
         amount: parseFloat(bookingDetails.value[0].amount) + parseFloat(grandTotal.value),
         add_ones_amount: parseFloat(grandTotal.value)
@@ -704,26 +726,22 @@ const validateSeatsBeforeProceed = () => {
 
     return missingSeats
 }
-
+// Add this with your other methods
+const closeSeatSelectionDialog = () => {
+    isSeatSelectionDialogOpen.value = false
+    missingSeatsList.value = []
+}
+const closeAncillaryErrorDialog = () => {
+    isAncillaryErrorDialogOpen.value = false
+}
 // Proceed to payment
-function proceedToPayment() {
+async function proceedToPayment() {
     const missingSeats = validateSeatsBeforeProceed()
 
     if (missingSeats.length > 0) {
-        let errorMessage = "Please select seats for all passengers before proceeding:\n\n"
-        missingSeats.forEach(item => {
-            errorMessage += `${item.passenger}:\n`
-            item.flights.forEach(flight => {
-                errorMessage += `  • ${flight}\n`
-            })
-            errorMessage += '\n'
-        })
-
-        toast.error(errorMessage, {
-            autoClose: false,
-            closeButton: true,
-            closeOnClick: false
-        })
+        // Store missing seats data and show dialog instead of toast
+        missingSeatsList.value = missingSeats
+        isSeatSelectionDialogOpen.value = true
 
         // Open seats accordion
         if (!openAccordions.value.includes('seats')) {
@@ -735,11 +753,13 @@ function proceedToPayment() {
     }
 
     isSaving.value = true;
+    ancillaryPatchErrors.value = [];
+    isAncillaryErrorDialogOpen.value = false;
 
-    patchAncillaryCharges()
-    updateBookingAmount()
+    try {
+        await patchAncillaryCharges()
+        await updateBookingAmount()
 
-    setTimeout(() => {
         isSaving.value = false
         localStorage.removeItem("booking_expiry") // Clear timer on successful completion
 
@@ -756,7 +776,13 @@ function proceedToPayment() {
         })
 
         toast.success('Ancillaries saved successfully')
-    }, 1000)
+    } catch (err) {
+        isSaving.value = false
+        const apiErrors = err?.response?.data?.errors
+        const fallbackMessage = err?.response?.data?.message || "Ancillaries failed to patch."
+        ancillaryPatchErrors.value = Array.isArray(apiErrors) && apiErrors.length ? apiErrors : [fallbackMessage]
+        isAncillaryErrorDialogOpen.value = true
+    }
 }
 
 // Close ancillaries
@@ -1196,6 +1222,11 @@ onUnmounted(() => {
                                                                      {{ formatAmount(seat?.Service?.Fee?.['@attributes']?.Amount || 0) }}
                                                                 </div>
                                                             </div>
+                                                        </div>
+                                                        <div v-else-if="isSeatTakenByAnotherPassenger(segment?.FlightSegmentInfo['@attributes']?.RPH, getPassengerTravelerRef(pax.index), row['@attributes'].RowNumber, seat.Summary['@attributes'].SeatNumber)"
+                                                            class="w-10 h-10 bg-gray-300 border border-gray-500 rounded flex items-center justify-center text-xs text-gray-700 cursor-not-allowed opacity-80"
+                                                            title="Selected by another passenger">
+                                                            {{ seat.Summary['@attributes'].SeatNumber }}
                                                         </div>
                                                         
                                                         <div v-else
@@ -1705,6 +1736,99 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
+        <!-- Seat Selection Required Dialog -->
+<!-- Seat Selection Required Dialog -->
+<div v-if="isSeatSelectionDialogOpen"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+    @click.self="closeSeatSelectionDialog">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+        <div class="flex items-start justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Seat Selection Required</h3>
+            <button @click="closeSeatSelectionDialog"
+                class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="mt-2">
+            <p class="text-sm text-gray-800 font-medium">
+                Airblue requires you to:
+            </p>
+            <p class="text-sm text-gray-600 mt-1">
+                select and purchase a seat to complete this booking.
+            </p>
+
+            <!-- Missing seats details -->
+            <div v-if="missingSeatsList.length > 0" class="mt-4 bg-amber-50 rounded-md p-3">
+                <p class="text-xs font-medium text-amber-800 mb-2">Passengers needing seat selection:</p>
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                    <div v-for="(item, index) in missingSeatsList" :key="index" class="border-b border-amber-200 pb-2 last:border-0">
+                        <p class="text-sm font-medium text-gray-800">{{ item.passenger }}</p>
+                        <div class="ml-4 mt-1">
+                            <p v-for="(flight, fIdx) in item.flights" :key="fIdx" class="text-xs text-gray-600 flex items-center gap-2">
+                                <span class="w-1 h-1 bg-amber-500 rounded-full"></span>
+                                {{ flight }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-3">
+                You can select seats from the "Seat Selection" section above.
+            </p>
+
+            <div v-if="error" class="mt-3 p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                {{ error }}
+            </div>
+        </div>
+
+        <div class="mt-6 w-full space-x-3">
+            
+            <button @click="closeSeatSelectionDialog"
+                class="px-4 py-2 w-full bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                Select Seats
+            </button>
+        </div>
+    </div>
+</div>
+<div v-if="isAncillaryErrorDialogOpen"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+    @click.self="closeAncillaryErrorDialog">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+        <div class="flex items-start justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Unable to Add Ancillaries</h3>
+            <button @click="closeAncillaryErrorDialog"
+                class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="mt-2">
+            <p class="text-sm text-gray-700 mb-3">
+                Airblue returned the following error(s). Please update your selection and try again:
+            </p>
+            <div class="bg-red-50 rounded-md p-3 space-y-2 max-h-56 overflow-y-auto">
+                <p v-for="(item, idx) in ancillaryPatchErrors" :key="idx" class="text-sm text-red-700">
+                    {{ item }}
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <button @click="closeAncillaryErrorDialog"
+                class="px-4 py-2 w-full bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
     </div>
 </template>
 

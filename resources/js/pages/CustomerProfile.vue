@@ -21,8 +21,11 @@ import {
     Download,
     Share,
     ChevronRight,
+    UserRound,
+    WalletCards,
+    ListChecks,
 } from "lucide-vue-next";
-import { Plus, Receipt, TicketCheck, Ban, CirclePause } from "lucide-vue-next";
+import { Plus, Receipt, TicketCheck, Ban, CirclePause, CircleX } from "lucide-vue-next";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import {
@@ -81,6 +84,8 @@ const router = useRouter();
 const activeTab = ref(route.query.tab || 'profile')
 
 const loading = ref(true);
+const bookingsLoading = ref(true);
+const bookingsError = ref(null);
 const error = ref(null);
 const authStore = useAuthStore();
 const transactionStore = useTransactionStore();
@@ -176,17 +181,25 @@ async function fetchCustomer() {
 const bookings = computed(() => store.getters["flight/bookingData"]);
 const customer = computed(() => store.getters["customer/customer"]);
 
-function fetchBookings() {
+async function fetchBookings() {
     if (!user_id?.value) return;
-    store.dispatch("flight/" + FETCH_BOOKING_DATA, {
-        userRole: user_role?.value,
-        booking_mode: 'B2C',
-        userId: user_id.value,
-        bookingFilter: "all",
+    bookingsLoading.value = true;
+    bookingsError.value = null;
 
-        searchQuery: searchQuery.value,
-        dateRange: dateRange.value
-    });
+    try {
+        await store.dispatch("flight/" + FETCH_BOOKING_DATA, {
+            userRole: user_role?.value,
+            booking_mode: 'B2C',
+            userId: user_id.value,
+            bookingFilter: activeFilter.value,
+            searchQuery: searchQuery.value,
+            dateRange: dateRange.value
+        });
+    } catch (e) {
+        bookingsError.value = "Failed to load bookings. Please try again.";
+    } finally {
+        bookingsLoading.value = false;
+    }
 }
 
 
@@ -322,41 +335,44 @@ watch(user_id, (id) => {
 </script>
 
 <template>
-    <div class="container mx-auto px-4 gap-6 md:gap-4 p-4 md:p-6">
+    <div class="container mx-auto px-4 gap-6 md:gap-4 p-4 md:p-6 max-[320px]:px-2">
 
         <div class="bg-white border-b border-gray-200 rounded-t-lg">
-            <div class="flex overflow-x-auto">
+            <div class="flex overflow-x-auto sm:overflow-x-visible scrollbar-hide">
                 <button @click="activeTab = 'profile'" :class="[
-                    'px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-colors',
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'profile'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-600 hover:text-gray-900'
                 ]">
+                    <UserRound class="h-4 w-4" aria-hidden="true" />
                     My Profile
                 </button>
                 <button @click="activeTab = 'bookings'" :class="[
-                    'px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-colors',
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'bookings'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-600 hover:text-gray-900'
                 ]">
+                    <TicketCheck class="h-4 w-4" aria-hidden="true" />
                     Bookings Overview
                 </button>
                 <button @click="activeTab = 'deposits'" :class="[
-                    'px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-colors',
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'deposits'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-600 hover:text-gray-900'
                 ]">
+                    <WalletCards class="h-4 w-4" aria-hidden="true" />
                     Deposit Overview
                 </button>
-                
                 <button @click="activeTab = 'wallet'" :class="[
-                    'px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-colors',
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'wallet'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-600 hover:text-gray-900'
                 ]">
+                    <ListChecks class="h-4 w-4" aria-hidden="true" />
                     Transactions Overview
                 </button>
             </div>
@@ -376,7 +392,7 @@ watch(user_id, (id) => {
                                     Account information
                                 </CardDescription>
                             </div>
-                            <Button @click="openEditDialog"
+                            <Button @click="openEditDialog" variant="ghost"
                                 class="bg-white text-primary hover:bg-gray-100 ">Edit</Button>
 
                             <!-- Edit Profile Dialog -->
@@ -474,9 +490,9 @@ watch(user_id, (id) => {
             </div>
 
             <!-- Bookings Overview Tab -->
-            <div v-show="activeTab === 'bookings'" class="p-6">
+            <div v-show="activeTab === 'bookings'" class="p-6 ">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6">Bookings Overview</h2>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-primary/10 rounded-md p-4 flex items-center cursor-pointer transition hover:shadow-md"
                         :class="{ 'ring-1 ring-primary': activeFilter === 'all' }" @click="filterBookings('all')">
                         <CalendarIcon class="h-8 w-8 text-primary mr-4" />
@@ -523,25 +539,56 @@ watch(user_id, (id) => {
                             </p>
                         </div>
                     </div>
-                </div>
 
-                <div class="w-full md:w-1/2 mb-2 mt-2 ">
-                    <div class="flex items-center gap-2">
-                        <label for="simple-search" class="sr-only">Search</label>
-                        <div class="relative w-full">
-
-                            <input v-model="searchQuery" type="text" id="simple-search"
-                                class="ring-0 outline-none border bg-white h-10 border-gray-300 text-gray-900 text-sm rounded-md focus:ring-primary focus:border-primary block w-full pl-10 p-2 "
-                                placeholder="Search" required="" />
+                    <div class="bg-purple-50 rounded-md p-4 flex items-center cursor-pointer transition hover:shadow-md"
+                        :class="{ 'ring-1 ring-purple-500': activeFilter === 'voided' }"
+                        @click="filterBookings('voided')">
+                        <CircleX class="h-8 w-8 text-purple-500 mr-4" />
+                        <div>
+                            <p class="text-sm font-medium text-purple-600">Voided</p>
+                            <p class="text-2xl font-bold text-purple-800">
+                                {{ bookings?.total_voided ?? 0 }}
+                            </p>
                         </div>
-                        <DateRangePicker heading="Select Date Range" v-model="dateRange" />
-                        <Button class=" text-white" @click="fetchBookings">Search</Button>
                     </div>
                 </div>
-                <div class="bg-white  relative sm:rounded-lg border border-gray-300 overflow-hidden">
+
+                <div class="w-full md:w-1/2 mb-2 mt-2">
+                    <div class="flex flex-row flex-nowrap items-center gap-2">
+                        <label for="simple-search" class="sr-only">Search</label>
+                        <div class="relative flex-1 min-w-[60px] sm:min-w-[80px] md:min-w-[100px]">
+                            <input v-model="searchQuery" type="text" id="simple-search"
+                                class="ring-0 outline-none border bg-white h-10 border-gray-300 text-gray-900 text-sm rounded-md focus:ring-primary focus:border-primary block w-full pl-10 p-2"
+                                placeholder="Search" required="" />
+                        </div>
+                        <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                            <div class="hidden xs:block">
+                                <DateRangePicker heading="Select Date Range" v-model="dateRange" />
+                            </div>
+                            <Button class="text-white whitespace-nowrap px-3 sm:px-4 text-xs sm:text-sm" @click="fetchBookings"
+                                :disabled="bookingsLoading">
+                                <LoaderIcon v-if="bookingsLoading" class="mr-2 h-4 w-4 animate-spin" />
+                                {{ bookingsLoading ? 'Loading…' : 'Search' }}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white relative sm:rounded-lg border-2 sm:border border-gray-300 overflow-x-auto">
                     <div class="overflow-x-auto">
+                        <div v-if="bookingsLoading" class="flex min-h-64 flex-col items-center justify-center px-4 py-12"
+                            role="status" aria-live="polite">
+                            <LoaderIcon class="h-10 w-10 animate-spin text-primary" />
+                            <p class="mt-3 text-sm font-medium text-gray-600">Loading bookings…</p>
+                        </div>
+
+                        <div v-else-if="bookingsError" class="flex min-h-64 flex-col items-center justify-center px-4 py-12 text-center">
+                            <InboxIcon class="h-10 w-10 text-red-400" />
+                            <p class="mt-3 font-medium text-red-600">{{ bookingsError }}</p>
+                            <Button class="mt-4 text-white" @click="fetchBookings">Try again</Button>
+                        </div>
+
                         <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400"
-                            v-if="bookings?.bookings?.length > 0">
+                            v-else-if="bookings?.bookings?.length > 0">
 
                             <thead
                                 class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
@@ -624,7 +671,7 @@ watch(user_id, (id) => {
 
                                             </div>
                                         </div>
-                                       
+
                                     </td>
 
                                     <td>
@@ -658,23 +705,27 @@ watch(user_id, (id) => {
                                         </div>
 
                                     </td>
-                                    <td class="py-2 px-4 uppercase">{{ booking.status }}</td>
+                                    <td class="py-2 px-4">
+                                        {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                    </td>
                                     <td v-if="booking?.status === 'booked'" class="py-2 px-4">
-  <span
-    class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
-           bg-amber-100 text-amber-700 border border-amber-300
-           "
-  >
-    {{ getRemainingTime(booking.expiry_time) }}
-  </span>
-</td>
-                                    <td v-else class="py-2 px-4  uppercase"><span
-    class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
-           bg-amber-100 text-amber-700 border border-amber-300
-           "
-  >
-    N/A
-  </span></td>
+                                        <span
+                                            class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
+                                                bg-amber-100 text-amber-700 border border-amber-300
+                                                "
+                                        >
+                                            {{ getRemainingTime(booking.expiry_time) }}
+                                        </span>
+                                    </td>
+                                    <td v-else class="py-2 px-4  uppercase">
+                                        <span
+                                        class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
+                                            bg-amber-100 text-amber-700 border border-amber-300
+                                            "
+                                    >
+                                        N/A
+                                        </span>
+                                    </td>
                                     <td class="px-1 py-4">
                                         <div class="flex space-x-2">
                                             <div class="flex space-x-2">
@@ -883,3 +934,14 @@ watch(user_id, (id) => {
         </teleport>
     </div>
 </template>
+
+<style scoped>
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+</style>

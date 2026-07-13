@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/services/stores/auth";
+import { getFirstAllowedAdminRoute, getUserHomeRoute, routePermissions } from "@/services/routes/authorizedRoute";
 import { createRouter, createWebHistory } from "vue-router";
 import routes from "../services/routes";
 
@@ -20,21 +21,7 @@ router.beforeEach(async (to, from, next) => {
 
     const loginPages = ["Login", "Register", "AgentRegister"];
     if (isAuthenticated && loginPages.includes(to.name)) {
-        if (["admin"].includes(user.role)) {
-            if (to.name !== "Dashboard") return next({ name: "Dashboard" });
-        } else if (user.role === "agent") {
-            if (isAuthenticated && isEmailVerified) {
-                if (to.name !== "AgentDashboard") return next({ name: "AgentDashboard" });
-            } else {
-                if (to.name !== "AgentDashboard") return next({ name: "AgentDashboard" });
-            }   
-        } else if (user.role === "salesman") {
-            if (to.name !== "SalesmanUsers") return next({ name: "SalesmanUsers" });
-        }else if (user.role === "reservation") {
-            if (to.name !== "ReservationUsers") return next({ name: "ReservationUsers" });
-        } else {
-            return next({ name: "Login" });
-        }
+        return next(getUserHomeRoute(authStore));
     }
 
     if (to.meta.requiresAuth) {
@@ -42,17 +29,16 @@ router.beforeEach(async (to, from, next) => {
             return next({ name: "Login" });
         } else {
             const requiredRole = to.meta.requiredRole;
-            if (user.role !== requiredRole) {
-                if (["admin", "reservation", "accounts"].includes(user.role)) {
-                    if (to.name !== "Dashboard") return next({ name: "Dashboard" });
-                } else if (user.role === "agent") {
-                    if (to.name !== "AgentDashboard") return next({ name: "AgentDashboard" });
-                } else if (user.role === "salesman") {
-                    if (to.name !== "SalesmanUsers") return next({ name: "SalesmanUsers" });
-                } else if (user.role === "reservation") {
-                    if (to.name !== "ReservationUsers") return next({ name: "ReservationUsers" });
+            if (requiredRole && user.role !== requiredRole && user.role !== 'admin') {
+                return next(getFirstAllowedAdminRoute(authStore));
+            }
+
+            const requiredPermissions = routePermissions(to.meta);
+            if (requiredPermissions.length && !requiredPermissions.some((permission) => authStore.hasPermission(permission))) {
+                if (user.role === 'admin') {
+                    return next({ name: "Dashboard" });
                 } else {
-                    if (to.name !== "Login") return next({ name: "Login" });
+                    return next(getFirstAllowedAdminRoute(authStore));
                 }
             }
         }

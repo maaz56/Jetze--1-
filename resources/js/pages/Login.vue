@@ -247,13 +247,23 @@ function handleLogout() {
 }
 
 function handleUserDashboard() {
-  //console.log("User Dashboard Accessed", user.value)
-  if (user?.value.role === 'admin') {
-    router.push({ name: 'Dashboard' }); // Replace with actual admin route name
-  } else if (user?.value.is_formFilled === 0) {
-    router.push({ name: 'AddAgentDetails' });
+  if (!user?.value) return;
+
+  const role = user.value.role;
+
+  if (role === 'admin') {
+    router.push({ name: 'Dashboard' });
+  } else if (role === 'agent') {
+    if (user.value.is_formFilled === 0) {
+      router.push({ name: 'AddAgentDetails' });
+    } else {
+      router.push({ name: 'DashboardFlights' });
+    }
+  } else if (role === 'customer' || role === 'user') {
+    router.push({ name: 'CustomerProfile' });
   } else {
-    router.push({ name: 'DashboardFlights' });
+    // This covers reservation, accounts, salesman and any custom roles created in the database
+    router.push({ name: 'AdminCustomerBookings' });
   }
 }
 

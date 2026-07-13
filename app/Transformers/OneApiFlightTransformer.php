@@ -37,11 +37,7 @@ class OneApiFlightTransformer
         $ondKey = "$origin/$destination";
         $deptDateMap = $apiResponse['ondWiseFlightCombinations'][$ondKey]['dateWiseFlightCombinations'] ?? null;
         if (empty($deptDateMap) || !is_array($deptDateMap)) {
-            Log::info('OneApiFlightTransformer: empty dateWiseFlightCombinations for departure.', [
-                'ond_key' => $ondKey,
-                'departure_date' => $params['departure_date'] ?? null,
-                'flight_type' => $params['flight_type'] ?? null,
-            ]);
+           
             return [];
         }
 
@@ -54,15 +50,11 @@ class OneApiFlightTransformer
             ]);
             return [];
         }
-        Log::info($params['flight_type']);
         if ($params['flight_type'] === 'return') {
             $returnOndKey = "$destination/$origin";
             $arrDateMap = $apiResponse['ondWiseFlightCombinations'][$returnOndKey]['dateWiseFlightCombinations'] ?? null;
             if (empty($arrDateMap) || !is_array($arrDateMap)) {
-                Log::info('OneApiFlightTransformer: empty dateWiseFlightCombinations for return.', [
-                    'ond_key' => $returnOndKey,
-                    'return_date' => $params['return_date'] ?? null,
-                ]);
+              
                 return [];
             }
 
@@ -87,7 +79,6 @@ class OneApiFlightTransformer
 
                 $oneApiService = new OneApiService();
                 $response = $oneApiService->getPrice($flight, $params);
-                Log::info($response);
                 $pricing = json_decode($response, true);
                 if (!isset($pricing['Body']['OTA_AirPriceRS']['PricedItineraries']['PricedItinerary'])) {
                     continue;
@@ -132,7 +123,6 @@ class OneApiFlightTransformer
                 ];
 
             }
-            Log::info($result);
             return $result;
         }
 
@@ -156,7 +146,6 @@ class OneApiFlightTransformer
                     $flight[1]['segments'] = $arrSegment;
                     $oneApiService = new OneApiService();
                     $response = $oneApiService->getPrice($flight, $params);
-                    Log::info($response);
                     $pricing = json_decode($response, true);
                     if (!isset($pricing['Body']['OTA_AirPriceRS']['PricedItineraries']['PricedItinerary'])) {
                         continue;
@@ -391,7 +380,6 @@ class OneApiFlightTransformer
                             ($ptc['PassengerTypeQuantity']['@attributes']['Code'] !== 'INF' ? (float) ($service['perPaxBundledFee'] ?? 0) : 0)
                         ),
                     ];
-                    Log::info($service);
                     $serviceDescription = $this->normalizeDescriptionToString($service['description'] ?? null);
                     foreach ($segments as $segment) {
                         $parsedBaggages = $this->extractBaggagePoliciesFromDescription($serviceDescription);

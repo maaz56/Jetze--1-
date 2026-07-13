@@ -10,8 +10,6 @@
           Back
         </Button>
       </div>
-      <pre>{{ blogRoutes }}</pre>
-
       <form @submit.prevent="submitForm" class="space-y-10">
         <!-- Main Content -->
         <section class="space-y-6">
@@ -57,6 +55,7 @@
               placeholder="Short description shown in search results and social previews..."
               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition"
             ></textarea>
+            <p v-if="errors.excerpt" class="mt-1.5 text-sm text-red-600">{{ errors.excerpt }}</p>
           </div>
 
           <div>
@@ -119,6 +118,7 @@
                 </button>
               </div>
             </div>
+            <p v-if="errors.featured_image" class="mt-1.5 text-sm text-red-600">{{ errors.featured_image }}</p>
           </div>
         </section>
 
@@ -234,6 +234,7 @@
                   </button>
                 </div>
               </div>
+              <p v-if="errors.og_image" class="mt-1.5 text-sm text-red-600">{{ errors.og_image }}</p>
             </div>
 
             <p v-if="socialImageMode === 'featured' && form.featured_image_preview" class="mt-3 text-sm text-green-700">
@@ -252,6 +253,7 @@
               placeholder="https://example.com/original-post"
               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition"
             />
+            <p v-if="errors.canonical_url" class="mt-1.5 text-sm text-red-600">{{ errors.canonical_url }}</p>
           </div>
 
           <div class="flex gap-8 pt-3">
@@ -327,6 +329,8 @@ const errors = reactive({});
 const isSubmitting = ref(false);
 const isFetching = ref(false);
 const thisBlog = ref([]);
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 
 const metaTitleLength = computed(() => form.meta_title?.length || 0);
 const metaDescLength = computed(() => form.meta_description?.length || 0);
@@ -342,6 +346,126 @@ const metaDescLengthClass = computed(() => {
   if (metaDescLength.value > 120) return 'text-amber-600 text-xs';
   return 'text-green-600 text-xs';
 });
+
+function extractPlainTextFromHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html || '';
+  return (div.textContent || div.innerText || '').trim();
+}
+
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function clearErrors() {
+  Object.keys(errors).forEach((key) => {
+    errors[key] = '';
+  });
+}
+
+function validateImageFile(file, fieldName) {
+  if (!file) return true;
+
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    errors[fieldName] = 'Only JPG, JPEG, PNG, or WEBP images are allowed.';
+    return false;
+  }
+
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    errors[fieldName] = 'Image size must not exceed 5MB.';
+    return false;
+  }
+
+  errors[fieldName] = '';
+  return true;
+}
+
+function validateForm() {
+  clearErrors();
+  let isValid = true;
+
+  if (!form.title?.trim()) {
+    errors.title = 'Title is required.';
+    isValid = false;
+  } else if (form.title.trim().length > 255) {
+    errors.title = 'Title must not exceed 255 characters.';
+    isValid = false;
+  }
+
+  if (!form.slug?.trim()) {
+    errors.slug = 'Slug is required.';
+    isValid = false;
+  } else if (form.slug.trim().length > 255) {
+    errors.slug = 'Slug must not exceed 255 characters.';
+    isValid = false;
+  } else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug.trim())) {
+    errors.slug = 'Slug may only contain lowercase letters, numbers, and single hyphens.';
+    isValid = false;
+  }
+
+  const plainContent = extractPlainTextFromHtml(form.content);
+  if (!plainContent) {
+    errors.content = 'Content is required.';
+    isValid = false;
+  }
+
+  if (form.excerpt && form.excerpt.length > 500) {
+    errors.excerpt = 'Excerpt must not exceed 500 characters.';
+    isValid = false;
+  }
+
+  if (form.focus_keyword && form.focus_keyword.length > 255) {
+    errors.focus_keyword = 'Focus keyword must not exceed 255 characters.';
+    isValid = false;
+  }
+
+  if (form.meta_title && form.meta_title.length > 255) {
+    errors.meta_title = 'Meta title must not exceed 255 characters.';
+    isValid = false;
+  }
+
+  if (form.meta_description && form.meta_description.length > 500) {
+    errors.meta_description = 'Meta description must not exceed 500 characters.';
+    isValid = false;
+  }
+
+  if (form.og_title && form.og_title.length > 255) {
+    errors.og_title = 'OG title must not exceed 255 characters.';
+    isValid = false;
+  }
+
+  if (form.canonical_url && !isValidUrl(form.canonical_url)) {
+    errors.canonical_url = 'Canonical URL must be a valid URL.';
+    isValid = false;
+  } else if (form.canonical_url && form.canonical_url.length > 500) {
+    errors.canonical_url = 'Canonical URL must not exceed 500 characters.';
+    isValid = false;
+  }
+
+  if (!validateImageFile(form.featured_image, 'featured_image')) {
+    isValid = false;
+  }
+
+  if (socialImageMode.value === 'custom' && !validateImageFile(form.og_image_file, 'og_image')) {
+    isValid = false;
+  }
+
+  return isValid;
+}
+
+function applyBackendErrors(err) {
+  const backendErrors = err?.response?.data?.errors;
+  if (!backendErrors || typeof backendErrors !== 'object') return;
+
+  Object.entries(backendErrors).forEach(([key, value]) => {
+    errors[key] = Array.isArray(value) ? value[0] : value;
+  });
+}
 
 // Auto-generate slug
 watch(() => form.title, (newTitle) => {
@@ -400,8 +524,11 @@ onMounted(async () => {
 
 function handleImageUpload(e, type) {
   const file = e.target.files?.[0];
-  if (!file || !file.type.startsWith('image/')) {
-    toast.error('Please select a valid image file');
+  if (!file) return;
+
+  const fieldName = type === 'featured' ? 'featured_image' : 'og_image';
+  if (!validateImageFile(file, fieldName)) {
+    toast.error(errors[fieldName]);
     return;
   }
 
@@ -452,11 +579,7 @@ function removeImage(type) {
 }
 
 async function submitForm() {
-  errors.title = !form.title.trim() ? 'Title is required' : '';
-  errors.slug = !form.slug.trim() ? 'Slug is required' : '';
-  errors.content = !form.content ? 'Content is required' : '';
-
-  if (Object.values(errors).some(Boolean)) {
+  if (!validateForm()) {
     toast.error('Please fix the errors in the form');
     return;
   }
@@ -492,14 +615,18 @@ async function submitForm() {
       payload.append('id', blogId.value);
       await store.dispatch(`blog/${UPDATE_BLOG}`, payload);
       toast.success('Blog post updated successfully');
+      router.push({ name: 'Blogs' });
     } else {
       await store.dispatch(`blog/${SAVE_BLOG}`, payload);
       toast.success('Blog post created successfully');
-      // Optional: reset form or redirect
       router.push({ name: 'Blogs' });
     }
   } catch (err) {
-    toast.error(err?.response?.data?.message || 'Failed to save blog post');
+    applyBackendErrors(err);
+    const firstBackendError = err?.response?.data?.errors
+      ? Object.values(err.response.data.errors)?.[0]?.[0]
+      : null;
+    toast.error(firstBackendError || err?.response?.data?.message || 'Failed to save blog post');
     console.error(err);
   } finally {
     isSubmitting.value = false;

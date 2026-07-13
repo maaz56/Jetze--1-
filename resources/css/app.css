@@ -170,6 +170,22 @@ html{
   .admin-icon-secondary {
     @apply text-secondary;
   }
+
+  .admin-sidebar-link {
+    @apply flex items-center rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors duration-200 hover:bg-primary/10 hover:text-primary;
+  }
+
+  .admin-sidebar-link-active {
+    @apply bg-primary font-medium text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground;
+  }
+
+  .admin-sidebar-icon {
+    @apply mr-3 h-5 w-5 flex-shrink-0 text-gray-500;
+  }
+
+  .admin-sidebar-icon-active {
+    @apply text-primary-foreground;
+  }
 }
 
 /* iOS Toast Look */

@@ -19,21 +19,23 @@ export const clientRoutes = [
             //     component: () => import("@/pages/Login.vue"),
             // },
            
-            {
-                path: "about/us",
-                name: "AboutUs",
-                component: () => import("@/pages/AboutUs.vue"),
-            },
+            // Rendered by Laravel Blade (resources/views/pages/about-us.blade.php).
+            // {
+            //     path: "about/us",
+            //     name: "AboutUs",
+            //     component: () => import("@/pages/AboutUs.vue"),
+            // },
             {
                 path: "how-to-use-abhi-pay-bank-transfer",
                 name: "HowToPay",
                 component: () => import("@/pages/HowToPay.vue"),
             },
-            {
-                path: "contact/us",
-                name: "ClientContactUs",
-                component: () => import("@/pages/ContactUs.vue"),
-            },
+            // Rendered by Laravel Blade (resources/views/pages/contact-us.blade.php).
+            // {
+            //     path: "contact/us",
+            //     name: "ClientContactUs",
+            //     component: () => import("@/pages/ContactUs.vue"),
+            // },
             {
                 path: "our/services",
                 name: "OurServices",
@@ -154,19 +156,40 @@ export const clientRoutes = [
                 component: () => import("@/pages/CustomerProfile.vue"),
             },
             {
+                path: "disable-sms-verification",
+                name: "DisableSmsVerification",
+                component: () => import("@/pages/DisableSmsVerification.vue"),
+                meta: {
+                    requiresAuth: true,
+                },
+            },
+            {
                 path: "customer-payment-view",
                 name: "CustomerPaymentView",
                 component: () => import("@/pages/CustomerPaymentView.vue"),
             },
+            // Blog pages are rendered by Laravel Blade.
+            // {
+            //     path: "/blog",
+            //     name: "index",
+            //     component: () => import("@/pages/blogs/index.vue"),
+            // },
+            // {
+            //     path: "/blog/:id/:slug",
+            //     name: "Blog",
+            //     component: () => import("@/pages/blogs/show.vue"),
+            //     props: true,
+            // },
+            // {
+            //     path: "/blog/:slug",
+            //     name: "BlogBySlug",
+            //     component: () => import("@/pages/blogs/show.vue"),
+            //     props: true,
+            // },
             {
-                path:"/blog",
-                name:"index",
-                component: () => import("@/pages/blogs/index.vue")
-            },
-             {
-                path:"/blog/:id/:slug",
-                name:"Blog",
-                component: ()=>import("@/pages/blogs/show.vue")
+                path: "popular-routes/:id",
+                name: "PopularRouteDetails",
+                component: () => import("@/pages/PopularRouteDetails.vue"),
             }
 
         ],

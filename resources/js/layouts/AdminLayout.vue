@@ -91,13 +91,11 @@ import {
 
 <template>
     <div class="flex h-screen overflow-hidden">
-        <Sidebar
-            class="hidden md:flex md:w-[220px] lg:w-[280px] flex-shrink-0"
-        />
+
         <div class="flex flex-col flex-grow overflow-hidden">
             <Nav class="flex-shrink-0" />
             <div class="flex flex-grow overflow-hidden">
-                <Sidebar class="md:hidden" />
+                <Sidebar class="" />
                 <main class="flex-grow overflow-y-auto p-4 lg:p-8 bg-gray-50">
                     <router-view></router-view>
                 </main>

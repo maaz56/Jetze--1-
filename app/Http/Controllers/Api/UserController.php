@@ -8,6 +8,7 @@ use App\Models\User;
 use Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Log;
 
 class UserController extends Controller
@@ -61,71 +62,78 @@ class UserController extends Controller
     //     ], 200);
     // }
 
-public function index(Request $request)
-{
-    // Log all request data
-    Log::info($request->all());
+    public function index(Request $request)
+    {
+        // Log all request data
+        Log::info($request->all());
 
-    $user = Auth::user();
+        $user = Auth::user();
 
-    $query = User::query()->with('agentData')->orderBy('created_at', 'desc');
+        $query = User::query()->with('agentData')->orderBy('created_at', 'desc');
 
-    // Admin can see all users, salesman can see only their own
-    if ($user && $user->role === 'salesman') {
-        $query->whereHas('agentData', function ($q) use ($user) {
-            $q->where('user_id', $user->id);
-        });
+
+        // Admin can see all users, salesman can see only their own
+        if ($user && $user->role === 'salesman') {
+            $query->whereHas('agentData', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
+        // Apply search filter (only if not null/empty)
+        if ($request->filled('search_query')) {
+            $searchQuery = $request->search_query;
+            $query->where(function ($q) use ($searchQuery) {
+                $q->where("name", "LIKE", "%" . $searchQuery . "%")
+                    ->orWhere("email", "LIKE", "%" . $searchQuery . "%")
+                    ->orWhere("role", "LIKE", "%" . $searchQuery . "%")
+                    ->orWhereHas('agentData', function ($agentQuery) use ($searchQuery) {
+                        $agentQuery->where("company_name", "LIKE", "%" . $searchQuery . "%")
+                            ->orWhere("ceo_contact", "LIKE", "%" . $searchQuery . "%")
+                            ->orWhere("agent_uid", "LIKE", "%" . $searchQuery . "%");
+                    });
+            });
+        }
+
+        // Apply approval_status filter (only if not null)
+        if ($request->filled('approval_status') && $request->approval_status !== 'all') {
+            $query->where('is_approved', $request->approval_status);
+        }
+
+        // Apply role filter (only if not null)
+        if ($request->filled('role')) {
+            $query->where('role', $request->role);
+        } elseif ($request->type === 'staff') {
+            // If type is staff, exclude regular customers and agents
+            $query->whereNotIn('role', ['agent', 'user', 'customer']);
+        } elseif ($request->type === 'customer') {
+            // If type is customer, only show agents and users
+            $query->whereIn('role', ['agent', 'user']);
+        }
+
+        // ✅ Check if page parameter is present
+        if ($request->has('page')) {
+            $users = $query->paginate(Constants::$PAGE_LIMIT);
+            $meta = MetaHandler::generate($users);
+            $data = $users->items();
+        } else {
+            $users = $query->get();
+            $meta = null; // No pagination meta
+            $data = $users;
+        }
+
+        $salesMenAgentCount = $this->staffMeta();
+
+        return response()->json([
+            'success' => true,
+            'message' => [
+                'status' => 'success',
+                'description' => 'Users retrieved successfully.',
+            ],
+            'salesMenAgentCount' => $salesMenAgentCount,
+            'data' => $data,
+            'meta' => $meta,
+        ], 200);
     }
-
-    // Apply search filter (only if not null/empty)
-    if ($request->filled('search_query')) {
-        $searchQuery = $request->search_query;
-        $query->where(function ($q) use ($searchQuery) {
-            $q->where("name", "LIKE", "%" . $searchQuery . "%")
-              ->orWhere("email", "LIKE", "%" . $searchQuery . "%")
-              ->orWhere("role", "LIKE", "%" . $searchQuery . "%")
-              ->orWhereHas('agentData', function ($agentQuery) use ($searchQuery) {
-                  $agentQuery->where("company_name", "LIKE", "%" . $searchQuery . "%")
-                             ->orWhere("ceo_contact", "LIKE", "%" . $searchQuery . "%")
-                             ->orWhere("agent_uid", "LIKE", "%" . $searchQuery . "%");
-              });
-        });
-    }
-
-    // Apply approval_status filter (only if not null)
-    if ($request->filled('approval_status') && $request->approval_status !== 'all') {
-        $query->where('is_approved', $request->approval_status);
-    }
-
-    // Apply role filter (only if not null)
-    if ($request->filled('role')) {
-        $query->where('role', $request->role);
-    }
-
-    // ✅ Check if page parameter is present
-    if ($request->has('page')) {
-        $users = $query->paginate(Constants::$PAGE_LIMIT);
-        $meta = MetaHandler::generate($users);
-        $data = $users->items();
-    } else {
-        $users = $query->get();
-        $meta = null; // No pagination meta
-        $data = $users;
-    }
-
-    $salesMenAgentCount = $this->staffMeta();
-
-    return response()->json([
-        'success' => true,
-        'message' => [
-            'status' => 'success',
-            'description' => 'Users retrieved successfully.',
-        ],
-        'salesMenAgentCount' => $salesMenAgentCount,
-        'data' => $data,
-        'meta' => $meta,
-    ], 200);
-}
 
 
 
@@ -134,7 +142,7 @@ public function index(Request $request)
     {
         // Fetch users with either 'salesman' or 'reservation' role
         $salesMen = User::whereIn('role', ['salesman', 'reservation'])->latest()->get();
-        foreach ($salesMen as $salesman) {  
+        foreach ($salesMen as $salesman) {
             $salesman->agent_count = $salesman->staffMeta()->count();
         }
         Log::info($salesMen);
@@ -162,7 +170,7 @@ public function index(Request $request)
             'email' => 'required|email',
             'password' => 'required',
         ]);
-      
+
         $user = new User();
         $user->role = $request->role;
         $user->name = $request->name;
@@ -306,6 +314,61 @@ public function index(Request $request)
         ]);
     }
 
+    public function getSmsOtpBrowserStatus(Request $request)
+    {
+        $user = Auth::user();
+        $browserId = (string) ($request->header('X-Browser-Id') ?: $request->query('browser_id', ''));
+
+        $isDisabledForThisBrowser = (bool) $user->sms_otp_disabled
+            && !empty($browserId)
+            && hash_equals((string) $user->sms_otp_disabled_browser_id, $browserId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'sms_otp_disabled' => $isDisabledForThisBrowser,
+                'browser_id' => $browserId,
+            ],
+        ]);
+    }
+
+    public function updateSmsOtpBrowserStatus(Request $request)
+    {
+        $request->validate([
+            'disable' => 'required|boolean',
+            'browser_id' => 'required|string|max:191',
+        ]);
+
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['customer', 'user'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This setting is available for customer accounts only.',
+            ], 403);
+        }
+
+        $disable = $request->boolean('disable');
+
+        if ($disable) {
+            $user->sms_otp_disabled = true;
+            $user->sms_otp_disabled_browser_id = $request->browser_id;
+        } else {
+            $user->sms_otp_disabled = false;
+            $user->sms_otp_disabled_browser_id = null;
+        }
+
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'sms_otp_disabled' => $disable,
+                'browser_id' => $disable ? $request->browser_id : null,
+            ],
+        ]);
+    }
+
     /**
      * Remove the specified resource from storage.
      */
@@ -338,19 +401,30 @@ public function index(Request $request)
     {
         Log::info($request);
         try {
-            $validator = $request->validate([
+            $request->validate([
                 'role' => 'required|string',
                 'name' => 'required',
                 'email' => 'required|email|unique:users,email',
                 'password' => 'required',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+
+            if (isset($errors['email'])) {
+                $existingUser = User::where('email', $request->email)->first();
+                if ($existingUser) {
+                    $errors['email'] = [
+                        'User already registered as "' . $existingUser->role . '". Please try another email.'
+                    ];
+                }
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => [
                     'status' => 'error',
                     'description' => 'Validation failed.',
-                    'errors' => $e->errors()
+                    'errors' => $errors
                 ]
             ], status: 422);
         }
@@ -363,6 +437,10 @@ public function index(Request $request)
         $user->email_verified_at = now();
         $user->password = Hash::make($request->password);
         $user->save();
+
+        if ($request->role) {
+            $user->assignRole($request->role);
+        }
 
         return response()->json([
             'success' => true,
@@ -404,6 +482,10 @@ public function index(Request $request)
         $user->email_verified_at = now();
         $user->password = Hash::make($request->password);
         $user->save();
+
+        if ($request->role) {
+            $user->syncRoles([$request->role]);
+        }
 
         return response()->json([
             'success' => true,

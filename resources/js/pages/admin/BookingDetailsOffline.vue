@@ -1268,12 +1268,12 @@ onMounted(() => {
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="line-clamp-2">
                                         {{
                                             agentData?.agent_data?.address ||
-                                            "Address1234SheikhpuraRoad, Lahore,Pakistan"
+                                            "Address line 1,SheikhpuraRoad, Lahore,Pakistan"
                                         }}
                                        
                                     </p>
@@ -2009,7 +2009,7 @@ segment, segmentIndex
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="">
                                         {{
@@ -2773,39 +2773,49 @@ passenger, index
 
 @media print {
     @page {
-        margin: 0;
-        size: auto;
+        size: A4 portrait;
+        margin: 6mm;
     }
 
     html,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
     body * {
         visibility: hidden;
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
-        color: #111827;
-        /* dark text for better printing */
-        font-size: 9pt;
-        /* Reduce font size for printing */
     }
 
     #print-container,
     #print-container * {
         visibility: visible;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     #print-container {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 0;
+        position: fixed;
+        inset: 0;
+        width: 198mm;
+        min-height: 285mm;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        overflow: hidden;
+    }
+
+    #print-section {
+        width: 100% !important;
+        max-width: 100% !important;
+        transform-origin: top left;
+        zoom: 0.90;
     }
 
     /* Make content more compact for printing */
     .p-6 {
-        padding: 10px !important;
+        padding: 8px !important;
     }
 
     .space-y-4>*+* {
@@ -2822,35 +2832,39 @@ passenger, index
     table {
         border-collapse: collapse;
         width: 100%;
-        font-size: 8pt;
+        font-size: 7.7pt;
     }
 
     th,
     td {
         border: 1px solid #374151;
-        padding: 4px;
+        padding: 3px;
         text-align: left;
     }
 
-    th {
-        background-color: #f3f4f6 !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+    /* Keep original browser colors instead of forcing print variants */
+    .print\:bg-white {
+        background-color: inherit !important;
     }
 
-    /* Ensure background colors print */
-    .bg-gray-50,
-    .bg-gray-100 {
-        background-color: #f9fafb !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+    .print\:text-black {
+        color: inherit !important;
+    }
+
+    .print\:border-gray-800,
+    .print\:border-gray-400,
+    .print\:border-gray-300 {
+        border-color: inherit !important;
     }
 
     /* Avoid page breaks inside critical elements */
     table,
     tr,
-    .border-b-2 {
+    .border-b-2,
+    .rounded-lg,
+    .shadow-lg {
         page-break-inside: avoid;
+        break-inside: avoid;
     }
 
     /* Hide unnecessary elements when printing */

@@ -115,6 +115,11 @@ const formatDate = (dateString) => {
 const capitalize = (string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
+const formatTransactionType = (transactionType) => {
+  if (!transactionType) return "-";
+  if (transactionType === "manually_issued") return "Manually Issued";
+  return capitalize(transactionType.replaceAll("_", " "));
+};
 watch(user_role, (newUserRole) => {
   if (newUserRole) {
     fetchAdminLedger();
@@ -253,7 +258,11 @@ onMounted(() => {
                     {{ transaction?.agent?.agent_data?.agent_uid ?? '-' }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
-                    {{ capitalize(transaction?.transaction_type) }}
+                    <div>{{ formatTransactionType(transaction?.transaction_type) }}</div>
+                    <p v-if="transaction?.transaction_type === 'manually_issued'"
+                      class="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Manually issued (no ledger deduction)
+                    </p>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
                     {{ transaction.reference_id }}

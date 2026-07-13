@@ -344,6 +344,26 @@ const validatePhone = (phone) => {
     return phoneRegex.test(phone);
 };
 
+const getTravellerDocumentNumber = (traveller) => {
+    const documentType = (traveller.documentType || "").toLowerCase();
+    if (documentType === "cnic") {
+        return (traveller.cnic || traveller.documentNo || "").trim();
+    }
+    return (traveller.documentNo || "").trim();
+};
+
+const normalizeTravellerDocuments = (traveller) => {
+    const documentType = (traveller.documentType || "").toLowerCase();
+    const normalizedDocumentNo = getTravellerDocumentNumber(traveller);
+
+    traveller.documentNo = normalizedDocumentNo;
+    if (documentType === "cnic") {
+        traveller.cnic = normalizedDocumentNo;
+    }
+
+    return traveller;
+};
+
 const validateDate = (date) => {
     if (!date) return false;
 
@@ -428,6 +448,8 @@ const validateForm = () => {
 
     // Validate travellers
     travellers.value.forEach((traveller, index) => {
+        normalizeTravellerDocuments(traveller);
+
         if (!traveller.title) {
             fetchBookingStatus
             errors.travellers[index].title = "Title is required";
@@ -468,7 +490,7 @@ const validateForm = () => {
             isValid = false;
         }
 
-        if (!traveller.documentNo) {
+        if (!getTravellerDocumentNumber(traveller)) {
             errors.travellers[index].documentNo = "Document number is required";
             isValid = false;
         }
@@ -567,10 +589,13 @@ async function saveBooking(type) {
         }
 
         globalError.value = "";
+        const normalizedTravellers = travellers.value.map((traveller) => ({
+            ...normalizeTravellerDocuments({ ...traveller }),
+        }));
 
         await store.dispatch("flight/" + SAVE_BOOKING, {
             main_contact: mainContact.value,
-            travellers: travellers.value,
+            travellers: normalizedTravellers,
             agency_contact: agencyContact.value,
             agent_id: user.value.id,
             agency_mobile: agentData.value.agent_data.mobile,
@@ -874,10 +899,14 @@ function parsePnrResponse() {
     }
 }
 function saveBookingData() {
+    const normalizedTravellers = travellers.value.map((traveller) => ({
+        ...normalizeTravellerDocuments({ ...traveller }),
+    }));
+
     store.dispatch("flight/" + SAVE_BOOKING_DATA, {
         main_contact: mainContact.value,
         flight_data: flight.value,
-        travellers: travellers.value,
+        travellers: normalizedTravellers,
         agency_contact: agencyContact.value,
         flight_id: route.query.flight_id,
     });
@@ -1456,7 +1485,8 @@ const handleSelectedTravellerAgentChange = (index, travellerArrayIndex) => {
      travellers.value[travellerArrayIndex].dob = selectedTravellerAgent.value.date_of_birth;
       travellers.value[travellerArrayIndex].nationality = selectedTravellerAgent.value.nationality;
       travellers.value[travellerArrayIndex].documentType = selectedTravellerAgent.value.doc_type;
-      travellers.value[travellerArrayIndex].documentNo = selectedTravellerAgent.value.document_no;
+      travellers.value[travellerArrayIndex].documentNo = selectedTravellerAgent.value.document_no || selectedTravellerAgent.value.cnic || "";
+      travellers.value[travellerArrayIndex].cnic = selectedTravellerAgent.value.cnic || selectedTravellerAgent.value.document_no || "";
        travellers.value[travellerArrayIndex].expiryDate = selectedTravellerAgent.value.expiry_date;
        travellers.value[travellerArrayIndex].issueCountry = selectedTravellerAgent.value.issue_country;
 };  
@@ -1724,7 +1754,14 @@ const goBack = () => {
                                                         </SelectTrigger>
                                                         <SelectContent class="bg-white border-gray-200 w-[200px]">
                                                             <SelectGroup>
-                                                                <SelectItem :value="index" v-for="(agentTraveller,index) in agentTravellers" :key="agentTraveller.id">{{ agentTraveller.title }} {{ agentTraveller.first_name }} {{ agentTraveller .last_name }}</SelectItem>
+                                                                <SelectItem
+                                                                    :value="index"
+                                                                    v-for="(agentTraveller,index) in agentTravellers"
+                                                                    :key="agentTraveller.id"
+                                                                    class="data-[highlighted]:text-white"
+                                                                >
+                                                                    {{ agentTraveller.title }} {{ agentTraveller.first_name }} {{ agentTraveller.last_name }}
+                                                                </SelectItem>
 
                                                             </SelectGroup>
                                                         </SelectContent>

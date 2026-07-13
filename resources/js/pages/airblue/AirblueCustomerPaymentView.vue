@@ -81,79 +81,78 @@
             <!-- Main Payment Section with Two Column Layout -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <!-- Left: Payment Methods List (Static) -->
-              <div class="lg:col-span-1 space-y-3">
+                <div class="lg:col-span-1 space-y-3">
 
-
-                <!-- Bank Transfer (Abhi Pay) -->
-
-
-                <!-- Abhipay -->
-                <div @click="paymentMethod = 'abhipay-bank'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay-bank'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
+                  <!-- Bank Transfer (Abhi Pay) -->
+                  <div @click="paymentMethod = 'abhipay-bank'" :class="[
+                    'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                     paymentMethod === 'abhipay-bank'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
+                      ? 'bg-primary border-primary shadow-lg'
+                      : 'border-primary bg-white hover:bg-primary/10'
                   ]">
-                    <Landmark />
+                    <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                      <Landmark :class="[
+                        'w-5 h-5',
+                        paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-primary'
+                      ]" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3 :class="[
+                        'font-semibold truncate',
+                        paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900'
+                      ]">
+                        Bank Transfer - Abhipay
+                      </h3>
+                    </div>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900']">
-                      Bank Transfer - Abhipay
-                    </h3>
-                  </div>
-                </div>
-                <div @click="paymentMethod = 'abhipay'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <CreditCard />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900']">
-                      Abhipay - Debit/Credit card
-                    </h3>
-                  </div>
-                </div>
 
-                <!-- Wallet Balance -->
-                <div @click="paymentMethod = 'wallet'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'wallet'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'wallet'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
+                  <!-- Abhipay - Debit/Credit card -->
+                  <div @click="paymentMethod = 'abhipay'" :class="[
+                    'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
+                    paymentMethod === 'abhipay'
+                      ? 'bg-primary border-primary shadow-lg'
+                      : 'border-primary bg-white hover:bg-primary/10'
                   ]">
-                    <Wallet />
+                    <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                      <CreditCard :class="[
+                        'w-5 h-5',
+                        paymentMethod === 'abhipay' ? 'text-white' : 'text-primary'
+                      ]" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3 :class="[
+                        'font-semibold truncate',
+                        paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900'
+                      ]">
+                        Abhipay - Debit/Credit card
+                      </h3>
+                    </div>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900']">
-                      Wallet Balance
-                    </h3>
+
+                  <!-- Wallet Balance -->
+                  <div @click="paymentMethod = 'wallet'" :class="[
+                    'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
+                    paymentMethod === 'wallet'
+                      ? 'bg-primary border-primary shadow-lg'
+                      : 'border-primary bg-white hover:bg-primary/10'
+                  ]">
+                    <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                      <Wallet :class="[
+                        'w-5 h-5',
+                        paymentMethod === 'wallet' ? 'text-white' : 'text-primary'
+                      ]" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3 :class="[
+                        'font-semibold truncate',
+                        paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900'
+                      ]">
+                        Wallet Balance
+                      </h3>
+                    </div>
                   </div>
+
                 </div>
-              </div>
 
               <!-- Right: Dynamic Information Box Based on Selected Method -->
               <div class="lg:col-span-2">
@@ -195,21 +194,17 @@
                         <p class="text-sm text-slate-700 leading-relaxed">
                           We will be redirecting you to Abhi Pay secure gateway for bank transfer. Complete your
                           transfer and you will be redirected back to confirm your Flight Booking.
-                          (Rs 500 service fee will be charged for OneBill bank transfer)
+                          (Service fee will be charged for OneBill bank transfer)
                         </p>
-                         <a
-    :href="$router.resolve({ name: 'HowToPay' }).href"
-    target="_blank"
-    rel="noopener"
-    class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
-  >
-    <!-- Icon -->
-    
-
-    How To Use AbhiPay Bank Transfer
-   
-    <ExternalLink class="w-3 h-3 mt-1"/>
-  </a>
+                        <a
+                          :href="$router.resolve({ name: 'HowToPay' }).href"
+                          target="_blank"
+                          rel="noopener"
+                          class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
+                        >
+                          How To Use AbhiPay Bank Transfer
+                          <ExternalLink class="w-3 h-3 mt-1"/>
+                        </a>
                       </div>
                     </div>
 
@@ -234,45 +229,37 @@
                   <!-- Bottom Action Buttons -->
                   <div class="mt-4">
 
-                    <!-- Buttons Row -->
-                    <div class="flex gap-2">
+                    <!-- Buttons Row with 70% / 30% width distribution -->
+                    <div class="flex gap-3 w-full">
 
-                      <!-- Refresh / Check Status Button -->
+                      <!-- Refresh / Check Status Button - 70% width -->
                       <button v-if="billId" @click="checkPaymentStatus('abhipay-bank')"
-                        class="w-12 flex items-center justify-center rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50">
-
-                        <RefreshCcw class="w-5 h-5" />
-
+                        class="flex-[7] py-3 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2 font-medium text-sm">
+                        <RefreshCcw class="w-4 h-4" />
+                        <span>Refresh Payment</span>
                       </button>
 
-                      <!-- Generate / Regenerate Button -->
+                      <!-- Generate / Regenerate Button - 30% width -->
                       <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing" :class="[
-                        'flex-1 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
+                        'flex-[3] py-3 rounded font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2',
                         !isProcessing
-                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
+                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md'
                           : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                       ]">
-
                         <span v-if="!billId">Generate Bill ID</span>
                         <span v-else>Regenerate Bill ID</span>
-
                         <span>→</span>
                       </button>
 
                     </div>
 
                     <!-- 🔹 Helper Message -->
-                    <p v-if="billId" class="text-xs text-slate-500 mt-2 flex items-center gap-1">
-
+                    <p v-if="billId" class="text-xs text-slate-500 mt-3 flex items-center gap-1">
                       <RefreshCcw class="w-3 h-3" />
-
                       Click refresh to check payment status after completing bank transfer
-
                     </p>
 
                   </div>
-
-
                 </div>
 
 
@@ -308,7 +295,7 @@
                       <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
                       <div>
                         <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay securely using your debit or credit card through Abhipay platform. Service Fee of 3% will
+                          Pay securely using your debit or credit card through Abhipay platform. Service Fee of {{ abhipayCardFeePercent.toFixed(2) }}% will
                           be charged for Visa/Master and Union card transactions. Fast and secure payment processing.
                         </p>
                       </div>
@@ -429,7 +416,7 @@
                 <span class="text-2xl">📞</span>
                 <h4 class="font-bold text-slate-900">Contact Us :</h4>
               </div>
-              <p class="text-sm text-slate-600">+92 311 1711123</p>
+              <p class="text-sm text-slate-600">+92 00000000</p>
             </div>
             <div class="bg-white rounded p-6 shadow-sm">
               <div class="flex items-center gap-3 mb-3">
@@ -865,6 +852,7 @@ import {
   FETCH_ANCILLARIES,
   PATCH_ANCILLARIES,
   FETCH_CUSTOMER_MARGIN,
+  FETCH_CUSTOMER_SETTINGS,
   INITIALIZE_ABHI_PAY,
   CHECK_PAYMENT_STATUS,
 } from "@/services/store/actions.type";
@@ -933,6 +921,8 @@ const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const airportMargins = computed(() => store.getters["airport/airportMargin"] || {});
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const paymentStatus = computed(() => store.getters["payment/paymentStatus"]);
+const customerSettings = computed(() => store.getters["customer/customerSettings"]);
+const abhipayCardFeePercent = computed(() => Number(customerSettings.value?.one_bill_percentage_charge ?? 0) || 0);
 
 // Extra Services Dialog State - FIXED
 const isExtraServicesOpen = ref(false);
@@ -972,6 +962,9 @@ const ancillaryGroups = computed(() => {
 const passengers = computed(() => getPassengers(bookingDetails.value?.[0]) || []);
 function fetchCustomerMarginValues() {
   store.dispatch("customerMargin/" + FETCH_CUSTOMER_MARGIN);
+}
+function fetchCustomerSettings() {
+  return store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
 }
 // Extra Services Total - FIXED
 
@@ -1822,8 +1815,9 @@ function calculateGrandTotal() {
 
   baseAmount.value = computedBase;
 
-  // AbhiPay card adds 3% on top of the base amount.
-  amount.value = paymentMethod.value === "abhipay" ? computedBase * 1.03 : computedBase;
+  // AbhiPay card adds configured percentage on top of the base amount.
+  const cardFeeMultiplier = 1 + (abhipayCardFeePercent.value / 100);
+  amount.value = paymentMethod.value === "abhipay" ? computedBase * cardFeeMultiplier : computedBase;
   return amount.value;
 }
 
@@ -1889,7 +1883,7 @@ onMounted(async () => {
   flight_provider = route.query.flight_provider || route.query.provider || null;
   booking_id = route.query.booking_id;
   pnr = route.query.pnr;
-  await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(),
+  await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(), fetchCustomerSettings(),
   ]);
 });
 // Payment methods

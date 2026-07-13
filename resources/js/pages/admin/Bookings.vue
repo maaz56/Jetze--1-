@@ -9,9 +9,7 @@ import {
     Receipt,
     MoveRight,
     CircleChevronRight,
-    ChevronRight,
-    CirclePause,
-    Ban
+    ChevronRight
 } from "lucide-vue-next";
 
 import {
@@ -264,7 +262,7 @@ onMounted(() => {
 
                                 </td>
                                 <td class="px-4 py-3">
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.source || 'N/A' }}
+                                    {{ parseFlightData(booking?.flight_data)?.provider?.source?.toUpperCase() || 'N/A' }}
 
                                 </td>
 
@@ -362,7 +360,9 @@ onMounted(() => {
                                     </div>
 
                                 </td>
-                                <td class="py-2 px-4 uppercase">{{ booking.status }}</td>
+                                <td class="py-2 px-4">
+                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                </td>
                                 <td class="px-1 py-4">
                                     <div class="flex space-x-2">
                                         <Button size="sm" variant="outline" @click="$router.push({

@@ -7,8 +7,10 @@ export function cn(...inputs) {
 }
 
 export function formatAmount(amount) {
-    const numericAmount = Number.parseFloat(amount);
-    const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+    const numericAmount =
+        typeof amount === "string"
+            ? Number(amount.replace(/,/g, ""))
+            : Number(amount);
 
     const formatter = new Intl.NumberFormat("en-US", {
         style: "currency",
@@ -17,7 +19,7 @@ export function formatAmount(amount) {
         maximumFractionDigits: 2,
     });
 
-    return formatter.format(safeAmount);
+    return formatter.format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
 // export function formatAmount(amount) {
 //   if (isNaN(amount)) return "₨0.00";

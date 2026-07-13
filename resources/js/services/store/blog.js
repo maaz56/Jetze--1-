@@ -7,6 +7,7 @@ import {
   UPDATE_BLOG,
   DELETE_BLOG,
   PUBLISH_BLOG,
+  SEND_BLOG_MAIL,
 } from "./actions.type";
 
 import {
@@ -19,6 +20,16 @@ import {
 } from "./mutations.type";
 
 import { toast } from "vue3-toastify";
+
+const resolveApiErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (data?.errors && typeof data.errors === "object") {
+    const firstField = Object.keys(data.errors)[0];
+    const firstMessage = firstField ? data.errors[firstField]?.[0] : null;
+    if (firstMessage) return firstMessage;
+  }
+  return data?.message || fallback;
+};
 
 const state = {
   blogs: [],
@@ -59,6 +70,7 @@ const actions = {
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed to load blog");
       commit(SET_API_ERROR, error?.response?.data);
+      throw error;
     } finally {
       commit(NOT_IS_LOADING);
     }
@@ -73,7 +85,7 @@ const actions = {
       // dispatch(FETCH_BLOGS); // refresh list
       return response.data; // useful if you want to redirect to edit
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to create blog");
+      toast.error(resolveApiErrorMessage(error, "Failed to create blog"));
       commit(SET_API_ERROR, error?.response?.data?.errors || error?.response?.data);
       throw error;
     } finally {
@@ -89,8 +101,9 @@ const actions = {
       toast.success("Blog updated successfully");
       dispatch(FETCH_BLOGS);
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to update blog");
+      toast.error(resolveApiErrorMessage(error, "Failed to update blog"));
       commit(SET_API_ERROR, error?.response?.data?.errors || error?.response?.data);
+      throw error;
     } finally {
       commit(NOT_IS_LOADING);
     }
@@ -119,6 +132,22 @@ const actions = {
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed to change publish status");
       commit(SET_API_ERROR, error?.response?.data);
+    } finally {
+      commit(NOT_IS_LOADING);
+    }
+  },
+
+  async [SEND_BLOG_MAIL]({ commit }, params) {
+    commit(IS_LOADING);
+    try {
+      const response = await apiService.sendBlogMail(params);
+      const queuedCount = response?.data?.queued_count || 0;
+      toast.success(`Blog email queued for ${queuedCount} recipient${queuedCount === 1 ? "" : "s"}`);
+      return response.data;
+    } catch (error) {
+      toast.error(resolveApiErrorMessage(error, "Failed to queue blog email"));
+      commit(SET_API_ERROR, error?.response?.data?.errors || error?.response?.data);
+      throw error;
     } finally {
       commit(NOT_IS_LOADING);
     }

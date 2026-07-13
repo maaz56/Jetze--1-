@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { FETCH_AGENT_LEDGER } from "@/services/store/actions.type";
 import Button from "../ui/button/Button.vue";
 import { 
@@ -90,13 +90,21 @@ function goToDashboard(tab) {
 
 // Updated navLinks to match the "Title + Subtitle" style of the image
 const navLinks = [
-    { name: "Home", text: "Flights", subText: "Book Cheapest", icon: "/plane.png" },
-    { name: "AboutUs", text: "About Us", subText: "Who we are", icon: "/info.png" },
-    { name: "index", text: "Blogs", subText: "Travel Stories", icon: "/blog.png" },
-    { name: "ClientContactUs", text: "Contact Us", subText: "Get in touch", icon: "/info.png" },
+    { routeName: "Home", text: "Flights", subText: "Book Cheapest", icon: "/plane.png" },
+    { href: "/about/us", text: "About Us", subText: "Who we are", icon: "/info.png" },
+    { href: "/blogs", text: "Blogs", subText: "Travel Stories", icon: "/blog.png" },
+    { href: "/contact/us", text: "Contact Us", subText: "Get in touch", icon: "/info.png" },
 ];
 
-const isLinkActive = (linkName) => route.name === linkName;
+const getLinkProps = (link) => link.routeName
+    ? { to: { name: link.routeName } }
+    : { href: link.href };
+
+const isLinkActive = (link) => {
+    if (link.routeName) return route.name === link.routeName;
+
+    return window.location.pathname.replace(/\/$/, "") === link.href.replace(/\/$/, "");
+};
 
 watch(user, (newUser) => {
     if (newUser) fetchAgentLedger();
@@ -134,13 +142,14 @@ onUnmounted(() => {
                 <div class="flex items-center">
                     
                     <div class="hidden xl:flex items-center">
-                        <router-link 
+                        <component
+                            :is="link.routeName ? RouterLink : 'a'"
                             v-for="(link, index) in navLinks" 
                             :key="index" 
-                            :to="{ name: link.name }"
+                            v-bind="getLinkProps(link)"
                             :class="[
                                 'group flex items-center px-5 py-2 border-r border-slate-200 last:border-r-0 transition-all',
-                                isLinkActive(link.name) ? 'text-primary' : 'hover:bg-slate-100 text-slate-700',
+                                isLinkActive(link) ? 'text-primary' : 'hover:bg-slate-100 text-slate-700',
                             ]"
                         >
                             <div class="p-2 bg-slate-100 rounded-full mr-3 group-hover:bg-primary/15 transition-transform">
@@ -149,7 +158,7 @@ onUnmounted(() => {
                                     :alt="link.text"
                                     :class="[
                                         'w-5 h-5 object-contain transition-all duration-300',
-                                        isLinkActive(link.name) ? 'scale-110' : 'grayscale opacity-60',
+                                        isLinkActive(link) ? 'scale-110' : 'grayscale opacity-60',
                                     ]"
                                 />
                             </div>
@@ -158,13 +167,13 @@ onUnmounted(() => {
                                 <span
                                     :class="[
                                         'text-[10px] transition-colors',
-                                        isLinkActive(link.name) ? 'text-primary/80' : 'text-slate-500 group-hover:text-slate-700',
+                                        isLinkActive(link) ? 'text-primary/80' : 'text-slate-500 group-hover:text-slate-700',
                                     ]"
                                 >
                                     {{ link.subText }}
                                 </span>
                             </div>
-                        </router-link>
+                        </component>
                     </div>
 
                     <div v-if="user" class="hidden md:flex items-center px-4 border-l border-slate-200 gap-3">
@@ -230,14 +239,15 @@ onUnmounted(() => {
                                 <div class="py-6">
                                     <img class="h-10 mb-8" src="/public/assets/logo.png" alt="Logo" />
                                     <nav class="space-y-4">
-                                        <router-link v-for="link in navLinks" :key="link.name" :to="{ name: link.name }"
+                                        <component :is="link.routeName ? RouterLink : 'a'" v-for="link in navLinks"
+                                            :key="link.routeName || link.href" v-bind="getLinkProps(link)"
                                             class="flex items-center p-3 rounded-lg hover:bg-white/5">
                                             <img :src="link.icon" :alt="link.text" class="w-5 h-5 mr-3 object-contain" />
                                             <div>
                                                 <p class="font-bold text-sm">{{ link.text }}</p>
                                                 <p class="text-[10px] opacity-60">{{ link.subText }}</p>
                                             </div>
-                                        </router-link>
+                                        </component>
                                     </nav>
                                     <div class="mt-8 pt-8 border-t border-white/10">
                                         <Button v-if="!isAuthenticated" @click="handleLogin" class="w-full bg-blue-600">Login</Button>

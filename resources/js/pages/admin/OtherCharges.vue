@@ -115,7 +115,7 @@ onMounted(() => {
                         </thead>
                         <tbody>
                             <tr v-for="item in allCharges" :key="item.id" class="border-b dark:border-gray-700">
-                                <td class="px-4 py-3">{{ item.agent.agent_data.agent_uid }}_{{ item.id + 1000 }}</td>
+                                <td class="px-4 py-3">{{ item.agent.agent_data?.agent_uid }}_{{ item.id + 1000 }}</td>
                                 <td class="px-4 py-3">{{ item.date }}</td>
                                 <td class="px-4 py-3">{{ item.amount }}</td>
                                 <td class="px-4 py-3">

@@ -42,7 +42,6 @@ const props = defineProps<{
   minValue?: Date | string | null;
   maxValue?: Date | string | null;
   heading?: string; // New prop for custom heading
-  triggerClass?: string;
 }>();
 
 const emit = defineEmits<{
@@ -110,30 +109,97 @@ const displayText = () => {
   <div :class="cn('grid gap-2', $attrs.class ?? '')">
     <Popover v-model:open="isOpenPopover">
       <PopoverTrigger as-child>
-        <Button
-          id="date"
-          variant="outline"
-          :class="cn('h-10 border-none bg-white/10 justify-start px-4', props.triggerClass)"
-        >
-          <CalendarIcon class="h-4 w-4 mr-2 text-white" />
-          <span class="text-white truncate">{{ displayText() }}</span>
+        <Button id="date" variant="outline" class="h-10 border-none bg-white/10 text-xs sm:text-sm">
+          <CalendarIcon class="mr-1.5 h-3.5 w-3.5 text-white" />
+          <span class="text-xs text-white sm:text-sm">{{ displayText() }}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent class="w-auto p-0 bg-white" align="end">
-        <div class="flex">
+      <PopoverContent
+        side="bottom"
+        :side-offset="8"
+        :avoid-collisions="false"
+        class="w-auto bg-white p-0"
+        align="end"
+      >
+        <div class="custom-calendar-container flex p-2">
           <RangeCalendar
             v-model="calendarModel"
             mode="range"
             :numberOfMonths="smallerThanMd ? 1 : 2"
             :minValue="minCalendar"
             :maxValue="maxCalendar"
+            class="daterange-calendar"
           />
         </div>
-        <div class="flex gap-2 justify-end p-3 pt-0">
-          <Button size="sm" class="bg-primary text-white" @click="applySelection">Apply</Button>
-          <Button class="bg-white text-black" variant="outline" size="sm" @click="clearSelection">Clear</Button>
+        <div class="flex justify-end gap-1.5 px-2 pb-2">
+          <Button size="sm" class="h-8 bg-primary px-3 text-xs text-white" @click="applySelection">Apply</Button>
+          <Button class="h-8 bg-white px-3 text-xs text-black" variant="outline" size="sm" @click="clearSelection">Clear</Button>
         </div>
       </PopoverContent>
     </Popover>
   </div>
 </template>
+
+<style scoped>
+.custom-calendar-container {
+  --range-calendar-cell-size: 2.4rem;
+}
+
+.custom-calendar-container :deep(.daterange-calendar) {
+  @apply p-1.5 text-xs;
+}
+
+.custom-calendar-container :deep(.daterange-calendar > div:nth-child(2)) {
+  @apply mt-2 gap-x-3 gap-y-2;
+}
+
+.custom-calendar-container :deep(.daterange-calendar button) {
+  @apply text-xs;
+}
+
+.custom-calendar-container :deep([data-selected]) {
+  @apply bg-slate-200 text-slate-900 rounded-none;
+}
+
+.custom-calendar-container :deep([data-selection-start]),
+.custom-calendar-container :deep([data-selection-end]) {
+  @apply bg-white text-primary border border-primary rounded-sm relative font-semibold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 0;
+}
+
+.custom-calendar-container :deep([data-selection-start]:hover),
+.custom-calendar-container :deep([data-selection-end]:hover),
+.custom-calendar-container :deep([data-selection-start]:focus),
+.custom-calendar-container :deep([data-selection-end]:focus) {
+  @apply bg-white text-primary;
+}
+
+.custom-calendar-container :deep([data-selection-start]::before),
+.custom-calendar-container :deep([data-selection-end]::before) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 600;
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
+  padding: 3px 4px;
+  border-radius: 1px 0 3px 0;
+}
+
+.custom-calendar-container :deep([data-selection-start]::before) {
+  content: 'Depart on';
+}
+
+.custom-calendar-container :deep([data-selection-end]::before) {
+  content: 'Return on';
+}
+
+.custom-calendar-container :deep([data-selected]:not([data-selection-start]):not([data-selection-end])) {
+  @apply bg-slate-200 text-slate-900;
+}
+</style>

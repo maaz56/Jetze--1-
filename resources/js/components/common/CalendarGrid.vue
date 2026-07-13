@@ -1,9 +1,9 @@
 <!-- CalendarGrid.vue -->
 <template>
-  <div class="w-[280px]">
-    <div class="grid grid-cols-7 gap-1 text-center text-sm">
+  <div class="calendar-grid-wrap">
+    <div class="grid grid-cols-7 gap-1 text-center text-xs">
       <!-- Weekday headers -->
-      <div v-for="day in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="day" class="font-medium py-2">
+      <div v-for="day in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="day" class="py-1.5 text-[10px] font-semibold text-gray-500">
         {{ day }}
       </div>
 
@@ -11,7 +11,7 @@
       <template v-for="day in days" :key="day?.toString()">
         <div
           v-if="day"
-          class="relative aspect-square flex flex-col items-center justify-center rounded-sm  text-sm"
+          class="calendar-day-cell relative flex flex-col items-center justify-center rounded-sm text-xs"
           :class="{
             'border border-blue-500 font-semibold': isSelected(day),
             'text-gray-400': !isInMonth(day),
@@ -21,15 +21,26 @@
           @click="day && !isDisabled(day) && $emit('date-selected', day)"
         >
           <span>{{ day.day }}</span>
-          <span v-if="priceForDay(day)" class="text-xs text-green-600 mt-0.5">
+          <span v-if="priceForDay(day)" class="mt-0.5 text-[9px] leading-none text-green-600">
             {{ formatPrice(priceForDay(day)) }}
           </span>
         </div>
-        <div v-else class="aspect-square"></div>
+        <div v-else class="calendar-day-cell"></div>
       </template>
     </div>
   </div>
 </template>
+
+<style scoped>
+.calendar-grid-wrap {
+  width: calc((var(--calendar-cell-size, 3.35rem) * 7) + (0.25rem * 6));
+}
+
+.calendar-day-cell {
+  width: var(--calendar-cell-size, 3.35rem);
+  height: var(--calendar-cell-size, 3.35rem);
+}
+</style>
 
 <script setup>
 import { computed } from "vue";

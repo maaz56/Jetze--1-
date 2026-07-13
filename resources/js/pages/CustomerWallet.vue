@@ -375,27 +375,25 @@ watch(user, (newUser) => {
                 <div class="">
                     <div class="">
                         <h1 class="text-2xl font-bold text-gray-800 mb-2">Select Banks to Deposit</h1>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div v-for="bank in banksWithOneBill" :key="bank.id"
-                                class="bg-primary/10 rounded-lg p-4 flex items-center cursor-pointer hover:bg-gray-100"
+                                class="bg-primary/10 rounded-lg p-4 flex items-center cursor-pointer hover:bg-gray-100 h-full"
                                 :class="{
                                     'ring-1 ring-primary': selectedBank?.id === bank.id,
                                     'bg-green-50': bank.isOneBill
                                 }" @click="selectBank(bank)">
                                 <img v-if="bank.isOneBill" src="https://1link.net.pk/assets/images/logo.png"
-                                    alt="1 BILL" class="h-8 w-8 text-primary mr-4 hero-logo">
+                                    alt="1 BILL" class="h-8 w-8 text-primary mr-4 hero-logo flex-shrink-0">
+                                <Receipt v-else-if="!bank?.logo_path" class="h-8 w-8 text-primary mr-4 flex-shrink-0" />
+                                <img v-else :src="bank?.logo_path" class="h-8 w-8 mr-4 flex-shrink-0" />
 
-                                <Receipt v-else-if="!bank?.logo_path" class="h-8 w-8 text-primary mr-4" />
-                                <img v-else :src="bank?.logo_path" class="h-8 w-8 mr-4" />
-
-                                <div>
-                                    <p class="text-md font-medium text-gray-600">{{ bank.bank_name }}</p>
-                                    <p class="text-xl font-semibold text-gray-800">{{ bank.account_title }}</p>
-                                    <p v-if="!bank.isOneBill" class="text-lg text-gray-700">
+                                <div class="flex-1">
+                                    <p class="text-xs sm:text-sm font-medium text-gray-600">{{ bank.bank_name }}</p>
+                                    <p class="text-sm sm:text-base font-semibold text-gray-800 break-words">{{ bank.account_title }}</p>
+                                    <p v-if="!bank.isOneBill" class="text-xs sm:text-sm text-gray-700 break-words">
                                         Account: {{ bank.account_number }}
                                     </p>
-                                    <p v-if="!bank.isOneBill" class="text-lg text-gray-700">
+                                    <p v-if="!bank.isOneBill" class="text-xs sm:text-sm text-gray-700 break-words">
                                         IBAN: {{ bank.iban }}
                                     </p>
                                 </div>
@@ -410,7 +408,7 @@ watch(user, (newUser) => {
         <div class="bg-white rounded-lg mb-3">
             <span class="text-2xl font-bold">New Deposit - Bank Transfer</span>
             <div class="space-y-6">
-                <div class="grid grid-cols-5 gap-2">
+                <div class="grid grid-cols-5 max-[425px]:grid-cols-2 gap-2">
                     <div class="grid">
                         <label>Date</label>
                         <Input class="text-black" v-model="date" type="date" />
@@ -451,7 +449,7 @@ watch(user, (newUser) => {
                                         <div class="flex items-center gap-2">
                                             <img v-if="bank?.logo_path" :src="bank.logo_path" :alt="bank.bank_name"
                                                 class="w-5 h-5 object-contain shrink-0" />
-                                            <span class="truncate max-w-[150px] block">
+                                            <span class="truncate max-w-[150px] max-[320px]:max-w-[93px] block">
                                                 {{ bank.bank_name }} - {{ bank.account_title }} - {{ bank.account_number
                                                 }}
                                             </span>
@@ -575,21 +573,23 @@ watch(user, (newUser) => {
                     <Popover>
                         <PopoverTrigger as-child>
                             <Button variant="outline"
-                                :class="cn('w-[280px] justify-start text-left font-normal bg-white', !value && 'text-muted-foreground')">
-                                <CalendarIcon class="mr-2 h-4 w-4" />
-                                <template v-if="value.start">
-                                    <template v-if="value.end">
-                                        {{ df.format(value.start.toDate(getLocalTimeZone())) }} - {{
-                                            df.format(value.end.toDate(getLocalTimeZone())) }}
+                                :class="cn('w-full sm:w-[280px] justify-start text-left font-normal bg-white text-xs sm:text-sm', !value && 'text-muted-foreground')">
+                                <CalendarIcon class="mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span class="truncate">
+                                    <template v-if="value.start">
+                                        <template v-if="value.end">
+                                            {{ df.format(value.start.toDate(getLocalTimeZone())) }} - {{
+                                                df.format(value.end.toDate(getLocalTimeZone())) }}
+                                        </template>
+                                        <template v-else>
+                                            {{ df.format(value.start.toDate(getLocalTimeZone())) }}
+                                        </template>
                                     </template>
-                                    <template v-else>
-                                        {{ df.format(value.start.toDate(getLocalTimeZone())) }}
-                                    </template>
-                                </template>
-                                <template v-else> Pick a date </template>
+                                    <template v-else> Pick a date </template>
+                                </span>
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent class="w-auto p-0 bg-white">
+                        <PopoverContent class="w-[95vw] sm:w-auto p-0 bg-white">
                             <RangeCalendar v-model="value" initial-focus :number-of-months="2"
                                 @update:start-value="(startDate) => (value.start = startDate)" />
                         </PopoverContent>

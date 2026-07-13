@@ -17,9 +17,23 @@ export const SET_AGENT_DATA = "setAgentData";
 
 export const SET_AIRLINES = "setAirlines";
 export const SET_AIRPORTS = "setAirports";
+export const SET_AIRPORT = "setAirport";
 export const SET_AIRLINE = "setAirline"
 export const SET_ORIGINS = "setOrigins";
 export const SET_DESTINATIONS = "setDestinations";
+
+/**
+ * Hotdeals
+ */
+export const SET_HOT_DEALS = "setHotDeals";
+export const SET_HOT_DEAL = "setHotDeal";
+
+/**
+ * Newsletter
+ */
+// store/mutations.type.js
+export const SET_SUBSCRIBERS = "setSubcribers";
+export const SET_SUBSCRIBER = "setSubcriber";
 
 export const SET_PROVIDERS = "setProviders";
 export const SET_ANCILLARIES = "setAncillaries";
@@ -81,6 +95,7 @@ export const SET_TRAVELLER = "setTraveller";
 export const SET_DIALOG_OPEN = "setDialogOpen";
 
 export const SET_TRAVELLERS = "setTravellers";
+export const SET_MY_TRAVELLERS = "setMyTravellers";
 export const SET_ADMIN_BOOKING = "setAdminBooking";
 export const SET_BOOKING_STATUS_SETTING = "setBookingStatusSetting";
 export const SET_ADMIN_BOOKING_DATA = "setAdminBookingData";
@@ -98,6 +113,17 @@ export const REMOVE_NOTIFICATION = "removeNotification";
 export const MARK_NOTIFICATION_READ = "markNotificationRead";
 
 
+export const SET_REQUESTS = "setRequests";
+export const SET_REQUEST_DATA = "setRequestData";
+
+export const SET_POPULAR_ROUTES = "setPopularRoutes";
+export const SET_TOP_AIRLINES = "setTopAirlines";
+
+export const SET_BLOGS = "setBlogs";
+export const SET_BLOG = "setBlog";
+export const CLEAR_API_ERRORS = "clearApiErrors";
+
+
 export const SET_PROMOTIONS = "setPromotions";
 export const SET_PROMOTION = "setPromotion";
 export const SET_PROMOTION_PROVIDERS = "setPromotionProviders";
@@ -106,11 +132,5 @@ export const SET_SEGMENT_MARGINS = "setSegmentMargins";
 export const SET_SEGMENT_MARGIN = "setSegmentMargin";
 export const SET_SEGMENT_MARGIN_PROVIDERS = "setSegmentMarginProviders";
 
-export const SET_REQUESTS = "setRequests";
-export const SET_REQUEST_DATA = "setRequestData";
-
-export const SET_POPULAR_ROUTES = "setPopularRoutes";
-
-export const SET_BLOGS = "setBlogs";
-export const SET_BLOG = "setBlog";
-export const CLEAR_API_ERRORS = "clearApiErrors";
+export const SET_REVIEWS = "setReviews";
+export const SET_APPROVED_REVIEWS = "setApprovedReviews";

@@ -4,37 +4,16 @@ export const adminRoutes = [
         component: () => import("@/layouts/AdminLayout.vue"),
         meta: {
             requiresAuth: true,
-            requiredRole: "admin",
         },
         children: [
             {
                 path: "dashboard",
                 name: "Dashboard",
                 component: () => import("@/pages/admin/Dashboard.vue"),
+                meta: { requiredRole: 'admin' }
             },
-            {
-                path:"setting",
-                name: "Setting",
-                component: () => import("@/pages/admin/Setting.vue"),
-            },
+            // add
              {
-                path: "/zoho/callback",
-                name: "ZohoCallback",
-                component: () => import("@/pages/admin/ZohoCallback.vue"),
-            },
-            
-             {
-                path: "/activity-log",
-                name: "ActivityLog",
-                component: () => import("@/pages/admin/ActivityLog.vue"),
-            },
-
-            {
-                path: "customer-margin",
-                name: "CustomerMargin",
-                component: () => import("@/pages/admin/CustomerSettings.vue"),
-            },
- {
                 path: "promotions",
                 name: "Promotions",
                 component: () => import("@/pages/admin/Promotions.vue"),
@@ -84,6 +63,34 @@ export const adminRoutes = [
                     requiredPermissions: ["airlines_view"],
                 },
             },
+
+
+            {
+                path:"setting",
+                name: "Setting",
+                component: () => import("@/pages/admin/Setting.vue"),
+                meta: { permission: 'manage-settings' }
+            },
+             {
+                path: "/zoho/callback",
+                name: "ZohoCallback",
+                component: () => import("@/pages/admin/ZohoCallback.vue"),
+            },
+            
+             {
+                path: "/activity-log",
+                name: "ActivityLog",
+                component: () => import("@/pages/admin/ActivityLog.vue"),
+                meta: { permission: 'view-activity-logs' }
+            },
+
+            {
+                path: "customer-margin",
+                name: "CustomerMargin",
+                component: () => import("@/pages/admin/CustomerSettings.vue"),
+                meta: { permission: 'manage-settings' }
+            },
+
             {
                 path: "new-user",
                 name: "NewUser",
@@ -98,11 +105,13 @@ export const adminRoutes = [
                 path: "users",
                 name: "Users",
                 component: () => import("@/pages/admin/Users.vue"),
+                meta: { permission: 'manage-staff' }
             },
             {
                 path: "staff",
                 name: "Staff",
                 component: () => import("@/pages/admin/Staff.vue"),
+                meta: { permission: 'manage-staff' }
             },
             {
                 path: "update-staff",
@@ -115,6 +124,12 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/NewStaff.vue"),
             },
             {
+                path: "roles",
+                name: "Roles",
+                component: () => import("@/pages/admin/Roles.vue"),
+                meta: { permission: 'manage-roles' }
+            },
+            {
                 path: "user-details",
                 name: "UserDetails",
                 component: () => import("@/pages/admin/UserDetails.vue"),
@@ -123,11 +138,13 @@ export const adminRoutes = [
                 path: "banners",
                 name: "Banners",
                 component: () => import("@/pages/admin/Banners.vue"),
+                meta: { permission: 'manage-marketing' }
             },
             {
                 path: "topup-request",
                 name: "TopUpRequest",
                 component: () => import("@/pages/admin/TopUpRequests.vue"),
+                meta: { permission: 'manage-finance' }
             },
             {
                 path: "deposit-details",
@@ -138,6 +155,7 @@ export const adminRoutes = [
                 path: "bookings",
                 name: "Bookings",
                 component: () => import("@/pages/admin/Bookings.vue"),
+                meta: { permission: 'view-bookings' }
             },
             {
                 path: "offline-bookings",
@@ -163,11 +181,13 @@ export const adminRoutes = [
                 path: "void-bookings",
                 name: "VoidBookings",
                 component: () => import("@/pages/admin/VoidBookings.vue"),
+                meta: { permission: 'manage-bookings' }
             },
             {
                 path: "customers",
                 name: "Customers",
                 component: () => import("@/pages/admin/Customers.vue"),
+                meta: { permission: 'manage-customers' }
             },
             {
                 path: "customer-details",
@@ -203,11 +223,13 @@ export const adminRoutes = [
                 path: "airlines",
                 name: "Airlines",
                 component: () => import("@/pages/admin/Airlines.vue"),
+                meta: { permission: 'manage-airlines' }
             },
             {
                 path: "airport-markups",
                 name: "AirportMarkups",
                 component: () => import("@/pages/admin/AirportMargin.vue"),
+                meta: { permission: 'manage-airports' }
             },
             {
                 path: "new/airline",
@@ -222,17 +244,20 @@ export const adminRoutes = [
             {
                 path: "airports",
                 name: "Airports",
-                component: () => import("@/pages/admin/Airports.vue"),
+                component: () => import("@/pages/admin/crm/airports/Airports.vue"),
+                meta: { permission: 'manage-cms' }
             },
             {
-                path: "new/airport",
+                path: "airports/create",
                 name: "NewAirport",
-                component: () => import("@/pages/admin/newAirport.vue"),
+                component: () => import("@/pages/admin/crm/airports/NewAirport.vue"),
+                meta: { permission: 'manage-cms' }
             },
             {
-                path: "update/airport",
-                name: "UpdateAirport",
-                component: () => import("@/pages/admin/updateAirport.vue"),
+                path: "airports/edit/:id",
+                name: "EditAirport",
+                component: () => import("@/pages/admin/crm/airports/EditAirport.vue"),
+                meta: { permission: 'manage-cms' }
             },
             {
                 path: "aircrafts",
@@ -340,6 +365,11 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/NewBank.vue"),
             },
             {
+                path: "update-bank/:id",
+                name: "UpdateBank",
+                component: () => import("@/pages/admin/UpdateBank.vue"),
+            },
+            {
                 path: "banks",
                 name: "Banks",
                 component: () => import("@/pages/admin/Banks.vue"),
@@ -412,6 +442,31 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/crm/popularRoutes/NewPopularRoutes.vue"),
             },
             {
+                path: "popular-routes/view/:id",
+                name: "PopularRouteView",
+                component: () => import("@/pages/admin/crm/popularRoutes/ViewPopularRoute.vue"),
+            },
+            {
+                path: "popular-routes/edit/:id",
+                name: "PopularRouteEdit",
+                component: () => import("@/pages/admin/crm/popularRoutes/EditPopularRoute.vue"),
+            },
+            {
+                path: "top-airlines",
+                name: "TopAirlines",
+                component: () => import("@/pages/admin/crm/topAirlines/TopAirlines.vue"),
+            },
+            {
+                path: "top-airlines/create",
+                name: "NewTopAirline",
+                component: () => import("@/pages/admin/crm/topAirlines/NewTopAirline.vue"),
+            },
+            {
+                path: "top-airlines/edit/:id",
+                name: "EditTopAirline",
+                component: () => import("@/pages/admin/crm/topAirlines/EditTopAirline.vue"),
+            },
+            {
                 path: "blogs",
                 name: "Blogs",
                 component: () => import("@/pages/admin/crm/blogs/index.vue"),
@@ -426,8 +481,51 @@ export const adminRoutes = [
                 name: "UpdateBlog",
                 component: () => import("@/pages/admin/crm/blogs/newBlog.vue"),
             },
+            {
+                path: "seo-settings",
+                name: "SeoSettings",
+                component: () => import("@/pages/admin/crm/SeoSettings.vue"),
+                meta: { permission: 'manage-cms' },
+            },
+            {
+                path: "reviews",
+                name: "AdminReviews",
+                component: () => import("@/pages/admin/crm/reviews/Reviews.vue"),
+                meta: { permission: 'manage-cms' }
+            },
+            {
+                path: "subcribers",
+                name: "Subcribers",
+                component: () => import("@/pages/admin/crm/Subcribers/Subcribers.vue"),
+                meta: { permission: 'manage-cms' }
+            },
 
+            // hotDeals Routes
 
+            {
+                path: "hot-deals",
+                name: "HotDeals",
+                component: () => import("@/pages/admin/crm/HotDealsRoutes/IndexHotDealsRoutes.vue"),
+                meta: { permission: 'manage-cms' }
+            },
+            {
+                path: "hot-deals/create",
+                name: "HotDealCreate",
+                component: () => import("@/pages/admin/crm/HotDealsRoutes/CreateHotDealsRoutes.vue"),
+                meta: { permission: 'manage-cms' }
+            },
+            {
+                path: "hot-deals/:id/edit",
+                name: "HotDealEdit",
+                component: () => import("@/pages/admin/crm/HotDealsRoutes/EditHotDealsRoutes.vue"),
+                meta: { permission: 'manage-cms' }
+            },
+            {
+                path: "hot-deals/:id",
+                name: "HotDealView",
+                component: () => import("@/pages/admin/crm/HotDealsRoutes/ViewHotDealsRoutes.vue"),
+                meta: { permission: 'manage-cms' }
+            },
         ],
     },
 ];

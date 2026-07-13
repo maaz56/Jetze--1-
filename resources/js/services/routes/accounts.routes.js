@@ -90,17 +90,17 @@ export const adminAccountsRoutes = [
             {
                 path: "airports",
                 name: "Airports",
-                component: () => import("@/pages/admin/Airports.vue"),
+                component: () => import("@/pages/admin/crm/airports/Airports.vue"),
             },
             {
                 path: "new/airport",
                 name: "NewAirport",
-                component: () => import("@/pages/admin/newAirport.vue"),
+                component: () => import("@/pages/admin/crm/airports/NewAirport.vue"),
             },
             {
                 path: "update/airport",
                 name: "UpdateAirport",
-                component: () => import("@/pages/admin/updateAirport.vue"),
+                component: () => import("@/pages/admin/crm/airports/EditAirport.vue"),
             },
             {
                 path: "aircrafts",

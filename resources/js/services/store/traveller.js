@@ -3,6 +3,7 @@ import {
     ASSIGN_TICKET_NUMBER,
     DELETE_TRAVELLER,
     FETCH_TRAVELLERS,
+    FETCH_MY_TRAVELLERS,
     SAVE_TRAVELLER,
     UPDATE_TRAVELLER,
 } from "./actions.type";
@@ -12,12 +13,14 @@ import {
     SET_API_ERROR,
     SET_TRAVELLERS,
     SET_TRAVELLER,
+    SET_MY_TRAVELLERS,
 } from "./mutations.type";
 import { toast } from "vue3-toastify";
 
 const state = {
     travellers: [],
     traveller: {},
+    myTravellers: [],
     isLoading: false,
     apiErrors: [],
 };
@@ -25,6 +28,9 @@ const state = {
 const getters = {
     travellers(state) {
         return state.travellers;
+    },
+    myTravellers(state) {
+        return state.myTravellers;
     },
     traveller: (state) => (id) => {
         if (state.travellers != null) {
@@ -140,6 +146,18 @@ const actions = {
         }
     },
 
+    async [FETCH_MY_TRAVELLERS](context) {
+        context.commit(IS_LOADING);
+        try {
+            const response = await apiService.getMyTravellers();
+            context.commit(SET_MY_TRAVELLERS, response.data.passengers || []);
+        } catch (error) {
+            context.commit(SET_API_ERROR, error);
+        } finally {
+            context.commit(NOT_IS_LOADING);
+        }
+    },
+
     async [ASSIGN_TICKET_NUMBER]    (context, params) {
         context.commit(IS_LOADING);
         try {
@@ -183,6 +201,9 @@ const mutations = {
     },
     [SET_TRAVELLER](state, data) {
         state.traveller = data;
+    },
+    [SET_MY_TRAVELLERS](state, data) {
+        state.myTravellers = data;
     },
 };
 

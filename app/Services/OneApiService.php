@@ -92,7 +92,6 @@ class OneApiService
 
     public function searchFlights($params)
     {
-        Log::info($params);
 
         $this->accessToken = $this->getAccessToken();
         // Log::info('Access Token: ' . $this->accessToken);
@@ -209,7 +208,6 @@ class OneApiService
                 'json' => $requestBody,
             ]);
             $header = $response->getHeaders();
-            Log::info($header['set-cookie']);
             // $this->setJsessionId($header['set-cookie'][0]);
             $responseData = json_decode($response->getBody()->getContents(), true);
             $origin = $params['origin'];
@@ -268,7 +266,6 @@ class OneApiService
             // }
 
 
-            Log::info("OneAPI Response:\n" . json_encode($responseData, JSON_PRETTY_PRINT));
             return $responseData;
         } catch (RequestException $e) {
             Log::error('Error fetching flights from OneAPI: ' . $e->getMessage());
@@ -430,7 +427,6 @@ class OneApiService
         $isReturn = ($params['flight_type'] === 'return');
         $journeyType = $isReturn ? 'RETURN' : 'ONEWAY';
         $soapRequestXml = $dom->saveXML();
-        Log::info($soapRequestXml);
         $client = new Client();
         $headers = [
             'Content-Type' => 'text/xml; charset=utf-8',
@@ -441,7 +437,6 @@ class OneApiService
             'X-AERO-AGENT-CODE' => $this->agentCode,
         ];
         // Log::info('Before JSESSIONID: ' . $this->getJsessionId());
-        $headers['Cookie'] = $this->getJsessionId();
         try {
             $response = $client->post($this->priceUrl, [
                 'headers' => $headers,
@@ -463,12 +458,11 @@ class OneApiService
 
             $json = json_encode($xml);
             $header = $response->getHeaders();
-            $cookieHeader = $header['set-cookie'][0] ?? '';
-            Log::info($cookieHeader);
+
+            $jsessionId = $this->extractSessionCookieFromHeaders($header) ?? '';
             $jsonData = json_decode($json, true);
-            $jsonData['Body']['SetCookie'] = $cookieHeader;
+            $jsonData['Body']['SetCookie'] = $jsessionId;
             $json = json_encode($jsonData);
-            // Log::info($json);
             // $this->setJsessionId($cookieHeader);
             return $json;
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -740,7 +734,6 @@ class OneApiService
         //--------------------------------------------------------------
         $soapRequestXml = $dom->saveXML();
         Log::info($soapRequestXml);
-
         $client = new Client();
         $headers = [
             'Content-Type' => 'text/xml; charset=utf-8',
@@ -750,7 +743,8 @@ class OneApiService
             'X-AERO-USERID' => $this->username,
             'X-AERO-AGENT-CODE' => $this->agentCode,
         ];
-        $headers['Cookie'] = $flight['req_specific']['SetCookie'] ?? '';
+        $headers['Cookie'] = $request['flight']['req_specific']['SetCookie'];
+        Log::info('Sending Price Validation with JSESSIONID: ' , $headers);
         try {
             $response = $client->post($this->priceUrl, [
                 'headers' => $headers,
@@ -773,7 +767,7 @@ class OneApiService
             }
 
             $json = json_encode($xml);
-            Log::info($json);
+
             return $json;
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             // -----------------------------------------------------------------
@@ -848,31 +842,42 @@ class OneApiService
 
     private function extractQuotePassengers(array $quote, array $requestData = []): array
     {
-        $breakdowns = $quote['Body']['OTA_AirPriceRS']['PricedItineraries']['PricedItinerary']['AirItineraryPricingInfo']['PTC_FareBreakdowns']['PTC_FareBreakdown'] ?? [];
+        $pricedItineraries = $quote['Body']['OTA_AirPriceRS']['PricedItineraries']['PricedItinerary'] ?? [];
         $passengers = [];
 
-        foreach ($this->normalizeOneApiList($breakdowns) as $breakdown) {
-            $attributes = $breakdown['PassengerTypeQuantity']['@attributes'] ?? [];
-            $code = $attributes['Code'] ?? null;
-            $quantity = (int) ($attributes['Quantity'] ?? 0);
-
-            if (!$code || $quantity < 1) {
+        foreach ($this->normalizeOneApiList($pricedItineraries) as $pricedItinerary) {
+            if (!is_array($pricedItinerary)) {
                 continue;
             }
 
-            $refs = [];
-            foreach ($this->normalizeOneApiList($breakdown['TravelerRefNumber'] ?? []) as $travelerRef) {
-                $rph = $travelerRef['@attributes']['RPH'] ?? null;
-                if ($rph) {
-                    $refs[] = $rph;
+            $breakdowns = $pricedItinerary['AirItineraryPricingInfo']['PTC_FareBreakdowns']['PTC_FareBreakdown'] ?? [];
+            foreach ($this->normalizeOneApiList($breakdowns) as $breakdown) {
+                if (!is_array($breakdown)) {
+                    continue;
                 }
-            }
 
-            $passengers[] = [
-                'code' => $code,
-                'quantity' => $quantity,
-                'traveler_refs' => $refs,
-            ];
+                $attributes = $breakdown['PassengerTypeQuantity']['@attributes'] ?? [];
+                $code = $attributes['Code'] ?? null;
+                $quantity = (int) ($attributes['Quantity'] ?? 0);
+
+                if (!$code || $quantity < 1) {
+                    continue;
+                }
+
+                $refs = [];
+                foreach ($this->normalizeOneApiList($breakdown['TravelerRefNumber'] ?? []) as $travelerRef) {
+                    $rph = is_array($travelerRef) ? ($travelerRef['@attributes']['RPH'] ?? null) : null;
+                    if ($rph) {
+                        $refs[] = $rph;
+                    }
+                }
+
+                $passengers[] = [
+                    'code' => $code,
+                    'quantity' => $quantity,
+                    'traveler_refs' => $refs,
+                ];
+            }
         }
 
         if (!empty($passengers)) {
@@ -1052,7 +1057,6 @@ class OneApiService
 
         // Output XML
         $xml = $dom->saveXML();
-        Log::info($xml);
         $journeyType = '';
         $flights = $flightData['leg']['flights'];
         $flightCount = count($flights);
@@ -1315,7 +1319,6 @@ class OneApiService
 
         // Output XML
         $xml = $dom->saveXML();
-        Log::info($xml);
         try {
             $headers = [
                 'Content-Type' => 'text/xml; charset=utf-8',
@@ -1932,7 +1935,6 @@ $flightCount = count($legs);
         }
         
         $xml = $doc->saveXML();
-        Log::info("OneApi Price with Bundle SSR Request XML:\n" . $xml);
         try {
             $headers = [
                 'Content-Type' => 'text/xml; charset=utf-8',
@@ -1977,7 +1979,6 @@ $flightCount = count($legs);
             $json = json_encode($xml);
             $array = json_decode($json, true);
 
-            Log::info($array);
             if (
                 
                 isset($array['Errors']['Error']) 
@@ -2046,7 +2047,6 @@ $flightCount = count($legs);
 
      public function bookFlight($request)
     {
-        Log::info($request);
         $flight = $request['flight'];
         $req = $flight['req_specific'];
         $ancillariesResponse = $request['ancillariesResponse'] ?? [];
@@ -2272,7 +2272,6 @@ $flightCount = count($legs);
 
         /* ===================== FINAL XML ===================== */
         $xml = $dom->saveXML();
-        Log::info("SOAP BOOK REQUEST:");
         Log::info($xml);
         $journeyType = '';
         $flights = $flight['leg']['flights'];
@@ -2300,7 +2299,7 @@ $flightCount = count($legs);
                 'X-AERO-JOURNEY-TYPE' => $journeyType,
             ];
             $headers['Cookie'] = $flight['req_specific']['SetCookie'] ?? '';
-            Log::info(json_encode($headers));
+            Log::info($headers);
 
             $client = new Client([
                 'base_uri' => $this->priceUrl,
@@ -2312,6 +2311,7 @@ $flightCount = count($legs);
             // 1. Send request
             // -----------------------------------------------------------------
             $response = $client->post('', ['body' => $xml]);
+            $responseHeaders = $response->getHeaders();
             $responseBody = (string) $response->getBody();
 
             Log::info("OneApi Booking Response XML:\n" . $responseBody);

@@ -147,7 +147,7 @@ class RegisteredUserController extends Controller
                     'phone' => ['required', 'string', 'max:255'],
                     'role' => ['required', 'in:customer'],
                     'name' => 'required|string|max:255',
-                    'lastName' => 'nullable|string|max:255',
+                    // 'lastName' => 'nullable|string|max:255',
                     'mobile' => 'required|string|max:15',
                     'address' => 'nullable|string',
                     'preferred_currency' => 'nullable',
@@ -155,7 +155,7 @@ class RegisteredUserController extends Controller
                 ]);
             
                 $user = User::create([
-                    'name' => trim(($validated['name'] ?? '') . ' ' . ($validated['lastName'] ?? '')),
+                    'name' => trim(($validated['name'])),
                     'email' => $validated['email'],
                     'password' => Hash::make($validated['password']),
                     'is_approved' => true,
@@ -166,7 +166,7 @@ class RegisteredUserController extends Controller
                 Customer::create([
                     'user_id' => $user->id,
                     'name' => $validated['name'],
-                    'last_name' => $validated['lastName'],
+                    // 'last_name' => $validated['lastName'],
                     'email' => $validated['email'],
                     'phone' => $validated['phone'],
                     'address' => $validated['address'] ?? null,
@@ -183,7 +183,7 @@ class RegisteredUserController extends Controller
                 Carbon::now()->addMinutes(config('auth.verification.expire', 60)),
                 ['id' => $user->getKey(), 'hash' => sha1($user->getEmailForVerification())]
             );
-            Mail::to($user->email)->send(new EmailVerification(
+           Mail::to($user->email)->send(new EmailVerification(
                 $verificationUrl,
                 (string) ($user->name ?? ''),
                 (string) ($user->email ?? ''),

@@ -1,8 +1,8 @@
 <template>
   <div v-show="loading" class="flex items-center justify-center space-x-2">
-    <div class="w-4 h-4 rounded-md bg-primary animate-beat"></div>
-    <div class="w-4 h-4 rounded-md bg-primary animate-beat delay-150"></div>
-    <div class="w-4 h-4 rounded-md bg-primary animate-beat"></div>
+    <div class="w-4 h-4 rounded-md bg-secondary animate-beat"></div>
+    <div class="w-4 h-4 rounded-md bg-secondary animate-beat delay-150"></div>
+    <div class="w-4 h-4 rounded-md bg-secondary animate-beat"></div>
   </div>
 </template>
 

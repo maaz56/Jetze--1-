@@ -23,7 +23,7 @@ class FlightController extends Controller
 
         $this->sooperApiService = $sooperApiService;
     }
-     public function fetchProviders()
+    public function fetchProviders()
     {
 
 
@@ -31,16 +31,17 @@ class FlightController extends Controller
         $apiProviders = [
             // ['identifier' => 'AirBlue', 'name' => 'AirBlue'],
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
+            ['identifier' => 'AT', 'name' => 'Akbar Travels'],
+
             // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
             // ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
-            ['identifier' => 'AT', 'name' => 'Akbar Travels'],
         ];
         // $apiProviders = array_merge($apiProviders, $sooperProviders);
         return response()->json($apiProviders);
     }
+
     public function index(Request $request)
     {
-        Log::info("Flight Search Request: " . json_encode($request->all(), JSON_PRETTY_PRINT));
         // Determine the flight type
         $flightType = $request->flightType;
         // Log::info($request->airline);
@@ -53,6 +54,7 @@ class FlightController extends Controller
             'infants' => $request->infants ?? 0,
             'flight_type' => $flightType,
             'currency_code' => $request->currencyCode ?? 'PKR', // Default to PKR if not provided
+            'flexible_plus_minus_3' => filter_var($request->flexible_plus_minus_3 ?? false, FILTER_VALIDATE_BOOLEAN),
         ];
 
         // Handle params based on flight type

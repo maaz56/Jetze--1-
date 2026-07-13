@@ -16,6 +16,7 @@
         "php-open-source-saver/jwt-auth": "^2.7",
         "pusher/pusher-php-server": "^7.2",
         "soapbox/laravel-formatter": "^2.0",
+        "spatie/laravel-permission": "*",
         "stripe/stripe-php": "^17.4"
     },
     "require-dev": {
@@ -70,6 +71,9 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "audit": {
+            "block-insecure": false
         }
     },
     "minimum-stability": "stable",

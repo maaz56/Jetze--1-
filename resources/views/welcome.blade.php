@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <title>Jetze</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    @include('partials.google-tag')
     
     <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -52,8 +54,7 @@
                         console.error("Failed to load favicon image");
                     };
                     
-                    // Set the image source - this should be the path to your favicon in the public directory
-                    img.src = '/favicon.png'; // Make sure this file exists in your public directory
+                    img.src = '/favicon.ico';
                 },
                 
                 // Start animation

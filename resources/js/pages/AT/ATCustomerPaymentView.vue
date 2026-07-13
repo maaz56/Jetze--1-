@@ -429,7 +429,7 @@
                 <span class="text-2xl">📞</span>
                 <h4 class="font-bold text-slate-900">Contact Us :</h4>
               </div>
-              <p class="text-sm text-slate-600">+92 311 1711123</p>
+              <p class="text-sm text-slate-600">+92 00000000</p>
             </div>
             <div class="bg-white rounded p-6 shadow-sm">
               <div class="flex items-center gap-3 mb-3">

@@ -29,7 +29,7 @@
                                 Dear <strong style="color:#A43734;">{{ $booking->user->name }}</strong>,
                             </p>
                             <p style="font-size:16px; margin-bottom:25px;">
-                                Thank you for booking with <strong>Jetze</strong>. Your offline booking has been
+                                Thank you for booking with <strong>Jetze.pk</strong>. Your offline booking has been
                                 recorded successfully.
                             </p>
 

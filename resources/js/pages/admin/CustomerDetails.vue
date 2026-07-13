@@ -579,13 +579,12 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
-
                 <!-- Bookings Overview -->
                 <div class="bg-white rounded-xl border shadow-sm p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-800">Bookings Overview</h3>
                         <Button v-if="authUser?.role === 'admin'"
-                            @click="$router.push({ name: 'AgentDetailBookings', query: { userId: agentData.id, userRole: agentData.role } })"
+                            @click="$router.push({ name: 'AdminCustomerBookings', query: { userId: agentData?.user?.id, userRole: agentData?.role } })"
                             size="sm" class="flex items-center gap-2">
                             <ShoppingCart class="w-4 h-4" />
                             View All

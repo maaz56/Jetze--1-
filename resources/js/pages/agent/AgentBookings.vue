@@ -453,7 +453,9 @@ onMounted(() => {
                                     </div>
                                     
                                 </td>
-                                <td class="py-2 px-4 uppercase">{{ booking.status }}</td>
+                                <td class="py-2 px-4">
+                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                </td>
                                 <td class="px-1 py-4">
                                     <div class="flex space-x-2">
                                         <div class="flex space-x-2">

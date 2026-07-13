@@ -148,7 +148,7 @@ onMounted(() => {
                 <div class="flex items-center group">
                     <Phone class="h-4 w-4 mr-1 text-primary" />
                     <a href="tel:03111448111" class="text-xs lg:text-sm text-primary-400 hover:text-gray-200">
-                        (+92) 0000000000
+                        (+92) 3111711123
                     </a>
                 </div>
 
@@ -240,7 +240,7 @@ onMounted(() => {
                 <div class="flex items-center group">
                     <Phone class="h-4 w-4 mr-2 text-primary" />
                     <a href="tel:+923111448111" class="text-sm text-primary-400 hover:text-gray-200">
-                         (+92) 0000000000
+                         (+92) 3111711123
                     </a>
                 </div>
 

@@ -98,6 +98,7 @@ class BookingConfirmedMail extends Mailable implements ShouldQueue
             'flight_provider' => $flightProvider,
             'booking_source' => $bookingSource,
             'pnr' => $pnr,
+            'download' => 'pdf',
         ];
         if ($flightId !== '' && $flightId !== 'UNKNOWN') {
             $eTicketParams['flight_id'] = $flightId;

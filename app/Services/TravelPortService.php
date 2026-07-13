@@ -39,11 +39,28 @@ class TravelPortService
 
     }
 
-    private function resolveSegmentValue($map, $segmentRef, $index)
+    private function resolveSegmentValue($map, $segmentRef, $index, $sequence = null)
     {
         if (is_array($map)) {
-            if ($segmentRef !== null && array_key_exists($segmentRef, $map)) {
-                return $map[$segmentRef];
+            if ($segmentRef !== null) {
+                $segmentRefKey = (string) $segmentRef;
+                if (array_key_exists($segmentRefKey, $map)) {
+                    return $map[$segmentRefKey];
+                }
+                if (array_key_exists($segmentRef, $map)) {
+                    return $map[$segmentRef];
+                }
+            }
+
+            if ($sequence !== null) {
+                $sequenceInt = (int) $sequence;
+                if (array_key_exists($sequenceInt, $map)) {
+                    return $map[$sequenceInt];
+                }
+                $sequenceKey = (string) $sequenceInt;
+                if (array_key_exists($sequenceKey, $map)) {
+                    return $map[$sequenceKey];
+                }
             }
             if (array_key_exists($index, $map)) {
                 return $map[$index];
@@ -113,7 +130,7 @@ class TravelPortService
     public function searchFlights($params)
     {
 
-        // Log::info("Searching TravelPort Flights with params: " . json_encode($params));
+        Log::info("Searching TravelPort Flights with params: " . json_encode($params));
         try {
 
             // First, get the TravelPort token
@@ -122,11 +139,15 @@ class TravelPortService
                 Log::error("TravelPort Token not retrieved");
                 return ['error' => 'Unable to get access token'];
             }
+            $usePremiumFlex = filter_var($params['flexible_plus_minus_3'] ?? false, FILTER_VALIDATE_BOOLEAN);
             // Prepare API endpoint
             $searchUrl = $this->searchUrl . '/' . $this->apiVersion . '/air/catalog/search/catalogproductofferings';
-                    //    $searchUrl = $this->searchUrl . '/' . $this->apiVersion . '/air/catalog/search/catalogproductofferings/premiumflex';
+            if ($usePremiumFlex && ($params['airline'] === 'TravelPort-GDS')) {
+                Log::info("Using Premium Flex search criteria for TravelPort");
+                $searchUrl .= '/premiumflex';
+            }
 
-
+                Log::info($searchUrl);
             // Prepare headers
             $headers = [
                 'Accept-Encoding' => 'gzip, deflate',
@@ -157,8 +178,6 @@ class TravelPortService
                     [
                         '@type' => 'SearchCriteriaFlight',
                         'departureDate' => $params['departure_date'],
-                        "daysBeforeDeparture" => 3,
-                        "daysAfterDeparture" => 3,
                         'From' => [
                             'value' => $params['origin']
                         ],
@@ -167,6 +186,7 @@ class TravelPortService
                         ]
                     ]
                 ];
+                
             }
 
 
@@ -196,7 +216,7 @@ class TravelPortService
                         [
                             '@type' => 'PassengerCriteria',
                             'number' => (int) ($params['children'] ?? 0),
-                            'passengerTypeCode' => 'CNN'
+                            'passengerTypeCode' => 'CHD'
                         ],
                         [
                             '@type' => 'PassengerCriteria',
@@ -233,6 +253,17 @@ class TravelPortService
                     ]
                 ];
             }
+            
+
+
+if ($usePremiumFlex && ($params['airline'] === 'TravelPort-GDS')) {
+    foreach ($body['CatalogProductOfferingsRequest']['SearchCriteriaFlight'] as &$flightCriteria) {
+        $flightCriteria['daysBeforeDeparture'] = 3;
+        $flightCriteria['daysAfterDeparture'] = 3;
+    }
+
+    unset($flightCriteria);
+}
 
             if ($params['flight_type'] === 'multi-city') {
                 // Initialize array if not set
@@ -257,8 +288,8 @@ class TravelPortService
                     "SearchRepresentation" => "Journey"
                 ];
             }
-            Log::info("TravelPort Flight Search Request Body: " . json_encode($body));
 
+            Log::info(json_encode($body, JSON_PRETTY_PRINT));
             $request = new Request(
                 'POST',
                 $searchUrl,
@@ -272,9 +303,6 @@ class TravelPortService
 
             // Decode the JSON response
             $data = json_decode($response->getBody()->getContents(), true);
-
-            Log::info("TravelPort Flight Search Response: " . json_encode($data));
-
             return $data;
 
         } catch (\Exception $e) {
@@ -285,7 +313,6 @@ class TravelPortService
 
     public function travelportNDCPRriceRequest($data)
     {
-        Log::info("TravelPort NDC Price Request", ['data' => $data]);
 
         $flightData = $data['flight_data']['leg']['flights'];
         $selectedFares = $data['selectedFares']; // This contains ['QR__CC01', 'QR__CC01']
@@ -384,7 +411,6 @@ class TravelPortService
     }
     public function travelportPrice($data)
     {
-        Log::info($data);
         $productCriteriaAir = [];
         $brandTier = null;
         $cabin = null;
@@ -405,7 +431,6 @@ class TravelPortService
                 foreach ($flight['fares'] as $fareIndex => $fare) {
                     if ($fare['ref_id'] === $data['selectedFares'][$flightIdx]) {
                         // Travelport brandTier starts from 1. Skip Economy/empty.
-                        Log::info(json_encode($fare));
                         $brandTierRaw = $fare['brand_tier'] ?? null;
                         if ($brandTierRaw === 'Economy' || $brandTierRaw === null || $brandTierRaw === '') {
                             $brandTier = null;
@@ -420,8 +445,9 @@ class TravelPortService
                     }
                 }
                 $segmentRef = $segment['segment_ref'] ?? null;
-                $segmentCabin = $this->resolveSegmentValue($cabin, $segmentRef, $index);
-                $segmentRbd = $this->resolveSegmentValue($rbd, $segmentRef, $index);
+                $segmentSequence = $index + 1;
+                $segmentCabin = $this->resolveSegmentValue($cabin, $segmentRef, $index, $segmentSequence);
+                $segmentRbd = $this->resolveSegmentValue($rbd, $segmentRef, $index, $segmentSequence);
                 $segmentPayload = [
                     'flightNumber' => $segment['flight_number'],
                     'carrier' => $segment['operating_carrier']['iata'],
@@ -433,7 +459,7 @@ class TravelPortService
                     'to' => $segment['to']['iata'],
                     'classOfService' => $segmentRbd,
                     'cabin' => is_array($segmentCabin) ? ($segmentCabin[0] ?? null) : $segmentCabin,
-                    'segmentSequence' => $index + 1,
+                    'segmentSequence' => $segmentSequence,
                     'AvailabilitySourceCode' => $segment['availability_source_code'] ?? '',
                     'ContentSource' => 'GDS',
                 ];
@@ -763,7 +789,6 @@ class TravelPortService
     public function addOffer($data)
     {
 
-        Log::info($data);
         $productCriteriaAir = [];
         $specificSegments = [];
         $brandTier = null;
@@ -783,7 +808,6 @@ class TravelPortService
                 foreach ($flight['fares'] as $fareIndex => $fare) {
                     if ($fare['ref_id'] === $data['fare_reference'][$flightIdx]) {
                         // Travelport brandTier starts from 1. Skip Economy/empty.
-                        Log::info($fare);
                         $brandTierRaw = $fare['brand_tier'] ?? null;
                         if ($brandTierRaw === 'Economy' || $brandTierRaw === null || $brandTierRaw === '') {
                             $brandTier = null;
@@ -797,8 +821,9 @@ class TravelPortService
                     }
                 }
                 $segmentRef = $segment['segment_ref'] ?? null;
-                $segmentCabin = $this->resolveSegmentValue($cabin, $segmentRef, $index);
-                $segmentRbd = $this->resolveSegmentValue($rbd, $segmentRef, $index);
+                $segmentSequence = $index + 1;
+                $segmentCabin = $this->resolveSegmentValue($cabin, $segmentRef, $index, $segmentSequence);
+                $segmentRbd = $this->resolveSegmentValue($rbd, $segmentRef, $index, $segmentSequence);
                 $segmentPayload = [
                     'flightNumber' => $segment['flight_number'],
                     'carrier' => $segment['operating_carrier']['iata'],
@@ -810,7 +835,7 @@ class TravelPortService
                     'to' => $segment['to']['iata'],
                     'classOfService' => $segmentRbd,
                     'cabin' => is_array($segmentCabin) ? ($segmentCabin[0] ?? null) : $segmentCabin,
-                    'segmentSequence' => $index + 1,
+                    'segmentSequence' => $segmentSequence,
                     'AvailabilitySourceCode' => $segment['availability_source_code'] ?? '',
                     'ContentSource' => 'GDS',
                 ];
@@ -877,7 +902,6 @@ class TravelPortService
                     return $wresponse;
                 }
             }
-            Log::info($this->sessionId);
             // Prepare API endpoint
             $searchUrl = $this->searchUrl . '/' . $this->apiVersion . '/air/book/airoffer/reservationworkbench/' . $this->sessionId . '/offers/buildfromproducts';
 
@@ -905,7 +929,6 @@ class TravelPortService
             $response = $this->client->sendAsync($request)->wait();
 
             // Decode the JSON response
-            Log::info("TravelPort offer Response: ", [$response]);
             $data = json_decode($response->getBody()->getContents(), true);
             Log::info("TravelPort offer Response: " . json_encode($data));
             if (isset($data['OfferListResponse']['Result']['Error'])) {
@@ -980,7 +1003,7 @@ class TravelPortService
                 $payload = [
                     '@type' => 'Traveler',
                     'id' => 'trav_' . ($index + 1),
-                    'passengerTypeCode' => $traveller['type'],
+                    'passengerTypeCode' => $traveller['type'] === 'CNN' ? 'CHD' : $traveller['type'],
                     'gender' => $gender,
                     'birthDate' => $traveller['dob'],
 
@@ -1253,7 +1276,6 @@ class TravelPortService
             $searchUrl = $this->searchUrl . '/' . $this->apiVersion .
                 '/air/payment/reservationworkbench/' .
                 $this->confirmationId . '/formofpayment';
-            Log::info($searchUrl);
             $headers = [
                 'Accept-Encoding' => 'gzip, deflate',
                 'Cache-Control' => 'no-cache',
@@ -1578,9 +1600,10 @@ class TravelPortService
             }
 
             $data = json_decode($response->getBody()->getContents(), true);
-            if ($data['ReceiptListResponse']['Result']['Error'] ?? false) {
-                Log::error('TravelPort: API error', $data['ReceiptListResponse']['Result']['Error']);
-                return null;
+            $apiError = $this->extractTravelportError($data);
+            if ($apiError) {
+                Log::error('TravelPort: API error', $apiError);
+                return ['success' => false, 'error' => $apiError['message'], 'data' => $apiError];
             }
             // Validate JSON
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -1664,9 +1687,10 @@ class TravelPortService
             }
 
             $data = json_decode($response->getBody()->getContents(), true);
-            if ($data['ReceiptListResponse']['Result']['Error'] ?? false) {
-                Log::error('TravelPort: API error', $data['ReceiptListResponse']['Result']['Error']);
-                return null;
+            $apiError = $this->extractTravelportError($data);
+            if ($apiError) {
+                Log::error('TravelPort: API error', $apiError);
+                return ['success' => false, 'error' => $apiError['message'], 'data' => $apiError];
             }
             // Validate JSON
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -1733,9 +1757,10 @@ class TravelPortService
             }
 
             $data = json_decode($response->getBody()->getContents(), true);
-            if ($data['ReceiptListResponse']['Result']['Error'] ?? false) {
-                Log::error('TravelPort: API error', $data['ReceiptListResponse']['Result']['Error']);
-                return null;
+            $apiError = $this->extractTravelportError($data);
+            if ($apiError) {
+                Log::error('TravelPort: API error', $apiError);
+                return ['success' => false, 'error' => $apiError['message'], 'data' => $apiError];
             }
             // Validate JSON
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -1744,12 +1769,12 @@ class TravelPortService
                 ]);
                 return ['error' => 'Invalid response format'];
             }
-            Log::info('TravelPort Void refund commit Response', $data);
+            Log::info('TravelPort Void refund commit Response'. json_encode($data));
             return ['success' => true, 'data' => $data];    
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             Log::error('TravelPort: Request exception', [
                 'message' => $e->getMessage(),
-                'response' => $e->hasResponse()                    ? $e->getResponse()->getBody()->getContents()
+                'response' => $e->hasResponse()  ? $e->getResponse()->getBody()->getContents()
                     : null,
             ]); 
             return ['error' => 'TravelPort request failed'];
@@ -1760,10 +1785,9 @@ class TravelPortService
             return ['error' => 'Unexpected server error'];
         }
     }
-    public function voidReservation($request)
+    public function voidReservation($pnr)
     {
-        Log::info('Initiating void reservation for PNR: ' . $request['pnr']);
-        $pnr = $request['pnr'];
+        Log::info('Initiating void reservation for PNR: ' . $pnr);
         $session = $this->initiateRefundWorkbench($pnr);
         Log::info('Refund Workbench Session Response', $session);
         if ($session['success'] ?? false) {
@@ -1782,7 +1806,191 @@ class TravelPortService
 
             }
             
-        } 
+        }
+
+        return [
+            'success' => false,
+            'error' => $session['error'] ?? 'Unable to initiate refund workbench',
+            'data' => $session['data'] ?? null,
+        ];
+    }
+
+    public function ticketDisplayNumber($pnr){
+        Log::info('Initiating ticket display for PNR: ' . $pnr);
+        try{
+
+        $token = $this->getAccessToken();
+            if (!$token) {
+                Log::error('TravelPort: Access token not retrieved');
+                return ['error' => 'Unable to get access token'];
+            }
+
+            // Endpoint
+            $searchUrl = $this->searchUrl . '/' . $this->apiVersion . '/air/receipt/reservations/' . $pnr.'/receipts';
+
+            
+            $headers = [
+                'Accept-Encoding' => 'gzip, deflate',
+                'Cache-Control' => 'no-cache',
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'XAUTH_TRAVELPORT_ACCESSGROUP' => $this->accessGroup,
+                'Accept-Version' => $this->apiVersion,
+                'Content-Version' => $this->apiVersion,
+                'taxBreakDown' => 'true',
+                'Authorization' => 'Bearer ' . $token,
+                'RetainFlag' => 'false'
+            ];
+
+            $request = new Request('GET', $searchUrl, $headers);
+
+            // Send request
+            $response = $this->client->sendAsync($request)->wait();
+
+            // Validate HTTP response
+            if ($response->getStatusCode() !== 200) {
+                Log::error('TravelPort: Invalid status code', [
+                    'status' => $response->getStatusCode(),
+                    'body' => $response->getBody()->getContents(),
+                ]);
+                return ['error' => 'Invalid response from TravelPort'];
+            }
+            $data = json_decode($response->getBody()->getContents(), true);
+            if ($data['ReceiptListResponse']['Result']['Error'] ?? false) {
+                Log::error('TravelPort: API error', $data['ReceiptListResponse']['Result']['Error']);
+                return null;
+            }
+
+             Log::info('TravelPort ticket display Response'. json_encode($data));
+                return ['success' => true, 'data' => $data];   
+
+        } catch (\Throwable $e) {
+            Log::error('TravelPort: Ticket Display Number Error', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['error' => 'Unexpected server error during ticket display'];
+        }
+    }
+    public function voidGDSReservation($pnr)
+    {
+        Log::info('Initiating GDS void reservation for PNR: ' . $pnr);
+        try {
+            $response = $this->ticketDisplayNumber($pnr);
+            Log::info('TravelPort ticket display response for GDS void', (array) $response);
+
+            if (!($response['success'] ?? false)) {
+                return ['error' => $response['error'] ?? 'Unable to fetch ticket numbers for void'];
+            }
+
+            $receiptIds = data_get($response, 'data.ReceiptListResponse.ReceiptID', []);
+            if (!is_array($receiptIds)) {
+                $receiptIds = [$receiptIds];
+            }
+
+            $ticketNumbers = [];
+            foreach ($receiptIds as $receipt) {
+                $documents = $receipt['Document'] ?? [];
+                if (!is_array($documents)) {
+                    $documents = [$documents];
+                }
+
+                foreach ($documents as $document) {
+                    $number = $document['Number'] ?? null;
+                    if (!empty($number)) {
+                        $ticketNumbers[] = (string) $number;
+                    }
+                }
+            }
+
+            $ticketNumbers = array_values(array_unique($ticketNumbers));
+            if (empty($ticketNumbers)) {
+                return ['error' => 'No ticket numbers found to update status'];
+            }
+
+            $token = $this->getAccessToken();
+            if (!$token) {
+                Log::error('TravelPort: Access token not retrieved');
+                return ['error' => 'Unable to get access token'];
+            }
+            $headers = [
+                'Accept-Encoding' => 'gzip, deflate',
+                'Cache-Control' => 'no-cache',
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'XAUTH_TRAVELPORT_ACCESSGROUP' => $this->accessGroup,
+                'Accept-Version' => $this->apiVersion,
+                'Content-Version' => $this->apiVersion,
+                'taxBreakDown' => 'true',
+                'Authorization' => 'Bearer ' . $token,
+                'RetainFlag' => 'false'
+            ];
+            $results = [];
+            foreach ($ticketNumbers as $ticketNumber) {
+                $searchUrl = $this->searchUrl . '/' . $this->apiVersion . '/air/ticket/tickets/updatestatus/' . $ticketNumber;
+                $body = [
+                    'TicketQueryUpdateTicket' => (object) [],
+                ];
+                Log::info(json_encode($body));
+                try {
+                    $request = new Request('PUT', $searchUrl, $headers, json_encode($body));
+                    $apiResponse = $this->client->sendAsync($request)->wait();
+                    $rawBody = $apiResponse->getBody()->getContents();
+                    $payload = json_decode($rawBody, true);
+
+                    $resultErrors = data_get($payload, 'Result.Error', []);
+                    if (!is_array($resultErrors)) {
+                        $resultErrors = [$resultErrors];
+                    }
+
+                    $alreadyVoid = collect($resultErrors)->contains(function ($err) {
+                        $message = strtoupper((string) ($err['Message'] ?? ''));
+                        return str_contains($message, 'DOCUMENT IS ALREADY IN VOID STATUS');
+                    });
+
+                    $hasApiError = !empty($payload['ErrorResponse']) || (!empty($resultErrors) && !$alreadyVoid);
+                    $isSuccess = $apiResponse->getStatusCode() === 200 && !empty($payload) && (!$hasApiError || $alreadyVoid);
+
+                    $results[] = [
+                        'ticket_number' => $ticketNumber,
+                        'success' => $isSuccess,
+                        'status_code' => $apiResponse->getStatusCode(),
+                        'response' => $payload,
+                        'raw_response' => $rawBody,
+                        'already_void' => $alreadyVoid,
+                    ];
+                } catch (\GuzzleHttp\Exception\RequestException $e) {
+                    $errorBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : null;
+                    $results[] = [
+                        'ticket_number' => $ticketNumber,
+                        'success' => false,
+                        'status_code' => $e->hasResponse() ? $e->getResponse()->getStatusCode() : 500,
+                        'response' => $errorBody ? json_decode($errorBody, true) : null,
+                        'raw_response' => $errorBody,
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            Log::info('TravelPort GDS update-status results', $results);
+            $hasFailure = collect($results)->contains(fn($r) => !($r['success'] ?? false));
+            if ($hasFailure) {
+                return [
+                    'success' => false,
+                    'error' => 'One or more ticket status updates failed',
+                    'data' => $results,
+                    'ticket_numbers' => $ticketNumbers,
+                ];
+            }
+
+            return ['success' => true, 'data' => $results, 'ticket_numbers' => $ticketNumbers];
+
+        } catch (\Throwable $e) {
+            Log::info($e->getMessage());
+            Log::error('TravelPort: Void GDS Reservation Error', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['error' => 'Unexpected server error during GDS void'];
+        }
     }
     public function getBookingDetails($pnr)
     {
@@ -1835,7 +2043,6 @@ class TravelPortService
                 return ['error' => 'Invalid response format'];
             }
 
-            Log::info('TravelPort Reservation Details Response', $data);
 
             return $data;
         
@@ -1859,5 +2066,33 @@ class TravelPortService
 
             return ['error' => 'Unexpected server error'];
         }
+    }
+
+    private function extractTravelportError(array $data): ?array
+    {
+        $paths = [
+            'ReservationResponse.Result.Error',
+            'ReceiptListResponse.Result.Error',
+            'ErrorResponse.Result.Error',
+            'Result.Error',
+        ];
+
+        foreach ($paths as $path) {
+            $error = data_get($data, $path);
+            if (empty($error)) {
+                continue;
+            }
+
+            $errors = is_array($error) && array_is_list($error) ? $error : [$error];
+            $first = $errors[0] ?? [];
+            $message = $first['Message'] ?? $first['message'] ?? 'Travelport API returned an error';
+
+            return [
+                'message' => $message,
+                'errors' => $errors,
+            ];
+        }
+
+        return null;
     }
 }

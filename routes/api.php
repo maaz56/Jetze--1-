@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\SegmentMarginController;
+use App\Http\Controllers\Api\SeoSettingController;
 use App\Http\Controllers\Api\BlogController;
+use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AdminSettingsController;
 use App\Http\Controllers\Api\AgentTravellerController;
@@ -26,8 +29,6 @@ use App\Http\Controllers\Api\ModifyRequestController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PromoImageController;
-use App\Http\Controllers\Api\PromotionController;
-use App\Http\Controllers\Api\SegmentMarginController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisaController;
@@ -37,7 +38,11 @@ use App\Http\Controllers\Api\UmrahPackageController;
 use App\Http\Controllers\Api\AgentDataController;
 use App\Http\Controllers\Api\DepositDataController;
 use App\Http\Controllers\Api\AgentLedgerController;
+use App\Http\Controllers\Api\HotDealController;
+use App\Http\Controllers\Api\NewsletterSubscriberController;
+use App\Http\Controllers\Api\PromotionController;
 use App\Http\Controllers\Api\ZohoController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\NotificationController;
 
@@ -55,9 +60,38 @@ Route::post('/login/request-otp', [App\Http\Controllers\Auth\AuthenticatedSessio
 Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'verifyLoginOtp']);
 
 
+// full CRUD
+Route::post('/subscribers', [NewsletterSubscriberController::class, 'store']);
+Route::get('/subscribers', [NewsletterSubscriberController::class, 'index']);
+Route::get('/subscribers/{id}', [NewsletterSubscriberController::class, 'show']);
+Route::put('/subscribers/{id}', [NewsletterSubscriberController::class, 'update']);
+Route::patch('/subscribers/{id}', [NewsletterSubscriberController::class, 'update']);
+Route::delete('/subscribers/{id}', [NewsletterSubscriberController::class, 'destroy']);
+
+
+// Hot Deals / Admin
+Route::get('hot-deals', [HotDealController::class, 'index']);
+Route::get('hot-deals/{hotDeal}', [HotDealController::class, 'show']);
+
+Route::prefix('admin')->group(function () {
+    Route::get('hot-deals', [HotDealController::class, 'adminIndex']);
+    Route::post('hot-deals', [HotDealController::class, 'store']);
+    Route::post('hot-deals/reorder', [HotDealController::class, 'reorder']);
+    Route::post('hot-deals/send-mail', [HotDealController::class, 'sendSelectedHotDealsMail']);
+    Route::get('hot-deals/{hotDeal}', [HotDealController::class, 'show']);
+    Route::post('hot-deals/{hotDeal}', [HotDealController::class, 'update']);
+    Route::put('hot-deals/{hotDeal}', [HotDealController::class, 'update']);
+    Route::delete('hot-deals/{hotDeal}', [HotDealController::class, 'destroy']);
+});
+
+
 
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
-    return $request->user()->load('customer');
+    $user = $request->user();
+    $user->load('customer');
+    $userData = $user->toArray();
+    $userData['permissions'] = $user->getAllPermissions()->pluck('name');
+    return response()->json($userData);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -66,8 +100,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 
 Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
-
-
 
 
 
@@ -85,6 +117,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('users-summary', [UserController::class, 'UsersSummary']);
     Route::post('/add-staff', [UserController::class, 'saveStaff']);
     Route::post('/update-staff', [UserController::class, 'updateStaff']);
+
 
     Route::put('update-status', [UserController::class, 'updateStatus']);
     Route::post('update-card-allowance', [UserController::class, 'updateCardAllowance']);
@@ -191,6 +224,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::post('save-travellers', [AgentTravellerController::class, 'store']);
     Route::put('update-travellers', [AgentTravellerController::class, 'update']);
     Route::delete('delete-travellers', [AgentTravellerController::class, 'destroy']);
+    Route::get('get-my-travellers', [BookingController::class, 'getMyTravellers']);
     Route::post('assign-ticket-number', [BookingController::class, 'assignTicketNumber']);
 
     Route::post('update-booking', [AdminSettingsController::class, 'updateBooking']);
@@ -204,12 +238,13 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     // Route::delete('/notifications/{id}', [NotificationController::class, 'deleteNotification']);
     Route::delete('/notifications/clear-all', [NotificationController::class, 'clearAllNotifications']);
 
-/////////public
+    /////////public
 
-///
+    ///
 
 
-    Route::get('airports', [AirportController::class, 'index']);
+    Route::resource('airports', AirportController::class);
+    Route::get('/fetch-airport/{id}', [AirportController::class, 'show']);
     Route::get('get-promo-images', [PromoImageController::class, 'index']);
     Route::get('group-tickets', [GroupTicketController::class, 'index']);
     Route::get('umrah-packages', [UmrahPackageController::class, 'index']);
@@ -242,6 +277,9 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('customer-data', [CustomerController::class, 'getCustomerData']);
     Route::post('update-customer-settings', [CustomerController::class, 'updateCustomerSettings']);
     Route::post('update-customer-data', [CustomerController::class, 'updateCustomerData']);
+    Route::post('resend-verification-email', [CustomerController::class, 'resendVerificationEmail']);
+    Route::get('sms-otp-browser-status', [UserController::class, 'getSmsOtpBrowserStatus']);
+    Route::post('sms-otp-browser-status', [UserController::class, 'updateSmsOtpBrowserStatus']);
 
     Route::get('safepay-url', [BookingController::class, 'initiatePayment']);
 
@@ -257,21 +295,22 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('zoho-organization', [ZohoController::class, 'getOrganization']);
     Route::get('zoho-contacts', [ZohoController::class, 'fetchOrCreateCustomer']);
     Route::get('create-invoice', [ZohoController::class, 'createInvoice']);
-Route::get('promotions/providers', [FlightController::class, 'fetchProviders']);
-Route::resource('promotions', PromotionController::class);
-Route::get('segment-margins/providers', [FlightController::class, 'fetchProviders']);
-Route::resource('segment-margins', SegmentMarginController::class);
+
     Route::get('/test-email', function () {
         Mail::raw('This is a test email', function ($message) {
             $message->to('recipient@example.com')->subject('Test Email');
         });
         return 'Email sent';
     });
-
 });
 
 // Route::get('/auth/google', [GoogleController::class, 'redirect']);
+Route::get('promotions/providers', [FlightController::class, 'fetchProviders']);
+Route::resource('promotions', PromotionController::class);
+
 Route::get('airports', [AirportController::class, 'index']);
+Route::get('airport-default-suggestions', [AirportController::class, 'defaultSuggestions']);
+Route::get('nearest-airports', [AirportController::class, 'nearest']);
 Route::post('update-booking-amount', [BookingController::class, 'updateBookingAmount']);
 Route::get('get-promo-images', [PromoImageController::class, 'index']);
 Route::get('airports', [AirportController::class, 'index']);
@@ -312,14 +351,17 @@ Route::post('send-payment-request', [PaymentController::class, 'createIntent']);
 Route::post('contact-messages', [ContactController::class, 'store'])
     ->middleware('throttle:5,10')
     ->name('api/contact-messages');
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('admin/seo-settings/{page}', [SeoSettingController::class, 'show']);
+    Route::post('admin/seo-settings/{page}', [SeoSettingController::class, 'update']);
+});
 Route::post('save-keys', [ZohoController::class, 'store']);
 Route::get('fetch-keys', [ZohoController::class, 'getKeys']);
 Route::post('zoho-token', [ZohoController::class, 'getToken']);
 Route::get('zoho-organization', [ZohoController::class, 'getOrganization']);
 Route::get('zoho-contacts', [ZohoController::class, 'fetchOrCreateCustomer']);
 Route::get('create-invoice', [ZohoController::class, 'createInvoice']);
-Route::get('segment-margins/providers', [FlightController::class, 'fetchProviders']);
-Route::resource('segment-margins', SegmentMarginController::class);
+
 Route::post('save-request', [ModifyRequestController::class, 'store']);
 Route::get('fetch-requests', [ModifyRequestController::class, 'index']);
 Route::get('fetch-modify-request-data', [ModifyRequestController::class, 'fetchModifyRequestData']);
@@ -329,12 +371,35 @@ Route::get('currencies', [CurrencyController::class, 'index']);
 
 Route::post('/save-popular-route', [CmsController::class, 'storePopularRoutes']);
 Route::get('/fetch-popular-routes', [CmsController::class, 'getPopularRoutes']);
+Route::get('/fetch-popular-route/{id}', [CmsController::class, 'getPopularRoute']);
+Route::post('/update-popular-route/{id}', [CmsController::class, 'updatePopularRoute']);
 Route::delete('/deletePopularRoute/{id}', [CmsController::class, 'deletePopularRoutes']);
+Route::post('/send-popular-routes-mail', [CmsController::class, 'sendSelectedPopularRoutesMail']);
+
+Route::post('/save-top-airline', [CmsController::class, 'storeTopAirline']);
+Route::get('/fetch-top-airlines', [CmsController::class, 'getTopAirlines']);
+Route::get('/fetch-top-airline/{id}', [CmsController::class, 'getTopAirline']);
+Route::post('/update-top-airline/{id}', [CmsController::class, 'updateTopAirline']);
+Route::delete('/delete-top-airline/{id}', [CmsController::class, 'deleteTopAirline']);
 
 Route::post('/save-blog', [BlogController::class, 'store']);
 Route::post('/update-blog', [BlogController::class, 'update']);
+Route::post('/send-blog-mail', [BlogController::class, 'sendSelectedBlogsMail']);
 Route::get('/fetch-blogs', [BlogController::class, 'index']);
 Route::get('/fetch-blog/{id}', [BlogController::class, 'show']);
 Route::delete('/delete-blog/{id}', [BlogController::class, 'delete']);
 Route::get('/blog/slugs', [BlogController::class, 'slugs']);
 Route::get('/blog/{slug}', [BlogController::class, 'show']);
+Route::get('roles', [RoleController::class, 'index']);
+Route::post('roles', [RoleController::class, 'store']);
+Route::put('roles/{id}', [RoleController::class, 'update']);
+Route::delete('roles/{id}', [RoleController::class, 'destroy']);
+Route::get('permissions', [RoleController::class, 'getPermissions']);
+Route::get('segment-margins/providers', [FlightController::class, 'fetchProviders']);
+Route::resource('segment-margins', SegmentMarginController::class);
+
+Route::post('/submit-review', [ReviewController::class, 'store']);
+Route::get('/fetch-reviews-approved', [ReviewController::class, 'approved']);
+Route::get('/admin/fetch-reviews', [ReviewController::class, 'index']);
+Route::post('/admin/approve-review/{id}', [ReviewController::class, 'approve']);
+Route::delete('/admin/delete-review/{id}', [ReviewController::class, 'delete']);

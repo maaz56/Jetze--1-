@@ -125,7 +125,7 @@
                                 Need help? <a href="mailto:support@Jetze.pk" style="color: #0F4F75; text-decoration: none;">support@Jetze.pk</a>
                             </p>
                             <p style="margin: 6px 0 0 0; font-size: 12px; color: #5A6E7F;">
-                                <a href="https://Jetze.com" style="color: #0F4F75; text-decoration: none;">www.Jetze.pk</a>
+                                <a href="https://Jetze.pk" style="color: #0F4F75; text-decoration: none;">www.Jetze.pk</a>
                             </p>
                         </td>
                     </tr>

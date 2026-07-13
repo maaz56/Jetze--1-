@@ -268,8 +268,8 @@ class AgentDataController extends Controller
      */
     public function show(Request $request)
     {
-
-        $user = User::with(['agentData'])->find($request->userId);
+        Log::info($request);
+        $user = User::with(['customer'])->find($request->userId);
 
         // $agentData = AgentData::where('agent_id', $request->userId)->first();
         // Log::info($agentData);
@@ -382,7 +382,7 @@ class AgentDataController extends Controller
         }
         $user = Auth::user();
 
-        $isApproved = $user->role === 'admin' ? 1 : 0;
+        $isApproved = ($user->role === 'admin') ? 1 : (($user->role === 'customer') ? 1 : null);
 
         $charge = AgentCharge::create([
             'date' => $request->input('date'),
@@ -396,7 +396,7 @@ class AgentDataController extends Controller
         ]);
 
         // Enable email notifications for charge/refund requests
-        $charge = AgentCharge::with(['agent.agentData', 'chargedBy'])->find($charge->id);
+        $charge = AgentCharge::with(['agent.customer', 'chargedBy'])->find($charge->id);
         if ($user->role === 'admin') {
             if (!empty($charge->agent->email)) {
                 Mail::to($charge->agent->email)->queue(

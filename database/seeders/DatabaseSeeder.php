@@ -13,26 +13,27 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        User::updateOrCreate(
+            ['email' => 'Jetze.pk@gmail.com'],
+            [
+                'role' => 'admin',
+                'is_approved' => true,
+                'email_verified_at' => now(),
+                'name' => 'admin',
+                'password' => '901c7cfe@@',
+            ]
+        );
+
         // User::updateOrCreate(
-        //     ['email' => 'Jetze.pk@gmail.com'],
+        //     ['email' => 'admin@Jetze.pk'],
         //     [
         //         'role' => 'admin',
         //         'is_approved' => true,
-        //         'email_verified_at' => now(),
         //         'name' => 'admin',
-        //         'password' => '901c7cfe@@',
+        //         'password' => bcrypt('Jetze123'),
         //     ]
         // );
-
-        //        User::updateOrCreate(
-//     ['email' => 'admin@Jetze.pk'],
-//     [
-//         'role' => 'admin',
-//         'is_approved' => true,
-//         'name' => 'admin',
-//         'password' => bcrypt('Jetze123'),
-//     ]
-// );
+        
         // User::updateOrCreate(
         //     ['email' => 'admin@gmail.com'],
         //     [
@@ -40,21 +41,21 @@ class DatabaseSeeder extends Seeder
         //         'is_approved' => true,
         //         'name' => 'admin',
         //         'password' => bcrypt('admin1234'),
+        //         'email_verified_at' => now()
         //     ]
         // );
 
 
 
         $this->call([
-            // AirportSeeder::class,
-            // AircraftSeeder::class,
-            // AirlineSeeder::class,
-            // airportMarginSeeder::class,
-            // CountryStateCityTableSeeder::class,
-            MobileCountryCodeSeeder::class,
-            // CustomerMarginSeeder::class,
-            // CustomerSettingSeeder::class,
-
+            AirportSeeder::class,
+            AircraftSeeder::class,
+            AirlineSeeder::class,
+            airportMarginSeeder::class,
+            CountryStateCityTableSeeder::class,
+            CustomerMarginSeeder::class,
+            CustomerSettingSeeder::class,
+            PermissionSeeder::class,
         ]);
     }
 }

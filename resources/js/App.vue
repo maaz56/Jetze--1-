@@ -2,7 +2,9 @@
 import { initFlowbite } from "flowbite";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
 const showEmailVerifyDialog = computed(
@@ -97,6 +99,19 @@ const resendVerificationEmail = async () => {
     }
 };
 
+const handleCloseDialog = async () => {
+    try {
+        await authStore.logout();
+    } catch (e) {
+        console.error("Logout failed during dialog close", e);
+    } finally {
+        authStore.user = null;
+        authStore.isLoggedIn = false;
+        localStorage.removeItem("access_token");
+        router.push({ name: "Home" });
+    }
+};
+
 onMounted(() => {
     initFlowbite();
     restoreCooldownFromStorage();
@@ -123,14 +138,21 @@ onUnmounted(() => {
     <div v-if="showEmailVerifyDialog" class="fixed inset-0 z-[9999]">
         <div class="absolute inset-0 bg-black/50"></div>
         <div class="relative z-[10000] flex h-full items-center justify-center px-4">
-            <div class="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
-                <div class="bg-primary px-6 py-4">
-                    <p class="text-xs font-semibold tracking-[0.18em] text-primary-foreground/85">
-                        ACCOUNT SECURITY
-                    </p>
-                    <h3 class="mt-1 text-lg font-semibold text-primary-foreground">
-                        Email Verification Required
-                    </h3>
+            <div class="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl relative">
+                <div class="bg-primary px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-semibold tracking-[0.18em] text-primary-foreground/85">
+                            ACCOUNT SECURITY
+                        </p>
+                        <h3 class="mt-1 text-lg font-semibold text-primary-foreground">
+                            Email Verification Required
+                        </h3>
+                    </div>
+                    <button @click="handleCloseDialog" class="text-primary-foreground/85 hover:text-primary-foreground hover:bg-white/10 rounded-full p-2 transition-all" title="Close & Logout">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="p-6">
@@ -175,7 +197,14 @@ onUnmounted(() => {
                         You can request another email in {{ formattedCooldown }}.
                     </div>
 
-                    <div class="mt-6 flex items-center justify-end">
+                    <div class="mt-6 flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            class="rounded-full px-5 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                            @click="handleCloseDialog"
+                        >
+                            Cancel & Logout
+                        </button>
                         <button
                             type="button"
                             class="rounded-full px-5 py-2.5 text-sm font-semibold transition-all"

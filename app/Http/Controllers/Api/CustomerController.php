@@ -9,6 +9,10 @@ use App\Models\CustomerSetting;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Log;
+use App\Mail\EmailVerification;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 
 class CustomerController extends Controller
 {
@@ -100,8 +104,24 @@ class CustomerController extends Controller
             ], 404);
         }
 
-        $settings->is_card_allowed = $request->is_card_allowed;
-        $settings->is_booking_allowed = $request->is_booking_allowed;
+        if ($request->has('is_card_allowed')) {
+            $settings->is_card_allowed = $request->boolean('is_card_allowed');
+        }
+        if ($request->has('is_booking_allowed')) {
+            $settings->is_booking_allowed = $request->boolean('is_booking_allowed');
+        }
+        if ($request->has('one_bill_charges')) {
+            $settings->one_bill_charges = $request->one_bill_charges;
+        }
+        if ($request->has('one_bill_fixed_charge')) {
+            $settings->one_bill_fixed_charge = $request->one_bill_fixed_charge;
+        }
+        if ($request->has('one_bill_percentage_charge')) {
+            $settings->one_bill_percentage_charge = $request->one_bill_percentage_charge;
+        }
+        if ($request->has('void_charges')) {
+            $settings->void_charges = $request->void_charges;
+        }
         $settings->save();
 
         return response()->json([
@@ -149,30 +169,65 @@ class CustomerController extends Controller
 
 
     public function updateCustomerType(Request $request)
-{
-    $request->validate([
-        'user_id' => 'required',
-        'mode' => 'required',
-    ]);
+    {
+        $request->validate([
+            'user_id' => 'required',
+            'mode' => 'required',
+        ]);
 
 
-    $customer = Customer::with('user')->where('user_id', $request->user_id)->first();
+        $customer = Customer::with('user')->where('user_id', $request->user_id)->first();
 
-    if (!$customer || !$customer->user) {
+        if (!$customer || !$customer->user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer or user not found.',
+            ], 404);
+        }
+
+        $customer->user->mode = $request->mode;
+        $customer->user->save();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Customer or user not found.',
-        ], 404);
+            'success' => true,
+            'data' => $customer,
+        ]);
     }
 
-    $customer->user->mode = $request->mode;
-    $customer->user->save();
+    public function resendVerificationEmail(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
 
-    return response()->json([
-        'success' => true,
-        'data' => $customer,
-    ]);
-}
+        $user = User::find($request->user_id);
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email is already verified.',
+            ], 400);
+        }
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            Carbon::now()->addMinutes(config('auth.verification.expire', 60)),
+            ['id' => $user->getKey(), 'hash' => sha1($user->getEmailForVerification())]
+        );
+
+        Mail::to($user->email)->send(new EmailVerification(
+            $verificationUrl,
+            (string) ($user->name ?? ''),
+            (string) ($user->email ?? ''),
+            null,
+            'Jetze'
+        ));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Verification link sent successfully.',
+        ]);
+    }
 
 
 }

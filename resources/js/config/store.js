@@ -8,6 +8,7 @@ import holiday from "@/services/store/holiday";
 import ledger from "@/services/store/ledger";
 import notification from "@/services/store/notification";
 import promoImage from "@/services/store/promoImage";
+import promotion from "@/services/store/promotion";
 import settings from "@/services/store/settings";
 import transaction from "@/services/store/transaction";
 import traveller from "@/services/store/traveller";
@@ -29,8 +30,10 @@ import modifyRequest from "@/services/store/modifyRequest";
 import cms from "@/services/store/cms";
 import blog from "@/services/store/blog";
 import payment from "@/services/store/payment";
-import promotion from "@/services/store/promotion";
 import segmentMargin from "@/services/store/segmentMargin";
+import review from "@/services/store/review";
+import newsletter from "@/services/store/newsletter";
+import hotDeals from "@/services/store/hotDeals";
 
 
 export default createStore({
@@ -52,6 +55,7 @@ export default createStore({
         ledger:ledger,
         bank: bank,
         promoImage: promoImage,
+        promotion: promotion,
         traveller:traveller,
         settings: settings,
         customerMargin: customerMargin,
@@ -66,7 +70,8 @@ export default createStore({
         blog: blog,
         payment:payment,
         segmentMargin: segmentMargin,
-        promotion: promotion,
-
+        review: review,
+        newsletter : newsletter,
+        hotDeals : hotDeals,
     },
 });

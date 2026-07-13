@@ -396,11 +396,16 @@ const searchFlights = () => {
             flightType.value === "return" ? dateRange.value.end : null;
     }
 
+    const queryParams = { ...searchParams };
+    if (flightType.value === "multi-city") {
+        queryParams.trips = JSON.stringify(multiCityTrips.value);
+    }
+
     localStorage.setItem("previous_search", JSON.stringify(searchParams));
 
     router.push({
         name: "Flights",
-        query: searchParams,
+        query: queryParams,
     });
 
 

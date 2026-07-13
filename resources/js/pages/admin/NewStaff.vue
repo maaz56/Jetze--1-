@@ -92,7 +92,7 @@
                   required
                 >
                   <option value="" disabled selected>Select a role</option>
-                  <option v-for="role in staffRoles" :key="role.id" :value="role.id">
+                  <option v-for="role in staffRoles" :key="role.id" :value="role.name">
                     {{ role.name }}
                   </option>
                 </select>
@@ -121,15 +121,14 @@
   </template>
   
   <script setup>
-  import { ref, reactive, computed } from 'vue';
+  import { ref, reactive } from 'vue';
   import { EyeIcon, EyeOffIcon, ChevronDownIcon } from 'lucide-vue-next';
   import { SAVE_STAFF } from '@/services/store/actions.type';
   import { useStore } from "vuex";
+  import { onMounted } from 'vue';
+  import axios from 'axios';
   
   const store = useStore();
-  
-  // Form state
-  const companyLogo = ref(null);
   
   const form = reactive({
     email: '',
@@ -140,12 +139,20 @@
   });
   
   // Staff roles data
-  const staffRoles = ref([
-    { id: 'admin', name: 'Administrator' },
-    { id: 'reservation', name: 'Reservation Staff' },
-    { id: 'accounts', name: 'accounts' },
-    { id: 'salesman', name: 'Salesman' }
-  ]);
+  const staffRoles = ref([]);
+  
+  const fetchRoles = async () => {
+    try {
+      const response = await axios.get('/api/roles');
+      staffRoles.value = response.data.data;
+    } catch (error) {
+      console.error("Failed to fetch roles", error);
+    }
+  };
+  
+  onMounted(() => {
+    fetchRoles();
+  });
   
   // UI state
   const showPassword = ref(false);
@@ -158,11 +165,6 @@
     staffName: '',
     staffRole: '',
   });
-  
-  // Handle file upload
-  const handleFileUpload = (event) => {
-    companyLogo.value = event.target.files[0];
-  };
   
   // Validate email
   const validateEmail = (email) => {
@@ -181,6 +183,12 @@
     errors.confirmPassword = '';
     errors.staffRole = '';
   
+    // Validate staff name
+    if (!form.staffName.trim()) {
+      errors.staffName = 'Please enter staff name';
+      isValid = false;
+    }
+
     // Validate email
     if (!validateEmail(form.email)) {
       errors.email = 'Please enter a valid email address';
@@ -224,15 +232,22 @@
   
     //console.log(JSON.stringify(Object.fromEntries(staffData.entries())));
   
-    store.dispatch("user/" + SAVE_STAFF, staffData).then(() => {
-      //console.log("Staff saved successfully");
+    try {
+      await store.dispatch("user/" + SAVE_STAFF, staffData);
       form.staffName = "";
-        form.email = "";
-        form.password = "";
-        form.staffRole = "";
+      form.email = "";
+      form.password = "";
+      form.confirmPassword = "";
+      form.staffRole = "";
+    } catch (error) {
+      const apiErrors = error?.response?.data?.message?.errors || {};
 
+      errors.staffName = apiErrors?.name?.[0] || '';
+      errors.email = apiErrors?.email?.[0] || '';
+      errors.password = apiErrors?.password?.[0] || '';
+      errors.staffRole = apiErrors?.role?.[0] || '';
+    } finally {
       isSubmitting.value = false;
-    
-    });
+    }
   };
   </script>

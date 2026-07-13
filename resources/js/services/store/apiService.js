@@ -28,6 +28,89 @@ export default {
         return apiClient.post("/logout");
     },
 
+    getHotDeals(params) {
+        return apiClient.get("/admin/hot-deals", { params });
+    },
+
+    getHotDeal(id) {
+        return apiClient.get(`/admin/hot-deals/${id}`);
+    },
+
+    saveHotDeal(data) {
+        return apiClient.post("/admin/hot-deals", data, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+    },
+
+    updateHotDeal(id, data) {
+        return apiClient.post(`/admin/hot-deals/${id}`, data, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+    },
+
+    deleteHotDeal(id) {
+        return apiClient.delete(`/admin/hot-deals/${id}`);
+    },
+
+    reorderHotDeals(data) {
+        return apiClient.post("/admin/hot-deals/reorder", data);
+    },
+
+    sendHotDealsMail(params) {
+        return apiClient.post("/admin/hot-deals/send-mail", params);
+    },
+
+    getPublicHotDeals(params) {
+        return apiClient.get("/hot-deals", { params });
+    },
+
+    /// Newsletter Subscriber - All CRUD operations
+    
+    // GET /api/subscribers - Fetch all subscribers
+    getSubscribers(params) {
+        return apiClient.get("/subscribers", { params });
+    },
+    
+    // GET /api/subscribers/{id} - Fetch single subscriber
+    getSubscriber(id) {
+        return apiClient.get(`/subscribers/${id}`);
+    },
+    
+    // POST /api/subscribers - Create new subscriber
+    saveSubscriber(params) {
+        return apiClient.post("/subscribers", params);
+    },
+    
+    // PUT /api/subscribers/{id} - Update subscriber (full update)
+    updateSubscriber(id, params) {
+        return apiClient.put(`/subscribers/${id}`, params);
+    },
+    
+    // PATCH /api/subscribers/{id} - Update subscriber (partial update)
+    patchSubscriber(id, params) {
+        return apiClient.patch(`/subscribers/${id}`, params);
+    },
+    
+    // DELETE /api/subscribers/{id} - Delete subscriber
+    deleteSubscriber(id) {
+        return apiClient.delete(`/subscribers/${id}`);
+    },
+    
+    // Alternative: Pass id in params object (like your bank example)
+    updateSubscriberAlt(params) {
+        const { id, ...data } = params;
+        return apiClient.put(`/subscribers/${id}`, data);
+    },
+    
+    // Toggle active status
+    toggleSubscriberStatus(id, isActive) {
+        return apiClient.patch(`/subscribers/${id}`, { is_active: isActive });
+    },
+
     // file uploader
     getUploadedFiles(params) {
         return apiClient.get("/uploads", {
@@ -166,7 +249,7 @@ export default {
         });
     },
     getTotalApprovedDeposits(params) {
-        return apiClient.get("approved-deposits-total", {
+        return apiClient.get("/approved-deposits-total", {
             params: params, // Use the 'params' object to send query parameters
         });
     },
@@ -195,7 +278,7 @@ export default {
     },
 
     updateUserStatus(params) {
-        return apiClient.put(`/update-status/`, params);
+        return apiClient.put(`/update-status`, params);
     },
 
     deleteUser(params) {
@@ -206,6 +289,28 @@ export default {
 
     getAirports(params) {
         return apiClient.get("/airports", {
+            params: params,
+        });
+    },
+    getAirport(id) {
+        return apiClient.get(`/fetch-airport/${id}`);
+    },
+    saveAirport(params) {
+        return apiClient.post("/airports", params);
+    },
+    updateAirport(params) {
+        return apiClient.put(`/airports/${params.id}`, params.data);
+    },
+    deleteAirport(id) {
+        return apiClient.delete(`/airports/${id}`);
+    },
+    getNearestAirports(params) {
+        return apiClient.get("/nearest-airports", {
+            params: params,
+        });
+    },
+    getAirportDefaultSuggestions(params) {
+        return apiClient.get("/airport-default-suggestions", {
             params: params,
         });
     },
@@ -447,6 +552,15 @@ export default {
     },
 
     updateBank(params) {
+        if (params instanceof FormData) {
+            params.append("_method", "PUT");
+            return apiClient.post("/banks", params, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            });
+        }
+
         return apiClient.put("/banks", params);
     },
 
@@ -621,6 +735,9 @@ export default {
             params: params,
         });
     },
+    getMyTravellers() {
+        return apiClient.get("/get-my-travellers");
+    },
     assignTicketNumber(params) {
         return apiClient.post("/assign-ticket-number", params);
     },
@@ -631,49 +748,19 @@ export default {
         });
     },
 
-
-     getPromotions(params) {
-        return apiClient.get("/promotions", { params });
-    },
-    getPromotion(id) {
-        return apiClient.get(`/promotions/${id}`);
-    },
-    savePromotion(params) {
-        return apiClient.post("/promotions", params);
-    },
-    updatePromotion(id, params) {
-        return apiClient.put(`/promotions/${id}`, params);
-    },
-    deletePromotion(id) {
-        return apiClient.delete(`/promotions/${id}`);
-    },
-    getPromotionProviders() {
-        return apiClient.get("/promotions/providers");
-    },
-
-    getSegmentMargins(params) {
-        return apiClient.get("/segment-margins", { params });
-    },
-    getSegmentMargin(id) {
-        return apiClient.get(`/segment-margins/${id}`);
-    },
-    saveSegmentMargin(params) {
-        return apiClient.post("/segment-margins", params);
-    },
-    updateSegmentMarginById(id, params) {
-        return apiClient.put(`/segment-margins/${id}`, params);
-    },
-    deleteSegmentMargin(id) {
-        return apiClient.delete(`/segment-margins/${id}`);
-    },
-    getSegmentMarginProviders() {
-        return apiClient.get("/segment-margins/providers");
-    },
     sendEmail(params) {
         return apiClient.post("/send-email", params);
     },
     submitContactMessage(params) {
         return apiClient.post("/contact-messages", params);
+    },
+    getSeoSetting(page) {
+        return apiClient.get(`/admin/seo-settings/${page}`);
+    },
+    saveSeoSetting(page, data) {
+        return apiClient.post(`/admin/seo-settings/${page}`, data, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
     },
     sendPaymentRequest(params) {
         return apiClient.post("/send-payment-request", params);
@@ -719,6 +806,9 @@ export default {
     updateCustomerData(params) {
         return apiClient.post("/update-customer-data", params);
     },
+    resendVerificationEmail(params) {
+        return apiClient.post("/resend-verification-email", params);
+    },
     getCustomers(params) {
         return apiClient.get("/customers", {
             params: params,
@@ -734,7 +824,6 @@ export default {
             params: params,
         });
     },
-
     updateCustomerSettings(params) {
         return apiClient.post("/update-customer-settings", params);
     },
@@ -768,8 +857,35 @@ export default {
             params: params,
         });
     },
+    getPopularRoute(id) {
+        return apiClient.get(`/fetch-popular-route/${id}`);
+    },
+    updatePopularRoute(params) {
+        return apiClient.post(`/update-popular-route/${params.id}`, params.data);
+    },
      deletePopularRoute(params) {
         return apiClient.delete(`/deletePopularRoute/${params.id}`);
+    },
+    sendPopularRoutesMail(params) {
+        return apiClient.post("/send-popular-routes-mail", params);
+    },
+
+    saveTopAirline(params) {
+        return apiClient.post("/save-top-airline", params);
+    },
+    getTopAirlines(params) {
+        return apiClient.get("/fetch-top-airlines", {
+            params: params,
+        });
+    },
+    getTopAirline(id) {
+        return apiClient.get(`/fetch-top-airline/${id}`);
+    },
+    updateTopAirline(params) {
+        return apiClient.post(`/update-top-airline/${params.id}`, params.data);
+    },
+    deleteTopAirline(params) {
+        return apiClient.delete(`/delete-top-airline/${params.id}`);
     },
     
 
@@ -789,6 +905,67 @@ export default {
     },
     updateBlog(params) {
         return apiClient.post(`/update-blog`, params);
-    }
+    },
+    sendBlogMail(params) {
+        return apiClient.post("/send-blog-mail", params);
+    },
     
+
+    getPromotions(params) {
+        return apiClient.get("/promotions", { params });
+    },
+    getPromotion(id) {
+        return apiClient.get(`/promotions/${id}`);
+    },
+    savePromotion(params) {
+        return apiClient.post("/promotions", params);
+    },
+    updatePromotion(id, params) {
+        return apiClient.put(`/promotions/${id}`, params);
+    },
+    deletePromotion(id) {
+        return apiClient.delete(`/promotions/${id}`);
+    },
+    getPromotionProviders() {
+        return apiClient.get("/promotions/providers");
+    },
+
+    getSegmentMargins(params) {
+        return apiClient.get("/segment-margins", { params });
+    },
+    getSegmentMargin(id) {
+        return apiClient.get(`/segment-margins/${id}`);
+    },
+    saveSegmentMargin(params) {
+        return apiClient.post("/segment-margins", params);
+    },
+    updateSegmentMarginById(id, params) {
+        return apiClient.put(`/segment-margins/${id}`, params);
+    },
+    deleteSegmentMargin(id) {
+        return apiClient.delete(`/segment-margins/${id}`);
+    },
+    getSegmentMarginProviders() {
+        return apiClient.get("/segment-margins/providers");
+    },
+
+    submitReview(params) {
+        return apiClient.post("/submit-review", params);
+    },
+    fetchReviewsApproved() {
+        return apiClient.get("/fetch-reviews-approved");
+    },
+    fetchReviews(params) {
+        return apiClient.get("/admin/fetch-reviews", {
+            params: params,
+        });
+    },
+    approveReview(params) {
+        return apiClient.post(`/admin/approve-review/${params.id}`, {
+            is_approved: params.is_approved
+        });
+    },
+    deleteReview(id) {
+        return apiClient.delete(`/admin/delete-review/${id}`);
+    }
 };

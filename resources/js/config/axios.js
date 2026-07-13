@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useRoute } from "vue-router";
 
 const apiService = axios.create({
     baseURL:
@@ -41,7 +42,8 @@ apiService.interceptors.response.use(
         return response;
     },
     async (error) => {
-        if (error.response && error.response.status === 401 && window.location.pathname !== "/") {
+        const route = useRoute();
+        if (error.response && error.response.status === 401 && route.name !== "Home") {
             // Call the logout function from auth.js
             window.location.href = "/";
         }

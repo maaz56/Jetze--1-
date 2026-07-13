@@ -3372,12 +3372,12 @@ watch(flight, () => {
                                     <div class="p-3">
                                         <div class="space-y-3">
                                             <div class="flex items-start space-x-2">
-                                                <Input type="checkbox" v-model="termsAccepted" id="terms"
-                                                    class="mt-1" />
+                                                <input id="terms" v-model="termsAccepted" type="checkbox"
+                                                    class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-primary focus:ring-primary" />
                                                 <Label for="terms" class="text-xs text-gray-500 leading-relaxed">
                                                     I understand and agree with the Privacy Policy, the User <a href="#"
                                                         class="text-primary hover:underline">Agreement and Terms</a> of
-                                                    Service of Jetze.com.pk
+                                                    Service of Jetze.com.pkkkkk
                                                 </Label>
                                             </div>
                                             <Button @click="showBookingPreview" :disabled="isSubmitting || !termsAccepted"

@@ -35,19 +35,10 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_values(array_filter([
-        config('app.frontend_url'),
-        'https://jetze.ae',
-        'https://www.jetze.ae',
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-    ])),
+    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000'), 'https://www.Jetze.pk'],
     
 
-    'allowed_origins_patterns' => [
-        '#^https:\/\/([a-z0-9-]+\.)?jetze\.ae$#',
-    ],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 

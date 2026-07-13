@@ -155,7 +155,7 @@ onMounted(() => {
                 <div class="relative overflow-hidden">
                     <div class="overflow-x-auto">
                         <Table>
-                            <TableHeader class="bg-muted">
+                            <TableHeader class="bg-primary">
                                 <TableRow>
                                     <TableHead scope="col" class="px-4 py-3">Logo</TableHead>
                                     <TableHead scope="col" class="px-4 py-3">Name</TableHead>
@@ -225,13 +225,22 @@ onMounted(() => {
                                                 :disabled="togglingBankIds.includes(bank.id)"
                                                 @update:checked="(value) => updateBankStatus(bank, value)"
                                             />
-                                            <Badge :variant="bank?.is_active ? 'default' : 'secondary'">
+                                            <Badge
+                                                variant="outline"
+                                                :class="bank?.is_active
+                                                    ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100'
+                                                    : 'bg-red-100 text-red-800 border-red-200 hover:bg-red-100'"
+                                            >
                                                 {{ bank?.is_active ? "Active" : "Inactive" }}
                                             </Badge>
                                         </div>
                                     </TableCell>
                                     <TableCell class="px-4 py-2 space-x-2 whitespace-nowrap">
-                                        
+                                        <button @click="$router.push({ name: 'UpdateBank', params: { id: bank.id } })"
+                                            class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:text-primary h-8 px-3 text-black hover:bg-primary/10">
+                                            <Pencil class="w-4 h-4 me-2" />
+                                            Edit
+                                        </button>
 
                                         <button  @click="confirmDelete(bank)"
                                             class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 text-destructive hover:bg-destructive/10">

@@ -21,9 +21,40 @@ async function fetchCountryCode() {
   }
 }
 
+function testGeolocation() {
+  if (!navigator.geolocation) {
+    console.warn("Geolocation is not supported by this browser.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      localStorage.setItem("latitude", String(latitude));
+      localStorage.setItem("longitude", String(longitude));
+
+      window.dispatchEvent(
+        new CustomEvent("user-geolocation-updated", {
+          detail: { latitude, longitude },
+        })
+      );
+
+     
+    },
+    (error) => {
+      console.error("Geolocation error:", error.message, error);
+    },
+    {
+       enableHighAccuracy: false, // ✅ faster
+      timeout: 20000,            // ✅ increase time
+      maximumAge: 60000, 
+    }
+  );
+}
 
 onMounted(() => {
   fetchCountryCode();
+  testGeolocation();
 });
 </script>
 

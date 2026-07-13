@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Charges Applied | Jetze</title>
+    <title>Charges Applied | Jetze.pk</title>
     <style>
         @media only screen and (max-width: 600px) {
             .responsive-table {
@@ -270,7 +270,7 @@
                         </table>
 
                                 <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">
-                                    📞 24/7 Support: +92 311 1711123 &nbsp;|&nbsp; 
+                                    📞 24/7 Support: +92 00000000 &nbsp;|&nbsp; 
                                     ✉️ <a href="mailto:support@Jetze.pk" style="color: #0A2E4D; text-decoration: none;">support@Jetze.pk</a>
                                 </p>
 

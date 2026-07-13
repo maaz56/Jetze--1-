@@ -39,10 +39,69 @@ class AirblueFlightTransformer
             $pricedItineraries = [$pricedItineraries];
         }
 
-        // Separate outbound (RefNumber=1) and inbound (RefNumber=2)
+        // Separate outbound/inbound. Prefer route-direction classification because
+        // some Airblue responses may not reliably use OriginDestinationRefNumber=2.
         $outbound = [];
         $inbound = [];
+        $requestedOutboundOrigin = $airlineParams['origin'] ?? null;
+        $requestedOutboundDestination = $airlineParams['destination'] ?? null;
+        $requestedInboundOrigin = $requestedOutboundDestination;
+        $requestedInboundDestination = $requestedOutboundOrigin;
+
+        $extractDirection = function ($itinerary) use (
+            $requestedOutboundOrigin,
+            $requestedOutboundDestination,
+            $requestedInboundOrigin,
+            $requestedInboundDestination
+        ) {
+            $segments = $itinerary['AirItinerary']['OriginDestinationOptions']['OriginDestinationOption']['FlightSegment'] ?? [];
+            if (isset($segments['@attributes'])) {
+                $segments = [$segments];
+            }
+
+            if (empty($segments) || !is_array($segments)) {
+                return null;
+            }
+
+            $first = $segments[0] ?? [];
+            $last = $segments[count($segments) - 1] ?? [];
+            $from = $first['DepartureAirport']['@attributes']['LocationCode'] ?? null;
+            $to = $last['ArrivalAirport']['@attributes']['LocationCode'] ?? null;
+
+            if (
+                $requestedOutboundOrigin &&
+                $requestedOutboundDestination &&
+                $from === $requestedOutboundOrigin &&
+                $to === $requestedOutboundDestination
+            ) {
+                return 'outbound';
+            }
+
+            if (
+                $requestedInboundOrigin &&
+                $requestedInboundDestination &&
+                $from === $requestedInboundOrigin &&
+                $to === $requestedInboundDestination
+            ) {
+                return 'inbound';
+            }
+
+            return null;
+        };
+
         foreach ($pricedItineraries as $itinerary) {
+            $direction = $extractDirection($itinerary);
+            if ($direction === 'outbound') {
+                $outbound[] = $itinerary;
+                continue;
+            }
+            if ($direction === 'inbound') {
+                $inbound[] = $itinerary;
+                continue;
+            }
+
+            // Fallback to OriginDestinationRefNumber only when direction
+            // cannot be inferred from route.
             $refNumber = $itinerary['@attributes']['OriginDestinationRefNumber'] ?? '1';
             if ($refNumber == '1') {
                 $outbound[] = $itinerary;
@@ -67,6 +126,14 @@ class AirblueFlightTransformer
 
         $outGroups = $groupByRPH($outbound);
         $inGroups = $groupByRPH($inbound);
+
+        // For return search, do not send partial one-way data.
+        // If inbound is missing, return no results.
+        if (($airlineParams['flight_type'] ?? null) === 'return' && empty($inGroups)) {
+            Log::info('Airblue return search skipped: inbound flight not found in response.');
+            return [];
+        }
+
         // CASE 1: One-way (only outbound)
         if (!empty($outGroups) && empty($inGroups)) {
             foreach ($outGroups as $rph => $groupItineraries) {
@@ -142,7 +209,7 @@ class AirblueFlightTransformer
             return $result;
         }
 
-        // CASE 3: Round-trip — map each inbound (2) with all outbound (1)
+        // CASE 3: Round-trip — map each inbound with each outbound
         foreach ($outGroups as $outRph => $outGroup) {
             foreach ($inGroups as $inRph => $inGroup) {
                 Log::info("Processing Outbound RPH: $outRph with Inbound RPH: $inRph");
@@ -393,7 +460,7 @@ class AirblueFlightTransformer
                 ],
                 "base_price" => (float) $totalFare['BaseFare']['@attributes']['Amount'],
                 "taxes" => (float) $totalFare['Taxes']['@attributes']['Amount'],
-                "fees" => (float) $totalFare['Fees']['@attributes']['Amount'],
+                "fees" => (float) (isset($totalFare['Fees']['@attributes']['Amount']) ? $totalFare['Fees']['@attributes']['Amount'] : 0),
                 "total_price" => (float) $totalFare['TotalFare']['@attributes']['Amount'],
                 "billable_price" => (float) $totalFare['TotalFare']['@attributes']['Amount'],
                 "margin_amount" => $margin_amount,
@@ -507,8 +574,6 @@ class AirblueFlightTransformer
 
 
 }
-
-
 
 
 

@@ -96,7 +96,15 @@ class AuthenticatedSessionController extends Controller
             'password' => ['required'],
         ]);
 
-        $user = User::select('id', 'email', 'password', 'role', 'name')
+        $user = User::select(
+            'id',
+            'email',
+            'password',
+            'role',
+            'name',
+            'sms_otp_disabled',
+            'sms_otp_disabled_browser_id'
+        )
             ->where('email', $validated['email'])
             ->first();
 
@@ -110,6 +118,27 @@ class AuthenticatedSessionController extends Controller
                     'description' => 'Invalid Email or Password!.'
                 ]
             ], 401);
+        }
+
+        $browserId = (string) ($request->header('X-Browser-Id') ?: $request->input('browser_id', ''));
+        $isCustomerRole = in_array($user->role, ['customer', 'user'], true);
+        $isBrowserOtpDisabled = $isCustomerRole
+            && (bool) $user->sms_otp_disabled
+            && !empty($browserId)
+            && hash_equals((string) $user->sms_otp_disabled_browser_id, $browserId);
+
+        if ($isBrowserOtpDisabled) {
+            $token = $user->createToken("user_token");
+
+            return response()->json([
+                'success' => true,
+                'skip_otp' => true,
+                'message' => [
+                    'status' => 'success',
+                    'description' => 'Logged in successfully.'
+                ],
+                'token' => $token,
+            ]);
         }
 
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);

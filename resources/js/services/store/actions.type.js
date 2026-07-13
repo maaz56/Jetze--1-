@@ -15,6 +15,25 @@ export const FETCH_USER = "fetchUser";
 export const UPDATE_USER_STATUS = "updateUserStatus";
 export const UPDATE_CARD_ALLOWANCE = "updateCardAllowance";
 
+/**
+ * HotDeals
+ */
+export const FETCH_HOT_DEALS = "fetchHotDeals";
+export const FETCH_HOT_DEAL = "fetchHotDeal";
+export const SAVE_HOT_DEAL = "saveHotDeal";
+export const UPDATE_HOT_DEAL = "updateHotDeal";
+export const DELETE_HOT_DEAL = "deleteHotDeal";
+export const REORDER_HOT_DEALS = "reorderHotDeals";
+
+/**
+ * Newsletter
+ */
+// store/actions.type.js
+export const FETCH_SUBSCRIBERS = "fetchSubcribers";
+export const SAVE_SUBSCRIBER = "saveSubcriber";
+export const UPDATE_SUBSCRIBER = "updateSubcriber";
+export const DELETE_SUBSCRIBER = "deleteSubcriber";
+
 
 export const FETCH_COUNTRIES = "fetchCountries";
 export const SAVE_COUNTRY = "saveCountry";
@@ -93,6 +112,10 @@ export const CREATE_PAYMENT_INTENT = "createPaymentIntent";
 export const CONFIRM_CARD_PAYMENT = "confirmCardPayment";
 
 export const SEND_EMAIL = "sendEmail";
+export const SAVE_AIRPORT = "saveAirport";
+export const UPDATE_AIRPORT = "updateAirport";
+export const DELETE_AIRPORT = "deleteAirport";
+export const FETCH_AIRPORT = "fetchAirport";
 
 export const FETCH_TRANSACTIONS = "fetchTransactions";
 export const SAVE_TRANSACTION = "saveTransaction";
@@ -166,6 +189,7 @@ export const FETCH_PROMO_IMAGES = "fetchPromoImages";
 export const ASSIGN_TICKET_NUMBER = "assignTicketNumber";
 export const FETCH_TRAVELLER = "fetchTraveler";
 export const FETCH_TRAVELLERS = "fetchTravelers";
+export const FETCH_MY_TRAVELLERS = "fetchMyTravellers";
 export const SAVE_TRAVELLER = "saveTraveler";
 export const UPDATE_TRAVELLER = "updateTraveler";
 export const DELETE_TRAVELLER = "deleteTraveler";
@@ -187,6 +211,7 @@ export const SAVE_AIRPORT_MARGINS = "saveAirportMargins";
 export const SAVE_CUSTOMER_MARGIN = "saveCustomerMargin";
 export const FETCH_CUSTOMER_MARGIN = "fetchCustomerMargin";
 export const UPDATE_CUSTOMER_DATA = "updateCustomerData";
+export const RESEND_VERIFICATION_EMAIL = "resendVerificationEmail";
 
 export const FETCH_CUSTOMER_BOOKING_DETAILS = "fetchCustomerBookingDetails";
 export const UPDATE_PROMO_IMAGE = "updatePromoImage"
@@ -221,20 +246,6 @@ export const DELETE_ACTIVITY_LOG = "deleteActivityLog";
 
 export const UPDATE_BOOKING_AMOUNT = "updateBookingAmount";
 
-export const FETCH_PROMOTIONS = "fetchPromotions";
-export const FETCH_PROMOTION = "fetchPromotion";
-export const SAVE_PROMOTION = "savePromotion";
-export const UPDATE_PROMOTION = "updatePromotion";
-export const DELETE_PROMOTION = "deletePromotion";
-export const FETCH_PROMOTION_PROVIDERS = "fetchPromotionProviders";
-
-export const FETCH_SEGMENT_MARGINS = "fetchSegmentMargins";
-export const FETCH_SEGMENT_MARGIN = "fetchSegmentMargin";
-export const SAVE_SEGMENT_MARGIN = "saveSegmentMargin";
-export const UPDATE_SEGMENT_MARGIN = "updateSegmentMargin";
-export const DELETE_SEGMENT_MARGIN = "deleteSegmentMargin";
-export const FETCH_SEGMENT_MARGIN_PROVIDERS = "fetchSegmentMarginProviders";
-
 export const SAVE_REQUEST = "saveRequest";
 export const FETCH_REQUESTS = "fetchRequests";
 export const FETCH_MODIFY_REQUEST_DATA = "fetchModifyRequestData";
@@ -249,6 +260,12 @@ export const FETCH_POPULAR_ROUTES = "fetchPopularRoutes";
 export const SAVE_POPULAR_ROUTE = "savePopularRoutes";
 export const UPDATE_POPULAR_ROUTE = "updatePopularRoutes";
 export const DELETE_POPULAR_ROUTE = "deletePopularRoutes";
+export const SEND_POPULAR_ROUTES_MAIL = "sendPopularRoutesMail";
+
+export const FETCH_TOP_AIRLINES = "fetchTopAirlines";
+export const SAVE_TOP_AIRLINE = "saveTopAirline";
+export const UPDATE_TOP_AIRLINE = "updateTopAirline";
+export const DELETE_TOP_AIRLINE = "deleteTopAirline";
 
 export const FETCH_BLOGS = "fetchBlogs";
 export const FETCH_BLOG = "fetchBlog";
@@ -256,3 +273,26 @@ export const SAVE_BLOG = "saveBlog";
 export const UPDATE_BLOG = "updateBlog";
 export const DELETE_BLOG = "deleteBlog";
 export const PUBLISH_BLOG = "publishBlog";
+export const SEND_BLOG_MAIL = "sendBlogMail";
+
+export const SEND_HOT_DEALS_MAIL = "sendHotDealsMail";
+
+export const FETCH_PROMOTIONS = "fetchPromotions";
+export const FETCH_PROMOTION = "fetchPromotion";
+export const SAVE_PROMOTION = "savePromotion";
+export const UPDATE_PROMOTION = "updatePromotion";
+export const DELETE_PROMOTION = "deletePromotion";
+export const FETCH_PROMOTION_PROVIDERS = "fetchPromotionProviders";
+
+export const FETCH_SEGMENT_MARGINS = "fetchSegmentMargins";
+export const FETCH_SEGMENT_MARGIN = "fetchSegmentMargin";
+export const SAVE_SEGMENT_MARGIN = "saveSegmentMargin";
+export const UPDATE_SEGMENT_MARGIN = "updateSegmentMargin";
+export const DELETE_SEGMENT_MARGIN = "deleteSegmentMargin";
+export const FETCH_SEGMENT_MARGIN_PROVIDERS = "fetchSegmentMarginProviders";
+
+export const SUBMIT_REVIEW = "submitReview";
+export const FETCH_REVIEWS_APPROVED = "fetchReviewsApproved";
+export const FETCH_REVIEWS = "fetchReviews";
+export const APPROVE_REVIEW = "approveReview";
+export const DELETE_REVIEW = "deleteReview";

@@ -43,8 +43,12 @@ async function handleLogin() {
   try {
     const response = await authStore.requestLoginOtp(loginDetail.value);
     if (response.status == 200) {
-      emit('openOtpCard',loginDetail.value)
-      toast.success(response.message?.description || 'OTP has been sent to your email');
+      if (response?.data?.skip_otp) {
+        toast.success(response?.data?.message?.description || 'Logged in successfully.');
+      } else {
+        emit('openOtpCard',loginDetail.value)
+        toast.success(response?.data?.message?.description || 'OTP has been sent to your email');
+      }
     }
   } catch (error) {
     console.error('Error requesting OTP:', error.response);

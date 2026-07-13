@@ -702,7 +702,7 @@ class AtApiService
             'SSRAmount' => $totalAmount,
             'ClientID' => $clientId,
             'HoldInfo' => $holdInfo,
-            'BookingType' => 'HB',
+            // 'BookingType' => $holdInfo ? 'HB' : 'HP',
             'DeviceID' => '',
             'AppVersion' => '',
             'CrossSellAmount' => 0,
@@ -1014,7 +1014,7 @@ class AtApiService
             'TargetCurrency' => '',
             'TargetAmount' => 0,
             'ServiceType' => 'ITI',
-            'BookingType' => 'HB', // HB = Hold Booking
+            'BookingType' => 'HP', // HB = Hold Booking
         ];
 
         Log::info('AT Payment Payload (final):', $payload);

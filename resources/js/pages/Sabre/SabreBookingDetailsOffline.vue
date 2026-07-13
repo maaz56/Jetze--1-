@@ -1293,12 +1293,12 @@ onMounted(() => {
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="line-clamp-2">
                                         {{
                                             agentData?.agent_data?.address ||
-                                            "F-16 AliZai Tower Address1234Pakistan"
+                                            "Address line 1 Mardan Road Charsadda.Pakistan"
                                         }}
                                        
                                     </p>
@@ -2055,7 +2055,7 @@ segment, segmentIndex
                                     {{
                                             agentData?.agent_data
                                                 ?.company_name ||
-                                            "+(+92) 0000000000"
+                                            "+(+92) 3111711123"
                                         }}
                                     <p class="">
                                         {{

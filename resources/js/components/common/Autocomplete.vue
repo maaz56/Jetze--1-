@@ -1,59 +1,42 @@
 <template>
     <div class="relative dropdown group">
+        <label v-if="label" class="mb-1 flex items-start justify-start text-sm font-semibold" :style="{ color: text_color }">
+            {{ label }}
+        </label>
         <div class="relative">
-            <div 
-                @click="focusInput"
-                :class="[
-                    'relative p-4 min-h-[110px] w-full rounded-xl transition-all duration-200 cursor-pointer border',
-                    isFocused ? 'bg-white border-blue-500 ring-1 ring-blue-500 shadow-lg' : 'bg-white border-gray-200 hover:bg-gray-50'
-                ]"
-            >
-                <span class="block text-sm font-medium text-gray-500 mb-1 uppercase tracking-wide">
+            <div :class="[
+                'relative min-h-[110px] w-full cursor-pointer rounded-xl border bg-white p-4 transition-all duration-200',
+                isFocused ? 'border-blue-500 ring-1 ring-blue-500 shadow-lg' : 'border-gray-200 hover:bg-gray-50',
+            ]">
+                <span class="mb-1 block text-sm font-medium uppercase tracking-wide text-gray-500">
                     {{ placeholder || 'From' }}
                 </span>
 
-                <input 
-                    type="text" 
-                    v-model="search"
-                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    @input="handleInput" 
-                    @keydown="handleKeydown" 
-                    @focus="handleFocus"
-                    @blur="handleBlur"
-                    ref="inputEl" 
-                />
+                <input type="text" :placeholder="isFocused ? 'Type to search...' : ''" v-model="search"
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                    :name="`${uniqueId}-search`" data-lpignore="true"
+                    :class="[
+                        'absolute inset-0 z-10 h-full w-full cursor-pointer border-none bg-transparent px-4 pt-7 text-3xl font-black text-gray-900 outline-none ring-0',
+                        !isFocused ? 'text-transparent caret-transparent' : '',
+                    ]"
+                    @input="handleInput" @keydown="handleKeydown" @focus="handleFocus" @click="handleInputClick"
+                    @blur="handleBlur" ref="inputEl" />
 
-                <div v-if="!isFocused || (isFocused && !search)" class="relative pointer-events-none">
+                <div v-if="!isFocused" class="relative pointer-events-none">
                     <template v-if="displayValue">
-                        <h2 class="text-3xl font-black text-gray-900 leading-tight truncate">
-                            {{ displayValue.city }}
-                        </h2>
-                        <p class="text-sm text-gray-600 font-medium truncate mt-1">
-                            {{ displayValue.iata }}, {{ displayValue.name }} {{ displayValue.country ? ' ' + displayValue.country : '' }}
+                        <h2 class="truncate text-3xl font-black leading-tight text-gray-900">{{ displayValue.city }}</h2>
+                        <p class="mt-1 truncate text-sm font-medium text-gray-600">
+                            {{ displayValue.iata }}, {{ selectedItem.name }}{{ displayValue.country ? ' ' + displayValue.country : '' }}
                         </p>
                     </template>
                     <template v-else>
-                        <h2 class="text-3xl font-black text-gray-400 leading-tight">Select City</h2>
-                        <p class="text-sm text-gray-400 mt-1">Airport Name, Country</p>
+                        <h2 class="text-3xl font-black leading-tight text-gray-400">Select City</h2>
+                        <p class="mt-1 text-sm text-gray-400">Airport Name, Country</p>
                     </template>
                 </div>
 
-                <div v-if="isFocused && search" class="relative z-20">
-                    <input 
-                        type="text" 
-                        v-model="search"
-                        class="w-full text-3xl font-black text-gray-900 bg-transparent border-none p-0 focus:ring-0 outline-none"
-                        @input="handleInput"
-                        placeholder="Type to search..."
-                    />
-                </div>
-
-                <button 
-                    v-if="search && isFocused" 
-                    @click.stop="clearSearch" 
-                    type="button"
-                    class="absolute right-4 top-4 z-30 text-gray-400 hover:text-blue-600 p-1 rounded-full hover:bg-blue-50"
-                >
+                <button v-if="search && isFocused" @click.stop="clearSearch" type="button"
+                    class="absolute right-4 top-4 z-30 rounded-full p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                     </svg>
@@ -63,41 +46,37 @@
 
         <Teleport to="body">
             <ul v-if="isOpen" :style="dropdownStyle"
-                class="bg-white z-[9999] border-none rounded-xl shadow-2xl overflow-hidden mt-1 min-w-[400px]">
-                <div class="max-h-80 overflow-y-auto custom-scrollbar">
-                    <li 
-                        v-for="(item, index) in searchResults"
-                        :key="item.id || index" 
-                        @click.stop="setSelected(item)"
-                        :class="[
-                            'px-4 py-3 cursor-pointer transition-colors border-b border-gray-50 flex items-center justify-between',
-                            index === focusedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'
-                        ]"
-                    >
+                class="z-[9999] mt-1 min-w-[400px] overflow-hidden rounded-xl border-none bg-white shadow-2xl">
+                <div class="custom-scrollbar max-h-80 overflow-y-auto">
+                    <li v-for="(item, index) in searchResults" :key="item.id || index"
+                        @click.stop="setSelected(item)" :class="[
+                            'flex cursor-pointer items-center justify-between border-b border-gray-50 px-4 py-3 transition-colors',
+                            index === focusedIndex ? 'bg-blue-50' : 'hover:bg-gray-50',
+                        ]">
                         <div class="flex items-center gap-4">
-                            <div class="bg-gray-100 p-2 rounded-lg">
-                                <Plane class="text-gray-500 w-5 h-5" />
+                            <div class="rounded-lg bg-gray-100 p-2">
+                                <Plane class="h-5 w-5 text-gray-500" />
                             </div>
                             <div class="flex flex-col">
-                                <span class="font-bold text-gray-900 text-lg">
+                                <span class="text-lg font-bold text-gray-900">
                                     {{ item.city_name }}
-                                    <span v-if="item.iata_code" class="text-gray-400 font-medium ml-1">({{ item.iata_code }})</span>
+                                    <span v-if="item.iata_code" class="ml-1 font-medium text-gray-400">({{ item.iata_code }})</span>
                                 </span>
-                                <span class="text-sm text-gray-500 truncate max-w-[250px]">{{ item.name }}</span>
+                                <span class="max-w-[250px] truncate text-sm text-gray-500">{{ item.name }}</span>
                             </div>
                         </div>
-                        <div v-if="getCountryName(item)" class="text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                        <div v-if="getCountryName(item)" class="text-xs font-bold uppercase tracking-tighter text-gray-400">
                             {{ getCountryName(item) }}
                         </div>
                     </li>
 
-                    <li v-if="!isSearching && searchResults.length === 0" class="p-8 text-center text-gray-400 font-medium">
+                    <li v-if="!isSearching && searchResults.length === 0" class="p-8 text-center font-medium text-gray-400">
                         <div class="mb-2">📍</div>
                         No airports found for "{{ search }}"
                     </li>
-                    <li v-if="isSearching" class="p-8 flex flex-col items-center justify-center gap-2">
+                    <li v-if="isSearching" class="flex flex-col items-center justify-center gap-2 p-8">
                         <Spinner color="#008cff" />
-                        <span class="text-xs text-gray-400 animate-pulse">Searching...</span>
+                        <span class="animate-pulse text-xs text-gray-400">Searching...</span>
                     </li>
                 </div>
             </ul>
@@ -154,7 +133,14 @@ const props = defineProps({
         type: Function,
         default: null,
     },
-
+    text_color: {
+        type: String,
+        default: "white"
+    },
+    border_color: {
+        type: String,
+        default: "transparent",
+    },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -235,6 +221,25 @@ const displayValue = computed(() => {
     };
 });
 
+const syncSelectionFromModelValue = (value) => {
+    if (!value) {
+        search.value = "";
+        selectedItem.value = null;
+        return;
+    }
+
+    const normalizedValue = String(value).trim().toLowerCase();
+    const found = props.source.find((i) => String(i.iata_code || "").trim().toLowerCase() === normalizedValue);
+    if (found) {
+        selectedItem.value = found;
+        search.value = formatSelection(found);
+        return;
+    }
+
+    search.value = value;
+    selectedItem.value = null;
+};
+
 const setDefaultSuggestions = () => {
     const limit = Math.max(0, props.defaultSuggestionsLimit);
     let suggestions = [];
@@ -274,6 +279,23 @@ const updateSearchResults = debounce(() => {
         const codeMatch = query.match(/\(([^)]+)\)$/);
         if (codeMatch) {
             query = codeMatch[1].trim();
+        }
+        // If input is in formatted style like "LHE-Lahore-Pakistan", use IATA code part.
+        if (query.includes("-")) {
+            const [firstPart] = query.split("-");
+            if (firstPart && firstPart.trim().length >= 2) {
+                query = firstPart.trim();
+            }
+        }
+
+        // Keep selected airport visible in popover when the input already holds formatted text.
+        if (selectedItem.value) {
+            const selectedCode = (selectedItem.value.iata_code || "").toLowerCase();
+            if (selectedCode && selectedCode === query) {
+                searchResults.value = [selectedItem.value];
+                isLoading.value = false;
+                return;
+            }
         }
 
         const filteredResults = props.source.filter((item) => {
@@ -329,9 +351,6 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
-    if (search.value) {
-        clearSearch();
-    }
     // Show dropdown on focus, including default suggestions when input is empty.
     isOpen.value = true;
     eventBus.value = {
@@ -340,6 +359,26 @@ function handleFocus() {
         dropdownId: uniqueId.value,
     };
     updateSearchResults();
+    nextTick(() => {
+        updatePosition();
+    });
+}
+
+function handleInputClick() {
+    // If an airport is already selected, clear it fully on click.
+    if (selectedItem.value) {
+        search.value = "";
+        selectedItem.value = null;
+        emit("update:modelValue", "");
+    }
+
+    isOpen.value = true;
+    eventBus.value = {
+        ...eventBus.value,
+        dropdownOpen: true,
+        dropdownId: uniqueId.value,
+    };
+    setDefaultSuggestions();
     nextTick(() => {
         updatePosition();
     });
@@ -409,6 +448,7 @@ watch(eventBus, (newVal) => {
 watch(() => props.tabId, () => {
     // When tab changes, we need to update the position after the DOM has updated
     nextTick(() => {
+        syncSelectionFromModelValue(props.modelValue);
         updatePosition();
     });
 });
@@ -419,9 +459,7 @@ onMounted(() => {
     window.addEventListener('resize', updatePosition);
 
     // Initialize with default value if provided
-    if (props.modelValue) {
-        search.value = props.modelValue;
-    }
+    syncSelectionFromModelValue(props.modelValue);
 
     // Update position after component is mounted
     nextTick(() => {
@@ -437,16 +475,8 @@ onBeforeUnmount(() => {
 
 // Watch for changes to modelValue
 watch(() => props.modelValue, (newValue) => {
-    if (newValue && newValue !== search.value) {
-        // if source is available try to find the matching item
-        const found = props.source.find(i => i.iata_code === newValue);
-        if (found) {
-            selectedItem.value = found;
-            search.value = formatSelection(found);
-        } else {
-            search.value = newValue;
-            selectedItem.value = null;
-        }
+    if (newValue !== search.value || !selectedItem.value) {
+        syncSelectionFromModelValue(newValue);
     }
 });
 
@@ -460,13 +490,7 @@ watch(() => props.source, () => {
     // if the component already has a modelValue but we haven't yet resolved
     // the matching item (likely because source was empty earlier), try again
     if (props.modelValue && !selectedItem.value) {
-        const found = props.source.find(
-            (i) => i.iata_code === props.modelValue,
-        );
-        if (found) {
-            selectedItem.value = found;
-            search.value = formatSelection(found);
-        }
+        syncSelectionFromModelValue(props.modelValue);
     }
 });
 </script>
@@ -483,46 +507,31 @@ watch(() => props.source, () => {
 }
 
 /* Custom scrollbar styling */
-.scrollbar-container {
+.custom-scrollbar {
     overflow: hidden;
 }
 
-.scrollbar::-webkit-scrollbar {
+.custom-scrollbar::-webkit-scrollbar {
     width: 8px;
 }
 
-.scrollbar::-webkit-scrollbar-track {
+.custom-scrollbar::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 0 4px 4px 0;
 }
 
-.scrollbar::-webkit-scrollbar-thumb {
+.custom-scrollbar::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 4px;
 }
 
-.scrollbar::-webkit-scrollbar-thumb:hover {
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #a1a1a1;
 }
 
 /* For Firefox */
-.scrollbar {
+.custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #c1c1c1 #f1f1f1;
-}
-</style>
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #999;
 }
 </style>

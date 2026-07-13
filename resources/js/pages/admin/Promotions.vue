@@ -119,7 +119,7 @@ onMounted(() => {
                                 </div>
                             </td>
                         </tr>
-                        <tr v-if="promotions?.length === 0 && !isLoading">
+                        <tr v-if="promotions.length === 0 && !isLoading">
                             <td colspan="7" class="px-6 py-12 text-center text-gray-500">
                                 No promotions found. Click "Add Promotion" to create one.
                             </td>

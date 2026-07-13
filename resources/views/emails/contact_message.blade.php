@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Contact Message | Jetze</title>
+    <title>New Contact Message | Jetze.pk</title>
     <style>
         @media only screen and (max-width: 600px) {
             .email-shell {

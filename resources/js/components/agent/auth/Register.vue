@@ -1,25 +1,9 @@
 <script setup>
 import FileUploaderWithView from '@/components/common/FileUploaderWithView.vue';
 import Label from "@/components/ui/label/Label.vue";
-import { Check, ChevronsUpDown } from "lucide-vue-next";
 import Button from "@/components/ui/button/Button.vue";
-import { cn } from "@/lib/utils";
-
 
 import { custom, email, minLength, required, useValidation } from '@/components/composables/useFormValidation';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command";
 import {
     Stepper,
     StepperDescription,
@@ -35,21 +19,12 @@ import { VisuallyHidden } from 'radix-vue';
 import { computed, ref } from 'vue';
 import { VueTelInput } from 'vue-tel-input';
 import 'vue-tel-input/vue-tel-input.css';
-import {  FETCH_CURRENCIES } from "@/services/store/actions.type";
-import { useStore } from "vuex";
-const store = useStore();
-
-const currencies = computed(() => store.getters["currency/currencies"] || []);
 
 const authStore = useAuthStore();
-const isOpenCurrencyDropdown = ref(false);
-const selectedCurrency = ref();
-
 
 const userDetail = ref({
     role: 'customer', // 'agent' or 'customer'
     name: '',
-    lastName: '',
     email: '',
     phone: '',
     password: '',
@@ -59,7 +34,6 @@ const userDetail = ref({
     e_id: '',
     companyName: '',
     address: '',
-    preferredCurrency: '',
 });
 const phoneValid = ref(false);
 const phoneInputOption = {
@@ -74,8 +48,10 @@ const dropdown = {
 const isSubmitForm = ref(false);
 const validator = {
     role: useValidation([required('Please select a role')]),
-    name: useValidation([required('Please enter first name'), custom(() => (/^[A-Za-z\s]+$/.test(userDetail.value.name.trim())), 'First Name should be only in alphabetic',)]),
-    lastName: useValidation([required('Please enter last name'), custom(() => (/^[A-Za-z\s]+$/.test(userDetail.value.lastName.trim())), 'Last name should be only in alphabetic',)]),
+    name: useValidation([
+        required('Please enter Full Name'),
+        custom(() => (/^[A-Za-z\s]+$/.test(userDetail.value.name.trim())), 'Full Name should contain only alphabetic characters and spaces')
+    ]),
     companyName: useValidation([custom(() => {
         if (userDetail.value.role === 'agent') {
             return required('Please enter Company Name')(userDetail.value.companyName) === true;
@@ -103,12 +79,11 @@ const currentStep = ref(1)
 
 const getValidation = computed(() => {
     const shouldValidate = isSubmitForm.value;
-    const { role, name, lastName, companyName, email, password, phone, confirmPassword } = userDetail.value;
+    const { role, name, companyName, email, password, phone, confirmPassword } = userDetail.value;
 
     return {
         role: shouldValidate && !!validator.role.validate(role),
         name: shouldValidate && !!validator.name.validate(name),
-        lastName: shouldValidate && !!validator.lastName.validate(lastName),
         companyName: shouldValidate && !!validator.companyName.validate(companyName),
         email: shouldValidate && !!validator.email.validate(email),
         password: shouldValidate && !!validator.password.validate(password),
@@ -129,33 +104,31 @@ const isAgent = computed(() => userDetail.value.role === 'agent');
 async function handleRegister() {
     isSubmitForm.value = true;
     
-    // // Validate role selection
-    // if (!userDetail.value.role) {
-    //     currentStep.value = 1;
-    //     return;
-    // }
+    // Clear any previous backend error messages on submission attempt
+    authStore.validationMessages = null;
+    authStore.generalError = null;
     
-    // if (!isValidFirstStep.value) {
-    //     currentStep.value = 1;
-    //     return
-    // }
-    // else if (currentStep.value == 1 && isAgent.value) {
-    //     currentStep.value = 2;
-    //     return;
-    // }
+    if (!isValidFirstStep.value) {
+        currentStep.value = 1;
+        return;
+    }
+    else if (currentStep.value == 1 && isAgent.value) {
+        currentStep.value = 2;
+        return;
+    }
     
-    const { role, name, lastName, email, phone, password, confirmPassword, logo, license, e_id, companyName, address, preferredCurrency } = userDetail.value
+    const { role, name, email, phone, password, confirmPassword, logo, license, e_id, companyName, address } = userDetail.value
     const formData = new FormData();
     formData.append('role', role);
     formData.append('name', name);
-    formData.append('lastName', lastName);
     formData.append('email', email);
     formData.append('phone', phone);
     formData.append('mobile', phone);
     formData.append('password', password);
     formData.append('password_confirmation', confirmPassword);
     formData.append('company_name', companyName);
-    formData.append('preferredCurrency', selectedCurrency.value || preferredCurrency || 'PKR');
+    formData.append('preferred_currency', 'PKR');
+    formData.append('preferredCurrency', 'PKR');
     
     // Only add agent-specific fields if registering as agent
     if (isAgent.value) {
@@ -177,12 +150,6 @@ async function handleRegister() {
     if (validationMessages.value) {
         currentStep.value = 1;
     }
-}
-
-function fetchCurrencies(event) {
-    store.dispatch("currency/" + FETCH_CURRENCIES, {
-        searchQuery: event.target.value,
-    });
 }
 
 const handleUploadFile = (event, key) => {
@@ -393,7 +360,7 @@ const handleUploadFile = (event, key) => {
                     {{ validationMessages.companyName }}
                 </p>
             </div>
-            <div>
+            <!-- <div>
                 <Popover v-model:open="isOpenCurrencyDropdown">
                     <PopoverTrigger as-child>
                         <Button
@@ -459,7 +426,7 @@ const handleUploadFile = (event, key) => {
                         </Command>
                     </PopoverContent>
                 </Popover>
-            </div>
+            </div> -->
         </template>
         
         <!-- Document Step - Only for Agents -->
@@ -508,6 +475,15 @@ const handleUploadFile = (event, key) => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
         </button> -->
+        <div v-if="authStore.generalError" class="p-3.5 bg-rose-50 border-l-4 border-rose-500 rounded-lg text-rose-800 text-xs font-medium leading-relaxed shadow-sm mb-4">
+            <div class="flex items-start gap-2.5">
+                <svg class="w-4 h-4 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{{ authStore.generalError }}</span>
+            </div>
+        </div>
+
         <button @click = "handleRegister()" :disabled="isLoading"
             class="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-4 rounded-md transition-all duration-200 flex items-center justify-center disabled:opacity-50 shadow-lg">
             <span v-if="!isLoading">

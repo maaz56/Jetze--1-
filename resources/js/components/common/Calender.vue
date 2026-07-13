@@ -4,27 +4,32 @@
     <Popover v-model:open="isOpenPopover">
       <PopoverTrigger as-child>
         <Button
-          class="w-full h-[110px] sm:h-[110px] shadow-none bg-white border border-gray-200 hover:bg-gray-50 rounded-xl justify-start px-4"
+          class="h-[110px] w-full justify-start rounded-xl border border-gray-200 bg-white px-4 shadow-none hover:bg-gray-50 sm:h-[110px]"
         >
           <CalendarIcon class="mr-2 h-4 w-4 text-gray-600" />
           <div class="text-left">
-            <p class="text-gray-900 font-bold text-left text-lg sm:text-2xl leading-tight">
+            <p class="text-left text-lg font-bold leading-tight text-gray-900 sm:text-2xl">
               {{ displayText || "Select Date" }}
             </p>
-            <p v-if="displayWeekday" class="text-sm text-gray-500 mt-1">
+            <p v-if="displayWeekday" class="mt-1 text-sm text-gray-500">
               {{ displayWeekday }}
             </p>
           </div>
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent class="p-4 bg-white border-0 shadow-md w-auto max-w-none">
+      <PopoverContent
+        side="bottom"
+        :side-offset="8"
+        :avoid-collisions="false"
+        class="header-calendar-container w-auto max-w-none border-0 bg-white p-4 shadow-md"
+      >
         <!-- Month + Year selects -->
         <!-- Month + Year selects -->
-<div class="flex items-center justify-between mb-4">
+<div class="mb-4 flex items-center justify-between">
   <div class="flex gap-2 items-center">
     <Select v-model="selectedMonth" @update:modelValue="onMonthYearChange">
-      <SelectTrigger class="w-[140px] border-gray-200 ">
+      <SelectTrigger class="w-[140px] border-gray-200">
         <span>
           {{ monthLabel || "Month" }}
         </span>
@@ -41,7 +46,7 @@
     </Select>
 
     <Select v-model="selectedYear" @update:modelValue="onMonthYearChange">
-      <SelectTrigger class="w-[140px] border-gray-200 ">
+      <SelectTrigger class="w-[140px] border-gray-200">
         <span>{{ selectedYear || "Year" }}</span>
       </SelectTrigger>
       <SelectContent class="!max-h-[200px] overflow-auto">
@@ -67,7 +72,7 @@
         <div class="flex gap-6">
           <!-- Left month (current) -->
           <div>
-            <div class="text-center font-medium mb-2">
+            <div class="mb-2 text-center font-medium">
               {{ formatMonthYear(displayedDateLeft) }}
             </div>
             <CalendarGrid
@@ -82,7 +87,7 @@
 
           <!-- Right month (next) -->
           <div class="hidden sm:block">
-            <div class="text-center font-medium mb-2">
+            <div class="mb-2 text-center font-medium">
               {{ formatMonthYear(displayedDateRight) }}
             </div>
             <CalendarGrid
@@ -97,13 +102,19 @@
         </div>
 
         <!-- Optional: note about prices -->
-        <p class="text-xs text-gray-500 mt-4">
+        <p class="mt-4 text-xs text-gray-500">
           Prices are estimated for one adult and may change.
         </p>
       </PopoverContent>
     </Popover>
   </div>
 </template>
+
+<style scoped>
+.header-calendar-container {
+  --calendar-cell-size: 2.5rem;
+}
+</style>
 
 <script setup>
 import { computed, ref, watch } from "vue";

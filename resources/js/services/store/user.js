@@ -137,17 +137,22 @@ const actions = {
     async [SAVE_STAFF](context, params) {
         context.commit(IS_LOADING);
         try {
-            const response = await apiService.saveStaff(params);
+            await apiService.saveStaff(params);
             context.commit(SET_STAFF, "Staff member saved successfully");
             toast("Staff member saved successfully.", {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
-            toast("Staff creation failed." + error, {
+            const apiMessage =
+                error?.response?.data?.message?.description ||
+                error?.response?.data?.message ||
+                "Staff creation failed.";
+
+            toast(apiMessage, {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
     async [UPDATE_STAFF](context, params) {
@@ -180,6 +185,7 @@ const actions = {
                 type: "success",
             });
             context.state.isSaving = false;
+            return response;
 
         } catch (error) {
             console.log(error);
@@ -187,6 +193,7 @@ const actions = {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
     async [FETCH_AGENTS_CHARGES](context, params) {
@@ -244,7 +251,7 @@ const actions = {
             const response = await apiService.getAgentData(params);
             context.commit(SET_AGENT_DATA, response.data);
         } catch (error) {
-            //console.log(error);
+            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });

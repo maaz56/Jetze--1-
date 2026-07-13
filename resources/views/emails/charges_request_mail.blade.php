@@ -63,7 +63,7 @@
 
                                         <p style="margin: 0; font-size: 16px;">
                                             Thank you for your prompt attention.<br>
-                                            <b>Jetze</b>
+                                            <b>Jetze.pk</b>
                                         </p>
                                     </td>
                                 </tr>

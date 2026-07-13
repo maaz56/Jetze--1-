@@ -22,7 +22,6 @@ class TravelPortFlightTransformer
     {
         $results = [];
         $tripType = $airlineParams['flight_type']; // one-way | return
-        // Log::info("FlightDate before transformations:" . json_encode($flightData));
         /* -------------------------------------------------bundle
          | NORMALIZE FLIGHT BY COMBINATION INDEX
          -------------------------------------------------*/
@@ -309,7 +308,6 @@ class TravelPortFlightTransformer
             ];
         }
 
-        Log::info('Transformed TravelPort Flights'.json_encode( $results) ?? []);
         return $results;
     }
 
@@ -330,7 +328,7 @@ class TravelPortFlightTransformer
             'iata' => $airport['iata_code'] ?? null,
             'city' => [
                 'name' => $airport['city_name'] ?? null,
-                'code' => $airport['iata_city_code'] ?? null,
+                'code' => $airport['iata_code'] ?? null,
                 'country' => [
                     'name' => $airport['iata_country_code'] ?? null,
                     'code' => $airport['iata_country_code'] ?? null,

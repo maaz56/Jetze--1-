@@ -19,14 +19,16 @@ use App\Models\Slice;
 use App\Models\User;
 use App\Services\AirBlueApiService;
 use App\Services\AirSialApiService;
-use App\Services\AtApiService;
 use App\Services\FlyDubaiApiService;
 use App\Services\OneApiService;
 use App\Services\PIAApiService;
 use App\Services\SabreApiService;
+use App\Services\AtApiService;
+
 // use App\Services\SafepayService;
 use App\Services\SooperApiService;
 use App\Services\TravelPortService;
+use App\Services\UtilityService;
 use Carbon\Carbon;
 use GuzzleHttp\Promise\Utils;
 use Illuminate\Http\Request;
@@ -51,6 +53,7 @@ class BookingController extends Controller
     protected $oneApiService;
     protected $airblueApiService;
     protected $travelportApiService;
+    protected $utilityService;
 
     public function __construct(
         SabreApiService $sabreApiService,
@@ -60,7 +63,8 @@ class BookingController extends Controller
         FlyDubaiApiService $flydubaiApiService,
         AirBlueApiService $airblueApiService,
         TravelPortService $travelportApiService,
-        OneApiService $oneApiService
+        OneApiService $oneApiService,
+        UtilityService $utilityService
     ) {
         $this->sabreApiService = $sabreApiService;
         // $this->safepayService = $safepayService;
@@ -71,12 +75,14 @@ class BookingController extends Controller
         $this->flydubaiApiService = $flydubaiApiService;
         $this->airblueApiService = $airblueApiService;
         $this->oneApiService = $oneApiService;
+        $this->utilityService = $utilityService;
     }
 
     public function index(Request $request)
     {
-        Log::info($request);
+        Log::info($request->all());
         $user = Auth::user();
+        Log::info($user);
         $bookingMode = null;
         if ($user && $user->role == 'agent') {
             $bookingMode = 'B2B';
@@ -86,7 +92,10 @@ class BookingController extends Controller
             $bookingMode = $request->booking_mode;
         }
         $query = FlightBookings::with(['pessangers', 'user.agentData'])->orderBy('id', 'desc');
-
+        if($user->role == 'admin' && $request->user_id){
+            Log::info("Admin accessing bookings for user_id: " . $request->user_id);
+            $query->where('agent_id', $request->user_id);
+        }
         // Apply booking mode filter only if user is agent/customer or if specified in request
         if ($request->userRole == "agent" || $request->userRole == "customer" || $bookingMode) {
             $query->where('booking_mode', $bookingMode);
@@ -120,18 +129,13 @@ class BookingController extends Controller
         }
 
 
-        if ($request->filled('dashboard_limit')) {
-            $limit = min(max((int) $request->dashboard_limit, 1), 15);
-            $query->limit($limit);
-        }
-
-        // Get bookings
+        // Get paginated bookings
         $bookings = $query->get();
-
+        Log::info($bookings);
         // Count different statuses
         $baseQuery = FlightBookings::query();
         if ($request->userRole == "agent" || $request->userRole == "customer" || $bookingMode) {
-            $query->where('booking_mode', $bookingMode);
+            $baseQuery->where('booking_mode', $bookingMode);
         }
         if ($request->userRole == "agent" || $request->userRole == "customer") {
             $baseQuery->where('agent_id', $request->userId);
@@ -142,6 +146,7 @@ class BookingController extends Controller
         $totalTicketed = (clone $baseQuery)->where('status', 'ticketed')->count();
         $totalCanceled = (clone $baseQuery)->where('status', 'canceled')->count();
         $totalBooked = (clone $baseQuery)->where('status', 'booked')->count();
+        $totalVoided = (clone $baseQuery)->where('status', 'voided')->count();
 
         // Extract itinerary references
         $bookingsWithItineraryReferences = $bookings->map(function ($booking) {
@@ -157,6 +162,7 @@ class BookingController extends Controller
             'total_canceled' => $totalCanceled,
             'total_ticketed' => $totalTicketed,
             'total_booked' => $totalBooked,
+            'total_voided' => $totalVoided,
         ]);
     }
 
@@ -165,7 +171,6 @@ class BookingController extends Controller
     public function getBookingDetails(Request $request)
     {
 
-        Log::info($request);
 
         //$bookingDetail = FlightBookings::with('pessangers')->where('id', $request->bookingId)->get();
         $bookingDetail = FlightBookings::with('pessangers', 'bookingInvoice')
@@ -215,21 +220,17 @@ class BookingController extends Controller
 
     public function store(Request $request)
     {
-        // Log::info($request);
-
+        
         $pnrResponse = null;
-        $localPnr = "null";
-
         $airlinePnr = null;
         $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
         $flightData = $request['flight'];
         $fareRefernce = $request['fare_reference'];
-        $sector = $flightData['provider']['sector'] ?? "NULL";
-        $travelDate = $flightData['provider']['travel_date'] ?? "NULL";
+        $sector = $flightData['provider']['sector'] ?? '';
+        $travelDate = $flightData['provider']['travel_date'];
         $travelDate = substr($travelDate, 0, 10);
         $contentSource = $flightData['provider']['contentSource'];
         $expiryTime = now()->addMinutes(15);
-        Log::info($expiryTime);
         // Check if booking already exists for same travellers and flight
         if ($flightData['provider']['contentSource'] == 'GDS') {
             Log::info('Checking for existing bookings with content source GDS');
@@ -407,9 +408,9 @@ class BookingController extends Controller
                     }
                     $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
                     $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][1]['Confirmation']['Locator']['value'] ?? null;
-                    if ($flightData['provider']['contentSource'] == 'NDC') {
-                        $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][2]['Confirmation']['Locator']['value'] ?? null;
-                        $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
+                    if($flightData['provider']['contentSource'] == 'NDC'){
+                    $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][2]['Confirmation']['Locator']['value'] ?? null;
+                    $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
 
                     }
                     if (!$itineraryRef) {
@@ -419,6 +420,8 @@ class BookingController extends Controller
                     $flightData = json_encode($flightData);
                     break;
                 case 'at':
+                    $localPnr = "null";
+                    $pnr = null;
                     $service = new AtApiService();
                     $pnrResponse = $service->atBooking($request);
                     $response = $pnrResponse;
@@ -437,8 +440,6 @@ class BookingController extends Controller
                 case 'OneApi':
                     $localPnr = "null";
                     $pnr = null;
-                    // $pnrResponse = ' {"Body":{"OTA_AirBookRS":{"@attributes":{"Cancel":"false","EchoToken":"69b7cef3809e6","PrimaryLangID":"en-us","RetransmissionIndicator":"false","SequenceNmbr":"1","TransactionIdentifier":"TID$1773653748647145100322.de1170","Version":"2006.01"},"AirReservation":{"AirItinerary":{"OriginDestinationOptions":{"OriginDestinationOption":{"FlightSegment":{"@attributes":{"ArrivalDateTime":"2026-07-14T12:15:00","DepartureDateTime":"2026-07-14T10:30:00","FlightNumber":"9P840","RPH":"9P$KHI\/LHE$6388998$20260714103000$20260714121500","ResCabinClass":"Y","Status":"35","returnFlag":"false"},"DepartureAirport":{"@attributes":{"LocationCode":"KHI","Terminal":""}},"ArrivalAirport":{"@attributes":{"LocationCode":"LHE","Terminal":""}},"Comment":"airport_short_names:KHI=Karach,LHE=null"}}}},"PriceInfo":{"@attributes":{"RepriceRequired":"false"},"ItinTotalFare":{"@attributes":{"NegotiatedFare":"false"},"BaseFare":{"@attributes":{"Amount":"20053.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"EquiBaseFare":{"@attributes":{"Amount":"20053.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"Taxes":{"Tax":{"@attributes":{"Amount":"2170.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TOTALTAX"}}},"Fees":{"Fee":{"@attributes":{"Amount":"3400.00","CurrencyCode":"PKR","DecimalPlaces":"2","FeeCode":"TOTALFEE"}}},"TotalFare":{"@attributes":{"Amount":"25623.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"TotalEquivFare":{"@attributes":{"Amount":"25623.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"TotalFareWithCCFee":{"@attributes":{"Amount":"25623.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"TotalEquivFareWithCCFee":{"@attributes":{"Amount":"25623.80","CurrencyCode":"PKR","DecimalPlaces":"2"}}},"PTC_FareBreakdowns":{"PTC_FareBreakdown":{"PassengerTypeQuantity":{"@attributes":{"Age":"0","Code":"ADT","Quantity":"1"}},"FareBasisCodes":{"FareBasisCode":"P"},"PassengerFare":{"@attributes":{"NegotiatedFare":"false"},"BaseFare":{"@attributes":{"Amount":"20053.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"EquiBaseFare":{"@attributes":{"Amount":"20053.80","CurrencyCode":"PKR","DecimalPlaces":"2"}},"Taxes":{"Tax":[{"@attributes":{"Amount":"1500.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TAX","TaxName":"Pakistan DOM Excise Duty (PK)"}},{"@attributes":{"Amount":"100.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TAX","TaxName":"Pakistan DOM Security Charge (XZ)"}},{"@attributes":{"Amount":"500.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TAX","TaxName":"Pakistan DOM Embarkation Fee (SP)"}},{"@attributes":{"Amount":"20.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TAX","TaxName":"Pakistan DOM Government Airport Tax (YI)"}},{"@attributes":{"Amount":"50.00","CurrencyCode":"PKR","DecimalPlaces":"2","TaxCode":"TAX","TaxName":"Pakistan DOM Stamp Duty (N9)"}}]},"Fees":{"Fee":["Baggage Selection","Seat Selection","Meal Selection"]},"TotalFare":{"@attributes":{"Amount":"25623.80","CurrencyCode":"PKR","DecimalPlaces":"2"}}},"TravelerRefNumber":{"@attributes":{"RPH":"9P|A1$7701527"}}}}},"TravelerInfo":{"AirTraveler":{"@attributes":{"AccompaniedByInfant":"false","PassengerTypeCode":"ADT"},"PersonName":{"GivenName":"ARSLAN","Surname":"AHMAD","NameTitle":"MR"},"Telephone":{"@attributes":{"DefaultInd":"false","FormattedInd":"false","PhoneNumber":"92--3056074127"}},"Document":{"@attributes":{"DocHolderNationality":"PK"}},"TravelerRefNumber":{"@attributes":{"RPH":"9P|A1$7701527"}},"ETicketInfo":{}},"SpecialReqDetails":{"SeatRequests":{"SeatRequest":{"@attributes":{"DepartureDate":"2026-07-14T10:30:00","FlightNumber":"9P840","FlightRefNumberRPHList":"9P$KHI\/LHE$37543$20260714103000$20260714121500","SeatNumber":"5E","SmokingAllowed":"false","TravelerRefNumberRPHList":"9P|A1$7701527"}}},"MealRequests":{"MealRequest":{"@attributes":{"DepartureDate":"2026-07-14T10:30:00","FlightNumber":"9P840","FlightRefNumberRPHList":"9P$KHI\/LHE$37543$20260714103000$20260714121500","TravelerRefNumberRPHList":"9P|A1$7701527","mealCode":"BAKECO","mealQuantity":"1"}}},"BaggageRequests":{"BaggageRequest":{"@attributes":{"DepartureDate":"2026-07-14T10:30:00","FlightNumber":"9P840","FlightRefNumberRPHList":"9P$KHI\/LHE$37543$20260714103000$20260714121500","TravelerRefNumberRPHList":"9P|A1$7701527","baggageCode":"46 Kg Total in 2 Piece","baggageOndGroupId":""}}}}},"Ticketing":{"@attributes":{"ReverseTktgSegmentsInd":"false","TicketTimeLimit":"2026-03-17T09:45:22","TicketType":"eTicket","TicketingStatus":"1"},"TicketAdvisory":"Reservation is onhold. To avoid cancellation, pay before 2026-03-17T09:45:22 GMT"},"BookingReferenceID":{"@attributes":{"ID":"4T334U","Type":"14"}},"TPA_Extensions":{"AAAirReservationExt":{"ContactInfo":{"PersonName":{"Title":"MR","FirstName":"ARSLAN","LastName":"AHMAD"},"Telephone":{"PhoneNumber":"3056074127","AreaCode":"92"},"Mobile":{"PhoneNumber":"3056074127","AreaCode":"92"},"Email":"arslan123@gmail.com","Address":{"CityName":"Karachi","StateProvinceName":"DEL","CountryName":{"CountryName":"PK","CountryCode":"PK"},"StateCode":"Sindh"},"PreferredLanguage":"en"},"AdminInfo":{"OriginAgentCode":"FJLAAAPEW5326"},"ResSummary":{"PTCCounts":{"PTCCount":[{"PassengerTypeCode":"ADT","PassengerTypeQuantity":"1"},{"PassengerTypeCode":"CHD","PassengerTypeQuantity":"0"},{"PassengerTypeCode":"INF","PassengerTypeQuantity":"0"}]}}}}},"Success":{},"Errors":{}}}}  
-// ';
                     $pnrResponse = $this->oneApiService->bookFlight($customer);
                     if ($pnrResponse === null) {
                         return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
@@ -486,9 +487,6 @@ class BookingController extends Controller
         $validated = Validator::make($request->all(), [
             'main_contact.email' => 'required|email',
             'main_contact.phone' => 'required|string',
-            'main_contact.phoneNationalNumber' => 'nullable|string',
-            'main_contact.phoneCountryCode' => 'nullable|string|size:2',
-            'main_contact.mobileCountryCode' => 'nullable|string|max:10',
             'main_contact.country' => 'required|string',
             'agency_mobile' => 'nullable|string',
             'agency_email' => 'nullable|email',
@@ -496,6 +494,8 @@ class BookingController extends Controller
             'agent_id' => 'nullable|integer',
             'amount' => 'required|numeric',
             'agent_markup' => 'nullable',
+            'segment_margin' => 'nullable|numeric',
+            'promotion_margin' => 'nullable|numeric',
             'travellers' => 'required|array',
             'travellers.*.type' => 'required|string',
             'travellers.*.title' => 'required|string',
@@ -506,8 +506,6 @@ class BookingController extends Controller
             'travellers.*.documentNo' => 'nullable|string',
             'travellers.*.expiryDate' => 'nullable|date',
             'travellers.*.issueCountry' => 'nullable|string',
-            'travellers.*.state' => 'nullable|string',
-            'travellers.*.city' => 'nullable|string',
             'travellers.*.gender' => 'nullable|string',
             'travellers.*.dob' => 'nullable|string'
         ])->validate();
@@ -547,6 +545,8 @@ class BookingController extends Controller
             'agent_margin' => $request->agent_margin ?? 0,
             'agent_discount' => $request->agent_discount ?? 0,
             'add_ones_amount' => $request->add_ones_amount ?? 0,
+            'segment_margin' => $validated['segment_margin'] ?? 0,
+            'promotion_margin' => $validated['promotion_margin'] ?? 0,
             'fare_reference' => $request->fare_reference
                 ? json_encode($request->fare_reference)
                 : null,
@@ -560,26 +560,24 @@ class BookingController extends Controller
         // Insert Travellers
         foreach ($validated['travellers'] as $traveller) {
             FlightPassenger::create([
-                'booking_id' => $flightBooking->id,
-                'type' => $traveller['type'],
-                'title' => $traveller['title'],
-                'first_name' => $traveller['firstName'],
-                'last_name' => $traveller['lastName'],
-                'nationality' => $traveller['nationality'],
+                'booking_id'    => $flightBooking->id,
+                'user_id'       => $validated['agent_id'],
+                'type'          => $traveller['type'],
+                'title'         => $traveller['title'],
+                'first_name'    => $traveller['firstName'],
+                'last_name'     => $traveller['lastName'],
+                'nationality'   => $traveller['nationality'],
                 'document_type' => $traveller['documentType'],
-                'document_no' => $traveller['documentNo'],
-                'cnic' => $traveller['cnic'] ?? null,
-                'expiry_date' => $traveller['expiryDate'],
+                'document_no'   => $traveller['documentNo'],
+                'cnic'          => $traveller['cnic'] ?? null,
+                'expiry_date'   => $traveller['expiryDate'],
                 'issue_country' => $traveller['issueCountry'],
-                'state' => $traveller['state'] ?? null,
-                'city' => $traveller['city'] ?? null,
-                'gender' => $traveller['gender'],
-                'dob' => $traveller['dob'],
-
+                'gender'        => $traveller['gender'],
+                'dob'           => $traveller['dob'],
             ]);
 
         }
-        if ($request->paymentMethod == 'hold') {
+        if ($request->paymentMethod == 'hold' && strtolower((string) $request->flight_provider) !== 'airblue') {
 
             $admin = User::where('role', 'admin')->first();
 
@@ -598,12 +596,41 @@ class BookingController extends Controller
             }
         }
         $flightBooking = FlightBookings::with(['pessangers', 'user.agentData'])->where('id', $flightBooking->id)->first();
+        Log::info('Expiry Time: ' . $expiryTime);
         CancelBookingJob::dispatch($flightBooking)->delay($expiryTime);
+
 
         return response()->json([
             'message' => 'Booking confirmed successfully',
             'booking' => $flightBooking,
         ], 200);
+    }
+
+    public function getMyTravellers(Request $request)
+    {
+        $userId = auth()->id();
+
+        if (!$userId) {
+            return response()->json(['passengers' => []]);
+        }
+
+        // Fetch all passengers for this user, newest first
+        $allPassengers = FlightPassenger::where('user_id', $userId)
+            ->orderBy('id', 'desc')
+            ->get();
+
+        // Deduplicate: keep only the most-recent record per (first_name + last_name + document_no) combo
+        $seen = [];
+        $unique = [];
+        foreach ($allPassengers as $passenger) {
+            $key = strtolower(trim($passenger->first_name . '|' . $passenger->last_name . '|' . $passenger->document_no));
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $unique[] = $passenger;
+            }
+        }
+
+        return response()->json(['passengers' => array_values($unique)]);
     }
 
     public function getPnrData(Request $request)
@@ -657,7 +684,7 @@ class BookingController extends Controller
         Log::info($request);
         $booking = FlightBookings::where('id', $request->booking_id)->first();
         // Update status and PNR
-        if ($request->has('add_ones_amount')) {
+        if ($request->add_ones_amount) {
             $booking->add_ones_amount = $request->add_ones_amount;
         }
         $booking->amount = $request->amount;
@@ -669,7 +696,7 @@ class BookingController extends Controller
     }
 
 
-    public function getPnrDetails(Request $request)
+     public function getPnrDetails(Request $request)
     {
 
         Log::info($request);
@@ -771,25 +798,25 @@ class BookingController extends Controller
             $pnrStatus = $this->travelportApiService->cancelReservation($request->pnr);
             Log::info($pnrStatus);
             if (!$pnrStatus) {
-                return response()->json([
+               return response()->json([
                     'message' => 'Booking cancellation failed',
                     'error' => 'Unable to cancel booking with Travelport API'
                 ], 400);
             }
-            $booking = FlightBookings::where('id', $request->bookingId)->first();
-            $booking->status = 'canceled';
-            $booking->save();
-            $this->sendBookingCanceledMail($booking);
+             $booking = FlightBookings::where('id', $request->bookingId)->first();
+                $booking->status = 'canceled';
+                $booking->save();
+                $this->sendBookingCanceledMail($booking);
             return $pnrStatus;
-        } else if ($request->booking_source == 'OneApi') {
-            $booking = FlightBookings::where('id', $request->bookingId)->first();
-            $booking->status = 'canceled';
-            $booking->save();
-            $this->sendBookingCanceledMail($booking);
-            return response()->json([
-                'message' => 'Booking Canceled successfully',
-                'booking' => $booking,
-            ]);
+        }else if ($request->booking_source == 'OneApi') {
+              $booking = FlightBookings::where('id', $request->bookingId)->first();
+                $booking->status = 'canceled';
+                $booking->save();
+                $this->sendBookingCanceledMail($booking);
+                return response()->json([
+                    'message' => 'Booking Canceled successfully',
+                    'booking' => $booking,
+                ]);
         }
         return;
 
@@ -817,6 +844,39 @@ class BookingController extends Controller
         }
     }
 
+    private function sendBookingStatusMail($booking, ?string $status = null, ?array $recipientEmails = null): void
+    {
+        if (!$booking) {
+            return;
+        }
+
+        $status = strtolower((string) ($status ?? $booking->status ?? ''));
+        if (!in_array($status, ['booked', 'canceled', 'cancelled', 'ticketed', 'issued'], true)) {
+            return;
+        }
+
+        $admin = User::where('role', 'admin')->first();
+        $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
+
+        $recipients = $recipientEmails ?? [
+            $booking->main_email,
+            $booking->agency_email,
+            $admin->email ?? null,
+        ];
+
+        $recipients = array_values(array_unique(array_filter($recipients)));
+
+        foreach ($recipients as $email) {
+            $mail = match ($status) {
+                'canceled', 'cancelled' => new BookingCanceledMail($email, $booking, $flightDataForMail),
+                'ticketed', 'issued' => new BookingConfirmedMail($email, $booking, $flightDataForMail),
+                default => new BookingCreatedMail($email, $booking, $flightDataForMail),
+            };
+
+            Mail::to($email)->queue($mail->afterCommit());
+        }
+    }
+
     public function confirmPnr(Request $request)
     {
         Log::info($request);
@@ -839,10 +899,10 @@ class BookingController extends Controller
         } else if ($request->flight_provider == 'OneApi') {
             $res = '[]';
             $res = $this->oneApiService->confirmTicket($request);
-            if (!$res) {
+            if ( !$res) {
                 return response()->json([
-                    'message' => 'Booking confirmation failed',
-
+                    'message' =>  'Booking confirmation failed',
+                    
                 ], 400);
             }
         } else if ($request->flight_provider == 'airsial') {
@@ -863,7 +923,7 @@ class BookingController extends Controller
 
             }
 
-        } else if ($request->flight_provider === 'at') {
+        }else if ($request->flight_provider === 'at') {
 
             $atApiService = new AtApiService();
             Log::info('Booking held, skipping confirmation step.');
@@ -897,31 +957,12 @@ class BookingController extends Controller
             $booking->sooper_response = json_encode($res); // Store Sooper response if available
             $booking->status = $request->booking_status;
             $booking->pnr = $request->pnr;
+            $booking->issuance_date = now();
+            // $booking->issuance_date = '2026-06-28 11:58:24';
+
             $booking->save();
-            $temp = json_decode($booking->pnr_response, true);
-            $admin = User::where('role', 'admin')->first();
 
-            // If still a string, decode again
-            if (is_string($temp)) {
-                $response = json_decode($temp, true);
-            } else {
-                $response = $temp;
-            }
-            $recipients = [
-                $booking->agency_email,
-                $admin->email,
-            ];
-
-            Log::info('Sending booking confirmation emails to recipients', ['recipients' => $recipients]);
-
-            $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
-            foreach ($recipients as $email) {
-                if (!empty($email)) {
-                    Mail::to($email)->queue(
-                        (new BookingConfirmedMail($email, $booking, $flightDataForMail))->afterCommit()
-                    );
-                }
-            }
+            $this->sendBookingStatusMail($booking, $booking->status);
         }
 
         return response()->json([
@@ -934,15 +975,38 @@ class BookingController extends Controller
     {
         Log::info($request);
         $request->validate([
-            'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed', // Example statuses
+            'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed,booked,issued,requested,voided',
             'airline_pnr' => 'nullable|string',
             'ticket_number' => 'nullable|string',
+            'is_manually_issued' => 'nullable|boolean',
         ]);
         $booking = FlightBookings::where('id', $request->booking_id)->first();
+        if (!$booking) {
+            return response()->json([
+                'message' => 'Booking not found',
+            ], 404);
+        }
+
+        $previousStatus = strtolower((string) $booking->status);
         $booking->status = $request->status;
-        $booking->airline_pnr = $request->airline_pnr;
-        $booking->ticket_number = $request->ticket_number;
+        if ($request->has('airline_pnr')) {
+            $booking->airline_pnr = $request->airline_pnr;
+        }
+        if ($request->has('ticket_number')) {
+            $booking->ticket_number = $request->ticket_number;
+        }
+        if ($request->has('is_manually_issued')) {
+            $booking->is_manually_issued = (bool) $request->is_manually_issued;
+        } elseif (auth()->check() && auth()->user()->role === 'admin' && in_array($request->status, ['issued', 'ticketed'], true)) {
+            // If admin is updating ticket status directly, treat it as a manual issue by default.
+            $booking->is_manually_issued = true;
+        }
         $booking->save();
+
+        if ($previousStatus !== strtolower((string) $booking->status)) {
+            $this->sendBookingStatusMail($booking, $booking->status);
+        }
+
         return response()->json([
             'message' => 'Booking Approved successfully',
             'booking' => $booking,
@@ -1006,13 +1070,16 @@ class BookingController extends Controller
     {
 
         Log::info($request);
+        $requestedUserId = $request->user_id ?? $request->userId;
 
         $query = FlightBookings::with('pessangers')
             ->where('booking_mode', 'B2C')
             ->orderBy('id', 'desc');
 
-        // Check user role
-        if ($request->userRole == "agent") {
+        // Always support filtering by user_id/userId from request.
+        if (!empty($requestedUserId)) {
+            $query->where('agent_id', $requestedUserId);
+        } elseif ($request->userRole == "agent") {
             $query->where('agent_id', $request->userId);
         }
 
@@ -1023,10 +1090,12 @@ class BookingController extends Controller
 
         // Get paginated bookings
         $bookings = $query->get();
-
+        Log::info($bookings);
         // Count different statuses
         $baseQuery = FlightBookings::query();
-        if ($request->userRole == "agent") {
+        if (!empty($requestedUserId)) {
+            $baseQuery->where('agent_id', $requestedUserId);
+        } elseif ($request->userRole == "agent") {
             $baseQuery->where('agent_id', $request->userId);
         }
 
@@ -1036,7 +1105,7 @@ class BookingController extends Controller
         $totalTicketed = (clone $baseQuery)->where('status', 'ticketed')->count();
         $totalCanceled = (clone $baseQuery)->where('status', 'canceled')->count();
         $totalBooked = (clone $baseQuery)->where('status', 'booked')->count();
-
+        $totalVoided = (clone $baseQuery)->where('status', 'voided')->count();
         // Extract itinerary references
         $bookingsWithItineraryReferences = $bookings->map(function ($booking) {
             $pnrResponse = json_decode($booking->pnr_response, true);
@@ -1051,11 +1120,12 @@ class BookingController extends Controller
             'total_canceled' => $totalCanceled,
             'total_ticketed' => $totalTicketed,
             'total_booked' => $totalBooked,
+            'total_voided' => $totalVoided,
         ]);
 
     }
 
-    public function sendPriceRequest(Request $request)
+     public function sendPriceRequest(Request $request)
     {
         $response = null;
         if ($request->flight_provider == 'travelport') {
@@ -1121,7 +1191,7 @@ class BookingController extends Controller
 
     }
 
-    public function getAncillaries(Request $request)
+   public function getAncillaries(Request $request)
     {
         $response = null;
         $promise1 = null;
@@ -1180,7 +1250,6 @@ class BookingController extends Controller
 
     public function patchAncillaries(Request $request)
     {
-        Log::info($request);
 
         $response = null;
         if ($request['flight_provider'] == 'sooper') {
@@ -1192,9 +1261,41 @@ class BookingController extends Controller
                     'message' => 'Ancillaries failed to patch',
                 ], 500);
             }
+
+            $airblueErrors = data_get($response, 'Body.AirBookModifyResponse.AirBookModifyResult.Errors.Error');
+            if (!empty($airblueErrors)) {
+                $errors = is_array($airblueErrors) ? $airblueErrors : [$airblueErrors];
+                return response()->json([
+                    'message' => 'Ancillaries failed to patch',
+                    'errors' => $errors,
+                ], 422);
+            }
+
             $booking = FlightBookings::where('id', $request->booking_id)->first();
-            $booking->is_ancillaries_selected = 'true';
-            $booking->save();
+            if ($booking) {
+                $wasAncillariesSelected = (string) $booking->is_ancillaries_selected === 'true';
+                $booking->is_ancillaries_selected = 'true';
+                $booking->save();
+
+                // Airblue: send booking-created email only after successful ancillaries patch.
+                // Guarded to avoid duplicate emails if patch is retried.
+                if (!$wasAncillariesSelected) {
+                    $admin = User::where('role', 'admin')->first();
+                    $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
+                    $recipients = [
+                        $booking->agency_email,
+                        $admin->email ?? null,
+                    ];
+
+                    foreach ($recipients as $email) {
+                        if (!empty($email)) {
+                            Mail::to($email)->queue(
+                                (new BookingCreatedMail($email, $booking, $flightDataForMail))->afterCommit()
+                            );
+                        }
+                    }
+                }
+            }
         } else if ($request['flight_provider'] == 'OneApi') {
             $response = $this->oneApiService->priceWithBundle_ssr($request);
             if ($response instanceof \Illuminate\Http\JsonResponse) {
@@ -1220,6 +1321,12 @@ class BookingController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
+        if ($this->isVoidWindowClosed($booking)) {
+            return response()->json([
+                'message' => 'Void is only available until midnight on the issuance date.',
+            ], 422);
+        }
+
         // Update booking status to voided
         $booking->status = 'requested';
         $booking->save();
@@ -1236,6 +1343,17 @@ class BookingController extends Controller
     {
         Log::info($request);
 
+        $booking = FlightBookings::where('id', $request->bookingId)->first();
+        if (!$booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        if ($this->isVoidWindowClosed($booking)) {
+            return response()->json([
+                'message' => 'Void is only available until midnight on the issuance date.',
+            ], 422);
+        }
+
         if ($request->flight_provider == 'sooper') {
             Log::info('Voiding booking via Sooper API', $request->all());
             $body = [
@@ -1244,7 +1362,6 @@ class BookingController extends Controller
                 'currency' => $request->currency,
             ];
             $res = $this->sooperApiService->voidSooperBooking($body);
-            $booking = FlightBookings::where('id', $request->bookingId)->first();
             // Update status and PNR
             Log::info($booking->status);
             $booking->status = $request->booking_status;
@@ -1255,21 +1372,51 @@ class BookingController extends Controller
             ]);
         } else if ($request->flight_provider == 'travelport') {
             Log::info('Voiding booking via TravePort API', $request->all());
+            $res= null;
             $pnr = $request->pnr;
-            $res = $this->travelportApiService->voidReservation($pnr);
-            $booking = FlightBookings::where('id', $request->bookingId)->first();
-            // Update status and PNR
+            if($request->booking_source == 'NDC'){
 
+                $res = $this->travelportApiService->voidReservation($pnr);
+            } else if ($request->booking_source == 'GDS') {
+                $res = $this->travelportApiService->voidGDSReservation($pnr);
+            }
+
+            if (!($res['success'] ?? false)) {
+                return response()->json([
+                    'message' => $res['error'] ?? 'Failed to void booking on Travelport',
+                    'error_response' => $res['data'] ?? null,
+                ], 422);
+            }
+
+            // Update status and PNR
+            
             Log::info($booking->status);
             $booking->status = $request->booking_status;
             $booking->save();
             return response()->json([
                 'message' => 'Booking voided successfully',
                 'booking' => $booking,
+                'travelport_response' => $res['data'] ?? null,
             ]);
         }
 
     }
+
+    private function isVoidWindowClosed(FlightBookings $booking): bool
+    {
+        if (!in_array(strtolower((string) $booking->status), ['ticketed', 'issued'], true)) {
+            return true;
+        }
+
+        if (!$booking->issuance_date) {
+            return true;
+        }
+
+        return now()->startOfDay()->greaterThan(
+            Carbon::parse($booking->issuance_date)->startOfDay()
+        );
+    }
+
     public function getPublicBookings(Request $request)
     {
         Log::info($request);
@@ -1313,8 +1460,9 @@ class BookingController extends Controller
         Log::info($request);
 
         $validated = $request->validate([
-            'email' => 'required|string',
-            'booking_id' => 'required|string',
+            'email' => 'required|email',
+            'booking_id' => 'required|integer',
+            'booking_status' => 'nullable|string',
         ]);
         $booking = FlightBookings::where('id', $validated['booking_id'])->first();
         if (!$booking) {
@@ -1322,10 +1470,12 @@ class BookingController extends Controller
                 'message' => 'Booking not found'
             ], 404);
         }
-        $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
-        Mail::to($validated['email'])->queue(
-            (new BookingCreatedMail($validated['email'], $booking, $flightDataForMail))->afterCommit()
+
+        $status = strtolower(
+            (string) ($validated['booking_status'] ?? $booking->status ?? 'booked')
         );
+
+        $this->sendBookingStatusMail($booking, $status, [$validated['email']]);
 
         return response()->json([
             'message' => 'Email sent successfully'

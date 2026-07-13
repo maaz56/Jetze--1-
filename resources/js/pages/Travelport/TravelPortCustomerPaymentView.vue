@@ -1,6 +1,6 @@
 <template>
 
-  
+
   <div  class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
 
     <!-- <pre>{{ paymentStatus }}</pre> -->
@@ -42,7 +42,7 @@
           <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full"></div>
 
           <!-- Step 4 - Pending -->
-          <div class="flex flex-col items-center relative z-10">
+          <div class="flex flex-col items-center relative z-10 w-full sm:w-auto">
             <div
               class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 text-gray-400 flex items-center justify-center">
               <span class="text-xs font-bold">4</span>
@@ -61,6 +61,187 @@
     </div>
   </div>
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Flight Summary for mobile -->
+        <div class="lg:col-span-1 md:hidden">
+          <div class="sticky top-6 space-y-6">
+             <!-- Expiry Timer -->
+                <div class="bg-amber-50 border border-amber-200 rounded p-4">
+                    <div class="flex items-center gap-3">
+                        <ClockIcon class="h-5 w-5 text-amber-600" />
+                        <div>
+                        <p class="text-sm font-medium text-amber-800">Booking expires in</p>
+                        <p class="text-lg font-bold text-amber-900">{{getRemainingTime( bookingDetails?.[0]?.expiry_time) }}</p>
+                        </div>
+                    </div>
+                </div>
+            <!-- Summary Card -->
+            <div class="bg-white rounded shadow-sm p-6">
+              <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-slate-900">Flight summary</h2>
+                <span class="text-xs font-semibold text-primary bg-amber-100 px-3 py-1 rounded-full">
+                  Flight details
+                </span>
+              </div>
+
+              <div v-if="passengers.length" class="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-slate-900">Passengers</h3>
+                  <span class="text-xs font-medium text-slate-500">{{ passengers.length }} Total</span>
+                </div>
+                <div class="space-y-2">
+                  <div
+                    v-for="(passenger, passengerIdx) in passengers"
+                    :key="passenger.id || passengerIdx"
+                    class="flex items-center justify-between rounded bg-white px-3 py-2"
+                  >
+                    <p class="text-sm font-medium text-slate-900">
+                      {{ formatPassengerName(passenger) }}
+                    </p>
+                    <span class="text-xs uppercase tracking-wide text-slate-500">
+                      {{ passenger.type || 'PAX' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Flight Route -->
+              <div class="">
+                <div v-for="(flight, flightIdx) in flightData?.leg?.flights" :key="flightIdx" class="mb-8 last:mb-0">
+                  <!-- Route Header -->
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <img :src="flight.marketing_carrier?.logo" :alt="flight.marketing_carrier?.name"
+                        class="h-8 w-8 rounded-full border border-gray-200" />
+                      <div>
+                        <p class="font-medium text-gray-900">{{ flight.marketing_carrier?.name }}</p>
+                        <p class="text-xs text-gray-500">Flight {{ flight.segments?.[0]?.flight_number }}</p>
+                      </div>
+                    </div>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                     Cabin Class: {{ flight.segments?.[0]?.cabin_class === 'E' ? 'Economy' : flight.segments?.[0]?.cabin_class ||
+                        'Economy' }}
+                    </span>
+                  </div>
+
+                  <!-- Flight Segments -->
+                  <div v-for="(segment, sIdx) in flight.segments" :key="sIdx" class="relative mb-2">
+                    <!-- Flight Segment -->
+                    <div class="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-gray-50 rounded">
+                      <!-- Departure -->
+                      <div class="flex-1">
+                        <div class="flex items-start gap-3">
+                          <div class="w-1 h-1 bg-primary rounded-full mt-2"></div>
+                          <div>
+                            <p class="text-sm font-semibold text-gray-900">
+                              {{ formatDateTime(segment.departure_at) }}
+                            </p>
+                            <p class="text-base font-bold text-gray-900 mt-1">
+                              {{ segment.from?.iata }}
+                            </p>
+                            <p class="text-xs text-gray-600">{{ segment.from?.name }}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Flight Path -->
+                      <div class="flex-1 flex flex-col items-center">
+                        <p class="text-xs text-gray-500 mb-1">{{ formatDuration(segment.flight_time) }}</p>
+                        <div class="w-full flex items-center">
+                          <div class="w-2 h-2 bg-primary rounded-full"></div>
+                          <div class="flex-1 h-0.5 bg-gradient-to-r from-primary to-primary/30"></div>
+                          <div class="w-2 h-2 bg-primary rounded-full"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Direct</p>
+                      </div>
+
+                      <!-- Arrival -->
+                      <div class="flex-1 text-right">
+                        <div class="flex items-start justify-end gap-3">
+                          <div class="text-right">
+                            <p class="text-sm font-semibold text-gray-900">
+                              {{ formatDateTime(segment.arrival_at) }}
+                            </p>
+                            <p class="text-base font-bold text-gray-900 mt-1">
+                              {{ segment.to?.iata }}
+                            </p>
+                            <p class="text-xs text-gray-600">{{ segment.to?.name }}</p>
+                          </div>
+                          <div class="w-1 h-1 bg-primary rounded-full mt-2"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+
+                </div>
+              </div>
+
+
+
+              <!-- Fare Breakdown -->
+              <div class="lg:col-span-1">
+                <div class="sticky top-6 space-y-6">
+                  <!-- Price Breakdown Card - Using flightData fares -->
+                  <div class="bg-gray-50 rounded overflow-hidden ">
+                    <div class="bg-gray-50 border-b border-gray-200 p-4">
+                      <h2 class="text-lg font-semibold text-gray-900">Price Summary</h2>
+                    </div>
+
+                    <div class="p-4">
+                      <div v-for="(flightItem, flightIndex) in flightData?.leg?.flights" :key="flightIndex">
+                        <div v-for="(fare, fareIndex) in flightItem?.fares" :key="fareIndex">
+                          <div v-if="selectedFares?.includes(fare.ref_id)" class="space-y-3">
+                            <!-- Base Fare with Margins -->
+                            <div class="flex justify-between items-center text-sm">
+                              <span class="text-gray-600">Base Fare</span>
+                              <span class="font-medium">
+                                {{ formatAmount(calculateFinalPrice(fare?.base_price,
+                                  fare?.margin_amount,
+                                  fare?.margin_type, fare?.amount_type) +
+                                  marginPerFlight) }}
+                              </span>
+                            </div>
+
+                            <!-- Taxes & Fees -->
+                            <div class="flex justify-between items-center text-sm">
+                              <span class="text-gray-600">Taxes & Fees</span>
+                              <span class="font-medium">{{ formatAmount(calculateTaxes(fare)) }}</span>
+                            </div>
+                            <div class="flex justify-between items-center ">
+                              <span class="text-sm font-medium text-gray-700">Flight Total</span>
+                              <span class="text-sm font-medium text-primary">
+                                {{ formatAmount(calculateTotalFare(fare) + marginPerFlight) }}
+                              </span>
+                            </div>
+
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Grand Total -->
+                      <div class=" mt-4 pt-4 border-t-2 border-gray-300">
+                        <div class="flex justify-between items-center">
+                          <span class="text-xl font-bold text-gray-900">Total Amount</span>
+                          <span class="text-xl font-bold text-primary">
+                            {{ formatAmount(amount) }}
+                          </span>
+                        </div>
+
+
+                      </div>
+                    </div>
+                  </div>
+
+
+
+
+             </div>
+              </div>
+            </div>
+
+
+          </div>
+        </div>
         <!-- Payment Methods Section -->
         <div class="lg:col-span-2 space-y-4">
           <div class="bg-white rounded shadow-sm p-4">
@@ -69,53 +250,51 @@
 
             <!-- Main Payment Section with Two Column Layout -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
               <!-- Left: Payment Methods List (Static) -->
               <div class="lg:col-span-1 space-y-3">
 
-
                 <!-- Bank Transfer (Abhi Pay) -->
-
-
-                <!-- Abhipay -->
                 <div @click="paymentMethod = 'abhipay-bank'" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay-bank'
                     ? 'bg-primary border-primary shadow-lg'
                     : 'border-primary bg-white hover:bg-primary/10'
                 ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay-bank'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Landmark />
+                  <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                    <Landmark :class="[
+                      'w-5 h-5',
+                      paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-primary'
+                    ]" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900']">
+                    <h3 :class="[
+                      'font-semibold truncate',
+                      paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900'
+                    ]">
                       Bank Transfer - Abhipay
                     </h3>
                   </div>
                 </div>
+
+                <!-- Abhipay - Debit/Credit card -->
                 <div @click="paymentMethod = 'abhipay'" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay'
-                   ? 'bg-primary border-primary shadow-lg'
+                    ? 'bg-primary border-primary shadow-lg'
                     : 'border-primary bg-white hover:bg-primary/10'
                 ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay'
-                       ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                      <CreditCard />
-
+                  <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                    <CreditCard :class="[
+                      'w-5 h-5',
+                      paymentMethod === 'abhipay' ? 'text-white' : 'text-primary'
+                    ]" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900']">
+                    <h3 :class="[
+                      'font-semibold truncate',
+                      paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900'
+                    ]">
                       Abhipay - Debit/Credit card
                     </h3>
                   </div>
@@ -128,21 +307,22 @@
                     ? 'bg-primary border-primary shadow-lg'
                     : 'border-primary bg-white hover:bg-primary/10'
                 ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'wallet'
-                       ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Wallet />
+                  <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                    <Wallet :class="[
+                      'w-5 h-5',
+                      paymentMethod === 'wallet' ? 'text-white' : 'text-primary'
+                    ]" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900']">
+                    <h3 :class="[
+                      'font-semibold truncate',
+                      paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900'
+                    ]">
                       Wallet Balance
                     </h3>
                   </div>
                 </div>
+
               </div>
 
               <!-- Right: Dynamic Information Box Based on Selected Method -->
@@ -185,20 +365,17 @@
                         <p class="text-sm text-slate-700 leading-relaxed">
                           We will be redirecting you to Abhi Pay secure gateway for bank transfer. Complete your
                           transfer and you will be redirected back to confirm your Flight Booking.
-                          (Rs 500 service fee will be charged for OneBill bank transfer)
+                          (Service fee will be charged for OneBill bank transfer)
                         </p>
-                         <a
-    :href="$router.resolve({ name: 'HowToPay' }).href"
-    target="_blank"
-    rel="noopener"
-    class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
-  >
-    
-
-    How To Use AbhiPay Bank Transfer
-   
-    <ExternalLink class="w-3 h-3 mt-1"/>
-  </a>
+                        <a
+                          :href="$router.resolve({ name: 'HowToPay' }).href"
+                          target="_blank"
+                          rel="noopener"
+                          class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
+                        >
+                          How To Use AbhiPay Bank Transfer
+                          <ExternalLink class="w-3 h-3 mt-1"/>
+                        </a>
                       </div>
                     </div>
 
@@ -223,45 +400,37 @@
                   <!-- Bottom Action Buttons -->
                   <div class="mt-4">
 
-                    <!-- Buttons Row -->
-                    <div class="flex gap-2">
+                    <!-- Buttons Row with 70% / 30% width distribution -->
+                    <div class="flex gap-3 w-full">
 
-                      <!-- Refresh / Check Status Button -->
+                      <!-- Refresh / Check Status Button - 70% width -->
                       <button v-if="billId" @click="checkPaymentStatus('abhipay-bank')"
-                        class="w-12 flex items-center justify-center rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50">
-
-                        <RefreshCcw class="w-5 h-5" />
-
+                        class="flex-[7] py-3 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2 font-medium text-sm">
+                        <RefreshCcw class="w-4 h-4" />
+                        <span>Refresh Payment</span>
                       </button>
 
-                      <!-- Generate / Regenerate Button -->
+                      <!-- Generate / Regenerate Button - 30% width -->
                       <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing" :class="[
-                        'flex-1 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
+                        'flex-[3] py-3 rounded font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2',
                         !isProcessing
-                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
+                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md'
                           : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                       ]">
-
                         <span v-if="!billId">Generate Bill ID</span>
                         <span v-else>Regenerate Bill ID</span>
-
                         <span>→</span>
                       </button>
 
                     </div>
 
                     <!-- 🔹 Helper Message -->
-                    <p v-if="billId" class="text-xs text-slate-500 mt-2 flex items-center gap-1">
-
+                    <p v-if="billId" class="text-xs text-slate-500 mt-3 flex items-center gap-1">
                       <RefreshCcw class="w-3 h-3" />
-
                       Click refresh to check payment status after completing bank transfer
-
                     </p>
 
                   </div>
-
-
                 </div>
 
 
@@ -297,7 +466,7 @@
                       <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
                       <div>
                         <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay securely using your debit or credit card through Abhipay platform. Service Fee of 3% will
+                          Pay securely using your debit or credit card through Abhipay platform. Service Fee of {{ abhipayCardFeePercent.toFixed(2) }}% will
                           be charged for Visa/Master and Union card transactions. Fast and secure payment processing.
                         </p>
                       </div>
@@ -312,7 +481,7 @@
                       </div>
                     </div>
                     <button @click="handlePaymentMethod('abhipay')" :disabled="!paymentMethod || isProcessing" :class="[
-                      'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
+                      'w-full mt-4 py-3 rounded font-semibold text-lg transition-all duration-300 max-sm:text-[10px] flex items-center justify-center gap-2',
                       paymentMethod && !isProcessing
                         ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
                         : 'bg-slate-300 text-slate-600 cursor-not-allowed'
@@ -346,7 +515,7 @@
                     </div>
                   </div>
                   <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
-                    'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
+                    'w-full mt-4 py-3  rounded font-semibold text-lg transition-all max-sm:text-[10px] duration-300 flex items-center justify-center gap-2',
                     paymentMethod && !isProcessing
                       ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
                       : 'bg-slate-300 text-slate-600 cursor-not-allowed'
@@ -379,7 +548,7 @@
                   </p>
                 </div>
 
-               
+
 
               </div>
             </div>
@@ -418,7 +587,7 @@
                 <span class="text-2xl">📞</span>
                 <h4 class="font-bold text-slate-900">Contact Us :</h4>
               </div>
-              <p class="text-sm text-slate-600">+92 311 1711123</p>
+              <p class="text-sm text-slate-600">+92 00000000</p>
             </div>
             <div class="bg-white rounded p-6 shadow-sm">
               <div class="flex items-center gap-3 mb-3">
@@ -431,7 +600,7 @@
         </div>
 
         <!-- Flight Summary Section -->
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1 max-sm:hidden">
           <div class="sticky top-6 space-y-6">
             <!-- Summary Card -->
             <div class="bg-white rounded shadow-sm p-6">
@@ -585,8 +754,8 @@
                             {{ formatAmount(amount) }}
                           </span>
                         </div>
-                        
-                      
+
+
                       </div>
                     </div>
                   </div>
@@ -783,6 +952,7 @@ import {
   FETCH_ANCILLARIES,
   PATCH_ANCILLARIES,
   FETCH_CUSTOMER_MARGIN,
+  FETCH_CUSTOMER_SETTINGS,
   INITIALIZE_ABHI_PAY,
   CHECK_PAYMENT_STATUS,
 } from "@/services/store/actions.type";
@@ -849,6 +1019,8 @@ const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const airportMargins = computed(() => store.getters["airport/airportMargin"] || {});
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const paymentStatus = computed(() => store.getters["payment/paymentStatus"]);
+const customerSettings = computed(() => store.getters["customer/customerSettings"]);
+const abhipayCardFeePercent = computed(() => Number(customerSettings.value?.one_bill_percentage_charge ?? 0) || 0);
 
 // Extra Services Dialog State - FIXED
 const isExtraServicesOpen = ref(false);
@@ -888,6 +1060,9 @@ const ancillaryGroups = computed(() => {
 const passengers = computed(() => getPassengers(bookingDetails.value?.[0]) || []);
 function fetchCustomerMarginValues() {
   store.dispatch("customerMargin/" + FETCH_CUSTOMER_MARGIN);
+}
+function fetchCustomerSettings() {
+  return store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
 }
 // Extra Services Total - FIXED
 
@@ -1441,7 +1616,7 @@ function confirmBooking() {
         error.value = "No PNR provided.";
         return;
     }
-    
+
 
 
     store.dispatch("flight/" + CONFIRM_BOOKING, {
@@ -1738,8 +1913,9 @@ function calculateGrandTotal() {
 
   baseAmount.value = computedBase;
 
-  // AbhiPay card adds 3% on top of the base amount.
-  amount.value = paymentMethod.value === "abhipay" ? computedBase * 1.03 : computedBase;
+  // AbhiPay card adds configured percentage on top of the base amount.
+  const cardFeeMultiplier = 1 + (abhipayCardFeePercent.value / 100);
+  amount.value = paymentMethod.value === "abhipay" ? computedBase * cardFeeMultiplier : computedBase;
   return amount.value;
 }
 
@@ -1805,7 +1981,7 @@ onMounted(async () => {
   flight_provider = route.query.flight_provider || route.query.provider || null;
   booking_id = route.query.booking_id;
   pnr = route.query.pnr;
-  await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(),
+  await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(), fetchCustomerSettings(),
   ]);
 });
 // Payment methods

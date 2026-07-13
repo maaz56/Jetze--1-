@@ -269,7 +269,6 @@ const actions = {
         //console.log("PNR Fetch : ", context);
         try {
             const response = await apiService.getPnrDetails(params);
-            console.log("PNR Details: ", response);
             context.commit(SET_PNR, response.data.data);
         } catch (error) {
             console.log(error);
@@ -393,12 +392,18 @@ const actions = {
             toast("Booking has been voided successfully.", {
                 type: "success",
             });
+            return response;
         } catch (error) {
             console.log(error);
-            toast("Something went wrong.", {
+            const errorMessage =
+                error?.response?.data?.message ||
+                error?.response?.data?.error ||
+                "Something went wrong.";
+            toast(errorMessage, {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
 
@@ -570,7 +575,7 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendPriceRequest(params);
-            console.log(response.data);
+            // //console.log(response.data);
             context.commit(SET_PRICE_RESPONSE, response.data.price_response);
                         context.commit(SET_FARE_RULES, response.data.fare_rules);
 
@@ -628,11 +633,12 @@ const actions = {
             return response.data;
         } catch (error) {
             console.log(error);
-            context.state.isPatchingAncillaries = true;
+            context.state.isPatchingAncillaries = false;
             toast(error?.response?.data?.message || "Something went wrong.", {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
 

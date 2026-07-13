@@ -1606,7 +1606,16 @@ const startCountdown = (remainingTime) => {
         }
     }, 1000);
 };
-onMounted(() => {
+const formatLayoverTime = (layoverMinutes) => {
+    const totalMinutes = Number(layoverMinutes);
+    if (!Number.isFinite(totalMinutes) || totalMinutes < 0) return "00:00";
+
+    const normalizedMinutes = Math.round(totalMinutes);
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minutes = normalizedMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};onMounted(() => {
     selectedFares.value = route.query.fares ? JSON.parse(route.query.fares) : []
     passengerCount.value = route.query.passenger_count ? parseInt(route.query.passenger_count) : 1
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2876,7 +2885,7 @@ watch(flight, () => {
                                     <div class="p-3">
                                         <div class="space-y-3">
                                             <div class="flex items-start space-x-2">
-                                                <Input type="checkbox" v-model="termsAccepted" id="terms"
+                                                <input type="checkbox" v-model="termsAccepted" id="terms"
                                                     class="mt-1" />
                                                 <Label for="terms" class="text-xs text-gray-500 leading-relaxed">
                                                     I understand and agree with the Privacy Policy, the User <a href="#"

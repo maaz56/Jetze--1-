@@ -8,6 +8,7 @@ import {
     UPDATE_CUSTOMER_DATA,
     UPDATE_CUSTOMER_SETTINGS,
     UPDATE_CUSTOMER_TYPE,
+    RESEND_VERIFICATION_EMAIL,
 } from "./actions.type";
 import {
     IS_LOADING,
@@ -131,6 +132,23 @@ const actions = {
                 "type": "error",
             })
             context.commit(SET_API_ERROR, error);
+        }
+    },
+    async [RESEND_VERIFICATION_EMAIL](context, params) {
+        context.commit(IS_LOADING);
+        try {
+            const response = await apiService.resendVerificationEmail(params);
+            toast('Verification link sent successfully.', {
+                "type": "success",
+            })
+            context.commit(NOT_IS_LOADING);
+        } catch (error) {
+            console.log(error);
+            toast(error.response?.data?.message || 'Something went wrong.', {
+                "type": "error",
+            })
+            context.commit(SET_API_ERROR, error);
+            context.commit(NOT_IS_LOADING);
         }
     },
 }

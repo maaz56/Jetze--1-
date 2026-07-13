@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Booking Confirmed | Jetze</title>
+    <title>Booking Confirmed | Jetze.pk</title>
     <style>
         @media only screen and (max-width: 600px) {
             .responsive-table {
@@ -57,7 +57,7 @@
                             style="background: #0F4F75; height: 5px;">
                         </div>
                         <div style="padding: 32px 32px 20px 32px; text-align: center; background: #FFFFFF;">
-                            <img src="{{ asset('assets/logo.png') }}" alt="Jetze" width="165"
+                            <img src="{{ asset('assets/logo.png') }}" alt="Jetze.pk" width="165"
                                 style="height: auto; display: inline-block;">
                         </div>
                     </td>
@@ -95,6 +95,16 @@
                                 $paymentParams['flight_id'] = $flightId;
                             }
                             $payNowUrl = rtrim($loginUrl ?? config('app.frontend_url'), '/') . $paymentPath . '?' . http_build_query($paymentParams);
+                            $selectSeatUrl = rtrim($loginUrl ?? config('app.frontend_url'), '/') . '/ancillaries/view?' . http_build_query($paymentParams);
+                            $isAirblue = $providerLower === 'airblue';
+                            $ancillariesSelectedRaw = strtolower(trim((string) ($booking->is_ancillaries_selected ?? '')));
+                            $isAncillariesSelected = in_array($ancillariesSelectedRaw, ['1', 'true', 'yes'], true);
+                            $showSelectSeatCta = $isAirblue && !$isAncillariesSelected;
+                            $primaryCtaLabel = $showSelectSeatCta ? 'Select Seat' : 'Pay Now';
+                            $primaryCtaUrl = $showSelectSeatCta ? $selectSeatUrl : $payNowUrl;
+                            $ctaDescription = $showSelectSeatCta
+                                ? 'Seat selection is mandatory before payment for Airblue bookings. Please select seats to continue.'
+                                : 'Proceed directly to your booking payment screen, or log in to manage seats, baggage, and full itinerary details.';
                             $resolvedUserName = trim((string) ($userName ?? ''));
                             if ($resolvedUserName === '') {
                                 $userFirstName = trim((string) ($booking->main_first_name ?? ''));
@@ -140,7 +150,7 @@
                                     <p style="margin: 0 0 6px 0; font-size: 18px; font-weight: 600; color: #1E2F3F;">
                                         Dear <span style="color: #A43734;">{{ $resolvedUserName }}</span>,</p>
                                     <p style="margin: 0; font-size: 15px; color: #4A627A;">Thank you for choosing
-                                        Jetze! Your flight booking is on hold. Please review your itinerary
+                                        Jetze.pk! Your flight booking is on hold. Please review your itinerary
                                         below:</p>
                                 </td>
                             </tr>
@@ -224,7 +234,7 @@
                                     $isReturnFlight = $flightIndex > 0;
                                     $flightLabel = $totalFlights > 1 ? ($isReturnFlight ? 'RETURN FLIGHT' : 'OUTBOUND FLIGHT') : 'FLIGHT DETAILS';
 
-                                    $operatingCarrierName = $toSafeString($operatingCarrier['name'] ?? null, 'Jetze Airlines');
+                                    $operatingCarrierName = $toSafeString($operatingCarrier['name'] ?? null, 'Jetze.pk Airlines');
                                     $flightNumberText = $toSafeString($flightNumber, '—');
                                     $aircraftText = $toSafeString($aircraft, '');
                                     $cabinClassText = $toSafeString($cabinClass, 'Economy');
@@ -360,16 +370,14 @@
                             <tr>
                                 <td style="padding-top: 8px;">
                                     <p style="margin: 0 0 24px 0; font-size: 14px; color: #4F6F8F; line-height: 1.5;">
-                                        Proceed directly to your booking payment screen, or log in to manage seats,
-                                        baggage, and full itinerary details.</p>
+                                        {{ $ctaDescription }}</p>
 
                                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
                                         style="border-collapse: collapse;">
                                         <tr class="stack-buttons">
                                             <td style="text-align: center; padding: 6px 8px;">
-                                                <a href="{{ $payNowUrl }}"
-                                                    style="display: inline-block; padding: 14px 36px; background: #0F4F75; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; box-shadow: 0 4px 12px rgba(10,46,77,0.2); min-width: 190px;">Pay
-                                                    Now</a>
+                                                <a href="{{ $primaryCtaUrl }}"
+                                                    style="display: inline-block; padding: 14px 36px; background: #0F4F75; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; box-shadow: 0 4px 12px rgba(10,46,77,0.2); min-width: 190px;">{{ $primaryCtaLabel }}</a>
                                             </td>
                                             <td style="text-align: center; padding: 6px 8px;">
                                                 <a href="#"
@@ -388,7 +396,7 @@
                                     </div>
 
                                     <p style="margin: 28px 0 0 0; font-size: 15px; font-weight: 500; color: #0F4F75;">
-                                        Bon Voyage,<br>The Jetze Team</p>
+                                        Bon Voyage,<br>The Jetze.pk Team</p>
                                 </td>
                             </tr>
 
@@ -463,7 +471,7 @@
                             </tr>
                         </table>
 
-                        <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">📞 24/7 Support: +92 311 1711123
+                        <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">📞 24/7 Support: +92 00000000
                             &nbsp;|&nbsp; ✉️ <a href="mailto:support@Jetze.pk"
                                 style="color: #0F4F75; text-decoration: none;">support@Jetze.pk</a></p>
 
@@ -480,7 +488,7 @@
                                 style="color: #8EA3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Unsubscribe</a>
                         </div>
 
-                        <p style="margin: 20px 0 0 0; font-size: 11px; color: #9AB0C2;">© {{ date('Y') }} Jetze.
+                        <p style="margin: 20px 0 0 0; font-size: 11px; color: #9AB0C2;">© {{ date('Y') }} Jetze.pk.
                             All rights reserved. Your trusted travel partner.</p>
                         <p style="margin: 12px 0 0 0; font-size: 10px; color: #B2C4D4;">Reference: {{ $bookingRef }} •
                             This is a booking confirmation email. Please keep for your records.</p>

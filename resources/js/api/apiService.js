@@ -1,11 +1,9 @@
 // resources/js/api/apiService.js
 import axios from "axios";
+import { resolveApiBaseUrl } from "@/config/apiBaseUrl";
 
 const apiService = axios.create({
-  baseURL:
-    import.meta.env.MODE === "production"
-      ? import.meta.env.VITE_API_ROOT
-      : import.meta.env.VITE_API_ROOT_LOCAL,
+  baseURL: resolveApiBaseUrl(),
   headers: { Accept: "application/json" },
   withCredentials: true,
 });

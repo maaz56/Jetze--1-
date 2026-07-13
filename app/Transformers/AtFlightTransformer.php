@@ -228,8 +228,17 @@ class AtFlightTransformer
                 ];
             }
 
+            $sectorParts = [];
+            foreach ($transformedLegs as $transformedLeg) {
+                $sectorParts[] = $transformedLeg['from']['iata'];
+                $sectorParts[] = $transformedLeg['to']['iata'];
+            }
+
+            $sector = implode('-', $sectorParts);
+
             $results[] = [
                 "provider" => array_merge($provider, [
+                    'sector' => $sector,
                     'travel_date' => $transformedLegs[0]['departure_at'] ?? null,
                 ]),
                 "currencyCode" => $currency,

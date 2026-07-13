@@ -4,7 +4,7 @@ import Button from "@/components/ui/button/Button.vue";
 import Input from "@/components/ui/input/Input.vue";
 import Label from "@/components/ui/label/Label.vue";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ClockIcon, PlusCircle, SquareCheckBig, SquareX, Upload, XCircle } from "lucide-vue-next";
+import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle, ChevronDown, ClockIcon, PlusCircle, SquareCheckBig, SquareX, Upload, XCircle } from "lucide-vue-next";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
@@ -25,6 +25,7 @@ import {
     FETCH_CUSTOMER_SETTINGS,
     FETCH_AIRPORT_MARGINS,
     UPDATE_BOOKING_AMOUNT,
+    FETCH_MY_TRAVELLERS,
 } from "@/services/store/actions.type";
 import {
     Dialog,
@@ -123,6 +124,8 @@ const baggagePrice = ref(0);
 const selectedBaggageData = ref([]);
 const selectedExtras = ref([]);
 const selectedFares = ref([]);
+const showMobileFlightDetails = ref(false);
+const showMobilePriceDetails = ref(false);
 const selectedExtraData = ref([]);
 const extraCharges = ref([]);
 const showPreview = ref();
@@ -501,6 +504,44 @@ const agencyContact = computed(() => ({
 
 const travellers = ref([]);
 const travellerIndex = ref(0);
+
+// Saved travellers from previous bookings
+const myTravellers = computed(() => store.getters["traveller/myTravellers"] || []);
+const savedAdultTravellers = computed(() => myTravellers.value.filter(t => t.type === "ADT"));
+const savedChildTravellers = computed(() => myTravellers.value.filter(t => ["CHD", "CNN"].includes(t.type)));
+const savedInfantTravellers = computed(() => myTravellers.value.filter(t => t.type === "INF"));
+
+function getSavedTravellersForSlot(traveller) {
+    if (traveller.type === "ADT") return savedAdultTravellers.value;
+    if (traveller.type === "CNN" || traveller.type === "CHD") return savedChildTravellers.value;
+    if (traveller.type === "INF") return savedInfantTravellers.value;
+    return [];
+}
+
+function fillTravellerFromSaved(index, savedPassenger) {
+    if (!savedPassenger) return;
+    const t = travellers.value[index];
+    t.title        = savedPassenger.title || "";
+    t.firstName    = savedPassenger.first_name || "";
+    t.lastName     = savedPassenger.last_name || "";
+    t.nationality  = savedPassenger.nationality || "";
+    t.documentType = savedPassenger.document_type || "passport";
+    t.documentNo   = savedPassenger.document_no || "";
+    t.expiryDate   = savedPassenger.expiry_date || "";
+    t.issueCountry = savedPassenger.issue_country || "";
+    t.gender       = savedPassenger.gender || "";
+    t.dob          = savedPassenger.dob || "";
+}
+
+// Per-slot popover open state and selected traveller
+const savedTravellerOpen = ref({});
+const selectedSavedTraveller = ref({});
+
+function selectSavedTraveller(index, saved) {
+    fillTravellerFromSaved(index, saved);
+    selectedSavedTraveller.value[index] = saved;
+    savedTravellerOpen.value[index] = false;
+}
 const taxFees = ref(0);
 const totalTaxFees = ref(0);
 const totalBaseFare = ref(0);
@@ -772,9 +813,16 @@ const validateForm = () => {
             isValid = false;
         }
 
-        if (!traveller.documentNo) {
-            errors.travellers[index].documentNo = "Document number is required";
-            isValid = false;
+        if (traveller.documentType === "passport") {
+            if (!traveller.documentNo) {
+                errors.travellers[index].documentNo = "Document number is required";
+                isValid = false;
+            }
+        } else if (traveller.documentType === "cnic") {
+            if (!traveller.cnic) {
+                errors.travellers[index].cnic = "CNIC number is required";
+                isValid = false;
+            }
         }
 
         if (!traveller.expiryDate) {
@@ -1608,7 +1656,7 @@ const scanWithTesseract = async (imageBlob) => {
         text = text.replace(/L{2,}/g, match => "<".repeat(match.length));
         //console.log("After LL→< fix:", text);
 
-        // 🔹 Step 2: Fix "C L C" patterns → <<< 
+        // 🔹 Step 2: Fix "C L C" patterns → <<<
         text = text.replace(/C+L+C+/g, "<".repeat(3));
         //console.log("After CLC fix:", text);
 
@@ -1817,7 +1865,16 @@ const startCountdown = (remainingTime) => {
         }
     }, 1000);
 };
-onMounted(() => {
+const formatLayoverTime = (layoverMinutes) => {
+    const totalMinutes = Number(layoverMinutes);
+    if (!Number.isFinite(totalMinutes) || totalMinutes < 0) return "00:00";
+
+    const normalizedMinutes = Math.round(totalMinutes);
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minutes = normalizedMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};onMounted(() => {
     authStore.fetchUser();
     selectedFares.value = route.query.fares ? JSON.parse(route.query.fares) : []
     isDomestic.value = localStorage.getItem("isDomestic") === "true";
@@ -1825,13 +1882,14 @@ onMounted(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     startCountdown(13 * 60 * 1000); // 13 minutes countdown
 
-    initializeStripe();
+    // initializeStripe();
     fetchMargins();
     fetchBookingStatus();
     fetchFlight();
     fetchCustomerMarginValues();
     fetchCustomerSettings();
     fetchAgentLedger();
+    store.dispatch("traveller/" + FETCH_MY_TRAVELLERS);
 });
 
 watch(flight, () => {
@@ -1945,6 +2003,161 @@ watch(flight, () => {
                     <!-- Main Content -->
                     <div class="lg:col-span-3 space-y-4">
                         <!-- Price Details Card - Moved to top -->
+                         <div v-if="countdown !== null && countdown !== '0'"
+                                :class="[
+                                    'flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm',
+                                    'sm:flex md:hidden'
+                                ]">
+                                <div class="flex items-end gap-4">
+                                    <div class="flex flex-col items-center">
+                                        <span
+                                            class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">
+                                            {{ countdown.split(':')[0] }}
+                                        </span>
+                                    </div>
+                                    <span
+                                        class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">:</span>
+                                    <div class="flex flex-col items-center">
+                                        <span
+                                            class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">
+                                            {{ countdown.split(':')[1] }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="mt-4 text-sm sm:text-base text-primary font-medium">
+                                    Please complete your booking before the timer expires.
+                                </div>
+                            </div>
+
+                            <div class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm sm:hidden">
+                                <div class="flex items-center gap-2 bg-gray-100 px-3 py-2.5 text-xs font-semibold text-gray-800">
+                                    <span>Departing</span>
+                                    <span>•</span>
+                                    <CalendarDays class="h-3.5 w-3.5 text-gray-500" />
+                                    <span>{{ moment.parseZone(flight?.leg?.flights?.[0]?.departure_at).format('DD MMM, YYYY') }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-3 px-3 py-3">
+                                    <div class="flex min-w-0 items-center gap-2">
+                                        <img class="h-6 w-6 shrink-0 object-contain"
+                                            :src="flight?.leg?.flights?.[0]?.marketing_carrier?.logo" alt="Airline" />
+                                        <span class="truncate text-xs font-bold text-gray-800">
+                                            {{ flight?.leg?.flights?.[0]?.from?.city?.code || flight?.leg?.flights?.[0]?.segments?.[0]?.from?.iata }}
+                                            -
+                                            {{ flight?.leg?.flights?.[0]?.to?.city?.code || flight?.leg?.flights?.[0]?.segments?.slice(-1)?.[0]?.to?.iata }}
+                                        </span>
+                                    </div>
+                                    <button type="button" @click="showMobileFlightDetails = !showMobileFlightDetails"
+                                        class="shrink-0 rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                                        {{ showMobileFlightDetails ? 'Hide' : 'Details' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="showMobileFlightDetails" class="mt-2 divide-y divide-gray-100 bg-white sm:hidden">
+                                <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
+                                    <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex">
+                                        <!-- Layover Info -->
+                                        <div v-if="segment?.layover_time"
+                                            class="bg-amber-50 border-l-4 border-amber-400 p-3">
+                                            <div class="flex items-center justify-center">
+                                                <ClockIcon class="w-4 h-4 text-amber-600 mr-2" />
+                                                <span class="text-xs font-medium text-amber-800">
+                                                    Layover: {{   formatLayoverTime(segment.layover_time) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <!-- Flight Segment -->
+                                        <div class="p-4">
+                                            <div class="flex items-center space-x-2 mb-4">
+                                                <img class="w-8 h-8 border border-gray-200"
+                                                    :src="segment?.operating_carrier?.logo" alt="Airline" />
+                                                <div>
+                                                    <div class="text-sm font-medium text-gray-900">{{
+                                                        segment?.operating_carrier?.name }}</div>
+                                                    <div class="text-xs text-gray-500">{{
+                                                        segment?.flight_number
+                                                    }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <!-- Departure -->
+                                                <div class="space-y-2">
+                                                    <div class="space-y-1">
+                                                        <div class="text-sm font-medium text-gray-900">{{
+                                                            formatDate(segment?.departure_at) }}</div>
+                                                        <div class="text-xs text-gray-500">{{ segment?.from?.name }}
+                                                            ({{
+                                                                segment?.from?.iata }})</div>
+                                                        <!-- <div class="text-xs text-gray-400">Terminal: {{
+                                                                segment?.from_terminal[0] ?? "N/A" }}</div> -->
+                                                    </div>
+                                                </div>
+                                                <!-- Flight Path -->
+                                                <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
+                                                <!-- Arrival -->
+                                                <div class="space-y-2 text-right">
+                                                    <div class="space-y-1">
+                                                        <div class="text-sm font-medium text-gray-900">{{
+                                                            formatDate(segment?.arrival_at) }}</div>
+                                                        <div class="text-xs text-gray-500">{{ segment?.to?.name }}
+                                                            ({{
+                                                                segment?.to?.iata }})</div>
+                                                        <!-- <div class="text-xs text-gray-400">Terminal: {{
+                                                                segment?.to_terminal[0] ?? "N/A" }}</div> -->
+                                                    </div>
+                                                    <div class="text-xs text-gray-400">{{ segment?.aircraft?.model
+                                                        }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
 
                         <!-- Flight Details Card -->
@@ -1963,6 +2176,7 @@ watch(flight, () => {
                                         <Label for="main-email" class="text-xs font-medium text-gray-600">Email <span
                                                 class="text-red-500">*</span></Label>
                                         <Input v-model="mainContact.email" id="main-email" type="email"
+                                            left-icon="/mail.png"
                                             placeholder="Enter your email" class="mt-1 text-sm"
                                             :class="{ 'border-red-300': errors.mainContact.email }" />
                                         <div v-if="errors.mainContact.email" class="text-red-500 text-xs mt-1">{{
@@ -1972,6 +2186,7 @@ watch(flight, () => {
                                         <Label for="main-phone" class="text-xs font-medium text-gray-600">Phone <span
                                                 class="text-red-500">*</span></Label>
                                         <Input v-model="mainContact.phone" id="main-phone" type="tel"
+                                            left-icon="/phone-call.png"
                                             placeholder="Enter your phone" class="mt-1 text-sm"
                                             :class="{ 'border-red-300': errors.mainContact.phone }" />
                                         <div v-if="errors.mainContact.phone" class="text-red-500 text-xs mt-1">{{
@@ -1985,9 +2200,14 @@ watch(flight, () => {
                                                 <Button variant="outline" role="combobox"
                                                     class="w-full justify-between mt-1 text-sm h-9"
                                                     :class="{ 'border-red-300': errors.mainContact.country }">
-                                                    {{mainContact.country !== "" ? countries.find((country) =>
-                                                        country.value === mainContact.country)?.label || mainContact.country
-                                                    : "Select country"}}
+                                                    <div class="flex items-center gap-2 truncate">
+                                                        <img src="/public/globe.png" alt="Globe" class="h-4 w-4 shrink-0 opacity-70" />
+                                                        <span class="truncate">
+                                                            {{mainContact.country !== "" ? countries.find((country) =>
+                                                                country.value === mainContact.country)?.label || mainContact.country
+                                                            : "Select country"}}
+                                                        </span>
+                                                    </div>
                                                     <ChevronsUpDown class="ml-2 h-3 w-3 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
@@ -2073,36 +2293,81 @@ watch(flight, () => {
                                                     is clear and contains all relevant information.
                                                 </p>
 
-                                                <!-- Upload Passport Button -->
-                                                <div class="flex">
-                                                    <div class="mb-4">
-                                                        <Label
-                                                            class="text-sm font-medium text-gray-700 mb-2 block">Upload
-                                                            Passport Image</Label>
+                                                <!-- Upload + Saved Traveller (same row) -->
+                                                <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                                    <div>
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">Upload Passport Image</Label>
                                                         <div class="flex items-center gap-3">
                                                             <input type="file" accept="image/*" ref="passportUpload"
                                                                 @change="handlePassportUpload($event, index)"
                                                                 class="hidden" :id="`passport-upload-${index}`" />
                                                             <button type="button" @click="triggerFileUpload(index)"
-                                                                class="bg-primary text-white px-4 py-2 text-sm rounded hover:bg-primary/90 flex items-center gap-2">
+                                                                class="bg-primary text-white px-4 py-2 h-10 text-sm rounded hover:bg-primary/90 flex items-center gap-2">
                                                                 <Upload class="w-4 h-4" />
                                                                 Upload Image
                                                             </button>
-                                                            <span v-if="traveller.passportImage"
-                                                                class="text-xs text-gray-600">
+                                                            <span v-if="traveller.passportImage" class="text-xs text-gray-600">
                                                                 {{ traveller.passportImage.name }}
                                                             </span>
-                                                            <span v-if="traveller.uploadError"
-                                                                class="text-red-500 text-xs">
+                                                            <span v-if="traveller.uploadError" class="text-red-500 text-xs">
                                                                 {{ traveller.uploadError }}
                                                             </span>
-
-
                                                         </div>
-
                                                     </div>
 
+                                                    <div v-if="getSavedTravellersForSlot(traveller).length > 0">
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                            Select Saved Traveller
+                                                        </Label>
+                                                        <Popover
+                                                            :open="savedTravellerOpen[index]"
+                                                            @update:open="(v) => savedTravellerOpen[index] = v"
+                                                        >
+                                                            <PopoverTrigger as-child>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    role="combobox"
+                                                                    class="w-full h-10 justify-between text-sm font-normal"
+                                                                >
+                                                                    <span v-if="selectedSavedTraveller[index]" class="truncate">
+                                                                        {{ selectedSavedTraveller[index].first_name }} {{ selectedSavedTraveller[index].last_name }}
+                                                                        <span v-if="selectedSavedTraveller[index].document_no" class="text-gray-400 ml-1">· {{ selectedSavedTraveller[index].document_no }}</span>
+                                                                    </span>
+                                                                    <span v-else class="text-gray-400">Search saved traveller...</span>
+                                                                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent class="p-0 w-72" align="start">
+                                                                <Command>
+                                                                    <CommandInput placeholder="Search by name or passport..." class="h-9" />
+                                                                    <CommandEmpty>No traveller found.</CommandEmpty>
+                                                                    <CommandList>
+                                                                        <CommandGroup>
+                                                                            <CommandItem
+                                                                                v-for="saved in getSavedTravellersForSlot(traveller)"
+                                                                                :key="saved.id"
+                                                                                :value="`${saved.first_name} ${saved.last_name} ${saved.document_no || ''}`"
+                                                                                class="group data-[highlighted]:bg-primary data-[highlighted]:text-white"
+                                                                                @select="() => selectSavedTraveller(index, saved)"
+                                                                            >
+                                                                                <Check :class="cn('mr-2 h-4 w-4', selectedSavedTraveller[index]?.id === saved.id ? 'opacity-100' : 'opacity-0')" />
+                                                                                <div>
+                                                                                    <div class="text-sm font-medium text-gray-900 group-data-[highlighted]:text-white">
+                                                                                        {{ saved.first_name }} {{ saved.last_name }}
+                                                                                    </div>
+                                                                                    <div v-if="saved.document_no" class="text-xs text-gray-400 group-data-[highlighted]:text-white/80">
+                                                                                        {{ saved.document_no }}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </CommandItem>
+                                                                        </CommandGroup>
+                                                                    </CommandList>
+                                                                </Command>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
                                                 </div>
+
                                                 <div v-if="scanning"
                                                     class="text-blue-500 text-sm flex items-center gap-2">
                                                     <span>Scanning... {{ progress }}%</span>
@@ -2164,13 +2429,14 @@ watch(flight, () => {
                                                     </div>
                                                 </div>
                                                 <!-- Full Name -->
-                                                <div class="grid grid-cols-2 gap-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div class="mb-4">
                                                         <Label class="text-sm font-medium text-gray-700 mb-2 block">Full
                                                             name <span class="text-red-500">*</span></Label>
-                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        <div class="grid grid-cols-2 sm:grid-cols-2 gap-3">
                                                             <div>
                                                                 <Input v-model="traveller.firstName" type="text"
+                                                                    left-icon="/user.png"
                                                                     placeholder="First name"
                                                                     class="text-sm border-gray-300"
                                                                     :class="{ 'border-red-300': getErrorPath(`travellers.${index}.firstName`) }" />
@@ -2181,6 +2447,7 @@ watch(flight, () => {
                                                             </div>
                                                             <div>
                                                                 <Input v-model="traveller.lastName" type="text"
+                                                                    left-icon="/user.png"
                                                                     placeholder="Last name"
                                                                     class="text-sm border-gray-300"
                                                                     :class="{ 'border-red-300': getErrorPath(`travellers.${index}.lastName`) }" />
@@ -2193,7 +2460,7 @@ watch(flight, () => {
                                                     </div>
 
                                                     <!-- Additional Personal Information -->
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                    <div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-4">
                                                         <div>
                                                             <Label class="text-sm font-medium text-gray-700 mb-2 block">
                                                                 Date of Birth
@@ -2223,7 +2490,8 @@ watch(flight, () => {
                                                                 Nationality<span class="required">*</span>
                                                             </Label>
                                                             <CountryDropdown :keyValue="'code'"
-                                                                placeholder="SELECT NATIONALITY"
+                                                                placeholder="Select..."
+                                                                left-icon="/globe.png"
                                                                 v-model="traveller.nationality"
                                                                 @update:modelValue="(value) => traveller.nationality = value" />
                                                             <div v-if="getErrorPath(`travellers.${index}.nationality`)"
@@ -2237,7 +2505,7 @@ watch(flight, () => {
                                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                         <div class="space-y-2">
                                                             <Label :for="`document-type-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
+                                                                class="text-sm font-medium text-gray-700 mb-2 block">
                                                                 Document Type <span class="text-red-500">*</span>
                                                             </Label>
                                                             <Select v-model="traveller.documentType"
@@ -2264,13 +2532,14 @@ watch(flight, () => {
                                                         <div v-if="traveller.documentType == 'passport'"
                                                             class="space-y-2">
                                                             <Label :for="`document-no-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
+                                                                class="text-sm font-medium text-gray-700 mb-2 block">
                                                                 Document Number <span class="text-red-500">*</span>
                                                             </Label>
                                                             <Input v-model="traveller.documentNo"
                                                                 :id="`document-no-${index}`"
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.documentNo`) }"
                                                                 type="text"
+                                                                left-icon="/passport.png"
                                                                 class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
                                                                 placeholder="Enter document number" />
                                                             <div v-if="getErrorPath(`travellers.${index}.documentNo`)"
@@ -2280,11 +2549,12 @@ watch(flight, () => {
                                                         </div>
                                                         <div v-if="traveller.documentType == 'cnic'" class="space-y-2">
                                                             <Label :for="`document-no-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
+                                                                class="text-sm font-medium text-gray-700 mb-2 block">
                                                                 CNIC Number <span class="text-red-500">*</span>
                                                             </Label>
                                                             <Input v-model="traveller.cnic" :id="`cnic-no-${index}`"
                                                                 type="text"
+                                                                left-icon="/id-card1.png"
                                                                 class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
                                                                 placeholder="Enter CNIC number" />
 
@@ -2294,22 +2564,18 @@ watch(flight, () => {
                                                             </div>
                                                         </div>
                                                     </div>
-
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div>
-                                                            <Label
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">Expiry
-                                                                Date <span class="text-red-500">*</span></Label>
-                                                            <Calender v-model="traveller.expiryDate"
-                                                                :id="`expiry-date-${index}`"
-                                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
-                                                                type="date"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.expiryDate`)"
-                                                                class="text-red-500 text-xs mt-1">{{
-                                                                    getErrorPath(`travellers.${index}.expiryDate`) }}</div>
-                                                        </div>
-
+                                                    <div>
+                                                        <Label
+                                                            class="text-sm font-medium text-gray-700 mb-2 block">Expiry
+                                                            Date <span class="text-red-500">*</span></Label>
+                                                        <Calender v-model="traveller.expiryDate"
+                                                            :id="`expiry-date-${index}`"
+                                                            :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
+                                                            type="date"
+                                                            class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.expiryDate`)"
+                                                            class="text-red-500 text-xs mt-1">{{
+                                                                getErrorPath(`travellers.${index}.expiryDate`) }}</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2449,7 +2715,7 @@ watch(flight, () => {
 
                         <div class="sticky top-2">
                             <div v-if="countdown !== null && countdown !== '0'"
-                                class="flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm">
+                                class="hidden md:flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm">
                                 <div class="flex items-end gap-4">
                                     <div class="flex flex-col items-center">
                                         <span
@@ -2470,7 +2736,7 @@ watch(flight, () => {
                                     Please complete your booking before the timer expires.
                                 </div>
                             </div>
-                            <div class="divide-y divide-gray-100 bg-white">
+                            <div class="divide-y divide-gray-100 bg-white max-sm:hidden">
                                 <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
                                     <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex">
                                         <!-- Layover Info -->
@@ -2479,27 +2745,26 @@ watch(flight, () => {
                                             <div class="flex items-center justify-center">
                                                 <ClockIcon class="w-4 h-4 text-amber-600 mr-2" />
                                                 <span class="text-xs font-medium text-amber-800">
-                                                    Layover: {{ moment.utc(moment.duration(segment.layover_time,
-                                                        "minutes").asMilliseconds()).format("HH:mm") }}
+                                                    Layover: {{   formatLayoverTime(segment.layover_time) }}
                                                 </span>
                                             </div>
                                         </div>
                                         <!-- Flight Segment -->
                                         <div class="p-4">
+                                            <div class="flex items-center space-x-2 mb-4">
+                                                <img class="w-8 h-8 border border-gray-200"
+                                                    :src="segment?.operating_carrier?.logo" alt="Airline" />
+                                                <div>
+                                                    <div class="text-sm font-medium text-gray-900">{{
+                                                        segment?.operating_carrier?.name }}</div>
+                                                    <div class="text-xs text-gray-500">{{
+                                                        segment?.flight_number
+                                                    }}</div>
+                                                </div>
+                                            </div>
                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 <!-- Departure -->
                                                 <div class="space-y-2">
-                                                    <div class="flex items-center space-x-2">
-                                                        <img class="w-8 h-8 border border-gray-200"
-                                                            :src="segment?.operating_carrier?.logo" alt="Airline" />
-                                                        <div>
-                                                            <div class="text-sm font-medium text-gray-900">{{
-                                                                segment?.operating_carrier?.name }}</div>
-                                                            <div class="text-xs text-gray-500">{{
-                                                                segment?.flight_number
-                                                                }}</div>
-                                                        </div>
-                                                    </div>
                                                     <div class="space-y-1">
                                                         <div class="text-sm font-medium text-gray-900">{{
                                                             formatDate(segment?.departure_at) }}</div>
@@ -2511,36 +2776,51 @@ watch(flight, () => {
                                                     </div>
                                                 </div>
                                                 <!-- Flight Path -->
-                                                <div class="flex items-center justify-center">
-                                                    <div class="w-full max-w-xs">
-                                                        <div class="flex items-center justify-between mb-1">
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                                }}</span>
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                                }}</span>
-                                                        </div>
-                                                        <div class="relative">
-                                                            <div
-                                                                class="absolute left-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                            <div
-                                                                class="h-0.5 bg-gradient-to-r from-primary to-primary/30 mx-1">
-                                                            </div>
-                                                            <div
-                                                                class="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                        </div>
-                                                        <div class="flex items-center justify-between mt-1">
-                                                            <span class="text-xs text-gray-400">{{
-                                                                segment?.from?.iata
-                                                                }}</span>
-                                                            <span class="text-xs text-gray-400">{{ segment?.to?.iata
-                                                                }}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
                                                 <!-- Arrival -->
                                                 <div class="space-y-2 text-right">
                                                     <div class="space-y-1">
@@ -2562,7 +2842,20 @@ watch(flight, () => {
                                 </div>
                             </div>
 
-                            <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
+                            <div class="flex items-center justify-between rounded border border-gray-200 bg-white p-3 shadow-sm sm:hidden">
+                                <div>
+                                    <div class="text-[11px] font-medium uppercase text-gray-500">Total Amount</div>
+                                    <div class="mt-0.5 text-base font-bold text-primary">{{ formatAmount(calculateGrandTotal()) }}</div>
+                                </div>
+                                <button type="button" @click="showMobilePriceDetails = !showMobilePriceDetails"
+                                    class="rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                                    {{ showMobilePriceDetails ? 'Hide' : 'Details' }}
+                                </button>
+                            </div>
+                            <div :class="[
+                                'bg-white shadow-sm border border-gray-200 overflow-hidden',
+                                showMobilePriceDetails ? 'block' : 'hidden sm:block'
+                            ]">
                                 <div class="flex p-4 items-center justify-between ">
                                     <h3 class="text-lg sm:text-xl font-semibold  text-gray-900">Price Details
                                     </h3>
@@ -2619,9 +2912,9 @@ watch(flight, () => {
                     <span class="px-3 text-xs font-medium text-gray-500">APPLIES TO FLIGHTS</span>
                     <div class="h-px flex-1 bg-gray-200"></div>
                 </div>
-                
+
                 <div class="space-y-2">
-                    <div v-for="flight in fareRules?.FareRuleListResponse?.ReferenceList?.[0]?.Flight" 
+                    <div v-for="flight in fareRules?.FareRuleListResponse?.ReferenceList?.[0]?.Flight"
                          :key="flight.id"
                          class="flex items-center justify-between text-sm p-2 hover:bg-gray-50 rounded">
                         <div class="flex items-center space-x-3">
@@ -2632,7 +2925,7 @@ watch(flight, () => {
                                 {{ flight.Departure.location }} → {{ flight.Arrival.location }}
                             </span>
                         </div>
-                       
+
                     </div>
                 </div>
             </div> -->
@@ -2891,12 +3184,12 @@ watch(flight, () => {
                                     <div class="p-3">
                                         <div class="space-y-3">
                                             <div class="flex items-start space-x-2">
-                                                <Input type="checkbox" v-model="termsAccepted" id="terms"
+                                                <input type="checkbox" v-model="termsAccepted" id="terms"
                                                     class="mt-1" />
                                                 <Label for="terms" class="text-xs text-gray-500 leading-relaxed">
                                                     I understand and agree with the Privacy Policy, the User <a href="#"
                                                         class="text-primary hover:underline">Agreement and Terms</a> of
-                                                    Service of Jetze.com.pk
+                                                    Service of Jetze.pk
                                                 </Label>
                                             </div>
                                             <Button @click="showBookingPreview" :disabled="isSubmitting || !termsAccepted"
@@ -3153,7 +3446,7 @@ watch(flight, () => {
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <!-- Departure -->
                                             <div class="space-y-2">
-                                                
+
                                                 <div class="space-y-1">
                                                     <div class="text-sm font-medium text-gray-900">{{
                                                         formatDate(segment?.departure_at) }}</div>
@@ -3165,36 +3458,51 @@ watch(flight, () => {
                                                 </div>
                                             </div>
                                             <!-- Flight Path -->
-                                            <div class="flex items-center justify-center">
-                                                <div class="w-full max-w-xs">
-                                                    <div class="flex items-center justify-between mb-1">
-                                                        <span class="text-xs font-medium text-gray-900">{{
-                                                            moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                            }}</span>
-                                                        <span class="text-xs font-medium text-gray-900">{{
-                                                            moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                            }}</span>
-                                                    </div>
-                                                    <div class="relative">
-                                                        <div
-                                                            class="absolute left-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                        </div>
-                                                        <div
-                                                            class="h-0.5 bg-gradient-to-r from-primary to-primary/30 mx-1">
-                                                        </div>
-                                                        <div
-                                                            class="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center justify-between mt-1">
-                                                        <span class="text-xs text-gray-400">{{
-                                                            segment?.from?.iata
-                                                            }}</span>
-                                                        <span class="text-xs text-gray-400">{{ segment?.to?.iata
-                                                            }}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
                                             <!-- Arrival -->
                                             <div class="space-y-2 text-right">
                                                 <div class="space-y-1">
@@ -3348,7 +3656,20 @@ watch(flight, () => {
 
                 <!-- Preview Sidebar -->
                 <div class="lg:col-span-2">
-                    <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:hidden">
+                        <div>
+                            <div class="text-[11px] font-medium uppercase text-gray-500">Total Amount</div>
+                            <div class="mt-0.5 text-base font-bold text-primary">{{ formatAmount(calculateGrandTotal()) }}</div>
+                        </div>
+                        <button type="button" @click="showMobilePriceDetails = !showMobilePriceDetails"
+                            class="rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                            {{ showMobilePriceDetails ? 'Hide' : 'Details' }}
+                        </button>
+                    </div>
+                    <div :class="[
+                        'bg-white shadow-sm border border-gray-200 overflow-hidden',
+                        showMobilePriceDetails ? 'block' : 'hidden sm:block'
+                    ]">
                         <div class="flex p-4 items-center justify-between ">
                             <h3 class="text-lg sm:text-xl font-semibold  text-gray-900">Price Details
                             </h3>
@@ -3404,9 +3725,9 @@ watch(flight, () => {
                     <span class="px-3 text-xs font-medium text-gray-500">APPLIES TO FLIGHTS</span>
                     <div class="h-px flex-1 bg-gray-200"></div>
                 </div>
-                
+
                 <div class="space-y-2">
-                    <div v-for="flight in fareRules?.FareRuleListResponse?.ReferenceList?.[0]?.Flight" 
+                    <div v-for="flight in fareRules?.FareRuleListResponse?.ReferenceList?.[0]?.Flight"
                          :key="flight.id"
                          class="flex items-center justify-between text-sm p-2 hover:bg-gray-50 rounded">
                         <div class="flex items-center space-x-3">
@@ -3417,7 +3738,7 @@ watch(flight, () => {
                                 {{ flight.Departure.location }} → {{ flight.Arrival.location }}
                             </span>
                         </div>
-                       
+
                     </div>
                 </div>
             </div> -->
@@ -3669,7 +3990,7 @@ watch(flight, () => {
         </div>
     </div>
 
- 
+
 
 
     <div v-if="isLowBalanceDialogOpen"
@@ -3739,15 +4060,15 @@ watch(flight, () => {
     <div v-if="isAlreadyBookedDialogOpen"
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
         @click.self="isAlreadyBookedDialogOpen = false">
-    
+
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-    
+
             <!-- Header -->
             <div class="flex items-start justify-between mb-4">
                 <h3 class="text-lg font-medium text-primary">
                     Booking Already Exists
                 </h3>
-    
+
                 <button @click="isAlreadyBookedDialogOpen = false"
                     class="text-gray-400 hover:text-gray-500">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3758,14 +4079,14 @@ watch(flight, () => {
                     </svg>
                 </button>
             </div>
-    
+
             <!-- Message -->
             <p class="text-sm text-gray-600 mb-5">
-                This traveler already has a confirmed booking for this flight.  
+                This traveler already has a confirmed booking for this flight.
                 Duplicate bookings are not allowed.
             </p>
-    
-           
+
+
             <!-- Actions -->
             <div class="flex justify-end">
                 <button
@@ -3774,7 +4095,7 @@ watch(flight, () => {
                     OK
                 </button>
             </div>
-    
+
         </div>
     </div>
     <div v-if="isConfirmDialogOpen"

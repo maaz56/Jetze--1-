@@ -95,7 +95,7 @@ class DepositDataController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            $deposits = DepositData::with(['agent.agentData', 'agent.customer'])
+            $deposits = DepositData::with('agent.agentData')
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -117,7 +117,7 @@ class DepositDataController extends Controller
             }
 
             $deposits = DepositData::where('agent_id', $agentId)
-                ->with(['agent.agentData', 'agent.customer']) // Include agent, agentData, and customer relationship
+                ->with('agent.agentData') // Include agent and agentData relationship
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -141,7 +141,7 @@ class DepositDataController extends Controller
     public function getAllDepositsWithAgentData()
     {
         // Fetch all deposits, include agent and their agentData
-        $deposits = DepositData::with(['agent.agentData', 'agent.customer'])
+        $deposits = DepositData::with(['agent.agentData'])
             ->orderBy('date', 'desc')
             ->get();
 
@@ -339,17 +339,20 @@ class DepositDataController extends Controller
             $totalPendingDeposits = DepositData::where('deposit_status', 'pending') // Filter deposits by approved status
                 ->sum('amount');
         } else {
-            $agentDeposits = DepositData::where('agent_id', $agentId);
+            // Fetch approved deposits for the agent and calculate the total
+            $totalApprovedDeposits = DepositData::where('agent_id', $agentId)
+                ->where('deposit_status', 'approved') // Filter deposits by approved status
+                ->sum('amount'); // Calculate the total amount of approved deposits
 
-            $totalDeposits = (clone $agentDeposits)->sum('amount');
-            $totalApprovedDeposits = (clone $agentDeposits)
-                ->where('deposit_status', 'approved')
+            $totalPendingDeposits = DepositData::where('agent_id', $agentId)
+                ->where('deposit_status', 'pending') // Filter deposits by approved status
                 ->sum('amount');
-            $totalPendingDeposits = (clone $agentDeposits)
-                ->where('deposit_status', 'pending')
-                ->sum('amount');
-            $totalRejectedDeposits = (clone $agentDeposits)
+
+            $totalRejectedDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'rejected')
+                ->sum('amount');
+
+            $totalDeposits = DepositData::where('agent_id', $agentId)
                 ->sum('amount');
         }
 

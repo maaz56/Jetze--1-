@@ -1,6 +1,6 @@
 <template>
 
-  
+
   <div  class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
     <div class=" mx-auto">
       <div class=" bg-white mb-4 rounded mx-auto  py-6 px-4">
@@ -52,386 +52,556 @@
       </div>
       <!-- Main Container -->
        <div v-if="isLoading || isPaymentLoading" class="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div class="bg-white p-6 max-w-md w-full mx-4">
-      <div class="flex flex-col items-center space-y-3">
-        <Spinner />
-      </div>
-    </div>
-  </div>
-      <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Payment Methods Section -->
-        <div class="lg:col-span-2 space-y-4">
-          <div class="bg-white rounded shadow-sm p-4">
-            <!-- Header -->
-            <h1 class="text-3xl font-bold text-slate-900 mb-2">How Would You Like To Pay?</h1>
-
-            <!-- Main Payment Section with Two Column Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <!-- Left: Payment Methods List (Static) -->
-              <div class="lg:col-span-1 space-y-3">
-
-
-                <!-- Bank Transfer (Abhi Pay) -->
-
-
-                <!-- Abhipay -->
-                <div @click="paymentMethod = 'abhipay-bank'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay-bank'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay-bank'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Landmark />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900']">
-                      Bank Transfer - Abhipay
-                    </h3>
-                  </div>
+            <div class="bg-white p-6 max-w-md w-full mx-4">
+                <div class="flex flex-col items-center space-y-3">
+                    <Spinner />
                 </div>
-                <div @click="paymentMethod = 'abhipay'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay'
-                   ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay'
-                       ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                      <CreditCard />
-
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900']">
-                      Abhipay - Debit/Credit card
-                    </h3>
-                  </div>
-                </div>
-
-                <!-- Wallet Balance -->
-                <div @click="paymentMethod = 'wallet'" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'wallet'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'wallet'
-                       ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Wallet />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900']">
-                      Wallet Balance
-                    </h3>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right: Dynamic Information Box Based on Selected Method -->
-              <div class="lg:col-span-2">
-                <!-- PayPal / PayPro Info -->
-                <div v-if="paymentMethod === 'paypal'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          We will be redirecting you to PayPro secure Banking Payment gateway to make payment and you
-                          will be redirected back to our site once payment is successful to get the Flight Booking. (No
-                          additional service fee will be charged for bank transfers)
-                        </p>
-                      </div>
+            </div>
+        </div>
+        <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+             <!-- Flight Summary Section for Mobile -->
+            <div class="md:hidden">
+            <div class="sticky top-6 space-y-6">
+                <!-- Expiry Timer -->
+                    <div class="bg-amber-50 border border-amber-200 rounded p-4">
+                        <div class="flex items-center gap-3">
+                            <ClockIcon class="h-5 w-5 text-amber-600" />
+                            <div>
+                                <p class="text-sm font-medium text-amber-800">Booking expires in</p>
+                                <p class="text-lg font-bold text-amber-900">{{getRemainingTime( bookingDetails?.[0]?.expiry_time) }}</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Please contact our support team at <a href="mailto:support@Jetze.pk"
-                            class="text-primary font-semibold hover:underline">support@Jetze.pk</a> and <a
-                            href="tel:+923421111003"
-                            class="text-primary font-semibold hover:underline">+923421111003</a> for any payment related
-                          issues.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                <!-- Summary Card -->
+                <div class="bg-white rounded shadow-sm p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-slate-900">Flight summary</h2>
+                    <span class="text-xs font-semibold text-primary bg-amber-100 px-3 py-1 rounded-full">
+                    Flight details
+                    </span>
                 </div>
 
-                <!-- Bank Transfer (Abhi Pay) Info -->
-                <div v-else-if="paymentMethod === 'abhipay-bank'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          We will be redirecting you to Abhi Pay secure gateway for bank transfer. Complete your
-                          transfer and you will be redirected back to confirm your Flight Booking.
-                          (Rs 500 service fee will be charged for OneBill bank transfer)
-                        </p>
-                        <a
-    :href="$router.resolve({ name: 'HowToPay' }).href"
-    target="_blank"
-    rel="noopener"
-    class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
-  >
-    <!-- Icon -->
-    
-
-    How To Use AbhiPay Bank Transfer
-   
-    <ExternalLink class="w-3 h-3 mt-1"/>
-  </a>
-                      </div>
-                      
+                <div v-if="passengers.length" class="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-slate-900">Passengers</h3>
+                    <span class="text-xs font-medium text-slate-500">{{ passengers.length }} Total</span>
                     </div>
-
-                    <!-- 🔹 Bill ID Section -->
-                    <div v-if="billId" class="bg-white border border-green-200 rounded-lg p-4 shadow-sm">
-                      <p class="text-xs text-slate-500 mb-1">Generated Bill ID</p>
-                      <div class="flex items-center justify-between">
-                        <span class="text-lg font-bold text-green-700 tracking-wide">
-                          {{ billId }}
+                    <div class="space-y-2">
+                    <div
+                        v-for="(passenger, passengerIdx) in passengers"
+                        :key="passenger.id || passengerIdx"
+                        class="flex items-center justify-between rounded bg-white px-3 py-2"
+                    >
+                        <p class="text-sm font-medium text-slate-900">
+                        {{ formatPassengerName(passenger) }}
+                        </p>
+                        <span class="text-xs uppercase tracking-wide text-slate-500">
+                        {{ passenger.type || 'PAX' }}
                         </span>
+                    </div>
+                    </div>
+                </div>
 
-                        <!-- Optional Copy Button -->
-                        <button @click="copyBillId"
-                          class="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded transition">
-                          Copy
+                <!-- Flight Route -->
+                <div class="">
+                    <div v-for="(flight, flightIdx) in flightData?.leg?.flights" :key="flightIdx" class="mb-8 last:mb-0">
+                    <!-- Route Header -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                        <img :src="flight.marketing_carrier?.logo" :alt="flight.marketing_carrier?.name"
+                            class="h-8 w-8 rounded-full border border-gray-200" />
+                        <div>
+                            <p class="font-medium text-gray-900">{{ flight.marketing_carrier?.name }}</p>
+                            <p class="text-xs text-gray-500">Flight {{ flight.segments?.[0]?.flight_number }}</p>
+                        </div>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        Cabin Class: {{ flight.segments?.[0]?.cabin_class === 'E' ? 'Economy' : flight.segments?.[0]?.cabin_class ||
+                            'Economy' }}
+                        </span>
+                    </div>
+
+                    <!-- Flight Segments -->
+                    <div v-for="(segment, sIdx) in flight.segments" :key="sIdx" class="relative mb-2">
+                        <!-- Flight Segment -->
+                        <div class="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-gray-50 rounded">
+                        <!-- Departure -->
+                        <div class="flex-1">
+                            <div class="flex items-start gap-3">
+                            <div class="w-1 h-1 bg-primary rounded-full mt-2"></div>
+                            <div>
+                                <p class="text-sm font-semibold text-gray-900">
+                                {{ formatDateTime(segment.departure_at) }}
+                                </p>
+                                <p class="text-base font-bold text-gray-900 mt-1">
+                                {{ segment.from?.iata }}
+                                </p>
+                                <p class="text-xs text-gray-600">{{ segment.from?.name }}</p>
+                            </div>
+                            </div>
+                        </div>
+                        <!-- Flight Path -->
+                        <div class="flex-1 flex flex-col items-center">
+                            <p class="text-xs text-gray-500 mb-1">{{ formatDuration(segment.flight_time) }}</p>
+                            <div class="w-full flex items-center">
+                            <div class="w-2 h-2 bg-primary rounded-full"></div>
+                            <div class="flex-1 h-0.5 bg-gradient-to-r from-primary to-primary/30"></div>
+                            <div class="w-2 h-2 bg-primary rounded-full"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Direct</p>
+                        </div>
+
+                        <!-- Arrival -->
+                        <div class="flex-1 text-right">
+                            <div class="flex items-start justify-end gap-3">
+                            <div class="text-right">
+                                <p class="text-sm font-semibold text-gray-900">
+                                {{ formatDateTime(segment.arrival_at) }}
+                                </p>
+                                <p class="text-base font-bold text-gray-900 mt-1">
+                                {{ segment.to?.iata }}
+                                </p>
+                                <p class="text-xs text-gray-600">{{ segment.to?.name }}</p>
+                            </div>
+                            <div class="w-1 h-1 bg-primary rounded-full mt-2"></div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
+
+                    </div>
+                </div>
+
+
+
+                <!-- Fare Breakdown -->
+                <div class="lg:col-span-1">
+                    <div class="sticky top-6 space-y-6">
+                    <!-- Price Breakdown Card - Using PNR Details -->
+                    <div class="bg-gray-50 rounded overflow-hidden ">
+                        <div class="bg-gray-50 border-b border-gray-200 p-4">
+                        <h2 class="text-lg font-semibold text-gray-900">Price Summary</h2>
+                        </div>
+
+                        <div class="p-4">
+                        <div class="space-y-3">
+                            <!-- Base Fare -->
+                            <div class="flex justify-between items-center text-sm px-2">
+                            <span class="text-gray-600">Base Fare</span>
+                            <span class="font-medium">
+                                {{ formatAmount(pnrFareSummary.baseFare) }}
+                            </span>
+                            </div>
+
+                            <!-- Taxes & Fees -->
+                            <div class="flex justify-between items-center text-sm px-2">
+                            <span class="text-gray-600">Taxes & Fees</span>
+                            <span class="font-medium">
+                                {{ formatAmount(pnrFareSummary.taxesAndFees) }}
+                            </span>
+                            </div>
+
+                            <!-- Flight Total (PNR) -->
+                            <div class="flex justify-between items-center bg-gray-200 p-2">
+                            <span class="text-sm font-medium text-gray-700">Flight Total</span>
+                            <span class="text-sm font-medium text-primary">
+                                {{ formatAmount(pnrFareSummary.totalFare) }}
+                            </span>
+                            </div>
+                        </div>
+
+                        <!-- Grand Total -->
+                        <div class="mt-1 border-t-2 border-gray-300">
+                            <div
+                                    class="flex justify-between items-center p-2">
+                                    <span class="text-xs sm:text-sm text-gray-600">Add-ons</span>
+                                    <span class="text-xs sm:text-sm font-medium">
+                                {{ formatAmount(bookingAddOnsAmount) }}
+                                </span>
+                                </div>
+                            <div class="flex justify-between items-center">
+                            <span class="text-xl font-bold text-gray-900">Total Amount</span>
+                            <span class="text-xl font-bold text-primary">
+                                {{ formatAmount(latestBookingPayableAmount) }}
+                            </span>
+                            </div>
+
+
+                        </div>
+                        </div>
+
+                    </div>
+
+
+
+
+                </div>
+                </div>
+                </div>
+
+
+            </div>
+            </div>
+            <!-- Payment Methods Section -->
+            <div class="lg:col-span-2 space-y-4">
+            <div class="bg-white rounded shadow-sm p-4">
+                <!-- Header -->
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">How Would You Like To Pay?</h1>
+
+                <!-- Main Payment Section with Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <!-- Left: Payment Methods List (Static) -->
+                <div class="lg:col-span-1 space-y-3">
+
+
+                    <!-- Bank Transfer (Abhi Pay) -->
+
+
+                    <!-- Abhipay -->
+                    <div @click="paymentMethod = 'abhipay-bank'" :class="[
+                    'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
+                    paymentMethod === 'abhipay-bank'
+                        ? 'bg-primary border-primary shadow-lg'
+                        : 'border-primary bg-white hover:bg-primary/10'
+                    ]">
+                    <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                        <Landmark :class="[
+                        'w-5 h-5',
+                        paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-primary'
+                        ]" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 :class="[
+                        'font-semibold truncate',
+                        paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900'
+                        ]">
+                        Bank Transfer - Abhipay
+                        </h3>
+                    </div>
+                    </div>
+
+                    <div @click="paymentMethod = 'abhipay'" :class="[
+                    'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
+                    paymentMethod === 'abhipay'
+                        ? 'bg-primary border-primary shadow-lg'
+                        : 'border-primary bg-white hover:bg-primary/10'
+                    ]">
+                    <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                        <CreditCard :class="[
+                        'w-5 h-5',
+                        paymentMethod === 'abhipay' ? 'text-white' : 'text-primary'
+                        ]" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 :class="[
+                        'font-semibold truncate',
+                        paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900'
+                        ]">
+                        Abhipay - Debit/Credit card
+                        </h3>
+                    </div>
+                    </div>
+
+                    <!-- Wallet Balance -->
+                    <div @click="paymentMethod = 'wallet'" :class="[
+                        'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
+                        paymentMethod === 'wallet'
+                        ? 'bg-primary border-primary shadow-lg'
+                        : 'border-primary bg-white hover:bg-primary/10'
+                    ]">
+                        <div class="w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0">
+                        <Wallet :class="[
+                            'w-5 h-5',
+                            paymentMethod === 'wallet' ? 'text-white' : 'text-primary'
+                        ]" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                        <h3 :class="[
+                            'font-semibold truncate',
+                            paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900'
+                        ]">
+                            Wallet Balance
+                        </h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Dynamic Information Box Based on Selected Method -->
+                <div class="lg:col-span-2">
+                    <!-- PayPal / PayPro Info -->
+                    <div v-if="paymentMethod === 'paypal'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            We will be redirecting you to PayPro secure Banking Payment gateway to make payment and you
+                            will be redirected back to our site once payment is successful to get the Flight Booking. (No
+                            additional service fee will be charged for bank transfers)
+                            </p>
+                        </div>
+                        </div>
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Please contact our support team at <a href="mailto:support@Jetze.pk"
+                                class="text-primary font-semibold hover:underline">support@Jetze.pk</a> and <a
+                                href="tel:+923421111003"
+                                class="text-primary font-semibold hover:underline">+923421111003</a> for any payment related
+                            issues.
+                            </p>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    <!-- Bank Transfer (Abhi Pay) Info -->
+                    <div v-else-if="paymentMethod === 'abhipay-bank'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            We will be redirecting you to Abhi Pay secure gateway for bank transfer. Complete your
+                            transfer and you will be redirected back to confirm your Flight Booking.
+                            (Service fee will be charged for OneBill bank transfer)
+                            </p>
+                            <a
+                            :href="$router.resolve({ name: 'HowToPay' }).href"
+                            target="_blank"
+                            rel="noopener"
+                            class="flex items-start gap-1 text-primary text-sm underline hover:underline hover:text-primary/80 transition"
+                            >
+                            How To Use AbhiPay Bank Transfer
+                            <ExternalLink class="w-3 h-3 mt-1"/>
+                            </a>
+                        </div>
+                        </div>
+
+                        <!-- 🔹 Bill ID Section -->
+                        <div v-if="billId" class="bg-white border border-green-200 rounded-lg p-4 shadow-sm">
+                        <p class="text-xs text-slate-500 mb-1">Generated Bill ID</p>
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg font-bold text-green-700 tracking-wide">
+                            {{ billId }}
+                            </span>
+
+                            <!-- Optional Copy Button -->
+                            <button @click="copyBillId"
+                            class="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded transition">
+                            Copy
+                            </button>
+                        </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Bottom Action Buttons -->
+                    <div class="mt-4">
+
+                        <!-- Buttons Row with 70% / 30% width distribution -->
+                        <div class="flex gap-3 w-full">
+
+                        <!-- Refresh / Check Status Button - 70% width -->
+                        <button v-if="billId" @click="checkPaymentStatus('abhipay-bank')"
+                            class="flex-[7] py-3 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2 font-medium text-sm">
+                            <RefreshCcw class="w-4 h-4" />
+                            <span>Refresh Payment</span>
                         </button>
-                      </div>
+
+                        <!-- Generate / Regenerate Button - 30% width -->
+                        <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing" :class="[
+                            'flex-[3] py-3 rounded font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2',
+                            !isProcessing
+                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md'
+                            : 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                        ]">
+                            <span v-if="!billId">Generate Bill ID</span>
+                            <span v-else>Regenerate Bill ID</span>
+                            <span>→</span>
+                        </button>
+
+                        </div>
+
+                        <!-- 🔹 Helper Message -->
+                        <p v-if="billId" class="text-xs text-slate-500 mt-3 flex items-center gap-1">
+                        <RefreshCcw class="w-3 h-3" />
+                        Click refresh to check payment status after completing bank transfer
+                        </p>
+
+                    </div>
                     </div>
 
-                  </div>
+                    <!-- HBL Pay Info -->
+                    <div v-else-if="paymentMethod === 'hbl'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            We will be redirecting you to HBL secure payment gateway. Enter your debit or credit card
+                            details to complete payment. Service Fee of 3% will be charged for credit/debit card
+                            transactions.
+                            </p>
+                        </div>
+                        </div>
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Your card information is encrypted and secure. You will be redirected back once payment is
+                            successful to get your Flight Booking confirmation.
+                            </p>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
 
-                  <!-- Bottom Action Buttons -->
-                  <div class="mt-4">
-
-                    <!-- Buttons Row -->
-                    <div class="flex gap-2">
-
-                      <!-- Refresh / Check Status Button -->
-                      <button v-if="billId" @click="checkPaymentStatus('abhipay-bank')"
-                        class="w-12 flex items-center justify-center rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition disabled:opacity-50">
-
-                        <RefreshCcw class="w-5 h-5" />
-
-                      </button>
-
-                      <!-- Generate / Regenerate Button -->
-                      <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing" :class="[
-                        'flex-1 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                        !isProcessing
-                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
-                          : 'bg-slate-300 text-slate-600 cursor-not-allowed'
-                      ]">
-
-                        <span v-if="!billId">Generate Bill ID</span>
-                        <span v-else>Regenerate Bill ID</span>
-
+                    <!-- Abhipay Info -->
+                    <div v-else-if="paymentMethod === 'abhipay'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Pay securely using your debit or credit card through Abhipay platform. Service Fee of {{ abhipayCardFeePercent.toFixed(2) }}% will
+                            be charged for Visa/Master and Union card transactions. Fast and secure payment processing.
+                            </p>
+                        </div>
+                        </div>
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Your payment is processed through Abhipay's encrypted gateway. You will receive confirmation
+                            email immediately after successful payment completion.
+                            </p>
+                        </div>
+                        </div>
+                        <button @click="handlePaymentMethod('abhipay')" :disabled="!paymentMethod || isProcessing" :class="[
+                        'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
+                        paymentMethod && !isProcessing
+                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
+                            : 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                        ]">
+                        <span>Proceed to Pay {{ formatAmount(payableAmount) }}</span>
                         <span>→</span>
-                      </button>
-
+                        </button>
+                    </div>
                     </div>
 
-                    <!-- 🔹 Helper Message -->
-                    <p v-if="billId" class="text-xs text-slate-500 mt-2 flex items-center gap-1">
-
-                      <RefreshCcw class="w-3 h-3" />
-
-                      Click refresh to check payment status after completing bank transfer
-
-                    </p>
-
-                  </div>
-
-
-                </div>
-
-
-                <!-- HBL Pay Info -->
-                <div v-else-if="paymentMethod === 'hbl'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          We will be redirecting you to HBL secure payment gateway. Enter your debit or credit card
-                          details to complete payment. Service Fee of 3% will be charged for credit/debit card
-                          transactions.
-                        </p>
-                      </div>
+                    <!-- Wallet Info -->
+                    <div v-else-if="paymentMethod === 'wallet'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Pay directly from your Jetze wallet balance.
+                            This is the fastest payment method with instant confirmation.
+                            </p>
+                        </div>
+                        </div>
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Your booking will be confirmed immediately. No additional fees apply for wallet payments.
+                            Contact support if you have any questions.
+                            </p>
+                        </div>
+                        </div>
                     </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Your card information is encrypted and secure. You will be redirected back once payment is
-                          successful to get your Flight Booking confirmation.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Abhipay Info -->
-                <div v-else-if="paymentMethod === 'abhipay'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay securely using your debit or credit card through Abhipay platform. Service Fee of 3% will
-                          be charged for Visa/Master and Union card transactions. Fast and secure payment processing.
-                        </p>
-                      </div>
-                    </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Your payment is processed through Abhipay's encrypted gateway. You will receive confirmation
-                          email immediately after successful payment completion.
-                        </p>
-                      </div>
-                    </div>
-                    <button @click="handlePaymentMethod('abhipay')" :disabled="!paymentMethod || isProcessing" :class="[
-                      'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                      paymentMethod && !isProcessing
+                    <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
+                        'w-full mt-4 py-3 px-6 rounded font-semibold text-lg max-sm:text-sm transition-all duration-300 flex items-center justify-center gap-2',
+                        paymentMethod && !isProcessing
                         ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
                         : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                     ]">
-                      <span>Proceed to Pay {{ formatAmount(amount) }}</span>
-                      <span>→</span>
+                        <span>Proceed to Pay {{ formatAmount(payableAmount) }}</span>
+                        <span>→</span>
                     </button>
-                  </div>
-                </div>
-
-                <!-- Wallet Info -->
-                <div v-else-if="paymentMethod === 'wallet'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay directly from your Jetze wallet balance.
-                          This is the fastest payment method with instant confirmation.
-                        </p>
-                      </div>
                     </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Your booking will be confirmed immediately. No additional fees apply for wallet payments.
-                          Contact support if you have any questions.
-                        </p>
-                      </div>
+
+                    <!-- Default/Placeholder Info -->
+                    <div v-else class="bg-blue-50 rounded p-6 border border-blue-100">
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                        <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                        <div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                            Select a payment method to see the available options and instructions.
+                            </p>
+                        </div>
+                        </div>
                     </div>
-                  </div>
-                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
-                    'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                    paymentMethod && !isProcessing
-                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
-                      : 'bg-slate-300 text-slate-600 cursor-not-allowed'
-                  ]">
-                    <span>Proceed to Pay {{ formatAmount(updatedBookingAmountWithMargins) }}</span>
-                    <span>→</span>
-                  </button>
-                </div>
-
-                <!-- Default/Placeholder Info -->
-                <div v-else class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Select a payment method to see the available options and instructions.
-                        </p>
-                      </div>
                     </div>
-                  </div>
+
+                    <!-- Security Badge -->
+                    <div class="mt-4 bg-amber-50 border border-amber-300 rounded p-4 flex items-center gap-3">
+                    <span class="text-2xl flex-shrink-0">🔒</span>
+                    <p class="text-sm text-amber-900">
+                        <span class="font-semibold">All Your personal information is secure</span> when you book with
+                        Jetze
+                    </p>
+                    </div>
+
+
+
                 </div>
-
-                <!-- Security Badge -->
-                <div class="mt-4 bg-amber-50 border border-amber-300 rounded p-4 flex items-center gap-3">
-                  <span class="text-2xl flex-shrink-0">🔒</span>
-                  <p class="text-sm text-amber-900">
-                    <span class="font-semibold">All Your personal information is secure</span> when you book with
-                    Jetze
-                  </p>
                 </div>
+            </div>
 
-               
+            <!-- Trust Badges -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                <div class="bg-white rounded p-6 text-center shadow-sm">
+                <div class="text-3xl mb-3">🔐</div>
+                <h4 class="font-bold text-slate-900 mb-2">100% Secure</h4>
+                <p class="text-sm text-slate-600">We use 256-bit SSL encryption</p>
+                </div>
+                <div class="bg-white rounded p-6 text-center shadow-sm">
+                <div class="text-3xl mb-3">✓</div>
+                <h4 class="font-bold text-slate-900 mb-2">Trusted worldwide</h4>
+                <p class="text-sm text-slate-600">We do not store or view your card data</p>
+                </div>
+                <div class="bg-white rounded p-6 text-center shadow-sm">
+                <div class="text-3xl mb-3">💳</div>
+                <h4 class="font-bold text-slate-900 mb-2">Easy Payments</h4>
+                <p class="text-sm text-slate-600">We do not store or view your card data</p>
+                </div>
+            </div>
 
-              </div>
+            <!-- Footer Info -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                <div class="bg-white rounded p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-2xl">📍</span>
+                    <h4 class="font-bold text-slate-900">Address</h4>
+                </div>
+                <p class="text-sm text-slate-600">Jetze</p>
+                </div>
+                <div class="bg-white rounded p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-2xl">📞</span>
+                    <h4 class="font-bold text-slate-900">Contact Us :</h4>
+                </div>
+                <p class="text-sm text-slate-600">+92 00000000</p>
+                </div>
+                <div class="bg-white rounded p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-2xl">📧</span>
+                    <h4 class="font-bold text-slate-900">Email :</h4>
+                </div>
+                <p class="text-sm text-slate-600">support@Jetze.pk</p>
+                </div>
             </div>
-          </div>
-
-          <!-- Trust Badges -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">🔐</div>
-              <h4 class="font-bold text-slate-900 mb-2">100% Secure</h4>
-              <p class="text-sm text-slate-600">We use 256-bit SSL encryption</p>
             </div>
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">✓</div>
-              <h4 class="font-bold text-slate-900 mb-2">Trusted worldwide</h4>
-              <p class="text-sm text-slate-600">We do not store or view your card data</p>
-            </div>
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">💳</div>
-              <h4 class="font-bold text-slate-900 mb-2">Easy Payments</h4>
-              <p class="text-sm text-slate-600">We do not store or view your card data</p>
-            </div>
-          </div>
-
-          <!-- Footer Info -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📍</span>
-                <h4 class="font-bold text-slate-900">Address</h4>
-              </div>
-              <p class="text-sm text-slate-600">Jetze</p>
-            </div>
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📞</span>
-                <h4 class="font-bold text-slate-900">Contact Us :</h4>
-              </div>
-              <p class="text-sm text-slate-600">+92 311 1711123</p>
-            </div>
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📧</span>
-                <h4 class="font-bold text-slate-900">Email :</h4>
-              </div>
-              <p class="text-sm text-slate-600">support@Jetze.pk</p>
-            </div>
-          </div>
-        </div>
 
         <!-- Flight Summary Section -->
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1 max-sm:hidden">
           <div class="sticky top-6 space-y-6">
             <!-- Summary Card -->
             <div class="bg-white rounded shadow-sm p-6">
@@ -587,11 +757,11 @@
                             {{ formatAmount(latestBookingPayableAmount) }}
                           </span>
                         </div>
-                        
-                      
+
+
                       </div>
                     </div>
-                    
+
                   </div>
 
 
@@ -662,7 +832,7 @@
           <Button @click="closePaymentDialog">Cancel</Button>
           <Button @click="handlePayment" :disabled="processing" class="bg-primary text-white">
             <Spinner v-if="processing" class="mr-2 h-4 w-4" />
-            Pay {{ formatAmount(updatedBookingAmountWithMargins) }}
+            Pay {{ formatAmount(payableAmount) }}
           </Button>
         </div>
       </div>
@@ -775,7 +945,7 @@
 
           <div class="bg-slate-50 rounded p-4 mb-6 text-center">
             <p class="text-sm text-slate-600 mb-1">Amount to Pay</p>
-            <p class="text-3xl font-bold text-primary">{{ currency }} {{ formatAmount(updatedBookingAmountWithMargins) }}</p>
+            <p class="text-3xl font-bold text-primary">{{ currency }} {{ formatAmount(payableAmount) }}</p>
           </div>
 
           <div class="space-y-3 mb-6">
@@ -839,6 +1009,7 @@ import {
   SEND_PAYMENT_REQUEST,
   FETCH_ANCILLARIES,
   PATCH_ANCILLARIES,
+  FETCH_CUSTOMER_SETTINGS,
   INITIALIZE_ABHI_PAY,
   CHECK_PAYMENT_STATUS,
   UPDATE_BOOKING_AMOUNT,
@@ -908,6 +1079,8 @@ const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const paymentStatus = computed(() => store.getters["payment/paymentStatus"]);
 const pnrDetails = computed(() => store.getters["flight/pnrData"]?.data);
+const customerSettings = computed(() => store.getters["customer/customerSettings"]);
+const abhipayCardFeePercent = computed(() => Number(customerSettings.value?.one_bill_percentage_charge ?? 0) || 0);
 
 const sumAttributeAmount = (node, attributeKey = "Amount") => {
   if (!node) return 0;
@@ -923,8 +1096,17 @@ const latestPnrFareWithoutMargins = computed(() => getLatestPnrFareWithoutMargin
 const savedMarginTotal = computed(() =>
   (agentAmount.value + margin.value + airportMargin.value - agentDiscount.value) || 0
 );
+const savedSegmentMarginTotal = computed(() =>
+  parseFloat(bookingDetails.value?.[0]?.segment_margin || 0) || 0
+);
+const savedPromotionMarginTotal = computed(() =>
+  parseFloat(bookingDetails.value?.[0]?.promotion_margin || 0) || 0
+);
+const savedBookingMarginTotal = computed(() =>
+  savedMarginTotal.value + savedSegmentMarginTotal.value + savedPromotionMarginTotal.value
+);
 const storedTicketAmountWithMargins = computed(() =>
-  Math.max(0, storedBookingAmountWithoutMargins.value + savedMarginTotal.value)
+  Math.max(0, storedBookingAmountWithoutMargins.value + savedBookingMarginTotal.value)
 );
 const bookingAddOnsAmount = computed(() =>
   Math.max(0, parseFloat(bookingDetails.value?.[0]?.add_ones_amount || 0) )
@@ -934,7 +1116,7 @@ const latestBookingAmountWithoutMargins = computed(() =>
   Math.max(0, latestPnrFareWithoutMargins.value)
 );
 const latestTicketAmountWithMargins = computed(() =>
-  Math.max(0, latestBookingAmountWithoutMargins.value + savedMarginTotal.value)
+  Math.max(0, latestBookingAmountWithoutMargins.value + savedBookingMarginTotal.value)
 );
 const savedBookingPayableAmount = computed(() =>
   Math.max(0, storedTicketAmountWithMargins.value)
@@ -944,6 +1126,13 @@ const latestBookingPayableAmount = computed(() =>
 );
 const updatedBookingAmountWithMargins = computed(() => {
   return Math.max(0, Number(latestTicketAmountWithMargins.value || 0));
+});
+const payableAmount = computed(() => {
+  const base = Math.max(0, Number(amount.value || updatedBookingAmountWithMargins.value || 0));
+  if (paymentMethod.value === "abhipay") {
+    return base;
+  }
+  return base;
 });
 const calculateFareMargin = (basePrice, marginAmount, marginType, amountType) => {
   const price = parseFloat(basePrice) || 0;
@@ -1164,6 +1353,10 @@ async function fetchBookingDetails() {
   } finally {
     isBookingDetailsLoading.value = false;
   }
+}
+
+function fetchCustomerSettings() {
+  return store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
 }
 
 
@@ -1610,9 +1803,9 @@ function getLatestPnrFareWithoutMargins() {
 }
 
 function getStoredBookingAmountWithoutMargins() {
-  // DB `amount` is stored as total payable (with margins). Strip margins for fair comparison vs PNR fare.
+  // DB `amount` is stored as total payable (with margins). Strip saved margins for fair comparison vs PNR fare.
   const storedPayableWithMargins = parseFloat(bookingDetails.value?.[0]?.amount || 0) || 0;
-  return Math.max(0, storedPayableWithMargins - savedMarginTotal.value);
+  return Math.max(0, storedPayableWithMargins - savedBookingMarginTotal.value);
 }
 
 function shouldShowPriceChangeDialog() {
@@ -1646,7 +1839,7 @@ async function updateBookingAmount() {
 
   await store.dispatch(`flight/${UPDATE_BOOKING_AMOUNT}`, {
     booking_id: bookingDetails.value[0].id,
-    amount: updatedBookingAmountWithMargins.value,
+    amount: payableAmount.value,
   });
 }
 
@@ -1679,7 +1872,7 @@ function handlePriceChangeCancel() {
 
 async function initializeAbhiPay() {
   store.dispatch('payment/' + INITIALIZE_ABHI_PAY, {
-    amount: updatedBookingAmountWithMargins.value,
+    amount: payableAmount.value,
     currency: 'PKR',
     booking_id: booking_id,
     paymentMethod: paymentMethod.value,
@@ -1706,7 +1899,7 @@ const copyBillId = () => {
 function handleConfirmDialogOpen() {
 
 
-  if (agentLedger.value?.balance < updatedBookingAmountWithMargins.value) {
+  if (agentLedger.value?.balance < payableAmount.value) {
     isLowBalanceDialogOpen.value = true;
   } else {
     isConfirmDialogOpen.value = true;
@@ -1746,7 +1939,7 @@ const payNow = async () => {
   loading.value = true;
   try {
     const { data } = await axios.post('/api/arb/initiate', {
-      amount: updatedBookingAmountWithMargins.value,
+      amount: payableAmount.value,
       flight_id: route.query.flight_id || flightData.value?.id || null,
       booking_id: bookingDetails?.value?.[0]?.id || booking_id,
       booking_uuid: pnrData.value?.data?.uuid ?? "null",
@@ -1867,7 +2060,7 @@ const handlePayment = async () => {
 
   try {
     const response = await store.dispatch('flight/' + SEND_PAYMENT_REQUEST, {
-      amount: Math.round(updatedBookingAmountWithMargins.value * 100),
+      amount: Math.round(payableAmount.value * 100),
       currency: 'sar',
       booking_id: booking_id,
     });
@@ -1959,28 +2152,14 @@ function calculateTotalFare(fare) {
 }
 
 function calculateGrandTotal() {
-  let totalWithoutSavedMargins = 0;
-
-  flightData.value?.leg?.flights?.forEach((flightItem) => {
-    flightItem?.fares?.forEach(fare => {
-      if (selectedFares.value?.includes?.(fare.ref_id)) {
-        totalWithoutSavedMargins += calculateFareWithoutSavedMargins(fare);
-      }
-    });
-  });
-
-  // Base amount is the real payable total (without payment-gateway adjustments).
-  const computedBase =
-    totalWithoutSavedMargins +
-    savedMarginTotal.value +
-    bookingAddOnsAmount.value +
-    extraServicesTotal.value +
-    totalSeatsCost.value;
-  console.log(computedBase);
+  // Source payable base from PNR-derived total (already normalized in computed values).
+  // This avoids recalculating from flight fares and keeps payment aligned with latest PNR pricing.
+  const computedBase = Math.max(0, Number(latestTicketAmountWithMargins.value || 0));
   baseAmount.value = computedBase;
 
-  // AbhiPay card adds 3% on top of the base amount.
-  amount.value = paymentMethod.value === "abhipay" ? computedBase * 1.03 : computedBase;
+  // AbhiPay card adds configured percentage on top of the base amount.
+  const cardFeeMultiplier = 1 + (abhipayCardFeePercent.value / 100);
+  amount.value = paymentMethod.value === "abhipay" ? computedBase * cardFeeMultiplier : computedBase;
   return amount.value;
 }
 
@@ -2046,7 +2225,7 @@ onMounted(async () => {
   flight_provider = route.query.flight_provider || route.query.provider || null;
   booking_id = route.query.booking_id;
   pnr = route.query.pnr;
-  await Promise.all([fetchPnrDetails(), fetchAgentLedger(), fetchBookingDetails(),
+  await Promise.all([fetchPnrDetails(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerSettings(),
   ]);
 });
 // Payment methods
@@ -2089,7 +2268,7 @@ function completePayment() {
   setTimeout(() => {
     isProcessing.value = false
     showPaymentModal.value = false
-    alert(`Payment of ${currency.value} ${formatAmount(updatedBookingAmountWithMargins.value)} via ${selectedMethod.value.name} completed successfully!`)
+    alert(`Payment of ${currency.value} ${formatAmount(payableAmount.value)} via ${selectedMethod.value.name} completed successfully!`)
   }, 2000)
 }
 

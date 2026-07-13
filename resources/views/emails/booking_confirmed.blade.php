@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Booking Confirmed | Jetze</title>
+    <title>Booking Confirmed | Jetze.pk</title>
     <style>
         @media only screen and (max-width: 600px) {
             .responsive-table {
@@ -58,7 +58,7 @@
                                     style="background: #0F4F75; height: 5px;">
                                 </div>
                                 <div style="padding: 32px 32px 20px 32px; text-align: center; background: #FFFFFF;">
-                                    <img src="{{ asset('assets/logo.png') }}" alt="Jetze" width="165"
+                                    <img src="{{ asset('assets/logo.png') }}" alt="Jetze.pk" width="165"
                                         style="height: auto; display: inline-block;">
                                 </div>
                             </td>
@@ -126,6 +126,7 @@
                                             'flight_provider' => $flightProvider,
                                             'booking_source' => $bookingSource,
                                             'pnr' => $pnrValue,
+                                            'download' => 'pdf',
                                         ];
                                         if ($flightId !== '' && $flightId !== 'UNKNOWN') {
                                             $eTicketQuery['flight_id'] = $flightId;
@@ -177,7 +178,7 @@
                                 <h1
                                     style="margin: 0 0 10px 0; font-size: 34px; line-height: 1.2; color: #0F4F75; font-weight: 700; letter-spacing: -0.5px;">
                                     Your Booking is Confirmed! ✈️</h1>
-                                <p style="margin: 0; font-size: 16px; color: #5A6E7F;">We are thrilled to confirm your flight booking with Jetze! Your reservation is confirmed, and you're all set for an amazing journey!</p>
+                                <p style="margin: 0; font-size: 16px; color: #5A6E7F;">We are thrilled to confirm your flight booking with Jetze.pk! Your reservation is confirmed, and you're all set for an amazing journey!</p>
                                 @if($totalFlights > 1)
                                     <p style="margin: 12px 0 0 0; font-size: 14px; color: #A43734; font-weight: 500;">🔄
                                         {{ $totalFlights }}-Flight Itinerary • {{ ucfirst($tripNature) }} Travel</p>
@@ -197,7 +198,7 @@
                                             <p style="margin: 0 0 6px 0; font-size: 18px; font-weight: 600; color: #1E2F3F;">
                                                 Dear <span style="color: #A43734;">{{ $resolvedUserName }}</span>,</p>
                                             <p style="margin: 0; font-size: 15px; color: #4A627A;">Thank you for choosing
-                                                Jetze! Your flight booking is confirmed. Please review your itinerary
+                                                Jetze.pk! Your flight booking is confirmed. Please review your itinerary
                                                 below:</p>
                                         </td>
                                     </tr>
@@ -271,7 +272,7 @@
                                                                             style="background: {{ $isReturnFlight ? '#F8EDEA' : '#EEF4F8' }}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; color: {{ $isReturnFlight ? '#A43734' : '#0F4F75' }}; letter-spacing: 0.5px;">{{ $flightLabel }}</span>
                                                                     @endif
                                                                     <span
-                                                                        style="font-weight: 700; font-size: 16px; color: #1E2F3F; margin-left: {{ $totalFlights > 1 ? '12px' : '0' }};">{{ $operatingCarrier['name'] ?? 'Jetze Airlines' }}</span>
+                                                                        style="font-weight: 700; font-size: 16px; color: #1E2F3F; margin-left: {{ $totalFlights > 1 ? '12px' : '0' }};">{{ $operatingCarrier['name'] ?? 'Jetze.pk Airlines' }}</span>
                                                                     <span
                                                                         style="font-size: 14px; color: #6F8FAA; margin-left: 8px;">Flight
                                                                         {{ $flightNumber }}</span>
@@ -430,7 +431,7 @@
                                                 <tr class="stack-buttons">
                                                     <td style="text-align: center; padding: 6px 8px;">
                                                         <a href="{{ $eTicketLink }}"
-                                                            style="display: inline-block; padding: 14px 28px; background: #A43734; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; min-width: 190px;">Download E-Ticket</a>
+                                                            style="display: inline-block; padding: 14px 28px; background: #A43734; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; min-width: 190px;">Download Booking PDF</a>
                                                     </td>
                                                     <td style="text-align: center; padding: 6px 8px;">
                                                         <a href="#"
@@ -448,8 +449,8 @@
                                             </div>
 
                                             <p style="margin: 28px 0 0 0; font-size: 15px; font-weight: 500; color: #0F4F75;">
-                                                Thank you for choosing Jetze. We wish you a pleasant journey!<br>
-                                                <span style="font-size: 14px; font-weight: 400; color: #6F8FAA;">The Jetze Team</span>
+                                                Thank you for choosing Jetze.pk. We wish you a pleasant journey!<br>
+                                                <span style="font-size: 14px; font-weight: 400; color: #6F8FAA;">The Jetze.pk Team</span>
                                             </p>
                                         </td>
                                     </tr>
@@ -525,7 +526,7 @@
                             </tr>
                         </table>
 
-                                <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">📞 24/7 Support: +92 311 1711123
+                                <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">📞 24/7 Support: +92 00000000
                                     &nbsp;|&nbsp; ✉️ <a href="mailto:support@Jetze.pk"
                                         style="color: #0F4F75; text-decoration: none;">support@Jetze.pk</a></p>
 
@@ -542,7 +543,7 @@
                                         style="color: #8EA3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Unsubscribe</a>
                                 </div>
 
-                                <p style="margin: 20px 0 0 0; font-size: 11px; color: #9AB0C2;">© {{ date('Y') }} Jetze.
+                                <p style="margin: 20px 0 0 0; font-size: 11px; color: #9AB0C2;">© {{ date('Y') }} Jetze.pk.
                                     All rights reserved. Your trusted travel partner.</p>
                                 <p style="margin: 12px 0 0 0; font-size: 10px; color: #B2C4D4;">Reference: {{ $bookingRef }} •
                                     This is a booking confirmation email. Please keep for your records.</p>

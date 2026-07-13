@@ -36,7 +36,7 @@ function redirectToWhatsApp() {
   position: fixed;
   right: 2.5rem;
   bottom: 2.5rem;
-  z-index: 50;
+  z-index: 39;
   width: 60px;
   height: 60px;
 }

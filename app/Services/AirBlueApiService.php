@@ -50,7 +50,6 @@ class AirBlueApiService
 
     public function searchFlights($params): string
     {
-        Log::info("AirBlue Search Params:\n" . json_encode($params));
 
         $paxMapping = [
             'adults' => 'ADT',
@@ -145,11 +144,9 @@ class AirBlueApiService
     </Envelope>
     XML;
 
-        Log::info("AirBlue Request XML:\n" . $airBlueRequestXML);
 
         $airBlueResponseXML = $this->sendRequest($airBlueRequestXML);
 
-        Log::info("AirBlue Response XML:\n" . $airBlueResponseXML);
 
         return $airBlueResponseXML;
     }
@@ -170,13 +167,11 @@ class AirBlueApiService
                 "Content-Type" => "text/xml; charset=utf-8",
             ]
         ]);
-        Log::info("AirBlue Search Request XML:\n" . $xml);
         $response = $client->post('', [
             'body' => $xml
         ]);
 
         $body = (string) $response->getBody();
-        Log::info("AirBlue Search Response Raw XML:\n" . $body);
         // Remove   namespace prefixes like S:, ns2:
         $body = preg_replace('/(<\/?)(\w+):([^>]*>)/', '$1$3', $body);
 
@@ -191,7 +186,7 @@ class AirBlueApiService
         }
 
         $json = json_encode($xml);
-        Log::info("AirBlue Search Response XML:\n" . $json);
+        // Log::info("AirBlue Search Response XML:\n" . $json);
         $array = json_decode($json, true);
 
         return json_encode($array);
@@ -204,7 +199,6 @@ class AirBlueApiService
 
     public function bookFlight($bookingData)
     {
-        Log::info("Booking Data: " . json_encode($bookingData));
 
         // -----------------------------------------------------------------
         // 1. Extract & validate core parts
@@ -466,7 +460,6 @@ class AirBlueApiService
     private function extractTaxes(array $fare): array
     {
 
-        Log::info("Extracting Taxes from Fare:\n" . json_encode($fare));
         $taxes = [];
         $total = $fare['taxes'] ?? 0;
         $currency = $fare['currency']['code'] ?? 'PKR';
@@ -493,7 +486,6 @@ class AirBlueApiService
     private function extractFees(array $fare): array
     {
 
-        Log::info("Extracting Fees from Fare:\n" . json_encode($fare));
 
         $fees = [];
         $total = $fare['fees'] ?? 0;
@@ -531,7 +523,6 @@ class AirBlueApiService
     // -------------------------------------------------------------------------
     private function buildXml(array $data, array $travellers, array $mainContact)
     {
-        Log::info("Building XML with Data:\n" . json_encode($data));
 
         $dom = new DOMDocument('1.0', 'UTF-8');
         $dom->formatOutput = true;
@@ -630,7 +621,6 @@ class AirBlueApiService
                 $taxes = $dom->createElement('Taxes');
                 $taxes->setAttribute('Amount', $travelerFare['taxes'] ?? 0);
                 if (isset($travelerFare['taxCodes']) && is_array($travelerFare['taxCodes'])) {
-                    Log::info("Adding Taxes for Traveler Fare:\n" . json_encode($travelerFare['taxCodes']));
                     foreach ($travelerFare['taxCodes'] ?? [] as $tax) {
                         $taxes->appendChild($this->el($dom, 'Tax', '', [
                             'TaxCode' => $tax['@attributes']['TaxCode'] ?? '',
@@ -748,7 +738,6 @@ class AirBlueApiService
         // === TravelerInfo (Passengers) ===
         $travelerInfo = $dom->createElement('TravelerInfo');
         foreach ($travellers as $index => $traveler) {
-            Log::info("Processing traveler for XML:\n" . $traveler['type']);
             if ($traveler['type'] == 'CNN') {
                 $traveler['title'] = 'MSTR';
             } else if ($traveler['type'] == 'INF') {
@@ -803,7 +792,6 @@ class AirBlueApiService
         }
         $airBookRQ->appendChild($travelerInfo);
 
-        Log::info("Final AirBlue Booking Request XML:\n" . $dom->saveXML());
         return $dom->saveXML();
     }
 
@@ -892,7 +880,6 @@ class AirBlueApiService
             $response = $client->post('', ['body' => $xmlBody]);
             $responseBody = (string) $response->getBody();
 
-            Log::info("AirBlue Booking Response XML:\n" . $responseBody);
 
             // -----------------------------------------------------------------
             // 2. Parse XML
@@ -967,7 +954,6 @@ class AirBlueApiService
 
     public function airSeatMap($request)
     {
-        Log::info($request);
 
 
         $flightsJson = $request['flight_data'] ?? '[]';
@@ -980,14 +966,12 @@ class AirBlueApiService
             ? json_decode($flightsJson, true)
             : $flightsJson;
         $legFlights = $flights['leg']['flights'] ?? [];
-        Log::info("Parsed Flights:\n", $legFlights ?? []);
         $pnrJson = $request['pnr_response'] ?? '';
 
         $pnr = is_string($pnrJson)
             ? json_decode($pnrJson, true)
             : $pnrJson;
         $bookingReferenceID = $pnr['Body']['AirBookResponse']['AirBookResult']['AirReservation']['BookingReferenceID'] ?? '';
-        Log::info($pnr);
         $data = [
             'Service' => [
                 'Target' => $this->target,
@@ -1094,7 +1078,6 @@ class AirBlueApiService
         }
 
         $xmlBody = $xml->asXML();
-        Log::info("Final SeatMap XML:\n" . $xmlBody);
         try {
             $certPath = storage_path('certs/cert.pem');
             $keyPath = storage_path('certs/key.pem');
@@ -1111,7 +1094,6 @@ class AirBlueApiService
             // -----------------------------------------------------------------
             $response = $client->post('', ['body' => $xmlBody]);
             $responseBody = (string) $response->getBody();
-            Log::info("AirBlue Fetch Seats Response XML:\n" . $responseBody);
             // -----------------------------------------------------------------
             // 2. Parse XML
             // -----------------------------------------------------------------    
@@ -1126,7 +1108,6 @@ class AirBlueApiService
             }
             $json = json_encode($xml);
             $array = json_decode($json, true);
-            Log::info("Parsed Fetch Seats Response Array: " . json_encode($array));
             return $array;
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             // -----------------------------------------------------------------
@@ -1146,10 +1127,8 @@ class AirBlueApiService
     }
     public function fetchAncillaries($request)
     {
-        Log::info($request);
         $flightsJson = $request['flight_data'] ?? '[]';
         $selectedFaresJson = $request['fare_reference'] ?? '[]';
-        Log::info("Raw Selected Fares:\n" . $selectedFaresJson);
         $selectedFares = is_string($selectedFaresJson)
             ? json_decode($selectedFaresJson, true)
             : $selectedFaresJson;
@@ -1158,7 +1137,6 @@ class AirBlueApiService
             ? json_decode($flightsJson, true)
             : $flightsJson;
         $legFlights = $flights['leg']['flights'] ?? [];
-        Log::info("Parsed Flights:\n", $legFlights ?? []);
         $pnrJson = $request['pnr_response'] ?? '';
 
         $pnr = is_string($pnrJson)
@@ -1277,7 +1255,6 @@ class AirBlueApiService
             }
         }
 
-        Log::info("Final AirBlue Fetch Ancillaries Request XML:\n" . $xml->asXML());
         $xmlBody = $xml->asXML();
         try {
             $certPath = storage_path('certs/cert.pem');
@@ -1295,7 +1272,6 @@ class AirBlueApiService
             // -----------------------------------------------------------------
             $response = $client->post('', ['body' => $xmlBody]);
             $responseBody = (string) $response->getBody();
-            Log::info("AirBlue Fetch Ancillaries Response XML:\n" . $responseBody);
             // -----------------------------------------------------------------
             // 2. Parse XML
             // -----------------------------------------------------------------    
@@ -1310,7 +1286,6 @@ class AirBlueApiService
             }
             $json = json_encode($xml);
             $array = json_decode($json, true);
-            Log::info("Parsed Fetch Ancillaries Response Array: " . json_encode($array));
             // $array = json_decode($array, true);
             //     $array = '{"Body":{"AirAncillaryItemsResponse":{"AirAncillaryItemsResult":{"@attributes":{"EchoToken":"691ace29c25bf","Version":"1.04"},"Success":[],"AncillaryItemResponses":{"AncillaryItemResponse":{"FlightSegmentInfo":{"@attributes":{"DepartureDateTime":"2026-01-03T13:15:00","ArrivalDateTime":"2026-01-03T15:00:00","StopQuantity":"0","RPH":"1","FlightNumber":"402","FareType":"EF","ResBookDesigCode":"X","CabinClass":"Y"},"DepartureAirport":{"@attributes":{"LocationCode":"KHI"}},"ArrivalAirport":{"@attributes":{"LocationCode":"LHE"}},"OperatingAirline":{"@attributes":{"Code":"PA"}},"Equipment":{"@attributes":{"AirEquipType":"A321"}},"MarketingAirline":{"@attributes":{"Code":"PA"}}},"AncillaryItemSets":{"AncillaryItemSet":[{"@attributes":{"GroupCode":"XBAG","GroupDescription":"Excess baggage must be purchased in advance (not available at airport check-in). Multiple baggage selections (10kg, 20kg, 30kg) can be purchased in one transaction. Important: Once purchased, excess baggage is non-changeable and cannot be upgraded. Please ensure the total baggage required is purchased\u00a0in\u00a0one\u00a0go.","GroupImageURL":"\/content\/filebank?id=b182a94f-fab1-44a4-845c-5fccd6e91107","GroupLevel":"COUPON","GroupTitle":"Checked Baggage","MultipleChoice":"true"},"AncillaryItems":{"AncillaryItem":[{"@attributes":{"ItemCode":"XBAG30","ItemTitle":"30kgs  1 Extra Bag","Available":"true","ChargeCurrency":"PKR","ChargeAmount":"4800","IsRefundable":"true"}},{"@attributes":{"ItemCode":"XBAG20","ItemTitle":"20kgs  1 Extra Bag","Available":"true","ChargeCurrency":"PKR","ChargeAmount":"2900","IsRefundable":"true"}},{"@attributes":{"ItemCode":"XBAG10","ItemTitle":"10kgs  1 Extra Bag","Available":"true","ChargeCurrency":"PKR","ChargeAmount":"1450","IsRefundable":"true"}}]}},{"@attributes":{"GroupCode":"WCHR","GroupDescription":"If the passenger requires wheelchair services, please select the option here.  (Skardu Airport is not equipped with an aerobridge or ambulift. Passengers must be able to embark and disembark via stairs either independently or with minimal assistance.).","GroupLevel":"COUPON","GroupTitle":"Wheelchair Service","MultipleChoice":"false"},"AncillaryItems":{"AncillaryItem":[{"@attributes":{"ItemCode":"WCHR","ItemTitle":"Wheel Chair (can climb stairs)","Description":"Wheelchair assistance required; passenger can walk short distance up or down stairs.","Available":"true","ChargeCurrency":"PKR","IsRefundable":"true"}},{"@attributes":{"ItemCode":"WCHS","ItemTitle":"Wheelchair (cant climb stairs)","Description":"Wheelchair assistance required; passenger can walk short distance, but not up or down stairs.","Available":"false","IsRefundable":"true"}},{"@attributes":{"ItemCode":"WCHC","ItemTitle":"Wheelchair (passenger cannot walk any distance)","Description":"Wheelchair required; passenger cannot walk any distance and will require the aisle chair to board.","Available":"true","ChargeCurrency":"PKR","IsRefundable":"true"}}]}}]}}},"BookingReferenceID":{"@attributes":{"Instance":"PA0041448160","ID":"LVFHSW"}}}}}}  
             // ';
@@ -1403,7 +1378,6 @@ class AirBlueApiService
             'PNR' => [$bookingReferenceID[0]],
         ];
 
-        Log::info("AirBlue Combined Modify Payload", $data);
 
         // -------------------------------
         // Build XML
@@ -1490,7 +1464,6 @@ class AirBlueApiService
         }
 
         $xmlBody = $xml->asXML();
-        Log::info("Final Combined XML:\n" . $xmlBody);
 
         // -------------------------------
         // Send Request
@@ -1510,7 +1483,6 @@ class AirBlueApiService
             $response = $client->post('', ['body' => $xmlBody]);
             $responseBody = (string) $response->getBody();
 
-            Log::info("AirBlue Combined Modify Response", [$responseBody]);
 
             // Clean response before parsing
             $clean = preg_replace('/(<\/?)(\w+):([^>]*>)/', '$1$3', $responseBody);
@@ -1603,7 +1575,6 @@ class AirBlueApiService
             // Convert XML to string
             $xml = $doc->saveXML();
 
-            Log::info("Zapways Read Request XML:\n" . $xml);
             // $endpoint = 'https://ota.zapways.com/Read';
             $certPath = storage_path('certs/cert.pem');
             $keyPath = storage_path('certs/key.pem');
@@ -1624,7 +1595,6 @@ class AirBlueApiService
             ]);
 
             $body = (string) $response->getBody();
-            Log::info("Zapways Read Response Raw XML:\n" . $body);
 
             // Remove namespace prefixes (S:, ns2:, etc.)
             $body = preg_replace('/(<\/?)(\w+):([^>]*>)/', '$1$3', $body);
@@ -1654,7 +1624,6 @@ class AirBlueApiService
 
     public function demandTicket($request)
     {
-        Log::info($request);
         $pnrJson = $request['pnrData'] ?? '';
         $paymentInfoJson = $request['payment_info'] ?? '';
 
@@ -1755,6 +1724,8 @@ class AirBlueApiService
         Log::info("Final AirBlue Demand Ticket Request XML:\n" . $xml->asXML());
 
         $xmlBody = $xml->asXML();
+        return;
+
         try {
             $certPath = storage_path('certs/cert.pem');
             $keyPath = storage_path('certs/key.pem');
@@ -1768,7 +1739,7 @@ class AirBlueApiService
             ]);
 
             // Send request
-            $response = $client->post('', ['body' => $xmlBody]);
+            // $response = $client->post('', ['body' => $xmlBody]);
             $responseBody = (string) $response->getBody();
 
             Log::info("AirBlue Demand Ticket Response XML:\n" . $responseBody);

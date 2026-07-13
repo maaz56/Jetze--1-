@@ -148,13 +148,15 @@ class TravelPortFlightNormalization
                 $flightProducts = $passengerFlight['FlightProduct'] ?? [];
                 $flightProducts = is_array($flightProducts) ? $flightProducts : [$flightProducts];
                 foreach ($flightProducts as $flightProduct) {
-                    $segmentRefKey =
-                        $flightProduct['FlightSegmentRef'] ??
-                        $flightProduct['flightSegmentRef'] ??
-                        $flightProduct['segmentRef'] ??
-                        $passengerFlight['FlightSegmentRef'] ??
-                        $passengerFlight['flightSegmentRef'] ??
-                        null;
+                    $segmentSequence = $flightProduct['segmentSequence'] ?? null;
+                    if (is_array($segmentSequence)) {
+                        $segmentRefKey = $segmentSequence[0] ?? null;
+                    } elseif (is_scalar($segmentSequence)) {
+                        $segmentRefKey = (int) $segmentSequence;
+                    } else {
+                        $segmentRefKey = null;
+                    }
+
                     $rbd = $flightProduct['classOfService'] ?? null;
                     $cabin = $flightProduct['cabin'] ?? null;
 
@@ -168,17 +170,18 @@ class TravelPortFlightNormalization
                     $defaultCabin = $defaultCabin ?? $cabin;
                 }
             }
-            $fallbackRbd = $defaultRbd ?? ($segment['PassengerFlight'][0]['FlightProduct'][0]['classOfService'] ?? null);
-            $fallbackCabin = $defaultCabin ?? ($segment['PassengerFlight'][0]['FlightProduct'][0]['cabin'] ?? null);
+            $fallbackRbd = $defaultRbd ?? '';
+            $fallbackCabin = $defaultCabin ?? '';
             $rbds = [];
             $segmentRefs = '';
             $segmentRoutesArr = [];
-            foreach ($segment['FlightSegment'] as $stop) {
+            foreach ($segment['FlightSegment'] as $index => $stop) {
                 $segmentRef = $stop['Flight']['FlightRef'];
                 $segmentRefs .= $segmentRef;
                 $flightInfo = $singleFlights[$segmentRef];
-                $segmentCabin = $segmentCabinRbdMap[$segmentRef]['cabin'] ?? $fallbackCabin ?? '';
-                $segmentRbd = $segmentCabinRbdMap[$segmentRef]['rbd'] ?? $fallbackRbd ?? '';
+                $segmentSequenceKey = (int) ($stop['sequence'] ?? ($index + 1));
+                $segmentCabin = $segmentCabinRbdMap[$segmentSequenceKey]['cabin'] ?? $fallbackCabin;
+                $segmentRbd = $segmentCabinRbdMap[$segmentSequenceKey]['rbd'] ?? $fallbackRbd;
                 $flightInfo['addProductDetail']['cabinClass'] = $segmentCabin;
                 $flightInfo['addProductDetail']['rbdCode'] = $segmentRbd;
                 $flightDetails[$id]['flightDetails'][] = [
@@ -256,50 +259,72 @@ class TravelPortFlightNormalization
 
     private function processTncBaggageInfo($baggageDetails)
     {
-        $baggageArr = [];
+        $baggageByProductRef = [];
+        $defaultBaggageByPax = [];
+
         foreach ($baggageDetails as $baggageDetail) {
-            if ($baggageDetail['@type'] == 'BaggageAllowanceDetail' && in_array($baggageDetail['baggageType'], ['FirstCheckedBag', 'SecondCheckedBag'])) {
-                $baggageItems = $baggageDetail['BaggageItem'] ?? [];
-                $paxTypes = $baggageDetail['passengerTypeCodes'];
-                $baggage = $this->defaultBaggage;
-                foreach ($baggageItems as $baggageItem) {
-                    if (!is_null($baggageItem)) {
-                        if ($baggageItem['@type'] == 'BaggageItem') {
-                            if (
-                                isset($baggageItem['soldByWeightInd'])
-                                && $baggageItem['soldByWeightInd']
-                                && isset($baggageItem['Measurement'])
-                            ) {
-                                foreach ($baggageItem['Measurement'] as $measurement) {
-                                    if ($measurement['measurementType'] == 'Weight') {
-                                        $baggage['freeAllowance'] = $measurement['value'];
-                                        $baggage['unitQualifier'] = $measurement['unit'] == 'Kilograms' ? 'Kg(s)' : 'lb(s)';
+            if (($baggageDetail['@type'] ?? null) !== 'BaggageAllowanceDetail') {
+                continue;
+            }
 
-                                        continue;
-                                    }
-                                }
-                            } elseif (
-                                isset($baggageItem['quantity'])
-                                && (!isset($baggageItem['BaggageFee'])
-                                    || (isset($baggageItem['BaggageFee']) && $baggageItem['BaggageFee']['value'] == 0))
-                            ) {
-                                $baggage['freeAllowance'] = $baggageDetail['baggageType'] == 'SecondCheckedBag' ? 2 : 1;
-                                $baggage['unitQualifier'] = 'PC(s)';
-                                $baggage['quantityCode'] = 'N';
+            if (!in_array($baggageDetail['baggageType'] ?? '', ['FirstCheckedBag', 'SecondCheckedBag'])) {
+                continue;
+            }
 
-                                continue;
-                            }
+            $baggageItems = $baggageDetail['BaggageItem'] ?? [];
+            $paxTypes = $baggageDetail['passengerTypeCodes'] ?? [];
+            $productRefs = $baggageDetail['ProductRef'] ?? ['__default__'];
+            $baggage = $this->defaultBaggage;
+
+            foreach ($baggageItems as $baggageItem) {
+                if (($baggageItem['@type'] ?? null) !== 'BaggageItem') {
+                    continue;
+                }
+
+                $hasNoFee = !isset($baggageItem['BaggageFee']) || (($baggageItem['BaggageFee']['value'] ?? null) == 0);
+                $includedInPrice = ($baggageItem['includedInOfferPrice'] ?? 'No') === 'Yes';
+                if (!$hasNoFee && !$includedInPrice) {
+                    continue;
+                }
+
+                if (
+                    isset($baggageItem['soldByWeightInd'])
+                    && $baggageItem['soldByWeightInd']
+                    && isset($baggageItem['Measurement'])
+                ) {
+                    foreach ($baggageItem['Measurement'] as $measurement) {
+                        if (($measurement['measurementType'] ?? null) === 'Weight') {
+                            $baggage['freeAllowance'] = $measurement['value'] ?? 0;
+                            $baggage['unitQualifier'] = ($measurement['unit'] ?? '') === 'Kilograms' ? 'Kg(s)' : 'lb(s)';
+                            $baggage['quantityCode'] = 'W';
+                            break;
                         }
                     }
+                } elseif (isset($baggageItem['quantity'])) {
+                    $quantity = (int) $baggageItem['quantity'];
+                    if (($baggageDetail['baggageType'] ?? '') === 'SecondCheckedBag') {
+                        $quantity = max($quantity, 2);
+                    }
+                    $baggage['freeAllowance'] = $quantity;
+                    $baggage['unitQualifier'] = 'PC(s)';
+                    $baggage['quantityCode'] = 'N';
                 }
-                foreach ($paxTypes as $paxType) {
-                    $paxType = in_array($paxType, ['CHD', 'CNN']) ? 'CH' : $paxType;
-                    $baggageArr[$paxType] = $baggage;
+            }
+
+            foreach ($paxTypes as $paxTypeRaw) {
+                $paxType = in_array($paxTypeRaw, ['CHD', 'CNN']) ? 'CH' : $paxTypeRaw;
+                foreach ($productRefs as $productRef) {
+                    $refKey = $productRef ?: '__default__';
+                    $baggageByProductRef[$refKey][$paxType] = $baggage;
                 }
+                $defaultBaggageByPax[$paxType] = $baggage;
             }
         }
 
-        return $baggageArr;
+        return [
+            'byProductRef' => $baggageByProductRef,
+            'default' => $defaultBaggageByPax,
+        ];
     }
 
     private function processTncPenaltyInfo($penaltyDetails)
@@ -398,15 +423,25 @@ class TravelPortFlightNormalization
                     $tncRef = $productBrandOffering['TermsAndConditions']['termsAndConditionsRef'];
                     $tncDetails = $tncList[$tncRef] ?? [];
                     $fareSummary['refundable'] = $tncDetails['refundable'] ?? false;
-                    $baggageInfo = $tncDetails['baggage'] ?? [];
-                    foreach ($baggageInfo as $paxType => $baggage) {
-                        $segmentBaggage[$paxType] = $baggage;
+                    $segmentBaggage = [];
+                    foreach ($this->passengerArr as $paxType) {
+                        $segmentBaggage[$paxType] = $this->defaultBaggage;
                     }
                     $productObj = $productBrandOffering['Product'][0];
                     if ($productObj['@type'] != 'ProductID') {
                         continue;
                     }
                     $segmentRef = $productObj['productRef'];
+                    $baggageInfo = $tncDetails['baggage'] ?? [];
+                    $baggageByProductRef = $baggageInfo['byProductRef'][$segmentRef]
+                        ?? $baggageInfo['byProductRef']['__default__']
+                        ?? [];
+                    $baggageByPax = !empty($baggageByProductRef)
+                        ? $baggageByProductRef
+                        : ($baggageInfo['default'] ?? []);
+                    foreach ($baggageByPax as $paxType => $baggage) {
+                        $segmentBaggage[$paxType] = $baggage;
+                    }
                     $segment = $flightDetails[$segmentRef];
                     $marketingCarrierCode = $segment['flightDetails'][0]['flightInformation']['companyId']['marketingCarrier'] ?? null;
                    
@@ -615,8 +650,6 @@ class TravelPortFlightNormalization
         return $penaltyTypeArr;
     }
 }
-
-
 
 
 

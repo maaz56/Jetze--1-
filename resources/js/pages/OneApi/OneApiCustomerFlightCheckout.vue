@@ -4,7 +4,7 @@ import Button from "@/components/ui/button/Button.vue";
 import Input from "@/components/ui/input/Input.vue";
 import Label from "@/components/ui/label/Label.vue";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, ArrowRight, CheckCircle, ClockIcon, Info, Package, PlusCircle, SquareCheckBig, SquareX, Upload, X, XCircle } from "lucide-vue-next";
+import { Armchair, ArrowLeft, ArrowRight, CalendarDays, CheckCircle, ClockIcon, Info, Luggage, PlusCircle, SquareCheckBig, SquareX, Utensils, Upload, X, XCircle } from "lucide-vue-next";
 import {
     FETCH_COUNTRIES,
     FETCH_FLIGHT,
@@ -23,6 +23,7 @@ import {
     FETCH_CUSTOMER_SETTINGS,
     FETCH_AIRPORT_MARGINS,
     SEND_PRICE_REQUEST,
+    FETCH_MY_TRAVELLERS,
 } from "@/services/store/actions.type";
 import {
     Dialog,
@@ -127,6 +128,8 @@ const baggagePrice = ref(0);
 const selectedBaggageData = ref([]);
 const selectedExtras = ref([]);
 const selectedFares = ref([]);
+const showMobileFlightDetails = ref(false);
+const showMobilePriceDetails = ref(false);
 const selectedExtraData = ref([]);
 const extraCharges = ref([]);
 const showPreview = ref();
@@ -294,6 +297,44 @@ const agencyContact = computed(() => ({
 
 const travellers = ref([]);
 const travellerIndex = ref(0);
+
+// Saved travellers from previous bookings
+const myTravellers = computed(() => store.getters["traveller/myTravellers"] || []);
+const savedAdultTravellers = computed(() => myTravellers.value.filter(t => t.type === "ADT"));
+const savedChildTravellers = computed(() => myTravellers.value.filter(t => ["CHD", "CNN"].includes(t.type)));
+const savedInfantTravellers = computed(() => myTravellers.value.filter(t => t.type === "INF"));
+
+function getSavedTravellersForSlot(traveller) {
+    if (traveller.type === "ADT") return savedAdultTravellers.value;
+    if (traveller.type === "CNN" || traveller.type === "CHD") return savedChildTravellers.value;
+    if (traveller.type === "INF") return savedInfantTravellers.value;
+    return [];
+}
+
+function fillTravellerFromSaved(index, savedPassenger) {
+    if (!savedPassenger) return;
+    const t = travellers.value[index];
+    t.title        = savedPassenger.title || "";
+    t.firstName    = savedPassenger.first_name || "";
+    t.lastName     = savedPassenger.last_name || "";
+    t.nationality  = savedPassenger.nationality || "";
+    t.documentType = savedPassenger.document_type || "passport";
+    t.documentNo   = savedPassenger.document_no || "";
+    t.expiryDate   = savedPassenger.expiry_date || "";
+    t.issueCountry = savedPassenger.issue_country || "";
+    t.gender       = savedPassenger.gender || "";
+    t.dob          = savedPassenger.dob || "";
+}
+
+// Per-slot popover open state and selected traveller
+const savedTravellerOpen = ref({});
+const selectedSavedTraveller = ref({});
+
+function selectSavedTraveller(index, saved) {
+    fillTravellerFromSaved(index, saved);
+    selectedSavedTraveller.value[index] = saved;
+    savedTravellerOpen.value[index] = false;
+}
 const taxFees = ref(0);
 const totalTaxFees = ref(0);
 const totalBaseFare = ref(0);
@@ -584,16 +625,6 @@ const validateForm = () => {
 
     return isValid;
 };
-watch(
-  () => travellers.value,
-  (newTravelers) => {
-    newTravelers.forEach(t => {
-      t.issueCountry = t.nationality
-    })
-  },
-  { deep: true }
-)
-
 function handleConfirmDialogOpen() {
     console.log("called");
     console.log("agenledger", agentLedger?.value.balance);
@@ -683,7 +714,6 @@ watch(quote, () => {
         return;
     }
     console.log("New quote received:", quote.value);
-    console.log(quote);
     // Ensure it's always an array
     passengerFares.value = JSON.parse(quote.value)?.Body?.OTA_AirPriceRS?.PricedItineraries?.PricedItinerary?.AirItineraryPricingInfo?.PTC_FareBreakdowns?.PTC_FareBreakdown || [];
     passengerFares.value = Array.isArray(passengerFares.value) ? passengerFares.value : [passengerFares.value];
@@ -854,7 +884,7 @@ function patchAncillaryCharges() {
         adults: route.query.adults,
         children: route.query.children,
         infants: route.query.infants,
-    
+
         // sessionID: flight.value?.req_specific?.SetCookie,
         selectedExtras: selectedExtras.value,
         extraCharges: extraCharges.value
@@ -975,7 +1005,7 @@ const confirmCardPayment = async () => {
 function handlePaymentMethod(type) {
     //patchAncillaryCharges();
     if (isSubmitting.value) return;
-    
+
     if (!validateForm()) {
         globalError.value =
             "Please fix the errors in the form before submitting";
@@ -1092,7 +1122,7 @@ async function saveBooking(type) {
         // ✅ Wait for ancillary charges to finish before continuing
 
             // await patchAncillaryCharges();
-        
+
 
         isSubmitting.value = true;
         currentState.value = 0;
@@ -1123,6 +1153,8 @@ async function saveBooking(type) {
             agent_markup: savedMarginBreakdown.customerMarkupTotal,
             agent_discount: savedMarginBreakdown.customerDiscountTotal,
             agent_margin: savedMarginBreakdown.otherChargesTotal,
+            segment_margin: savedMarginBreakdown.segmentMarginTotal,
+            promotion_margin: savedMarginBreakdown.promotionMarginTotal,
             add_ones_amount: totalAddOnesAmount.value,
             ancillariesResponse: ancillariesResponse.value,
             type: paymentMethod.value || type,
@@ -1200,7 +1232,6 @@ watch(isLoading, () => {
 
 // Use reactive for better performance with nested objects
 const seatSelections = reactive({})
-const showExtras = ref(false);
 function getMinPriceForColor(priceRange) {
         // Return example price ranges for legend
         const ranges = {
@@ -1215,7 +1246,7 @@ function getMinPriceForColor(priceRange) {
     function getSeatColorClass(price) {
         // Define price thresholds (adjust based on your actual prices)
         const priceNum = Number(price) || 0
-        
+
         if (priceNum <= 500) return 'bg-green-300 hover:bg-green-200 border-green-300'
         if (priceNum <= 1000) return 'bg-yellow-300 hover:bg-yellow-200 border-yellow-300'
         if (priceNum <= 1500) return 'bg-orange-300 hover:bg-orange-200 border-orange-300'
@@ -1223,8 +1254,8 @@ function getMinPriceForColor(priceRange) {
     }
      function hasBaggageOptions() {
         // Check if any segment has baggage options
-        return flight?.leg?.flights?.some(flight => 
-            flight.segments?.some(segment => 
+        return flight?.leg?.flights?.some(flight =>
+            flight.segments?.some(segment =>
                 getBaggageOptionsForSegment(segment.RPH)?.length > 0
             )
         )
@@ -1239,7 +1270,7 @@ const normalizedSeats = computed(() => {
         ?.OTA_AirSeatMapRS
         ?.SeatMapResponses
         ?.SeatMapResponse || [];
-    
+
     // Convert to array if not already
     if (!Array.isArray(responses)) {
         responses = responses ? [responses] : [];
@@ -1249,10 +1280,10 @@ const normalizedSeats = computed(() => {
         const flightSegmentInfo = response.FlightSegmentInfo?.['@attributes'] || {};
         const cabinClass = response.SeatMapDetails?.CabinClass;
         const airRows = cabinClass?.AirRows?.AirRow || [];
-        
+
         // Parse rows and seats
         const rows = Array.isArray(airRows) ? airRows : [airRows];
-        
+
         return {
             id: idx,
             segmentInfo: {
@@ -1267,7 +1298,7 @@ const normalizedSeats = computed(() => {
                 const rowAttrs = row['@attributes'] || {};
                 const airSeats = row.AirSeats?.AirSeat || [];
                 const seats = Array.isArray(airSeats) ? airSeats : [airSeats];
-                
+
                 return {
                     rowNumber: rowAttrs.RowNumber,
                     maxSeats: rowAttrs.MaxNumberOfSeats,
@@ -1294,11 +1325,11 @@ const getSeatsForSegment = (segment) => {
     if (!segment || !normalizedSeats.value.length) return null;
     // Try to match by segment code
     const segmentCode = segment.segment || segment.code || '';
-    const seatData = normalizedSeats.value.find(seatItem => 
+    const seatData = normalizedSeats.value.find(seatItem =>
         seatItem.segmentInfo.segmentCode === segmentCode ||
         seatItem.segmentInfo.flightNumber === segment.flightNumber
     );
-    
+
     return seatData;
 };
 
@@ -1312,9 +1343,9 @@ const getSeatRowsForSegment = (segment) => {
 const getSeatTypesForSegment = (segment) => {
     const seatData = getSeatsForSegment(segment);
     if (!seatData) return [];
-    
+
     const seatTypes = new Map();
-    
+
     seatData.rows.forEach(row => {
         row.seats.forEach(seat => {
             if (seat.seatCharacteristics && !seatTypes.has(seat.seatCharacteristics)) {
@@ -1327,7 +1358,7 @@ const getSeatTypesForSegment = (segment) => {
             }
         });
     });
-    
+
     return Array.from(seatTypes.values());
 };
 
@@ -1339,7 +1370,7 @@ const isSeatSelected = (flightIdx, segmentIdx, trvIndex, seat) => {
         }
     const selectedSeat = selectedExtras.value[flightIdx]?.seat?.[segmentIdx]?.[trvIndex];
     if (!selectedSeat) return false;
-    
+
     return selectedSeat.refId === seat.refId;
 };
 
@@ -1375,7 +1406,7 @@ const getSeatForTraveler = (flightIdx, segmentIdx, trvIndex) => {
 const getAllSelectedSeatsForSegment = (flightIdx, segmentIdx) => {
     const seatSelections = selectedExtras.value[flightIdx]?.seat?.[segmentIdx];
     if (!seatSelections) return [];
-    
+
     return Object.values(seatSelections);
 };
 
@@ -1383,7 +1414,7 @@ const getAllSelectedSeatsForSegment = (flightIdx, segmentIdx) => {
 const getSelectedSeatInfo = (flightIdx, segmentIdx, trvIndex) => {
     const selectedSeat = selectedExtras.value[flightIdx]?.seat?.[segmentIdx]?.[trvIndex];
     if (!selectedSeat) return 'No seat selected';
-    
+
     return `Row ${selectedSeat.row}, Seat ${selectedSeat.seatNumber}`;
 };
 
@@ -1402,7 +1433,7 @@ const handleTempSeatSelection = (flightIdx, segmentIdx, trvIndex, seat) => {
         toast.error("This seat is already selected for another passenger. Please choose a different seat.");
         return;
     }
-    
+
     // Store selection for specific traveler
     tempSelectedSeat.value[flightIdx][segmentIdx][trvIndex] = {
         ...seat,
@@ -1426,7 +1457,7 @@ const saveSeatSelection = (flightIdx, segmentIdx, trvIndex) => {
         toast.error("This seat is already selected for another passenger. Please choose a different seat.");
         return;
     }
-    
+
     // Initialize selectedExtras structure if needed
     if (!selectedExtras.value[flightIdx]) {
         selectedExtras.value[flightIdx] = { seat: {} };
@@ -1437,7 +1468,7 @@ const saveSeatSelection = (flightIdx, segmentIdx, trvIndex) => {
     if (!selectedExtras.value[flightIdx].seat[segmentIdx]) {
         selectedExtras.value[flightIdx].seat[segmentIdx] = {};
     }
-    
+
     // Save to selectedExtras for specific traveler
     selectedExtras.value[flightIdx].seat[segmentIdx][trvIndex] = {
         ...tempSeat,
@@ -1449,10 +1480,10 @@ const saveSeatSelection = (flightIdx, segmentIdx, trvIndex) => {
         travelerIndex: trvIndex,
         segmentCode: getSeatsForSegment(flight.value?.leg?.flights?.[flightIdx]?.segments?.[segmentIdx])?.segmentInfo?.segmentCode
     };
-    
+
     // Clear temporary selection for this traveler
     delete tempSelectedSeat.value[flightIdx][segmentIdx][trvIndex];
-    
+
     // Clean up empty objects
     if (Object.keys(tempSelectedSeat.value[flightIdx][segmentIdx]).length === 0) {
         delete tempSelectedSeat.value[flightIdx][segmentIdx];
@@ -1466,7 +1497,7 @@ const saveSeatSelection = (flightIdx, segmentIdx, trvIndex) => {
 const saveAllSeatSelections = (flightIdx, segmentIdx) => {
     const tempSelections = tempSelectedSeat.value[flightIdx]?.[segmentIdx];
     if (!tempSelections) return;
-    
+
     Object.keys(tempSelections).forEach(trvIndex => {
         saveSeatSelection(flightIdx, segmentIdx, parseInt(trvIndex));
     });
@@ -1477,7 +1508,7 @@ const removeSeat = (flightIdx, segmentIdx, trvIndex, showPrompt = true) => {
     // Remove from selectedExtras
     if (selectedExtras.value[flightIdx]?.seat?.[segmentIdx]?.[trvIndex]) {
         delete selectedExtras.value[flightIdx].seat[segmentIdx][trvIndex];
-        
+
         // Clean up empty objects
         if (Object.keys(selectedExtras.value[flightIdx].seat[segmentIdx]).length === 0) {
             delete selectedExtras.value[flightIdx].seat[segmentIdx];
@@ -1489,7 +1520,7 @@ const removeSeat = (flightIdx, segmentIdx, trvIndex, showPrompt = true) => {
             delete selectedExtras.value[flightIdx];
         }
     }
-    
+
     // Remove from tempSelectedSeat
     if (tempSelectedSeat.value[flightIdx]?.[segmentIdx]?.[trvIndex]) {
         delete tempSelectedSeat.value[flightIdx][segmentIdx][trvIndex];
@@ -1511,7 +1542,7 @@ const removeSeat = (flightIdx, segmentIdx, trvIndex, showPrompt = true) => {
 // Remove all seat selections for a segment
 const removeAllSeatsForSegment = (flightIdx, segmentIdx) => {
     const travelerCount = getTravelerCount();
-    
+
     for (let i = 0; i < travelerCount; i++) {
         removeSeat(flightIdx, segmentIdx, i, false);
     }
@@ -1520,7 +1551,7 @@ const removeAllSeatsForSegment = (flightIdx, segmentIdx) => {
 // Check if all travelers have selected seats for a segment
 const areAllSeatsSelectedForSegment = (flightIdx, segmentIdx) => {
     const travelerCount = getTravelerCount();
-    
+
     for (let i = 0; i < travelerCount; i++) {
         if (!selectedExtras.value[flightIdx]?.seat?.[segmentIdx]?.[i]) {
             return false;
@@ -1533,7 +1564,7 @@ const areAllSeatsSelectedForSegment = (flightIdx, segmentIdx) => {
 const getTotalSeatAmountForSegment = (flightIdx, segmentIdx) => {
     const seatSelections = selectedExtras.value[flightIdx]?.seat?.[segmentIdx];
     if (!seatSelections) return 0;
-    
+
     return Object.values(seatSelections).reduce((total, seat) => {
         return total + (parseFloat(seat.amount) || 0);
     }, 0);
@@ -1551,7 +1582,7 @@ const copySeatToAllTravelers = (flightIdx, segmentIdx, sourceTrvIndex) => {
 // Format seat type display
 const formatSeatType = (seatCharacteristics) => {
     if (!seatCharacteristics) return 'Standard';
-    
+
     const price = parseFloat(seatCharacteristics);
     if (!isNaN(price)) {
         if (price === 0) return 'Standard Seat';
@@ -1559,32 +1590,32 @@ const formatSeatType = (seatCharacteristics) => {
         if (price >= 2000 && price < 5000) return 'Premium';
         if (price >= 5000) return 'Extra Legroom';
     }
-    
+
     return 'Special Seat';
 };
 const calculateFlightTotal = (flightIdx) => {
     const flightExtras = selectedExtras.value[flightIdx];
     if (!flightExtras) return 0;
-    
+
     let total = 0;
-    
+
     ['baggage', 'seat', 'meal'].forEach(serviceType => {
         const serviceGroup = flightExtras[serviceType];
         if (!serviceGroup) return;
-        
+
         Object.values(serviceGroup).forEach(segmentGroup => {
             if (!segmentGroup) return;
-            
+
             Object.values(segmentGroup).forEach(item => {
                 if (!item) return;
-                
+
                 const amount = parseFloat(item.amount) || 0;
                 const quantity = parseInt(item.quantity) || 1;
                 total += amount * quantity;
             });
         });
     });
-    
+
     return total;
 };
 
@@ -1626,17 +1657,17 @@ const showFreeSelectionPrompt = (typeLabel) => {
 // Initialize structures for all travelers
 const initializeStructures = () => {
     const travelerCount = getTravelerCount();
-    
+
     flight.value?.leg?.flights?.forEach((flightItem, flightIdx) => {
         if (!tempSelectedSeat.value[flightIdx]) {
             tempSelectedSeat.value[flightIdx] = {};
         }
-        
+
         flightItem.segments?.forEach((segment, segmentIdx) => {
             if (!tempSelectedSeat.value[flightIdx][segmentIdx]) {
                 tempSelectedSeat.value[flightIdx][segmentIdx] = {};
             }
-            
+
             // Initialize selectedExtras structure
             if (!selectedExtras.value[flightIdx]) {
                 selectedExtras.value[flightIdx] = { seat: {} };
@@ -1647,7 +1678,7 @@ const initializeStructures = () => {
             if (!selectedExtras.value[flightIdx].seat[segmentIdx]) {
                 selectedExtras.value[flightIdx].seat[segmentIdx] = {};
             }
-            
+
             // Initialize for each traveler
             for (let i = 0; i < travelerCount; i++) {
                 if (!selectedExtras.value[flightIdx].seat[segmentIdx][i]) {
@@ -1673,10 +1704,10 @@ const normalizedMeals = computed(() => {
     return responsesArray.map((response, idx) => {
         const flightSegmentInfo = response.FlightSegmentInfo?.['@attributes'] || {};
         let meals = response.Meal || [];
-        
+
         // Ensure meals is an array
         meals = Array.isArray(meals) ? meals : [meals].filter(Boolean);
-        
+
         return {
             id: idx,
             segmentInfo: {
@@ -1718,15 +1749,15 @@ const isMultipleMealsEnabled = computed(() => {
 // Get meals for a specific segment
 const getMealsForSegment = (segment) => {
     if (!segment || !normalizedMeals.value.length) return [];
-    
+
     const segmentCode = segment.segment || segment.code || '';
     const flightNumber = segment.flightNumber;
-    
-    const mealData = normalizedMeals.value.find(mealItem => 
+
+    const mealData = normalizedMeals.value.find(mealItem =>
         mealItem.segmentInfo.segmentCode === segmentCode ||
         mealItem.segmentInfo.flightNumber === flightNumber
     );
-    
+
     return mealData?.meals || [];
 };
 
@@ -1734,14 +1765,14 @@ const getMealsForSegment = (segment) => {
 const getMealCategoriesForSegment = (segment) => {
     const meals = getMealsForSegment(segment);
     if (!meals.length) return [];
-    
+
     const categories = new Set();
     meals.forEach(meal => {
         if (meal.mealCategoryCode) {
             categories.add(meal.mealCategoryCode);
         }
     });
-    
+
     return Array.from(categories).sort();
 };
 
@@ -1755,7 +1786,7 @@ const getMealsByCategory = (segment, category) => {
 const isMealSelectedForTraveler = (flightIdx, segmentIdx, trvIndex, mealCode) => {
     const selectedMeal = selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[trvIndex];
     if (!selectedMeal) return false;
-    
+
     return selectedMeal.mealCode === mealCode;
 };
 
@@ -1768,7 +1799,7 @@ const getSelectedMealForTraveler = (flightIdx, segmentIdx, trvIndex) => {
 const getAllSelectedMealsForSegment = (flightIdx, segmentIdx) => {
     const mealSelections = selectedExtras.value[flightIdx]?.meal?.[segmentIdx];
     if (!mealSelections) return [];
-    
+
     return Object.values(mealSelections);
 };
 
@@ -1776,7 +1807,7 @@ const getAllSelectedMealsForSegment = (flightIdx, segmentIdx) => {
 const getTotalSelectedMealsCount = (flightIdx, segmentIdx) => {
     const mealSelections = selectedExtras.value[flightIdx]?.meal?.[segmentIdx];
     if (!mealSelections) return 0;
-    
+
     return Object.keys(mealSelections).length;
 };
 
@@ -1784,7 +1815,7 @@ const getTotalSelectedMealsCount = (flightIdx, segmentIdx) => {
 const getTotalMealAmountForSegment = (flightIdx, segmentIdx) => {
     const mealSelections = selectedExtras.value[flightIdx]?.meal?.[segmentIdx];
     if (!mealSelections) return 0;
-    
+
     return Object.values(mealSelections).reduce((total, meal) => {
         return total + (parseFloat(meal.mealCharge) || 0);
     }, 0);
@@ -1802,7 +1833,7 @@ const handleMealSelection = (flightIdx, segmentIdx, trvIndex, meal) => {
     if (!selectedExtras.value[flightIdx].meal[segmentIdx]) {
         selectedExtras.value[flightIdx].meal[segmentIdx] = {};
     }
-    
+
     // Store the selected meal for this traveler
     selectedExtras.value[flightIdx].meal[segmentIdx][trvIndex] = {
         ...meal,
@@ -1820,10 +1851,10 @@ const handleMealSelection = (flightIdx, segmentIdx, trvIndex, meal) => {
 const adjustMealQuantity = (flightIdx, segmentIdx, trvIndex, change) => {
     const selectedMeal = selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[trvIndex];
     if (!selectedMeal) return;
-    
+
     const newQuantity = Math.max(1, (selectedMeal.quantity || 1) + change);
     selectedMeal.quantity = newQuantity;
-    
+
     // Update total amount based on quantity
     selectedMeal.amount = (parseFloat(selectedMeal.mealCharge) || 0);
 };
@@ -1839,7 +1870,7 @@ const removeMeal = (flightIdx, segmentIdx, trvIndex) => {
     // Remove from selectedExtras
     if (selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[trvIndex]) {
         delete selectedExtras.value[flightIdx].meal[segmentIdx][trvIndex];
-        
+
         // Clean up empty objects
         if (Object.keys(selectedExtras.value[flightIdx].meal[segmentIdx]).length === 0) {
             delete selectedExtras.value[flightIdx].meal[segmentIdx];
@@ -1851,7 +1882,7 @@ const removeMeal = (flightIdx, segmentIdx, trvIndex) => {
             delete selectedExtras.value[flightIdx];
         }
     }
-    
+
     // Also remove from extraCharges if exists
     if (extraCharges.value[flightIdx]?.meal?.[segmentIdx]?.[trvIndex]) {
         delete extraCharges.value[flightIdx].meal[segmentIdx][trvIndex];
@@ -1869,7 +1900,7 @@ const removeMeal = (flightIdx, segmentIdx, trvIndex) => {
 // Save meal selections (typically called from dialog)
 const saveMealSelections = (flightIdx, segmentIdx) => {
     const travelerCount = getTravelerCount();
-    
+
     // Update extraCharges for each traveler with a meal
     if (!extraCharges.value[flightIdx]) {
         extraCharges.value[flightIdx] = { meal: {} };
@@ -1877,14 +1908,14 @@ const saveMealSelections = (flightIdx, segmentIdx) => {
     if (!extraCharges.value[flightIdx].meal) {
         extraCharges.value[flightIdx].meal = {};
     }
-    
+
     for (let i = 0; i < travelerCount; i++) {
         const selectedMeal = selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[i];
         if (selectedMeal) {
             if (!extraCharges.value[flightIdx].meal[segmentIdx]) {
                 extraCharges.value[flightIdx].meal[segmentIdx] = {};
             }
-            
+
             extraCharges.value[flightIdx].meal[segmentIdx][i] = {
                 amount: selectedMeal.amount,
                 currency: selectedMeal.currency,
@@ -1899,14 +1930,14 @@ const saveMealSelections = (flightIdx, segmentIdx) => {
 const copyMealToAllTravelers = (flightIdx, segmentIdx, sourceTrvIndex) => {
     const sourceMeal = selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[sourceTrvIndex];
     if (!sourceMeal) return;
-    
+
     const travelerCount = getTravelerCount();
-    
+
     for (let i = 0; i < travelerCount; i++) {
         if (i !== sourceTrvIndex) {
             // Skip if traveler already has a meal
             if (!selectedExtras.value[flightIdx]?.meal?.[segmentIdx]?.[i]) {
-                selectedExtras.value[flightIdx].meal[segmentIdx][i] = { 
+                selectedExtras.value[flightIdx].meal[segmentIdx][i] = {
                     ...sourceMeal,
                     travelerIndex: i,
                     title: `${sourceMeal.mealName} (Traveler ${i + 1})`,
@@ -1929,17 +1960,17 @@ const handleImageError = (event) => {
 // Initialize meal selections structure
 const initializeMealStructures = () => {
     const travelerCount = getTravelerCount();
-    
+
     flight.value?.leg?.flights?.forEach((flightItem, flightIdx) => {
         if (!selectedExtras.value[flightIdx]) {
             selectedExtras.value[flightIdx] = { meal: {} };
         }
-        
+
         flightItem.segments?.forEach((segment, segmentIdx) => {
             if (!selectedExtras.value[flightIdx].meal[segmentIdx]) {
                 selectedExtras.value[flightIdx].meal[segmentIdx] = {};
             }
-            
+
             // Initialize for each traveler
             for (let i = 0; i < travelerCount; i++) {
                 if (!selectedExtras.value[flightIdx].meal[segmentIdx][i]) {
@@ -1995,12 +2026,12 @@ const normalizedBaggages = computed(() => {
 // Helper function to get baggage options for a specific segment by RPH
 const getBaggageOptionsForSegment = (segmentRPH) => {
     if (!segmentRPH || !normalizedBaggages.value.length) return [];
-    
+
     // Find which group contains this segment
-    const baggageGroup = normalizedBaggages.value.find(group => 
+    const baggageGroup = normalizedBaggages.value.find(group =>
         group.segments?.some(seg => seg['@attributes']?.RPH === segmentRPH)
     );
-    
+
     return baggageGroup?.baggages || [];
 };
 
@@ -2034,7 +2065,7 @@ const handleExtraBaggageChange = (flightIdx, segmentIdx, trvIndex, baggageOption
     if (!selectedExtras.value[flightIdx].baggage[segmentIdx]) {
         selectedExtras.value[flightIdx].baggage[segmentIdx] = {};
     }
-    
+
     // Store the selected baggage for specific traveler
     selectedExtras.value[flightIdx].baggage[segmentIdx][trvIndex] = {
         ...baggageOption,
@@ -2051,7 +2082,7 @@ const handleExtraBaggageChange = (flightIdx, segmentIdx, trvIndex, baggageOption
 const removeExtraBaggage = (flightIdx, segmentIdx, trvIndex) => {
     if (selectedExtras.value[flightIdx]?.baggage?.[segmentIdx]?.[trvIndex]) {
         delete selectedExtras.value[flightIdx].baggage[segmentIdx][trvIndex];
-        
+
         // Clean up empty objects
         if (Object.keys(selectedExtras.value[flightIdx].baggage[segmentIdx]).length === 0) {
             delete selectedExtras.value[flightIdx].baggage[segmentIdx];
@@ -2075,7 +2106,7 @@ const removeExtraBaggage = (flightIdx, segmentIdx, trvIndex) => {
 const getAllSelectedBaggageForSegment = (flightIdx, segmentIdx) => {
     const baggageSelections = selectedExtras.value[flightIdx]?.baggage?.[segmentIdx];
     if (!baggageSelections) return [];
-    
+
     return Object.values(baggageSelections);
 };
 
@@ -2083,7 +2114,7 @@ const getAllSelectedBaggageForSegment = (flightIdx, segmentIdx) => {
 const getTotalBaggageAmountForSegment = (flightIdx, segmentIdx) => {
     const baggageSelections = selectedExtras.value[flightIdx]?.baggage?.[segmentIdx];
     if (!baggageSelections) return 0;
-    
+
     return Object.values(baggageSelections).reduce((total, baggage) => {
         return total + (parseFloat(baggage.amount) || 0);
     }, 0);
@@ -2209,7 +2240,7 @@ const initializeSelectedExtras = (travelerCount) => {
             if (!selectedExtras.value[flightIdx].baggage[segmentIdx]) {
                 selectedExtras.value[flightIdx].baggage[segmentIdx] = {};
             }
-            
+
             // Initialize for each traveler
             for (let i = 0; i < travelerCount; i++) {
                 if (!selectedExtras.value[flightIdx].baggage[segmentIdx][i]) {
@@ -2358,6 +2389,8 @@ function getSavedMarginBreakdown() {
 
     let customerMarkupTotal = 0;
     let customerDiscountTotal = 0;
+    let segmentMarginTotal = 0;
+    let promotionMarginTotal = 0;
 
     selectedFareItems.forEach((fare) => {
         const customerMarginPerPassenger = parseFloat(
@@ -2372,6 +2405,9 @@ function getSavedMarginBreakdown() {
         } else {
             customerDiscountTotal += Math.abs(customerMarginPerPassenger) * passengerTotal;
         }
+
+        segmentMarginTotal += getSignedSegmentMarginAmount(fare);
+        promotionMarginTotal += getSignedPromotionMarginAmount(fare);
     });
 
     return {
@@ -2379,7 +2415,47 @@ function getSavedMarginBreakdown() {
         customerDiscountTotal,
         airportMarginTotal: airportMarginPerPassenger * passengerTotal * selectedFareItems.length,
         otherChargesTotal,
+        segmentMarginTotal,
+        promotionMarginTotal,
     };
+}
+
+function getSignedSegmentMarginAmount(fare) {
+    const signedAmount = parseFloat(
+        fare?.segment_margin_signed_amount ?? fare?.segment_margin?.signed_amount
+    );
+
+    if (!Number.isNaN(signedAmount)) {
+        return signedAmount;
+    }
+
+    const amount = parseFloat(
+        fare?.segment_margin_amount ?? fare?.segment_margin?.applied_amount ?? 0
+    ) || 0;
+    const marginType = String(
+        fare?.segment_margin_type ?? fare?.segment_margin?.margin_type ?? "markup"
+    ).toLowerCase();
+
+    return marginType === "discount" ? -Math.abs(amount) : Math.abs(amount);
+}
+
+function getSignedPromotionMarginAmount(fare) {
+    const signedAmount = parseFloat(
+        fare?.promotion_signed_amount ?? fare?.promotion?.signed_amount
+    );
+
+    if (!Number.isNaN(signedAmount)) {
+        return signedAmount;
+    }
+
+    const amount = parseFloat(
+        fare?.promotion_amount ?? fare?.promotion?.applied_amount ?? 0
+    ) || 0;
+    const priceOption = String(
+        fare?.promotion_type ?? fare?.promotion?.price_option ?? "markup"
+    ).toLowerCase();
+
+    return priceOption === "discount" ? -Math.abs(amount) : Math.abs(amount);
 }
 const calculateCustomerMargin = (price) => {
     const margin = calculateCustomerMarginAmount(price, CustomerMargin?.value);
@@ -2430,7 +2506,7 @@ const pax = parseInt(passengerCount.value) || 0;
 const billable = baseFare + (airline * pax) + (type * pax);
 
     const total = parseFloat(billable) + parseFloat(customerMargin * passengerCount.value || 0);
-    
+
     return total;
 }
 
@@ -2610,7 +2686,7 @@ const scanWithTesseract = async (imageBlob) => {
         text = text.replace(/L{2,}/g, match => "<".repeat(match.length));
         //console.log("After LL→< fix:", text);
 
-        // 🔹 Step 2: Fix "C L C" patterns → <<< 
+        // 🔹 Step 2: Fix "C L C" patterns → <<<
         text = text.replace(/C+L+C+/g, "<".repeat(3));
         //console.log("After CLC fix:", text);
 
@@ -2655,7 +2731,7 @@ const scanWithTesseract = async (imageBlob) => {
             traveller.dob = passportData.value.birthDate;
             traveller.gender = passportData.value.gender;
             traveller.title = traveller.gender === "M" ? "Mr" : "Miss";
-            traveller.nationality = passportData.value.nationality;
+            traveller.nationality = countries?.value[0]?.code || passportData.value.nationality;
         } else {
             errorMessage.value = "No MRZ detected in the cropped area.";
         }
@@ -2816,7 +2892,7 @@ function initializeSelectedSeat() {
 const getUniqueRows = (segmentCode) => {
     const seatGroup = getSeatsForSegment(segmentCode);
     if (!seatGroup) return [];
-    
+
     // Get unique row numbers
     const uniqueRows = [...new Set(seatGroup.seats.map(seat => seat.row))];
     return uniqueRows.sort((a, b) => parseInt(a) - parseInt(b));
@@ -2826,12 +2902,12 @@ const getUniqueRows = (segmentCode) => {
 const getSeatByPosition = (segmentCode, row, colIndex) => {
     const seatGroup = getSeatsForSegment(segmentCode);
     if (!seatGroup) return null;
-    
+
     // Map column index to seat letter
     const colMap = ['A', 'B', 'C', 'D', 'E', 'F'];
     const colLetter = colIndex < 3 ? colMap[colIndex] : colMap[colIndex - 1];
-    
-    return seatGroup.seats.find(seat => 
+
+    return seatGroup.seats.find(seat =>
         seat.row === row && seat.col === colLetter
     );
 };
@@ -2849,7 +2925,7 @@ const handleSeatChange = (flightIdx, segmentIdx, seatData, type) => {
     if (!selectedExtras.value[flightIdx][type]) {
         selectedExtras.value[flightIdx][type] = {};
     }
-    
+
     // Store the selected seat
     selectedExtras.value[flightIdx][type][segmentIdx] = {
         ref_id: seatData.ref_id,
@@ -2859,7 +2935,7 @@ const handleSeatChange = (flightIdx, segmentIdx, seatData, type) => {
         currency: seatData.currency,
         rawSeat: seatData
     };
-    
+
     // Also store in selectedSeat for UI state
     if (!selectedSeat.value[flightIdx]) {
         selectedSeat.value[flightIdx] = {};
@@ -2886,7 +2962,16 @@ const startCountdown = (remainingTime) => {
         }
     }, 1000);
 };
-onMounted(() => {
+const formatLayoverTime = (layoverMinutes) => {
+    const totalMinutes = Number(layoverMinutes);
+    if (!Number.isFinite(totalMinutes) || totalMinutes < 0) return "00:00";
+
+    const normalizedMinutes = Math.round(totalMinutes);
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minutes = normalizedMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};onMounted(() => {
         authStore.fetchUser();
     selectedFares.value = route.query.fares ? JSON.parse(route.query.fares) : []
     passengerCount.value = route.query.passenger_count ? parseInt(route.query.passenger_count) : 1
@@ -2901,6 +2986,7 @@ onMounted(() => {
     fetchCustomerSettings();
     fetchAgentLedger();
     initializeSelectedExtras();
+    store.dispatch("traveller/" + FETCH_MY_TRAVELLERS);
 });
 
 watch(flight, () => {
@@ -2974,7 +3060,7 @@ watch(
             <div v-if="!isLoading && flight">
                 <!-- Header -->
                 <div class="mb-4">
-                    <div class="bg-white shadow-sm border border-gray-200 p-4">
+                    <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
                         <h1 class="text-xl font-semibold text-gray-900 mb-1">Complete Your Booking</h1>
                         <p class="text-gray-500 text-sm">Please fill in the required information to proceed with your
                             flight booking.</p>
@@ -2984,6 +3070,162 @@ watch(
                     <!-- Main Content -->
                     <div class="lg:col-span-3 space-y-4">
                         <!-- Price Details Card - Moved to top -->
+                         <div v-if="countdown !== null && countdown !== '0'"
+                                :class="[
+                                    'flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm',
+                                    'sm:flex md:hidden'
+                                ]">
+                                <div class="flex items-end gap-4">
+                                    <div class="flex flex-col items-center">
+                                        <span
+                                            class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">
+                                            {{ countdown.split(':')[0] }}
+                                        </span>
+                                    </div>
+                                    <span
+                                        class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">:</span>
+                                    <div class="flex flex-col items-center">
+                                        <span
+                                            class="text-4xl sm:text-5xl md:text-6xl font-mono font-bold text-primary tracking-widest">
+                                            {{ countdown.split(':')[1] }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="mt-4 text-sm sm:text-base text-primary font-medium">
+                                    Please complete your booking before the timer expires.
+                                </div>
+                            </div>
+
+
+                            <div class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm sm:hidden">
+                                <div class="flex items-center gap-2 bg-gray-100 px-3 py-2.5 text-xs font-semibold text-gray-800">
+                                    <span>Departing</span><span>•</span>
+                                    <CalendarDays class="h-3.5 w-3.5 text-gray-500" />
+                                    <span>{{ moment.parseZone(flight?.leg?.flights?.[0]?.departure_at).format('DD MMM, YYYY') }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-3 px-3 py-3">
+                                    <div class="flex min-w-0 items-center gap-2">
+                                        <img class="h-6 w-6 shrink-0 object-contain"
+                                            :src="flight?.leg?.flights?.[0]?.marketing_carrier?.logo" alt="Airline" />
+                                        <span class="truncate text-xs font-bold text-gray-800">
+                                            {{ flight?.leg?.flights?.[0]?.from?.city?.code || flight?.leg?.flights?.[0]?.segments?.[0]?.from?.iata }}
+                                            -
+                                            {{ flight?.leg?.flights?.[0]?.to?.city?.code || flight?.leg?.flights?.[0]?.segments?.slice(-1)?.[0]?.to?.iata }}
+                                        </span>
+                                    </div>
+                                    <button type="button" @click="showMobileFlightDetails = !showMobileFlightDetails"
+                                        class="shrink-0 rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                                        {{ showMobileFlightDetails ? 'Hide' : 'Details' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="showMobileFlightDetails" class="mt-2 divide-y divide-gray-100 bg-white sm:hidden">
+                                <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
+                                    <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex">
+                                        <!-- Layover Info -->
+                                        <div v-if="segment?.layover_time"
+                                            class="bg-amber-50 border-l-4 border-amber-400 p-3">
+                                            <div class="flex items-center justify-center">
+                                                <ClockIcon class="w-4 h-4 text-amber-600 mr-2" />
+                                                <span class="text-xs font-medium text-amber-800">
+                                                    Layover: {{   formatLayoverTime(segment.layover_time) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <!-- Flight Segment -->
+                                        <div class="p-4">
+                                            <div class="flex items-center space-x-2 mb-4">
+                                                <img class="w-8 h-8 border border-gray-200"
+                                                    :src="segment?.operating_carrier?.logo" alt="Airline" />
+                                                <div>
+                                                    <div class="text-sm font-medium text-gray-900">{{
+                                                        segment?.operating_carrier?.name }}</div>
+                                                    <div class="text-xs text-gray-500">{{
+                                                        segment?.flight_number
+                                                    }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <!-- Departure -->
+                                                <div class="space-y-2">
+                                                    <div class="space-y-1">
+                                                        <div class="text-sm font-medium text-gray-900">{{
+                                                            formatDate(segment?.departure_at) }}</div>
+                                                        <div class="text-xs text-gray-500">{{ segment?.from?.name }}
+                                                            ({{
+                                                                segment?.from?.iata }})</div>
+                                                        <div class="text-xs text-gray-400">Terminal: {{
+                                                            segment?.from_terminal?.[0] ?? "N/A" }}</div>
+                                                    </div>
+                                                </div>
+                                                <!-- Flight Path -->
+                                                <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
+                                                <!-- Arrival -->
+                                                <div class="space-y-2 text-right">
+                                                    <div class="space-y-1">
+                                                        <div class="text-sm font-medium text-gray-900">{{
+                                                            formatDate(segment?.arrival_at) }}</div>
+                                                        <div class="text-xs text-gray-500">{{ segment?.to?.name }}
+                                                            ({{
+                                                                segment?.to?.iata }})</div>
+                                                        <div class="text-xs text-gray-400">Terminal: {{
+                                                            segment?.to_terminal?.[0] ?? "N/A" }}</div>
+                                                    </div>
+                                                    <div class="text-xs text-gray-400">{{ segment?.aircraft?.model
+                                                    }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
 
 
                         <!-- Flight Details Card -->
@@ -3002,6 +3244,7 @@ watch(
                                         <Label for="main-email" class="text-xs font-medium text-gray-600">Email <span
                                                 class="text-red-500">*</span></Label>
                                         <Input v-model="mainContact.email" id="main-email" type="email"
+                                            left-icon="/mail.png"
                                             placeholder="Enter your email" class="mt-1 text-sm"
                                             :class="{ 'border-red-300': errors.mainContact.email }" />
                                         <div v-if="errors.mainContact.email" class="text-red-500 text-xs mt-1">{{
@@ -3011,6 +3254,7 @@ watch(
                                         <Label for="main-phone" class="text-xs font-medium text-gray-600">Phone <span
                                                 class="text-red-500">*</span></Label>
                                         <Input v-model="mainContact.phone" id="main-phone" type="tel"
+                                            left-icon="/phone-call.png"
                                             placeholder="Enter your phone" class="mt-1 text-sm"
                                             :class="{ 'border-red-300': errors.mainContact.phone }" />
                                         <div v-if="errors.mainContact.phone" class="text-red-500 text-xs mt-1">{{
@@ -3024,9 +3268,14 @@ watch(
                                                 <Button variant="outline" role="combobox"
                                                     class="w-full justify-between mt-1 text-sm h-9"
                                                     :class="{ 'border-red-300': errors.mainContact.country }">
-                                                    {{mainContact.country !== "" ? countries.find((country) =>
-                                                        country.value === mainContact.country)?.label || mainContact.country || "Select Country" :
-                                                        "Select country"}}
+                                                    <div class="flex items-center gap-2 truncate">
+                                                        <img src="/public/globe.png" alt="Globe" class="h-4 w-4 shrink-0 opacity-70" />
+                                                        <span class="truncate">
+                                                            {{mainContact.country !== "" ? countries.find((country) =>
+                                                                country.value === mainContact.country)?.label || mainContact.country || "Select Country" :
+                                                                "Select country"}}
+                                                        </span>
+                                                    </div>
                                                     <ChevronsUpDown class="ml-2 h-3 w-3 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
@@ -3072,13 +3321,9 @@ watch(
                         </div>
 
                         <!-- Traveller Details Card with Accordions -->
-                        <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
-                            <div class="bg-gray-50 border-b border-gray-200 p-3">
-                                <h2 class="text-base font-medium text-gray-900">Traveller Details</h2>
-                                <p class="text-xs text-gray-500 mt-1">Use all names exactly as they appear on your
-                                    passport/ID</p>
-                            </div>
-                            <div class="p-3 space-y-2">
+                        <div class="bg-white shadow-sm overflow-hidden">
+                            
+                            <div class=" space-y-2">
                                 <div v-for="(traveller, trvIndex) in travellers" :key="`traveller-${trvIndex}`"
                                     class="border border-gray-200">
                                     <!-- Accordion Header -->
@@ -3112,36 +3357,77 @@ watch(
                                                     is clear and contains all relevant information.
                                                 </p>
 
-                                                <!-- Upload Passport Button -->
-                                                <div class="flex">
-                                                    <div class="mb-4">
-                                                        <Label
-                                                            class="text-sm font-medium text-gray-700 mb-2 block">Upload
-                                                            Passport Image</Label>
+                                                <!-- Upload + Saved Traveller (same row) -->
+                                                <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                                    <div>
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">Upload Passport Image</Label>
                                                         <div class="flex items-center gap-3">
                                                             <input type="file" accept="image/*" ref="passportUpload"
                                                                 @change="handlePassportUpload($event, trvIndex)"
                                                                 class="hidden" :id="`passport-upload-${trvIndex}`" />
                                                             <button type="button" @click="triggerFileUpload(trvIndex)"
-                                                                class="bg-primary text-white px-4 py-2 text-sm rounded hover:bg-primary/90 flex items-center gap-2">
+                                                                class="bg-primary text-white px-4 py-2 h-10 text-sm rounded hover:bg-primary/90 flex items-center gap-2">
                                                                 <Upload class="w-4 h-4" />
                                                                 Upload Image
                                                             </button>
-                                                            <span v-if="traveller.passportImage"
-                                                                class="text-xs text-gray-600">
+                                                            <span v-if="traveller.passportImage" class="text-xs text-gray-600">
                                                                 {{ traveller.passportImage.name }}
                                                             </span>
-                                                            <span v-if="traveller.uploadError"
-                                                                class="text-red-500 text-xs">
+                                                            <span v-if="traveller.uploadError" class="text-red-500 text-xs">
                                                                 {{ traveller.uploadError }}
                                                             </span>
-
-
                                                         </div>
-
                                                     </div>
 
+                                                    <div v-if="getSavedTravellersForSlot(traveller).length > 0">
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                            Select Saved Traveller
+                                                        </Label>
+                                                        <Popover
+                                                            :open="savedTravellerOpen[trvIndex]"
+                                                            @update:open="(v) => savedTravellerOpen[trvIndex] = v"
+                                                        >
+                                                            <PopoverTrigger as-child>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    role="combobox"
+                                                                    class="w-full h-10 justify-between text-sm font-normal"
+                                                                >
+                                                                    <span v-if="selectedSavedTraveller[trvIndex]" class="truncate">
+                                                                        {{ selectedSavedTraveller[trvIndex].first_name }} {{ selectedSavedTraveller[trvIndex].last_name }}
+                                                                        <span v-if="selectedSavedTraveller[trvIndex].document_no" class="text-gray-400 ml-1">· {{ selectedSavedTraveller[trvIndex].document_no }}</span>
+                                                                    </span>
+                                                                    <span v-else class="text-gray-400">Search saved traveller...</span>
+                                                                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent class="p-0 w-72" align="start">
+                                                                <Command>
+                                                                    <CommandInput placeholder="Search by name or passport..." class="h-9" />
+                                                                    <CommandEmpty>No traveller found.</CommandEmpty>
+                                                                    <CommandList>
+                                                                        <CommandGroup>
+                                                                            <CommandItem
+                                                                                v-for="saved in getSavedTravellersForSlot(traveller)"
+                                                                                :key="saved.id"
+                                                                                :value="`${saved.first_name} ${saved.last_name} ${saved.document_no || ''}`"
+                                                                                class="hover:text-white"
+                                                                                @select="() => selectSavedTraveller(trvIndex, saved)"
+                                                                            >
+                                                                                <Check :class="cn('mr-2 h-4 w-4', selectedSavedTraveller[trvIndex]?.id === saved.id ? 'opacity-100' : 'opacity-0')" />
+                                                                                <div>
+                                                                                    <div class="text-sm font-medium">{{ saved.first_name }} {{ saved.last_name }}</div>
+                                                                                    <div v-if="saved.document_no" class="text-xs text-gray-400">{{ saved.document_no }}</div>
+                                                                                </div>
+                                                                            </CommandItem>
+                                                                        </CommandGroup>
+                                                                    </CommandList>
+                                                                </Command>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
                                                 </div>
+
                                                 <div v-if="scanning"
                                                     class="text-blue-500 text-sm flex items-center gap-2">
                                                     <span>Scanning... {{ progress }}%</span>
@@ -3200,15 +3486,16 @@ watch(
                                                 </div>
 
                                                 <!-- Full Name -->
-                                                <div class="grid grid-cols-2 gap-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <!-- Full Name Section -->
                                                     <div class="mb-4">
-                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">Full
-                                                            name <span class="text-red-500">*</span></Label>
-                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">Full name <span class="text-red-500">*</span></Label>
+                                                        <div class="grid grid-cols-2 sm:grid-cols-2 gap-3">
                                                             <div>
                                                                 <Input v-model="traveller.firstName" type="text"
+                                                                    left-icon="/user.png"
                                                                     placeholder="First name"
-                                                                    class="text-sm border-gray-300"
+                                                                    class="text-sm border-gray-300 w-full"
                                                                     :class="{ 'border-red-300': getErrorPath(`travellers.${trvIndex}.firstName`) }" />
                                                                 <div v-if="getErrorPath(`travellers.${trvIndex}.firstName`)"
                                                                     class="text-red-500 text-xs mt-1">{{
@@ -3217,8 +3504,9 @@ watch(
                                                             </div>
                                                             <div>
                                                                 <Input v-model="traveller.lastName" type="text"
+                                                                    left-icon="/user.png"
                                                                     placeholder="Last name"
-                                                                    class="text-sm border-gray-300"
+                                                                    class="text-sm border-gray-300 w-full"
                                                                     :class="{ 'border-red-300': getErrorPath(`travellers.${trvIndex}.lastName`) }" />
                                                                 <div v-if="getErrorPath(`travellers.${trvIndex}.lastName`)"
                                                                     class="text-red-500 text-xs mt-1">{{
@@ -3229,19 +3517,13 @@ watch(
                                                     </div>
 
                                                     <!-- Additional Personal Information -->
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                    <div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-4">
                                                         <div>
                                                             <Label class="text-sm font-medium text-gray-700 mb-2 block">
                                                                 Date of Birth
-                                                                <span v-if="traveller.type == 'ADT'"
-                                                                    class="text-red-500 text-xs">*12+
-                                                                    years</span>
-                                                                <span v-else-if="traveller.type == 'CNN'"
-                                                                    class="text-red-500 text-xs">*2-12
-                                                                    years</span>
-                                                                <span v-else-if="traveller.type == 'INF'"
-                                                                    class="text-red-500 text-xs">*Under
-                                                                    2</span>
+                                                                <span v-if="traveller.type == 'ADT'" class="text-red-500 text-xs">*12+ years</span>
+                                                                <span v-else-if="traveller.type == 'CNN'" class="text-red-500 text-xs">*2-12 years</span>
+                                                                <span v-else-if="traveller.type == 'INF'" class="text-red-500 text-xs">*Under 2</span>
                                                             </Label>
                                                             <Calender v-model="traveller.dob" type="date"
                                                                 :maxValue="todayDate.toISOString().split('T')[0]"
@@ -3250,17 +3532,16 @@ watch(
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${trvIndex}.dob`) }"
                                                                 class="w-full h-8 text-sm bg-white text-black border-gray-200 focus:border-primary focus:ring-primary/20" />
                                                             <div v-if="getErrorPath(`travellers.${trvIndex}.dob`)"
-                                                                class="text-red-500 text-xs mt-1">{{
-                                                                    getErrorPath(`travellers.${trvIndex}.dob`) }}</div>
+                                                                class="text-red-500 text-xs mt-1">{{ getErrorPath(`travellers.${trvIndex}.dob`) }}</div>
                                                         </div>
                                                         <div class="mb-3">
                                                             <Label :for="`nationality-${trvIndex}`"
                                                                 class="block text-sm font-medium text-gray-700 mb-1">
                                                                 Nationality<span class="required">*</span>
                                                             </Label>
-
                                                             <CountryDropdown :keyValue="'code'"
-                                                                placeholder="SELECT NATIONALITY"
+                                                                placeholder="Select..."
+                                                                left-icon="/globe.png"
                                                                 v-model="traveller.nationality"
                                                                 @update:modelValue="(value) => traveller.nationality = value" />
                                                             <div v-if="getErrorPath(`travellers.${trvIndex}.nationality`)"
@@ -3269,70 +3550,54 @@ watch(
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </div>
 
-                                                    <!-- Document Information -->
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <!-- Document Information -->
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                                    <div>
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                            Document Type <span class="text-red-500">*</span>
+                                                        </Label>
+                                                        <Select v-model="traveller.documentType">
+                                                            <SelectTrigger
+                                                                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                                                                <SelectValue placeholder="Select document type" />
+                                                            </SelectTrigger>
+                                                            <SelectContent
+                                                                class="bg-white border border-gray-200 rounded-md shadow-md">
+                                                                <SelectItem value="passport"
+                                                                    class="px-4 py-2 hover:bg-gray-100 cursor-pointer">
+                                                                    Passport
+                                                                </SelectItem>
+                                                                <SelectItem value="id"
+                                                                    class="px-4 py-2 hover:bg-gray-100 cursor-pointer">
+                                                                    ID Card
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <div v-if="getErrorPath(`travellers.${trvIndex}.documentType`)"
+                                                            class="text-red-500 text-xs mt-1">
+                                                            {{ getErrorPath(`travellers.${trvIndex}.documentType`) }}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                            Document Number <span class="text-red-500">*</span>
+                                                        </Label>
+                                                        <Input v-model="traveller.documentNo" type="text"
+                                                            left-icon="/passport.png"
+                                                            placeholder="Document number"
+                                                            class="text-sm border-gray-300 w-full"
+                                                            :class="{ 'border-red-300': getErrorPath(`travellers.${trvIndex}.documentNo`) }" />
+                                                        <div v-if="getErrorPath(`travellers.${trvIndex}.documentNo`)"
+                                                            class="text-red-500 text-xs mt-1">{{
+                                                                getErrorPath(`travellers.${trvIndex}.documentNo`) }}</div>
+                                                    </div>
+                                                    <!-- Expiry Date -->
                                                         <div>
                                                             <Label class="text-sm font-medium text-gray-700 mb-2 block">
-                                                                Document Type <span class="text-red-500">*</span>
+                                                                Expiry Date <span class="text-red-500">*</span>
                                                             </Label>
-                                                            <Select v-model="traveller.documentType">
-                                                                <SelectTrigger
-                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary">
-                                                                    <SelectValue placeholder="Select document type" />
-                                                                </SelectTrigger>
-                                                                <SelectContent
-                                                                    class="bg-white border border-gray-200 rounded-md shadow-md">
-                                                                    <SelectItem value="passport"
-                                                                        class="px-4 py-2 hover:bg-gray-100 cursor-pointer">
-                                                                        Passport
-                                                                    </SelectItem>
-                                                                    <SelectItem value="id"
-                                                                        class="px-4 py-2 hover:bg-gray-100 cursor-pointer">
-                                                                        ID Card
-                                                                    </SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <div v-if="getErrorPath(`travellers.${trvIndex}.documentType`)"
-                                                                class="text-red-500 text-xs mt-1">
-                                                                {{ getErrorPath(`travellers.${trvIndex}.documentType`) }}
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <Label
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">Document
-                                                                Number <span class="text-red-500">*</span></Label>
-                                                            <Input v-model="traveller.documentNo" type="text"
-                                                                placeholder="Document number"
-                                                                class="text-sm border-gray-300"
-                                                                :class="{ 'border-red-300': getErrorPath(`travellers.${trvIndex}.documentNo`) }" />
-                                                            <div v-if="getErrorPath(`travellers.${trvIndex}.documentNo`)"
-                                                                class="text-red-500 text-xs mt-1">{{
-                                                                    getErrorPath(`travellers.${trvIndex}.documentNo`) }}</div>
-                                                        </div>
-                                                        <!-- <div v-if="traveller.type == 'ADT'" class="space-y-2">
-                                                                                                        <Label :for="`document-no-${trvIndex}`"
-                                                                                                            class="block text-sm font-medium text-gray-700">
-                                                                                                            CNIC Number <span class="text-red-500">*</span>
-                                                                                                        </Label>
-                                                                                                        <Input v-model="traveller.cnic" :id="`cnic-no-${trvIndex}`" type="text"
-                                                                                                            class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                                                                            placeholder="Enter CNIC number"
-                                                                                                            
-                                                                                                            />
-                                                    
-                                                                                                        <div v-if="getErrorPath(`travellers.${trvIndex}.cnic`)"
-                                                                                                            class="error-message text-xs text-red-500">
-                                                                                                            {{ getErrorPath(`travellers.${trvIndex}.cnic`) }}
-                                                                                                        </div>
-                                                                                                    </div> -->
-                                                    </div>
-
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div>
-                                                            <Label
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">Expiry
-                                                                Date <span class="text-red-500">*</span></Label>
                                                             <Calender v-model="traveller.expiryDate"
                                                                 :id="`expiry-date-${trvIndex}`"
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${trvIndex}.expiryDate`) }"
@@ -3342,87 +3607,54 @@ watch(
                                                                 class="text-red-500 text-xs mt-1">{{
                                                                     getErrorPath(`travellers.${trvIndex}.expiryDate`) }}</div>
                                                         </div>
-
-                                                    </div>
                                                 </div>
+
+
                                             </div>
 
-                                            <!-- Add Extra Services Button -->
-<div class="pt-4 border-t border-gray-200">
-    <button @click="showExtras = !showExtras" 
-            class="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100  transition-colors">
-        <div class="flex items-center gap-2">
-            <Package class="w-5 h-5 text-primary" />
-            <span class="text-sm font-medium text-gray-900">Add extra services</span>
-        </div>
-        <svg class="w-4 h-4 text-gray-500 transition-transform" 
-             :class="{ 'rotate-180': showExtras }" 
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-        </svg>
-    </button>
+                                            <!-- Traveller ancillary services -->
+<div class="pt-5 border-t border-gray-200">
+    <div class="mb-4">
+        <p class="text-sm font-semibold text-gray-900">Extra Services</p>
+        <p class="mt-1 text-xs text-gray-500">Choose services separately for each flight in this journey.</p>
+    </div>
 
-    <!-- Extra Services Section (shown when showExtras is true) -->
-   <div v-show="showExtras" class="mt-4">
-    <Tabs defaultValue="baggage" class="w-full ">
-        <TabsList class="flex justify-start items-end gap-2 bg-transparent p-0 w-full">
-            <TabsTrigger value="baggage" class=" group relative flex-shrink-0 text-sm sm:text-base font-medium
-             px-5 py-2.5
-             rounded-none
-             border-b-2 border-transparent
-             data-[state=active]:border-primary
-             data-[state=active]:bg-white
-             data-[state=active]:text-primary
-             data-[state=inactive]:text-gray-600
-             hover:text-primary transition">
-                Baggage
-                
-            </TabsTrigger>
-            <TabsTrigger value="seats" class="text-sm group relative flex-shrink-0 text-sm sm:text-base font-medium
-             px-5 py-2.5
-             rounded-none
-             border-b-2 border-transparent
-             data-[state=active]:border-primary
-             data-[state=active]:bg-white
-             data-[state=active]:text-primary
-             data-[state=inactive]:text-gray-600
-             hover:text-primary transition">
-                Seats
-                
-            </TabsTrigger>
-            <TabsTrigger value="meals" class="text-sm group relative flex-shrink-0 text-sm sm:text-base font-medium
-             px-5 py-2.5
-             rounded-none
-             border-b-2 border-transparent
-             data-[state=active]:border-primary
-             data-[state=active]:bg-white
-             data-[state=active]:text-primary
-             data-[state=inactive]:text-gray-600
-             hover:text-primary transition">
-                Meals
-               
-            </TabsTrigger>
-        </TabsList>
-
-        <!-- Baggage Tab -->
-        <TabsContent value="baggage" class="mt-0">
-            <div v-if="hasBaggageOptions" class="border border-gray-200 rounded overflow-hidden">
-                <div class="bg-gray-50 p-3 border-b border-gray-200">
-                    <h4 class="text-sm font-medium text-gray-900">About your baggage</h4>
-                    <p class="text-xs text-gray-500 mt-1">
-                        Need additional baggage? Save time and money by purchasing extra baggage in advance
-                    </p>
+    <Accordion type="multiple" class="space-y-3">
+        <!-- Baggage dropdown -->
+        <AccordionItem value="baggage" class="overflow-hidden border border-gray-200 rounded bg-white shadow-sm">
+            <AccordionTrigger class="px-4 py-3.5 hover:no-underline hover:bg-gray-50 [&>svg]:text-gray-400">
+                <div class="flex items-center gap-3 text-left">
+                    <span class="flex h-9 w-9 items-center justify-center rounded bg-blue-50 text-primary">
+                        <Luggage class="h-4 w-4" />
+                    </span>
+                    <span>
+                        <span class="block text-sm font-semibold text-gray-900">Baggage</span>
+                        <span class="block text-xs font-normal text-gray-500">Review allowance and add checked baggage</span>
+                    </span>
                 </div>
+            </AccordionTrigger>
+            <AccordionContent class="border-t border-gray-100 ">
+            <div v-if="hasBaggageOptions" class=" rounded overflow-hidden">
+                
 
-                <div class="p-4 space-y-4">
-                    <div v-for="(flight, flightIdx) in flight?.leg?.flights" :key="flightIdx" 
-                         class="border border-gray-200 rounded-lg p-4 bg-white">
-                        <h5 class="text-sm font-medium text-gray-900 mb-3">
+                <div class="p-4 sm:p-2 space-y-4 sm:space-y-3">
+                    <Tabs default-value="flight-0" class="w-full">
+                        <TabsList class="mb-3 grid h-auto w-full bg-gray-100 p-1"
+                            :style="{ gridTemplateColumns: `repeat(${flight?.leg?.flights?.length || 1}, minmax(0, 1fr))` }">
+                            <TabsTrigger v-for="(flightItem, tabIndex) in flight?.leg?.flights" :key="`baggage-tab-${tabIndex}`"
+                                :value="`flight-${tabIndex}`"
+                                class="min-w-0 rounded px-2 py-2 text-xs text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm">
+                                <span class="truncate">{{ flightItem?.from?.iata || flightItem?.from?.city?.name }} → {{ flightItem?.to?.iata || flightItem?.to?.city?.name }}</span>
+                            </TabsTrigger>
+                        </TabsList>
+                    <TabsContent v-for="(flight, flightIdx) in flight?.leg?.flights" :key="flightIdx"
+                        :value="`flight-${flightIdx}`" class="mt-0 rounded p-4 sm:p-3 bg-white">
+                        <h5 class="text-sm font-medium text-gray-900 mb-3 sm:mb-2">
                             {{ flight?.from?.city?.name }} to {{ flight?.to?.city?.name }}
                         </h5>
 
-                        <div v-for="(segment, segmentIdx) in flight?.segments" :key="segmentIdx" class="mb-4 last:mb-0">
-                            <div class="text-xs font-medium text-gray-700 mb-3">
+                        <div v-for="(segment, segmentIdx) in flight?.segments" :key="segmentIdx" class="mb-4 sm:mb-3 last:mb-0">
+                            <div class="text-xs font-medium text-gray-700 mb-3 sm:mb-2">
                                 {{ segment?.from?.name }} → {{ segment?.to?.name }}
                             </div>
 
@@ -3432,27 +3664,27 @@ watch(
 
                             <template v-if="!isInfantTraveler(trvIndex)">
                             <!-- Show included baggage -->
-                            <div class="mb-4 p-3 bg-green-50 rounded border border-green-100">
+                            <div class="mb-4 sm:mb-3 p-3 sm:p-2 bg-green-50 rounded border border-green-100">
                                 <p class="text-xs font-medium text-green-800 mb-2">✓ Included Baggage</p>
                                 <div v-for="fare in flight?.fares" :key="fare.ref_id">
-                                    <div v-if="fare?.ref_id === route?.query?.fare_id || fare?.ref_id === 2" 
-                                         class="space-y-2">
+                                    <div v-if="fare?.ref_id === route?.query?.fare_id || fare?.ref_id === 2"
+                                        class="space-y-2">
                                         <!-- Carry baggage -->
-                                        <div v-if="fare.baggage_policies?.some(p => p.type === 'carry')" 
-                                             class="flex items-center gap-2 text-xs">
+                                        <div v-if="fare.baggage_policies?.some(p => p.type === 'carry')"
+                                            class="flex items-center gap-2 text-xs">
                                             <CheckCircle class="w-3 h-3 text-green-600 flex-shrink-0" />
-                                            <span class="text-gray-700">
-                                                {{ fare.baggage_policies.find(p => p.type === 'carry').weight_limit }} 
+                                            <span class="text-gray-700 break-words">
+                                                {{ fare.baggage_policies.find(p => p.type === 'carry').weight_limit }}
                                                 {{ fare.baggage_policies.find(p => p.type === 'carry').weight_unit }} cabin baggage
                                                 ({{ fare.baggage_policies.find(p => p.type === 'carry').pieces }} piece)
                                             </span>
                                         </div>
                                         <!-- Checked baggage -->
-                                        <div v-if="fare.baggage_policies?.some(p => p.type === 'checked')" 
-                                             class="flex items-center gap-2 text-xs">
+                                        <div v-if="fare.baggage_policies?.some(p => p.type === 'checked')"
+                                            class="flex items-center gap-2 text-xs">
                                             <CheckCircle class="w-3 h-3 text-green-600 flex-shrink-0" />
-                                            <span class="text-gray-700">
-                                                {{ fare.baggage_policies.find(p => p.type === 'checked').weight_limit }} 
+                                            <span class="text-gray-700 break-words">
+                                                {{ fare.baggage_policies.find(p => p.type === 'checked').weight_limit }}
                                                 {{ fare.baggage_policies.find(p => p.type === 'checked').weight_unit }} checked baggage
                                                 ({{ fare.baggage_policies.find(p => p.type === 'checked').pieces }} piece)
                                             </span>
@@ -3461,133 +3693,201 @@ watch(
                                 </div>
                             </div>
 
-                            <!-- Extra baggage options - LIST VIEW -->
+                            <!-- Extra baggage options - RESPONSIVE LIST VIEW -->
                             <div v-if="getBaggageOptionsForSegment(segment.RPH).length > 0">
-                                <p class="text-xs font-medium text-gray-700 mb-3">Extra Baggage Options</p>
+                                <p class="text-xs font-medium text-gray-700 mb-3 sm:mb-2">Extra Baggage Options</p>
                                 <div class="space-y-2">
                                     <div v-for="(option, optionIdx) in getBaggageOptionsForSegment(segment.RPH)"
-                                         :key="optionIdx"
-                                         @click="handleExtraBaggageChange(flightIdx, segment.RPH, trvIndex, option)"
-                                         class="flex items-center gap-3 p-3 border rounded cursor-pointer transition-all bg-white"
-                                         :class="{
-                                             'border-primary bg-primary/5': isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode),
-                                             'border-gray-200 hover:bg-gray-50': !isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode)
-                                         }">
-                                        
-                                        <!-- Radio indicator (visual only) -->
-                                        <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                                             :class="isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode) 
-                                                 ? 'border-primary bg-primary' 
-                                                 : 'border-gray-300'">
-                                            <div v-if="isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode)" 
-                                                 class="w-2 h-2 rounded-full bg-white"></div>
+                                        :key="optionIdx"
+                                        @click="handleExtraBaggageChange(flightIdx, segment.RPH, trvIndex, option)"
+                                        class="flex items-center gap-2 p-2 border rounded cursor-pointer transition-all bg-white"
+                                        :class="{
+                                            'border-primary bg-primary/5': isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode),
+                                            'border-gray-200 hover:bg-gray-50': !isBaggageSelected(flightIdx, segment.RPH   , trvIndex, option.baggageCode)
+                                        }">
+
+                                        <!-- Radio indicator -->
+                                        <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                            :class="isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode)
+                                                ? 'border-primary bg-primary'
+                                                : 'border-gray-300'">
+                                            <div v-if="isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode)"
+                                                class="w-1.5 h-1.5 rounded-full bg-white"></div>
                                         </div>
-                                        
+
                                         <!-- Baggage image -->
-                                        <div class="w-16 h-16 rounded bg-gray-100 flex-shrink-0 overflow-hidden border">
-                                            <img src="/public/assets/baggage.jpg" 
-                                                 alt="Baggage" 
-                                                 class="w-full h-full object-contain" />
+                                        <div class="w-12 h-12 rounded bg-gray-100 flex-shrink-0 overflow-hidden border">
+                                            <img src="/public/assets/baggage.jpg"
+                                                alt="Baggage"
+                                                class="w-full h-full object-contain" />
                                         </div>
-                                        
+
                                         <!-- Baggage details -->
                                         <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <span class="text-sm font-medium text-gray-900">
-                                                    {{ option.baggageCode }}
-                                                </span>
-                                                <span class="text-xs text-gray-500">
-                                                    {{ option.weight }}kg
+                                           <div class="flex items-center justify-between gap-1">
+                                                <div class="flex items-center gap-1 flex-wrap">
+                                                    <span class="text-xs sm:text-sm font-medium text-gray-900">
+                                                        {{ option.baggageCode }}
+                                                    </span>
+                                                    <span class="text-[10px] sm:text-xs text-gray-500">
+                                                        {{ option.weight }}kg
+                                                    </span>
+                                                </div>
+                                                <!-- Price - visible on md and larger screens (at the end/right side) -->
+                                                <span class="hidden md:inline text-xs sm:text-sm font-bold text-primary whitespace-nowrap">
+                                                    {{ option.currencyCode }} {{ Number(option.baggageCharge).toFixed(2) }}
                                                 </span>
                                             </div>
-                                            <p class="text-sm text-gray-500 line-clamp-2">
+                                            <p class="text-xs text-gray-500 line-clamp-1 break-words">
                                                 {{ option.baggageDescription }}
                                             </p>
-                                        </div>
-                                        
-                                        <!-- Price and action -->
-                                        <div class="flex flex-col items-end gap-2 flex-shrink-0 min-w-[100px]">
-                                            <span class="text-base font-bold text-primary whitespace-nowrap">
+                                            <!-- Price - visible only on small screens (outside the flex div) -->
+                                            <span class="md:hidden text-xs font-bold text-primary whitespace-nowrap block mt-1">
                                                 {{ option.currencyCode }} {{ Number(option.baggageCharge).toFixed(2) }}
                                             </span>
-                                            
-                                            <!-- Show selected indicator or add button -->
+
                                             <div v-if="isBaggageSelected(flightIdx, segment.RPH, trvIndex, option.baggageCode)"
-                                                 class="text-xs text-primary font-medium">
-                                                Selected
+                                                class="text-xs text-primary font-medium mt-1">
+                                                ✓ Selected
                                             </div>
                                         </div>
                                     </div>
+
                                 </div>
                             </div>
 
-                            <!-- Selected baggage summary -->
-                            <div v-if="getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex)" 
-                                 class="mt-4 p-3 bg-primary/10 rounded border border-primary">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded bg-white border overflow-hidden flex-shrink-0">
-                                            <img src="/public/assets/baggage.jpg" 
-                                                 alt="Selected baggage" 
-                                                 class="w-full h-full object-contain" />
-                                        </div>
-                                        <div>
-                                            <div class="flex items-center gap-2">
-                                                <CheckCircle class="w-4 h-4 text-blue-600" />
-                                                <span class="text-sm font-medium text-gray-900">
-                                                    {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).title || 'Extra Baggage' }}
-                                                </span>
-                                            </div>
-                                            <p class="text-xs text-gray-600 mt-1">
-                                                {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).description || 'Extra baggage allowance' }}
-                                            </p>
-                                            <p class="text-xs text-gray-500 mt-1">
-                                                Traveler {{ trvIndex + 1 }} • {{ flight?.from?.city?.name }} → {{ flight?.to?.city?.name }}
-                                            </p>
-                                        </div>
+                            <!-- Selected baggage summary - RESPONSIVE -->
+                            <div v-if="getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex)"
+                                class="mt-4 sm:mt-3 bg-primary/10 rounded border border-primary overflow-hidden">
+
+                                <!-- Mobile Design (sm) -->
+                                <div class="block sm:hidden">
+                                    <!-- Header with airline/location -->
+                                    <div class="bg-primary/15 px-3 py-2 border-b border-primary/20">
+                                        <p class="text-xs font-medium text-gray-700">
+                                            {{ flight?.from?.city?.name }} → {{ flight?.to?.city?.name }}
+                                        </p>
+                                        <p class="text-[10px] text-gray-500 mt-0.5">
+                                            Traveler {{ trvIndex + 1 }}
+                                        </p>
                                     </div>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-base font-bold text-primary">
-                                            {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.currency }}
-                                            {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.amount }}
-                                        </span>
-                                        <button @click="removeExtraBaggage(flightIdx, segment.RPH, trvIndex)"
-                                                class="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+
+                                    <!-- Content -->
+                                    <div class="p-3">
+                                        <div class="flex items-center gap-3">
+                                            <!-- Baggage image -->
+                                            <div class="w-12 h-12 rounded bg-white border overflow-hidden flex-shrink-0">
+                                                <img src="/public/assets/baggage.jpg"
+                                                    alt="Selected baggage"
+                                                    class="w-full h-full object-contain" />
+                                            </div>
+
+                                            <!-- Baggage info -->
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-1">
+                                                    <CheckCircle class="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                                                    <span class="text-sm font-semibold text-gray-900">
+                                                        {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).title || 'Extra Baggage' }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-[10px] text-gray-500 mt-1 line-clamp-2">
+                                                    {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).description || 'Extra baggage allowance' }}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Price and remove button -->
+                                        <div class="flex items-center justify-between mt-3 pt-2 border-t border-primary/20">
+                                            <span class="text-sm font-bold text-primary">
+                                                {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.currency }}
+                                                {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.amount }}
+                                            </span>
+                                            <button @click="removeExtraBaggage(flightIdx, segment.RPH, trvIndex)"
+                                                class="px-3 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-full transition-colors"
                                                 title="Remove baggage">
-                                            <X class="w-4 h-4" />
-                                        </button>
+                                                Remove
+                                            </button>
+                                        </div>
+                                </div>
+                            </div>
+
+                            <!-- Desktop Design (md and up) -->
+                            <div class="hidden sm:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3">
+                                <div class="flex items-center gap-3 w-full sm:w-auto">
+                                    <div class="w-10 h-10 rounded bg-white border overflow-hidden flex-shrink-0">
+                                        <img src="/public/assets/baggage.jpg"
+                                            alt="Selected baggage"
+                                            class="w-full h-full object-contain" />
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <CheckCircle class="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                            <span class="text-sm font-medium text-gray-900">
+                                                {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).title || 'Extra Baggage' }}
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mt-1">
+                                            {{ getSelectedBaggageForTraveler(flightIdx, segment.RPH, trvIndex).description || 'Extra baggage allowance' }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Traveler {{ trvIndex + 1 }} • {{ flight?.from?.city?.name }} → {{ flight?.to?.city?.name }}
+                                        </p>
                                     </div>
                                 </div>
+                                <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                                    <span class="text-base font-bold text-primary">
+                                        {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.currency }}
+                                        {{ selectedExtras[flightIdx]?.baggage?.[segment.RPH]?.[trvIndex]?.amount }}
+                                    </span>
+                                    <button @click="removeExtraBaggage(flightIdx, segment.RPH, trvIndex)"
+                                            class="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+                                            title="Remove baggage">
+                                        <X class="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
                             </div>
                             </template>
                         </div>
-                    </div>
+                    </TabsContent>
+                    </Tabs>
                 </div>
             </div>
             <div v-else class="text-center py-8 text-gray-500 border border-gray-200 rounded">
                 No baggage options available
             </div>
-        </TabsContent>
+            </AccordionContent>
+        </AccordionItem>
 
-        <!-- Seats Tab -->
-        <TabsContent value="seats" class="mt-0">
-            <div v-if="ancillaries?.ancillaries?.seats" class="border border-gray-200 rounded overflow-hidden">
-                <div class="bg-gray-50 p-3 border-b border-gray-200">
-                    <h4 class="text-sm font-medium text-gray-900">Want your own seat?</h4>
-                    <p class="text-xs text-gray-500 mt-1">
-                        Customize your trip with optional extras. Select the services you want now.
-                    </p>
+        <!-- Seats dropdown -->
+        <AccordionItem value="seats" class="overflow-hidden border border-gray-200 rounded bg-white shadow-sm">
+            <AccordionTrigger class="px-4 py-3.5 hover:no-underline hover:bg-gray-50 [&>svg]:text-gray-400">
+                <div class="flex items-center gap-3 text-left">
+                    <span class="flex h-9 w-9 items-center justify-center rounded bg-violet-50 text-violet-600"><Armchair class="h-4 w-4" /></span>
+                    <span><span class="block text-sm font-semibold text-gray-900">Seats</span><span class="block text-xs font-normal text-gray-500">Select a seat for every flight</span></span>
                 </div>
+            </AccordionTrigger>
+            <AccordionContent class="border-t border-gray-100 ">
+            <div v-if="ancillaries?.ancillaries?.seats" class="rounded overflow-hidden">
                 
-                <div class="p-4 space-y-4">
-                    <div v-for="(flight, flightIdx) in flight?.leg?.flights" :key="flightIdx" 
-                         class="border border-gray-200 rounded p-4 bg-white">
-                        <h5 class="text-sm font-medium text-gray-900 mb-3">
+
+                <div class="p-4 sm:p-2 space-y-4 sm:space-y-3">
+                    <Tabs default-value="flight-0" class="w-full">
+                        <TabsList class="mb-3 grid h-auto w-full bg-gray-100 p-1"
+                            :style="{ gridTemplateColumns: `repeat(${flight?.leg?.flights?.length || 1}, minmax(0, 1fr))` }">
+                            <TabsTrigger v-for="(flightItem, tabIndex) in flight?.leg?.flights" :key="`seat-tab-${tabIndex}`"
+                                :value="`flight-${tabIndex}`" class="min-w-0 rounded px-2 py-2 text-xs text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm">
+                                <span class="truncate">{{ flightItem?.from?.iata || flightItem?.from?.city?.name }} → {{ flightItem?.to?.iata || flightItem?.to?.city?.name }}</span>
+                            </TabsTrigger>
+                        </TabsList>
+                    <TabsContent v-for="(flight, flightIdx) in flight?.leg?.flights" :key="flightIdx"
+                        :value="`flight-${flightIdx}`" class="mt-0  rounded p-4 sm:p-3 bg-white">
+                        <h5 class="text-sm font-medium text-gray-900 mb-3 sm:mb-2">
                             {{ flight?.from?.city?.name }} to {{ flight?.to?.city?.name }}
                         </h5>
 
-                        <div v-for="(segment, segmentIdx) in flight?.segments" :key="segmentIdx" class="mb-6 last:mb-0">
-                            <div class="text-xs font-medium text-gray-700 mb-4">
+                        <div v-for="(segment, segmentIdx) in flight?.segments" :key="segmentIdx" class="mb-6 sm:mb-4 last:mb-0">
+                            <div class="text-xs font-medium text-gray-700 mb-4 sm:mb-2">
                                 Segment: {{ segment?.from?.name }} → {{ segment?.to?.name }}
                             </div>
 
@@ -3597,12 +3897,12 @@ watch(
 
                             <template v-if="getSeatsForSegment(segment)">
                                 <template v-if="!isInfantTraveler(trvIndex)">
-                                <!-- Selected seat preview (from saved selection) -->
-                                <div v-if="selectedExtras[flightIdx]?.seat?.[segment.RPH]?.[trvIndex]" 
-                                     class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <CheckCircle class="w-3 h-3 text-blue-600" />
+                                <!-- Selected seat preview (from saved selection) - Responsive -->
+                                <div v-if="selectedExtras[flightIdx]?.seat?.[segment.RPH]?.[trvIndex]"
+                                    class="mb-4 sm:mb-3 p-3 sm:p-2 bg-blue-50 rounded border border-blue-200">
+                                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <CheckCircle class="w-3 h-3 text-blue-600 flex-shrink-0" />
                                             <span class="text-xs font-medium text-gray-900">
                                                 Saved Seat: {{ getSelectedSeatInfo(flightIdx, segment.RPH, trvIndex) }}
                                             </span>
@@ -3611,125 +3911,130 @@ watch(
                                                 {{ selectedExtras[flightIdx]?.seat?.[segment.RPH]?.[trvIndex]?.amount }})
                                             </span>
                                         </div>
-                                        <button class="px-2 py-1 text-xs rounded bg-red-100 text-red-600 hover:bg-red-200"
+                                        <button class="px-2 py-1 text-xs rounded bg-red-100 text-red-600 hover:bg-red-200 w-full sm:w-auto"
                                                 @click="removeSeat(flightIdx, segment.RPH, trvIndex)">
                                             Remove
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Temporary seat selection preview (before saving) -->
-                                <div v-if="tempSelectedSeat[flightIdx]?.[segment.RPH]?.[trvIndex] && !selectedExtras[flightIdx]?.seat?.[segment.RPH]?.[trvIndex]" 
-                                     class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                    <div class="flex items-center gap-2">
-                                        <Info class="w-3 h-3 text-purple-600" />
+                                <!-- Temporary seat selection preview (before saving) - Responsive -->
+                                <div v-if="tempSelectedSeat[flightIdx]?.[segment.RPH]?.[trvIndex] && !selectedExtras[flightIdx]?.seat?.[segment.RPH]?.[trvIndex]"
+                                    class="mb-4 sm:mb-3 p-3 sm:p-2 bg-purple-50 rounded border border-purple-200">
+                                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                        <Info class="w-3 h-3 text-purple-600 flex-shrink-0" />
                                         <span class="text-xs font-medium text-gray-900">
-                                            Row {{ tempSelectedSeat[flightIdx][segment.RPH][trvIndex].row }}, 
+                                            Row {{ tempSelectedSeat[flightIdx][segment.RPH][trvIndex].row }},
                                             Seat {{ tempSelectedSeat[flightIdx][segment.RPH][trvIndex].seatNumber }}
                                         </span>
                                         <span class="text-xs text-gray-500">
                                             ({{ formatAmount(tempSelectedSeat[flightIdx][segment.RPH][trvIndex].seatPrice) }})
                                         </span>
-                                        <span class="text-xs text-purple-600 ml-2">
-                                            Click "Save Seat Selection" to confirm
+                                        <span class="text-xs text-purple-600">
+                                            Click "Save" to confirm
                                         </span>
                                     </div>
                                 </div>
 
-                                <!-- Seat Map with Horizontal Grid -->
+                                <!-- Seat Map with Horizontal Grid - MOBILE OPTIMIZED -->
                                 <div v-if="getSeatRowsForSegment(segment).length > 0" class="mb-4">
-                                    <p class="text-xs font-medium text-gray-700 mb-3">Select Your Seat</p>
-                                    
-                                    <!-- Color Legend with PKR ranges -->
-                                    <div class="flex flex-wrap gap-4 mb-4 text-xs">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-4 h-4 bg-green-300 border border-green-600 rounded"></div>
-                                            <span> (≤ PKR 500)</span>
+                                    <p class="text-xs font-medium text-gray-700 mb-2">Select Your Seat</p>
+
+                                    <!-- Color Legend - Responsive compact -->
+                                    <div class="flex flex-wrap gap-2 sm:gap-3 mb-3 text-[10px] sm:text-xs">
+                                        <div class="flex items-center gap-1">
+                                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-green-300 border border-green-600 rounded"></div>
+                                            <span class="hidden xs:inline">≤500</span>
+                                            <span class="xs:hidden">L</span>
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-4 h-4 bg-yellow-300 border border-yellow-600 rounded"></div>
-                                            <span> (PKR 501 - 1000)</span>
+                                        <div class="flex items-center gap-1">
+                                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-300 border border-yellow-600 rounded"></div>
+                                            <span class="hidden xs:inline">501-1000</span>
+                                            <span class="xs:hidden">M</span>
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-4 h-4 bg-orange-300 border border-orange-600 rounded"></div>
-                                            <span> (PKR 1001 - 1500)</span>
+                                        <div class="flex items-center gap-1">
+                                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-orange-300 border border-orange-600 rounded"></div>
+                                            <span class="hidden xs:inline">1001-1500</span>
+                                            <span class="xs:hidden">H</span>
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-4 h-4 bg-blue-500 border border-blue-700 rounded"></div>
-                                            <span>F (> PKR 1500)</span>
+                                        <div class="flex items-center gap-1">
+                                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 border border-blue-700 rounded"></div>
+                                            <span>>1500</span>
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-4 h-4 bg-gray-300 border border-gray-500 rounded"></div>
-                                            <span>Reserved</span>
+                                        <div class="flex items-center gap-1">
+                                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-gray-300 border border-gray-500 rounded"></div>
+                                            <span>RES</span>
                                         </div>
                                     </div>
 
-                                    <!-- Seat Map Grid -->
+                                    <!-- Seat Map Grid - Even Smaller on mobile -->
                                     <div class="overflow-x-auto">
-                                        <div class="min-w-max p-4 bg-gray-50 rounded-lg">
+                                        <div class="min-w-max p-1 sm:p-4 bg-gray-50 rounded">
                                             <template v-if="getSeatRowsForSegment(segment).length > 0">
                                                 <div class="inline-block">
-                                                    <!-- Header with row numbers -->
-                                                    <div class="flex gap-2">
-                                                        <div class="w-16 h-8 flex items-end justify-center pb-1">
-                                                            <span class="text-xs font-medium text-gray-400">Row →</span>
+                                                    <!-- Header with row numbers - super compact -->
+                                                    <div class="flex gap-0.5 sm:gap-2">
+                                                        <div class="w-7 sm:w-16 h-5 sm:h-8 flex items-end justify-center pb-0.5 sm:pb-1">
+                                                            <span class="text-[8px] sm:text-xs font-medium text-gray-400">R</span>
                                                         </div>
-                                                        <div v-for="row in getSeatRowsForSegment(segment)" 
-                                                             :key="'header-'+row.rowNumber"
-                                                             class="w-10 text-center">
-                                                            <div class="h-8 flex items-end justify-center pb-1">
-                                                                <span class="text-xs font-medium text-gray-700 bg-gray-200 px-2 py-1 rounded">{{ row.rowNumber }}</span>
+                                                        <div v-for="row in getSeatRowsForSegment(segment)"
+                                                            :key="'header-'+row.rowNumber"
+                                                            class="w-5 sm:w-10 text-center">
+                                                            <div class="h-5 sm:h-8 flex items-end justify-center pb-0.5 sm:pb-1">
+                                                                <span class="text-[7px] sm:text-xs font-medium text-gray-700 bg-gray-200 px-0.5 sm:px-2 py-0 sm:py-1 rounded">{{ row.rowNumber }}</span>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <!-- Seat letters rows -->
-                                                    <div v-for="col in ['A', 'B', 'C', 'D', 'E', 'F']" 
-                                                         :key="'col-'+col"
-                                                         class="flex items-center">
-                                                        <div class="w-16 h-10 flex items-center">
-                                                            <span class="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded">{{ col }}</span>
+                                                    <!-- Seat letters rows - super compact seats -->
+                                                    <div v-for="col in ['A', 'B', 'C', 'D', 'E', 'F']"
+                                                        :key="'col-'+col"
+                                                        class="flex items-center">
+                                                        <div class="w-7 sm:w-16 h-6 sm:h-10 flex items-center">
+                                                            <span class="text-[8px] sm:text-xs font-medium text-gray-700 bg-gray-100 px-0.5 sm:px-2 py-0 sm:py-1 rounded">{{ col }}</span>
                                                         </div>
-                                                        
-                                                        <div class="flex gap-2">
-                                                            <div v-for="row in getSeatRowsForSegment(segment)" 
-                                                                 :key="'seat-'+row.rowNumber+'-'+col"
-                                                                 class="relative group">
+
+                                                        <div class="flex gap-0.5 sm:gap-2">
+                                                            <div v-for="row in getSeatRowsForSegment(segment)"
+                                                                :key="'seat-'+row.rowNumber+'-'+col"
+                                                                class="relative group">
                                                                 <template v-if="getSeatAtPosition(row.seats, col)">
                                                                     <div v-if="getSeatAtPosition(row.seats, col).seatAvailability === 'VAC'"
-                                                                         @click="handleTempSeatSelection(flightIdx, segment.RPH, trvIndex, getSeatAtPosition(row.seats, col))"
-                                                                         class="w-10 h-10 my-1 rounded cursor-pointer transition-all hover:scale-110 flex items-center justify-center text-xs font-medium"
-                                                                         :class="getSeatColorClass(getSeatAtPosition(row.seats, col).seatPrice)"
-                                                                         :style="{
-                                                                             border: isSeatSelected(flightIdx, segment.RPH, trvIndex, getSeatAtPosition(row.seats, col)) 
-                                                                                 ? '3px solid #3b82f6' 
-                                                                                 : getSeatAtPosition(row.seats, col).seatPrice > 1500 ? '2px solid #1e40af' : '1px solid rgba(0,0,0,0.2)',
-                                                                             boxShadow: getSeatAtPosition(row.seats, col).seatPrice > 1500 ? '0 2px 8px rgba(0,0,0,0.3)' : 'none'
-                                                                         }">
-                                                                        {{ col }}{{ row.rowNumber }}
-                                                                        
-                                                                        <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-lg">
+                                                                        @click="handleTempSeatSelection(flightIdx, segment.RPH, trvIndex, getSeatAtPosition(row.seats, col))"
+                                                                        class="w-5 h-5 sm:w-10 sm:h-10 my-0 sm:my-1 rounded cursor-pointer transition-all hover:scale-105 flex items-center justify-center text-[7px] sm:text-xs font-medium"
+                                                                        :class="getSeatColorClass(getSeatAtPosition(row.seats, col).seatPrice)"
+                                                                        :style="{
+                                                                            border: isSeatSelected(flightIdx, segment.RPH, trvIndex, getSeatAtPosition(row.seats, col))
+                                                                                ? '1.5px solid #3b82f6'
+                                                                                : getSeatAtPosition(row.seats, col).seatPrice > 1500 ? '1px solid #1e40af' : '0.5px solid rgba(0,0,0,0.2)',
+                                                                            boxShadow: getSeatAtPosition(row.seats, col).seatPrice > 1500 ? '0 0.5px 2px rgba(0,0,0,0.2)' : 'none'
+                                                                        }">
+                                                                        <span class="sm:hidden text-[6px]">{{ row.rowNumber }}</span>
+                                                                        <span class="hidden sm:inline">{{ col }}{{ row.rowNumber }}</span>
+
+                                                                        <!-- Tooltip - hidden on mobile -->
+                                                                        <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 sm:mb-2 px-1 sm:px-2 py-0.5 sm:py-1 bg-gray-900 text-white text-[8px] sm:text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-lg hidden sm:block">
                                                                             <div class="font-bold">Seat {{ col }}{{ row.rowNumber }}</div>
                                                                             <div>{{ getSeatAtPosition(row.seats, col).seatCharacteristics || 'Standard' }}</div>
                                                                             <div class="font-bold text-yellow-300">
-                                                                                {{ getSeatAtPosition(row.seats, col).currencyCode || 'PKR' }} 
                                                                                 {{ formatAmount(getSeatAtPosition(row.seats, col).seatPrice) }}
                                                                             </div>
                                                                         </div>
                                                                     </div>
 
                                                                     <div v-else-if="getSeatAtPosition(row.seats, col).seatAvailability === 'RES'"
-                                                                         class="w-10 h-10 bg-gray-300 border border-gray-500 rounded flex items-center justify-center text-xs text-gray-700 cursor-not-allowed"
-                                                                         title="Reserved">
-                                                                        {{ col }}{{ row.rowNumber }}
+                                                                        class="w-5 h-5 sm:w-10 sm:h-10 my-0 sm:my-1 bg-gray-300 border border-gray-500 rounded flex items-center justify-center text-[7px] sm:text-xs text-gray-700 cursor-not-allowed">
+                                                                        <span class="sm:hidden text-[6px]">R</span>
+                                                                        <span class="hidden sm:inline">{{ col }}{{ row.rowNumber }}</span>
                                                                     </div>
 
                                                                     <div v-else
-                                                                         class="w-10 h-10 bg-gray-100 border border-gray-300 rounded flex items-center justify-center text-xs text-gray-400">
-                                                                        X
+                                                                        class="w-5 h-5 sm:w-10 sm:h-10 my-0 sm:my-1 bg-gray-100 border border-gray-300 rounded flex items-center justify-center text-[7px] sm:text-xs text-gray-400">
+                                                                        <span class="sm:hidden">X</span>
+                                                                        <span class="hidden sm:inline">X</span>
                                                                     </div>
                                                                 </template>
-                                                                <div v-else class="w-10 h-10"></div>
+                                                                <div v-else class="w-5 h-5 sm:w-10 sm:h-10"></div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3738,11 +4043,11 @@ watch(
                                         </div>
                                     </div>
 
-                                    <!-- Save Seat Button -->
-                                    <div class="mt-4 flex justify-end">
+                                    <!-- Save Seat Button - Full width on mobile -->
+                                    <div class="mt-4">
                                         <button v-if="tempSelectedSeat[flightIdx]?.[segment.RPH]?.[trvIndex]"
                                                 @click="saveSeatSelection(flightIdx, segment.RPH, trvIndex)"
-                                                class="bg-primary text-white px-4 py-2 text-sm rounded hover:bg-primary/90">
+                                                class="w-full sm:w-auto bg-primary text-white px-4 py-2 text-sm rounded hover:bg-primary/90">
                                             Save Seat Selection
                                         </button>
                                     </div>
@@ -3751,33 +4056,44 @@ watch(
                             </template>
                             <p v-else-if="!isInfantTraveler(trvIndex)" class="text-xs text-gray-500">No seat selection available for this segment.</p>
                         </div>
-                    </div>
+                    </TabsContent>
+                    </Tabs>
                 </div>
-            </div>
-            <div v-else class="text-center py-8 text-gray-500 border border-gray-200 rounded">
-                No seat options available
-            </div>
-        </TabsContent>
-
-        <!-- Meals Tab -->
-        <TabsContent value="meals" class="mt-0">
-            <div v-if="ancillaries?.ancillaries?.meals" class="border border-gray-200 rounded overflow-hidden">
-                <div class="bg-gray-50 p-2 border-b border-gray-200">
-                    <h4 class="text-sm font-medium text-gray-900">Add Meals</h4>
-                    <p class="text-xs text-gray-500">
-                        Pre-book meals and enjoy discounted prices onboard.
-                    </p>
                 </div>
+                <div v-else class="text-center py-8 text-gray-500 border border-gray-200 rounded">
+                    No seat options available
+                </div>
+            </AccordionContent>
+        </AccordionItem>
 
-                <div class="p-3 space-y-3">
-                    <div v-for="(flightItem, flightIdx) in flight?.leg?.flights" :key="flightIdx" 
-                         class="border border-gray-200 rounded p-3 bg-white">
-                        <h5 class="text-sm font-medium text-gray-900 mb-2">
+        <!-- Meals dropdown -->
+        <AccordionItem value="meals" class="overflow-hidden border border-gray-200 rounded bg-white shadow-sm">
+            <AccordionTrigger class="px-4 py-3.5 hover:no-underline hover:bg-gray-50 [&>svg]:text-gray-400">
+                <div class="flex items-center gap-3 text-left">
+                    <span class="flex h-9 w-9 items-center justify-center rounded bg-amber-50 text-amber-600"><Utensils class="h-4 w-4" /></span>
+                    <span><span class="block text-sm font-semibold text-gray-900">Meals</span><span class="block text-xs font-normal text-gray-500">Pre-order meals for each flight</span></span>
+                </div>
+            </AccordionTrigger>
+            <AccordionContent class="border-t border-gray-100 ">
+            <div v-if="ancillaries?.ancillaries?.meals" class=" rounded overflow-hidden">
+                
+                <div class="p-4 sm:p-2 space-y-4 sm:space-y-3">
+                    <Tabs default-value="flight-0" class="w-full">
+                        <TabsList class="mb-3 grid h-auto w-full bg-gray-100 p-1"
+                            :style="{ gridTemplateColumns: `repeat(${flight?.leg?.flights?.length || 1}, minmax(0, 1fr))` }">
+                            <TabsTrigger v-for="(flightTab, tabIndex) in flight?.leg?.flights" :key="`meal-tab-${tabIndex}`"
+                                :value="`flight-${tabIndex}`" class="min-w-0 rounded px-2 py-2 text-xs text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm">
+                                <span class="truncate">{{ flightTab?.from?.iata || flightTab?.from?.city?.name }} → {{ flightTab?.to?.iata || flightTab?.to?.city?.name }}</span>
+                            </TabsTrigger>
+                        </TabsList>
+                    <TabsContent v-for="(flightItem, flightIdx) in flight?.leg?.flights" :key="flightIdx"
+                        :value="`flight-${flightIdx}`" class="mt-0 border border-gray-200 rounded p-4 sm:p-3 bg-white">
+                        <h5 class="text-sm font-medium text-gray-900 mb-3 sm:mb-2">
                             {{ flightItem?.from?.city?.name }} to {{ flightItem?.to?.city?.name }}
                         </h5>
 
-                        <div v-for="(segment, segmentIdx) in flightItem?.segments" :key="segmentIdx" class="mb-3 last:mb-0">
-                            <div class="text-xs text-gray-500 mb-2">
+                        <div v-for="(segment, segmentIdx) in flightItem?.segments" :key="segmentIdx" class="mb-4 sm:mb-3 last:mb-0">
+                            <div class="text-xs text-gray-500 mb-3 sm:mb-2">
                                 {{ segment?.from?.name }} → {{ segment?.to?.name }}
                             </div>
 
@@ -3786,29 +4102,29 @@ watch(
                             </p>
 
                             <template v-if="!isInfantTraveler(trvIndex)">
-                            <!-- Selected meal preview for each traveler -->
+                            <!-- Selected meal preview for each traveler - Responsive -->
                             <div v-for="tIndex in getTravelerCount()" :key="tIndex" class="mb-2">
-                                <div v-if="getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)" 
-                                     class="p-2 bg-primary/5 rounded border border-primary/20">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <CheckCircle class="w-4 h-4 text-primary flex-shrink-0" />
-                                            <div class="text-sm">
+                                <div v-if="getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)"
+                                    class="p-2 bg-primary/5 rounded border border-primary/20">
+                                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <CheckCircle class="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                                            <div class="text-xs sm:text-sm">
                                                 <span class="font-medium text-gray-900">T{{ tIndex + 1 }}:</span>
                                                 <span class="text-gray-700 ml-1">{{ getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.mealName }}</span>
-                                                <span v-if="getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.quantity > 1" 
-                                                      class="text-gray-500 ml-1">
+                                                <span v-if="getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.quantity > 1"
+                                                    class="text-gray-500 ml-1">
                                                     (Qty: {{ getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.quantity }})
                                                 </span>
                                                 <span class="text-gray-500 ml-1">
                                                     {{ formatAmount(
-                                                        (getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.mealCharge || 0) * 
+                                                        (getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.mealCharge || 0) *
                                                         (getSelectedMealForTraveler(flightIdx, segment.RPH, tIndex)?.quantity || 1)
                                                     ) }}
                                                 </span>
                                             </div>
                                         </div>
-                                        <button class="px-2 py-1 text-xs rounded bg-red-100 text-red-600 hover:bg-red-200"
+                                        <button class="px-2 py-1 text-xs rounded bg-red-100 text-red-600 hover:bg-red-200 w-full sm:w-auto"
                                                 @click="removeMeal(flightIdx, segment.RPH, tIndex)">
                                             Remove
                                         </button>
@@ -3818,85 +4134,88 @@ watch(
 
                             <!-- Meal selection options -->
                             <div v-if="getMealsForSegment(segment)?.length > 0">
-                                <!-- Traveler tabs -->
-                                <div v-if="getTravelerCount() > 1" class="flex gap-2 mb-3">
-                                    <button v-for="tIndex in getTravelerCount()" 
+                                <!-- Traveler tabs - Responsive -->
+                                <div v-if="getTravelerCount() > 1" class="flex gap-2 mb-3 overflow-x-auto pb-1">
+                                    <button v-for="tIndex in getTravelerCount()"
                                             :key="tIndex"
                                             @click="trvIndex = tIndex"
-                                            class="px-3 py-1.5 text-sm rounded-full transition-colors"
-                                            :class="trvIndex === tIndex 
-                                                ? 'bg-primary text-white' 
+                                            class="px-3 py-1.5 text-xs sm:text-sm rounded-full transition-colors whitespace-nowrap flex-shrink-0"
+                                            :class="trvIndex === tIndex
+                                                ? 'bg-primary text-white'
                                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
                                         Traveler {{ tIndex + 1 }}
                                     </button>
                                 </div>
 
-                                <!-- Meals by category - LIST VIEW -->
-                                <div v-for="category in getMealCategoriesForSegment(segment)" 
-                                     :key="category"
-                                     class="mb-3 last:mb-0">
+                                <!-- Meals by category - MOBILE OPTIMIZED (like baggage) -->
+                                <div v-for="category in getMealCategoriesForSegment(segment)"
+                                    :key="category"
+                                    class="mb-3 last:mb-0">
                                     <h5 class="text-sm font-medium text-gray-700 mb-2">{{ category }}</h5>
-                                    
+
                                     <div class="space-y-2">
-                                        <div v-for="meal in getMealsByCategory(segment, category)" 
-                                             :key="meal.mealCode"
-                                             class="flex items-start gap-3 p-2 border rounded transition-all bg-white"
-                                             :class="{
-                                                 'border-primary bg-primary/5': isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode),
-                                                 'border-gray-200 hover:bg-gray-50 cursor-pointer': !isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode)
-                                             }">
-                                            
-                                            <div class="w-12 h-12 rounded bg-gray-100 flex-shrink-0 overflow-hidden"
-                                                 @click="!isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode) && handleMealSelection(flightIdx, segment.RPH, trvIndex, meal)">
-                                                <img :src="meal.mealImageLink || '/placeholder-meal.jpg'" 
-                                                     :alt="meal.mealName"
-                                                     class="w-full h-full object-cover"
-                                                     @error="handleImageError" />
+                                        <div v-for="meal in getMealsByCategory(segment, category)"
+                                            :key="meal.mealCode"
+                                            class="flex items-center gap-2 p-2 border rounded cursor-pointer transition-all bg-white"
+                                            :class="{
+                                                'border-primary bg-primary/5': isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode),
+                                                'border-gray-200 hover:bg-gray-50': !isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode)
+                                            }">
+
+                                            <!-- Meal image - smaller on mobile -->
+                                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded bg-gray-100 flex-shrink-0 overflow-hidden"
+                                                @click="!isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode) && handleMealSelection(flightIdx, segment.RPH, trvIndex, meal)">
+                                                <img :src="meal.mealImageLink || '/placeholder-meal.jpg'"
+                                                    :alt="meal.mealName"
+                                                    class="w-full h-full object-cover"
+                                                    @error="handleImageError" />
                                             </div>
-                                            
+
+                                            <!-- Meal details - compact -->
                                             <div class="flex-1 min-w-0"
-                                                 @click="!isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode) && handleMealSelection(flightIdx, segment.RPH, trvIndex, meal)">
-                                                <div class="flex items-center gap-2 mb-1">
-                                                    <span class="text-sm font-medium text-gray-900">
+                                                @click="!isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode) && handleMealSelection(flightIdx, segment.RPH, trvIndex, meal)">
+                                                <div class="flex items-center gap-0.5 flex-wrap mb-0.5">
+                                                    <span class="text-[9px] sm:text-sm font-medium text-gray-900">
                                                         {{ meal.mealName }}
                                                     </span>
-                                                    <span class="text-xs text-gray-400 whitespace-nowrap">
-                                                        ({{ meal.availableMeals }} left)
+                                                    <span class="text-[6px] sm:text-xs text-gray-400 whitespace-nowrap">
+                                                        ({{ meal.availableMeals }})
                                                     </span>
-                                                    <span v-if="meal.defaultMeal === 'Y'" 
-                                                          class="bg-yellow-100 text-yellow-800 text-xs px-1.5 rounded whitespace-nowrap">
-                                                        Default
+                                                    <span v-if="meal.defaultMeal === 'Y'"
+                                                        class="bg-yellow-100 text-yellow-800 text-[5px] sm:text-xs px-0.5 rounded whitespace-nowrap">
+                                                        Def
                                                     </span>
                                                 </div>
-                                                <p class="text-sm text-gray-500 line-clamp-2">
+                                                <p class="text-[7px] sm:text-xs text-gray-500 line-clamp-1 sm:line-clamp-2">
                                                     {{ meal.mealDescription }}
                                                 </p>
                                             </div>
-                                            
-                                            <div class="flex flex-col items-end gap-2 flex-shrink-0 min-w-[140px]">
-                                                <span class="text-base font-bold text-primary whitespace-nowrap">
+
+                                            <!-- Price and action - responsive -->
+                                            <div class="flex flex-col items-end gap-1 flex-shrink-0 min-w-[50px] sm:min-w-[140px]">
+                                                <span class="text-xs sm:text-base font-bold text-primary whitespace-nowrap">
                                                     {{ formatAmount(meal.mealCharge) }}
                                                 </span>
-                                                
+
                                                 <button v-if="!isMealSelectedForTraveler(flightIdx, segment.RPH, trvIndex, meal.mealCode)"
                                                         @click="handleMealSelection(flightIdx, segment.RPH, trvIndex, meal)"
-                                                        class="bg-primary text-white px-4 py-1.5 text-sm rounded hover:bg-primary/90 w-1/2">
+                                                        class="bg-primary text-white px-2 py-1 text-[10px] sm:text-sm rounded hover:bg-primary/90 w-full sm:w-auto">
                                                     Add
                                                 </button>
-                                                
-                                                <div v-else class="flex items-center gap-1 w-full justify-end" @click.stop>
-                                                    <span class="text-sm text-gray-500">Qty:</span>
+
+                                                <div v-else class="flex items-center gap-0.5 w-full justify-end" @click.stop>
+                                                    <span class="text-[10px] sm:text-sm text-gray-500 hidden sm:inline">Qty:</span>
                                                     <div class="flex items-center border rounded">
                                                         <button type="button"
-                                                                class="w-7 h-7 flex items-center justify-center hover:bg-gray-100 text-sm"
+                                                                class="w-5 h-5 sm:w-7 sm:h-7 flex items-center justify-center hover:bg-gray-100 text-xs sm:text-sm"
                                                                 @click.stop="adjustMealQuantity(flightIdx, segment.RPH, trvIndex, -1)">
                                                             −
                                                         </button>
-                                                        <span class="px-2 text-sm min-w-[28px] text-center">
+                                                        <span class="px-1 sm:px-2 text-xs sm:text-sm min-w-[20px] sm:min-w-[28px] text-center">
                                                             {{ getMealQuantity(flightIdx, segment.RPH, trvIndex) }}
                                                         </span>
                                                         <button type="button"
-                                                                class="w-7 h-7 flex items-center justify-center hover:bg-gray-100 text-sm"
+                                                                class="w-5 h-5 sm:w-7 sm:h-7 flex items-center justify-center hover:bg-gray-100 text-xs sm:text-sm"
                                                                 @click.stop="adjustMealQuantity(flightIdx, segment.RPH, trvIndex, 1)">
                                                             +
                                                         </button>
@@ -3912,17 +4231,18 @@ watch(
                             </div>
                             </template>
                         </div>
-                    </div>
+                    </TabsContent>
+                    </Tabs>
                 </div>
             </div>
             <div v-else class="text-center py-8 text-gray-500 border border-gray-200 rounded">
                 No meal options available
             </div>
-        </TabsContent>
-    </Tabs>
+            </AccordionContent>
+        </AccordionItem>
+    </Accordion>
 </div>
-</div>
-                                           
+
 
 
                                         </div>
@@ -3938,7 +4258,7 @@ watch(
 
                         <div class="sticky top-2">
                             <div v-if="countdown !== null && countdown !== '0'"
-                                class="flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm">
+                                class="hidden md:flex flex-col items-center justify-center bg-primary/10 border border-gray-200 p-4 mb-4 shadow-sm">
                                 <div class="flex items-end gap-4">
                                     <div class="flex flex-col items-center">
                                         <span
@@ -3959,7 +4279,8 @@ watch(
                                     Please complete your booking before the timer expires.
                                 </div>
                             </div>
-                            <div class="divide-y divide-gray-100 bg-white">
+
+                            <div class="divide-y divide-gray-100 bg-white max-sm:hidden">
                                 <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
                                     <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex">
                                         <!-- Layover Info -->
@@ -3968,27 +4289,26 @@ watch(
                                             <div class="flex items-center justify-center">
                                                 <ClockIcon class="w-4 h-4 text-amber-600 mr-2" />
                                                 <span class="text-xs font-medium text-amber-800">
-                                                    Layover: {{ moment.utc(moment.duration(segment.layover_time,
-                                                        "minutes").asMilliseconds()).format("HH:mm") }}
+                                                    Layover: {{   formatLayoverTime(segment.layover_time) }}
                                                 </span>
                                             </div>
                                         </div>
                                         <!-- Flight Segment -->
                                         <div class="p-4">
+                                            <div class="flex items-center space-x-2 mb-4">
+                                                <img class="w-8 h-8 border border-gray-200"
+                                                    :src="segment?.operating_carrier?.logo" alt="Airline" />
+                                                <div>
+                                                    <div class="text-sm font-medium text-gray-900">{{
+                                                        segment?.operating_carrier?.name }}</div>
+                                                    <div class="text-xs text-gray-500">{{
+                                                        segment?.flight_number
+                                                    }}</div>
+                                                </div>
+                                            </div>
                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 <!-- Departure -->
                                                 <div class="space-y-2">
-                                                    <div class="flex items-center space-x-2">
-                                                        <img class="w-8 h-8 border border-gray-200"
-                                                            :src="segment?.operating_carrier?.logo" alt="Airline" />
-                                                        <div>
-                                                            <div class="text-sm font-medium text-gray-900">{{
-                                                                segment?.operating_carrier?.name }}</div>
-                                                            <div class="text-xs text-gray-500">{{
-                                                                segment?.flight_number
-                                                            }}</div>
-                                                        </div>
-                                                    </div>
                                                     <div class="space-y-1">
                                                         <div class="text-sm font-medium text-gray-900">{{
                                                             formatDate(segment?.departure_at) }}</div>
@@ -4000,36 +4320,51 @@ watch(
                                                     </div>
                                                 </div>
                                                 <!-- Flight Path -->
-                                                <div class="flex items-center justify-center">
-                                                    <div class="w-full max-w-xs">
-                                                        <div class="flex items-center justify-between mb-1">
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                            }}</span>
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                            }}</span>
-                                                        </div>
-                                                        <div class="relative">
-                                                            <div
-                                                                class="absolute left-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                            <div
-                                                                class="h-0.5 bg-gradient-to-r from-primary to-primary/30 mx-1">
-                                                            </div>
-                                                            <div
-                                                                class="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                        </div>
-                                                        <div class="flex items-center justify-between mt-1">
-                                                            <span class="text-xs text-gray-400">{{
-                                                                segment?.from?.iata
-                                                            }}</span>
-                                                            <span class="text-xs text-gray-400">{{ segment?.to?.iata
-                                                            }}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
                                                 <!-- Arrival -->
                                                 <div class="space-y-2 text-right">
                                                     <div class="space-y-1">
@@ -4051,17 +4386,31 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
+                            <!-- Price Details -->
+                            <div class="flex items-center justify-between rounded border border-gray-200 bg-white p-3 shadow-sm sm:hidden">
+                                <div>
+                                    <div class="text-[11px] font-medium uppercase text-gray-500">Total Amount</div>
+                                    <div class="mt-0.5 text-base font-bold text-primary">{{ formatAmount(calculateGrandTotal()) }}</div>
+                                </div>
+                                <button type="button" @click="showMobilePriceDetails = !showMobilePriceDetails"
+                                    class="rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                                    {{ showMobilePriceDetails ? 'Hide' : 'Details' }}
+                                </button>
+                            </div>
+                            <div :class="[
+                                'bg-white shadow-sm border border-gray-200 overflow-hidden',
+                                showMobilePriceDetails ? 'block' : 'hidden sm:block'
+                            ]">
                                 <div class="flex p-4 items-center justify-between ">
                                     <h3 class="text-lg sm:text-xl font-semibold  text-gray-900">Price Details
                                     </h3>
-                                    
+
                                 </div>
                                 <div v-for="(passengerFareItem, index) in passengerFares" :key="index">
     <div class="mb-4">
         <Accordion type="multiple" collapsible>
             <AccordionItem :value="`passenger-fare-${index}`" class="overflow-hidden">
-                
+
                 <!-- HEADER -->
                 <AccordionTrigger
                     class="px-2 py-2 border-b grid grid-cols-[1fr_auto_auto] items-center hover:no-underline gap-1">
@@ -4080,7 +4429,7 @@ watch(
                             formatAmount(
                                 (parseFloat(passengerFareItem?.PassengerFare?.BaseFare?.['@attributes']?.Amount || 0) +
                                 parseFloat(passengerFareItem?.PassengerFare?.Surcharge?.['@attributes']?.Amount || 0) +
-                                parseFloat(passengerFareItem?.PassengerFare?.Taxes?.Total?.['@attributes']?.Amount || 
+                                parseFloat(passengerFareItem?.PassengerFare?.Taxes?.Total?.['@attributes']?.Amount ||
                                     (() => {
                                         const taxes = passengerFareItem?.PassengerFare?.Taxes?.Tax;
                                         if (!taxes) return 0;
@@ -4117,7 +4466,7 @@ watch(
 
                 <!-- CONTENT - Fare Breakdown -->
                 <AccordionContent class="px-3 sm:px-4 sm:pr-7 pb-3 space-y-2">
-                    
+
                     <!-- Base Fare with Margin -->
                     <div class="flex justify-between items-center">
                         <span class="text-xs sm:text-sm text-gray-600">Base Fare</span>
@@ -4151,7 +4500,7 @@ watch(
                         </span>
                     </div>
 
-                   
+
 
                     <!-- Surcharge (if exists) -->
                     <div v-if="passengerFareItem?.PassengerFare?.Surcharge" class="flex justify-between items-center">
@@ -4266,7 +4615,7 @@ watch(
             </AccordionItem>
         </Accordion>
     </div>
-    
+
 </div>
 <div class="flex justify-between items-center p-3">
                         <span class="text-xs sm:text-sm text-gray-600">Add-Ones</span>
@@ -4290,7 +4639,7 @@ watch(
                                     <div class="p-3">
                                         <div class="space-y-3">
                                             <div class="flex items-start space-x-2">
-                                                <Input type="checkbox" v-model="termsAccepted" id="terms"
+                                                <input type="checkbox" v-model="termsAccepted" id="terms"
                                                     class="mt-1" />
                                                 <Label for="terms" class="text-xs text-gray-500 leading-relaxed">
                                                     I understand and agree with the Privacy Policy, the User <a href="#"
@@ -4552,7 +4901,7 @@ watch(
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <!-- Departure -->
                                             <div class="space-y-2">
-                                                
+
                                                 <div class="space-y-1">
                                                     <div class="text-sm font-medium text-gray-900">{{
                                                         formatDate(segment?.departure_at) }}</div>
@@ -4564,36 +4913,51 @@ watch(
                                                 </div>
                                             </div>
                                             <!-- Flight Path -->
-                                            <div class="flex items-center justify-center">
-                                                <div class="w-full max-w-xs">
-                                                    <div class="flex items-center justify-between mb-1">
-                                                        <span class="text-xs font-medium text-gray-900">{{
-                                                            moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                            }}</span>
-                                                        <span class="text-xs font-medium text-gray-900">{{
-                                                            moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                            }}</span>
-                                                    </div>
-                                                    <div class="relative">
-                                                        <div
-                                                            class="absolute left-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                        </div>
-                                                        <div
-                                                            class="h-0.5 bg-gradient-to-r from-primary to-primary/30 mx-1">
-                                                        </div>
-                                                        <div
-                                                            class="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center justify-between mt-1">
-                                                        <span class="text-xs text-gray-400">{{
-                                                            segment?.from?.iata
-                                                            }}</span>
-                                                        <span class="text-xs text-gray-400">{{ segment?.to?.iata
-                                                            }}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <div class="flex items-center justify-center p-4">
+    <div class="w-full max-w-xs">
+        <!-- Times Row: Increased font size and weight for readability -->
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+            </span>
+            <span class="text-sm font-bold text-slate-800">
+                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
+            </span>
+        </div>
+
+        <!-- IATA Codes Row: Subtle color for origin, bold for destination -->
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.from?.iata }}
+            </span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                {{ segment?.to?.iata }}
+            </span>
+        </div>
+
+        <!-- Route Line with Airplane -->
+        <div class="relative flex items-center">
+            <!-- Left Dot (Origin) -->
+            <div class="z-10 w-1.5 h-1.5 bg-white border border-primary rounded-full"></div>
+
+            <!-- The Line -->
+            <div class="flex-grow h-px bg-slate-200 relative mx-0.5">
+                <!-- Progress Gradient (Optional overlay) -->
+                <div class="absolute inset-0 bg-gradient-to-r from-primary to-primary/20 rounded-full"></div>
+
+                <!-- Centered Airplane Icon -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-1">
+                    <svg class="w-3.5 h-3.5 text-primary rotate-90" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Dot (Destination) -->
+            <div class="z-10 w-1.5 h-1.5 bg-primary rounded-full"></div>
+        </div>
+    </div>
+</div>
                                             <!-- Arrival -->
                                             <div class="space-y-2 text-right">
                                                 <div class="space-y-1">
@@ -4747,17 +5111,30 @@ watch(
 
                 <!-- Preview Sidebar -->
                 <div class="lg:col-span-2">
-                    <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:hidden">
+                        <div>
+                            <div class="text-[11px] font-medium uppercase text-gray-500">Total Amount</div>
+                            <div class="mt-0.5 text-base font-bold text-primary">{{ formatAmount(calculateGrandTotal()) }}</div>
+                        </div>
+                        <button type="button" @click="showMobilePriceDetails = !showMobilePriceDetails"
+                            class="rounded border border-primary px-4 py-2 text-xs font-semibold text-primary">
+                            {{ showMobilePriceDetails ? 'Hide' : 'Details' }}
+                        </button>
+                    </div>
+                    <div :class="[
+                        'bg-white shadow-sm border border-gray-200 overflow-hidden',
+                        showMobilePriceDetails ? 'block' : 'hidden sm:block'
+                    ]">
                                 <div class="flex p-4 items-center justify-between ">
                                     <h3 class="text-lg sm:text-xl font-semibold  text-gray-900">Price Details
                                     </h3>
-                                    
+
                                 </div>
                                 <div v-for="(passengerFareItem, index) in passengerFares" :key="index">
     <div class="mb-4">
         <Accordion type="multiple" collapsible>
             <AccordionItem :value="`passenger-fare-${index}`" class="overflow-hidden">
-                
+
                 <!-- HEADER -->
                 <AccordionTrigger
                     class="px-2 py-2 border-b grid grid-cols-[1fr_auto_auto] items-center hover:no-underline gap-1">
@@ -4776,7 +5153,7 @@ watch(
                             formatAmount(
                                 (parseFloat(passengerFareItem?.PassengerFare?.BaseFare?.['@attributes']?.Amount || 0) +
                                 parseFloat(passengerFareItem?.PassengerFare?.Surcharge?.['@attributes']?.Amount || 0) +
-                                parseFloat(passengerFareItem?.PassengerFare?.Taxes?.Total?.['@attributes']?.Amount || 
+                                parseFloat(passengerFareItem?.PassengerFare?.Taxes?.Total?.['@attributes']?.Amount ||
                                     (() => {
                                         const taxes = passengerFareItem?.PassengerFare?.Taxes?.Tax;
                                         if (!taxes) return 0;
@@ -4812,7 +5189,7 @@ watch(
 
                 <!-- CONTENT - Fare Breakdown -->
                 <AccordionContent class="px-3 sm:px-4 sm:pr-7 pb-3 space-y-2">
-                    
+
                     <!-- Base Fare with Margin -->
                     <div class="flex justify-between items-center">
                         <span class="text-xs sm:text-sm text-gray-600">Base Fare</span>
@@ -4834,7 +5211,7 @@ watch(
                         </span>
                     </div>
 
-                   
+
 
                     <!-- Surcharge (if exists) -->
                     <div v-if="passengerFareItem?.PassengerFare?.Surcharge" class="flex justify-between items-center">
@@ -4949,7 +5326,7 @@ watch(
             </AccordionItem>
         </Accordion>
     </div>
-    
+
 </div>
 <div class="flex justify-between items-center p-3">
                         <span class="text-xs sm:text-sm text-gray-600">Add-Ones</span>

@@ -83,12 +83,14 @@ const actions = {
             toast("Bank has been updated successfully.", {
                 type: "success",
             });
+            return response;
         } catch (error) {
             //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            return null;
         }
     },
 

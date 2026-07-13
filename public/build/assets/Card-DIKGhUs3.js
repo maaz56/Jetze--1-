@@ -1,1 +1,0 @@
-import{c as a}from"./utils-BNXbhsg2.js";import{o,c,aw as n,n as t,u as l}from"./app-Bf-HvLTm.js";const m={__name:"Card",props:{class:{type:null,required:!1}},setup(r){const s=r;return(e,d)=>(o(),c("div",{class:t(l(a)("rounded-xl border bg-card text-card-foreground shadow",s.class))},[n(e.$slots,"default")],2))}};export{m as _};

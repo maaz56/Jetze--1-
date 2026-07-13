@@ -648,13 +648,13 @@ onMounted(() => {
                                 <p class="">
                                     {{
                                         agentData?.agent_data?.mobile ||
-                                        "+(+92) 0000000000"
+                                        "+(+92) 3111711123"
                                     }}
                                 </p>
                                 <p class="line-clamp-2">
                                     {{
                                         agentData?.agent_data?.address ||
-                                        "Address1234567"}}
+                                        "Address line 1,Sheikhpura Road,Lahore,Pakistan"}}
                                 </p>
                                 <p class="">
                                     {{
@@ -1210,13 +1210,13 @@ onMounted(() => {
                                 <p class="">
                                     {{
                                         agentData?.agent_data?.mobile ||
-                                        "+(+92) 0000000000"
+                                        "+(+92) 3111711123"
                                     }}
                                 </p>
                                 <p class="line-clamp-2">
                                     {{
                                         agentData?.agent_data?.address ||
-                                        "Address1234567"}}
+                                        "Address line 1,Sheikhpura Road,Lahore,Pakistan"}}
                                 </p>
                                 <p class="">
                                     {{

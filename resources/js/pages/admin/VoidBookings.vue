@@ -187,7 +187,7 @@ onMounted(() => {
   Void Bookings
 </div>
             <div class="bg-white dark:bg-gray-800 relative sm:rounded-lg border overflow-hidden">
-                <div class="overflow-x-auto">
+                <div class="custom-scrollbar overflow-x-auto">
                     <table v-if="bookings?.bookings?.length > 0"
                         class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                         <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
@@ -377,3 +377,39 @@ onMounted(() => {
         </div>
     </section>
 </template>
+
+<style scoped>
+/* custom scrollbar for mobile */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 2px;
+    width: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #e5e7eb;
+    border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #9ca3af;
+    border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #9ca3af #e5e7eb;
+}
+
+/* For Firefox to make it even thinner, use this hack */
+@-moz-document url-prefix() {
+    .custom-scrollbar {
+        scrollbar-width: auto;
+        scrollbar-color: #9ca3af #e5e7eb;
+    }
+}
+</style>

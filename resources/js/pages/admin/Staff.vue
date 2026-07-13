@@ -71,6 +71,7 @@ import {
 import { useStore } from "vuex";
 import { useAuthStore } from "@/services/stores/auth";
 import auth from "@/services/store/auth";
+import axios from "axios";
 
 
 const userStore = useUserStore();
@@ -90,8 +91,21 @@ const authUser = computed(() => authStore.user);
 const approvalFilter = ref('all'); // 'all', 'approved', 'pending'
 const roleFilter = ref('all'); // 'all', 'agent', 'user'
 
-// Modified to only include agent and user roles
-const availableRoles = ref(['agent', 'user']);
+// Modified to fetch roles from DB
+const availableRoles = ref([]);
+
+const fetchAvailableRoles = async () => {
+    try {
+        const response = await axios.get('/api/roles');
+        availableRoles.value = response.data.data;
+    } catch (error) {
+        console.error("Failed to fetch roles", error);
+    }
+};
+
+onMounted(() => {
+    fetchAvailableRoles();
+});
 
 const fetchUsers = debounce(() => {
     // When "all" is selected, we still only want to fetch agents and users
@@ -104,17 +118,17 @@ const fetchUsers = debounce(() => {
         page: route.query.page,
         approval_status: approvalFilter.value !== 'all' ? approvalFilter.value : undefined,
         role: effectiveRole,
+        type: 'staff'
     });
 }, 300);
 
 // Filtered users based on selected filters
 const filteredUsers = computed(() => {
     if (!users.value?.data) return [];
-
-    // If we need additional client-side filtering to ensure only agents and users
-    // are shown even when "all" is selected, we can add that logic here
+    
+    // Exclude regular customers/agents from the staff module
     return users.value.data.filter(user => 
-          user.role === 'reservation' || user.role === 'salesman'||user.role === 'admin' || user.role === 'accounts'
+        user.role !== 'agent' && user.role !== 'user'
     );
 });
 
@@ -208,16 +222,11 @@ onMounted(() => {
                                         All Roles
                                     </Button>
                                     <!-- Only show Agent and User roles -->
-                                   
-                                     <Button variant="ghost" size="sm" class="w-full justify-start"
-                                        :class="{ 'bg-muted': roleFilter === 'salesman' }"
-                                        @click="roleFilter = 'salesman'; fetchUsers()">
-                                        Salesman
-                                    </Button>
-                                    <Button variant="ghost" size="sm" class="w-full justify-start"
-                                        :class="{ 'bg-muted': roleFilter === 'reservation' }"
-                                        @click="roleFilter = 'reservation'; fetchUsers()">
-                                        Reservation
+                                    <Button v-for="role in availableRoles" :key="role.id"
+                                        variant="ghost" size="sm" class="w-full justify-start capitalize"
+                                        :class="{ 'bg-muted': roleFilter === role.name }"
+                                        @click="roleFilter = role.name; fetchUsers()">
+                                        {{ role.name }}
                                     </Button>
                                 </div>
                             </PopoverContent>
@@ -253,15 +262,13 @@ onMounted(() => {
                 <div class="relative overflow-hidden">
                     <div class="overflow-x-auto">
                         <Table>
-                            <TableHeader class="bg-muted">
+                            <TableHeader class="bg-primary">
                                 <TableRow>
                                     <TableHead scope="col" class="px-4 py-3">Role</TableHead>
                                     <TableHead scope="col" class="px-4 py-3">Name</TableHead>
 
                                    
                                     <TableHead scope="col" class="px-4 py-3">Email</TableHead>
-                                     <TableHead scope="col" class="px-4 py-3">Phone</TableHead>
-                                     <TableHead scope="col" class="px-4 py-3">Agent Count</TableHead>
                                    
                                    
                                     <TableHead scope="col" class="px-4 py-3">Actions</TableHead>
@@ -286,19 +293,8 @@ onMounted(() => {
                                             {{ user?.email || "_" }}
                                         </span>
                                     </TableCell>
-                                    <TableCell class="px-4 py-2">
-                                        <span class="text-xs font-medium px-2 py-0.5">
-                                            {{ user?.phone || "_" }}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell class="px-4 py-2">
-                                           
-                                         <Badge
-                                            class="uppercase bg-primary/20  hover:bg-primary/20 text-gray-800 border-primary/50 cursor-default">
-                                            {{  users?.salesMenAgentCount[index]?.agent_count || "_" }}
-                                        </Badge>
-                                      
-                                    </TableCell>
+                                   
+                                    
                                   
                                    
 

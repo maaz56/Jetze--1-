@@ -2420,7 +2420,7 @@ passenger, index
                                         class="bg-white border-2 rounded-md p-6 cursor-pointer transition-all duration-200 hover:border-primary hover:shadow-md"
                                         :class="selectedFares[flightIndex] === fare.ref_id ? 'border-primary bg-primary/5' : 'border-gray-200'">
                                         <div class="flex flex-col gap-4">
-                                            <pre>{{ fare }}</pre>
+                                            <!-- <pre>{{ fare }}</pre> -->
                                             <!-- Radio Button and Fare Details -->
                                             <div class="flex items-center justify-between gap-6">
                                                 <input type="radio" :name="'fare-' + flightIndex" class="hidden"

@@ -112,9 +112,9 @@
             <br>
             Email: <a href="mailto:support@Jetze.pk" class="text-primary hover:underline">support@Jetze.pk</a>
             <br>
-            Phone: (+92) 0000000000
+            Phone: (+92) 3111711123
             <br>
-            Address: 65-B Gulfishan Town, Address1234
+            Address: 65-B Gulfishan Town, Mardan Road Charsadda.
           </p>
         </section>
       </div>

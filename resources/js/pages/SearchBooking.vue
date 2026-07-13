@@ -256,7 +256,7 @@ onMounted(() => {
                       'bg-red-100 text-red-800': booking.status === 'cancelled',
                       'bg-gray-100 text-gray-800': !['confirmed', 'pending', 'cancelled'].includes(booking.status)
                     }">
-                      {{ booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1) || 'Unknown' }}
+                      {{ booking.status?.toUpperCase() || 'UNKNOWN' }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
                     </span>
                   </td>
                   <td class="px-6 py-4 text-center">

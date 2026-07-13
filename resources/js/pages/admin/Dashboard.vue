@@ -19,12 +19,11 @@ import {
   Plus,
   Eye,
   CircleDollarSign,
-  CircleChevronRight, 
+  CircleChevronRight,
   CirclePause,
   BarChart3,
   Plane
 } from "lucide-vue-next";
-import { Badge } from "@/components/ui/badge";
 import {
   FETCH_USER_SUMMARY,
   FETCH_BOOKING_DATA,
@@ -51,17 +50,6 @@ const agentsDepositData = computed(() => store.getters["deposit/depositDataWithA
 const user = computed(() => authStore.user);
 const emit = defineEmits(['filter-change'])
 const activeFilter = ref('all');
-const DASHBOARD_BOOKING_LIMIT = 15;
-
-const toNumber = (value) => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const getTimestamp = (date) => {
-  const timestamp = new Date(date || 0).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
-};
 
 function fetchUsers() {
   userStore.fetchUsers({
@@ -78,7 +66,6 @@ function fetchBookings() {
   store.dispatch("flight/" + FETCH_BOOKING_DATA, {
     user_role: user.value.role,
     bookingFilter: activeFilter.value,
-    dashboard_limit: DASHBOARD_BOOKING_LIMIT,
   });
 }
 
@@ -93,106 +80,16 @@ const parseFlightData = (flightDataString) => {
 
 const bookingsData = computed(() => {
   return {
-    total_count: bookings?.value?.total_count,
-    total_ticketed: bookings?.value?.total_ticketed,
-    total_canceled: bookings?.value?.total_canceled,
-    total_booked: bookings?.value?.total_booked,
+    total_count: bookings?.value?.total_count || 0,
+    total_ticketed: bookings?.value?.total_ticketed || 0,
+    total_canceled: bookings?.value?.total_canceled || 0,
+    total_booked: bookings?.value?.total_booked || 0,
   };
 });
 
 const latestBookings = computed(() => {
-  const rows = Array.isArray(bookings.value?.bookings) ? bookings.value.bookings : [];
-
-  return [...rows]
-    .sort((current, next) => getTimestamp(next?.created_at) - getTimestamp(current?.created_at))
-    .slice(0, DASHBOARD_BOOKING_LIMIT);
+  return (bookings.value?.bookings || []).slice(0, 15);
 });
-
-const depositRows = computed(() => agentsDepositData.value?.deposits || []);
-
-const calculatedDepositTotals = computed(() => {
-  return depositRows.value.reduce((totals, deposit) => {
-    const amount = toNumber(deposit?.amount);
-    const status = getDepositStatus(deposit);
-
-    totals.totalDeposits += amount;
-
-    if (status === "approved") {
-      totals.totalApprovedDeposits += amount;
-    } else if (status === "pending") {
-      totals.totalPendingDeposits += amount;
-    } else if (status === "rejected") {
-      totals.totalRejectedDeposits += amount;
-    }
-
-    return totals;
-  }, {
-    totalDeposits: 0,
-    totalApprovedDeposits: 0,
-    totalPendingDeposits: 0,
-    totalRejectedDeposits: 0,
-  });
-});
-
-const depositTotals = computed(() => {
-  const apiTotals = agentDepositTotals.value || {};
-  const fallbackTotals = calculatedDepositTotals.value;
-
-  return {
-    totalDeposits: apiTotals.totalDeposits != null
-      ? toNumber(apiTotals.totalDeposits)
-      : fallbackTotals.totalDeposits,
-    totalApprovedDeposits: apiTotals.totalApprovedDeposits != null
-      ? toNumber(apiTotals.totalApprovedDeposits)
-      : fallbackTotals.totalApprovedDeposits,
-    totalPendingDeposits: apiTotals.totalPendingDeposits != null
-      ? toNumber(apiTotals.totalPendingDeposits)
-      : fallbackTotals.totalPendingDeposits,
-    totalRejectedDeposits: apiTotals.totalRejectedDeposits != null
-      ? toNumber(apiTotals.totalRejectedDeposits)
-      : fallbackTotals.totalRejectedDeposits,
-  };
-});
-
-function getCustomerFullName(customer) {
-  return [
-    customer?.name,
-    customer?.first_name,
-    customer?.last_name,
-  ].filter(Boolean).join(" ");
-}
-
-function getDepositName(deposit) {
-  return deposit?.agent?.agent_data?.company_name
-    || deposit?.agent?.customer?.company_name
-    || getCustomerFullName(deposit?.agent?.customer)
-    || deposit?.agent?.name
-    || deposit?.agent?.email
-    || "-";
-}
-
-function getDepositStatus(deposit) {
-  return String(deposit?.deposit_status || deposit?.status || "pending").toLowerCase();
-}
-
-function getDepositStatusLabel(deposit) {
-  const status = getDepositStatus(deposit);
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function getDepositStatusClass(deposit) {
-  const status = getDepositStatus(deposit);
-
-  if (status === "approved") {
-    return "py-2 px-3 rounded-full text-xs uppercase bg-green-100 text-green-800 border-green-200 cursor-default";
-  }
-
-  if (status === "rejected") {
-    return "py-2 px-3 rounded-full text-xs uppercase bg-red-100 text-red-800 border-red-200 cursor-default";
-  }
-
-  return "py-2 px-3 rounded-full text-xs uppercase bg-amber-100 text-amber-800 border-amber-200 cursor-default";
-}
 
 function fetchTotalApprovedDepost() {
   store.dispatch("deposit/" + FETCH_TOTAL_APPROVED_DEPOSIT);
@@ -216,33 +113,37 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bg-gray-50 min-h-screen p-4">
+  <div class="bg-gray-50 min-h-screen p-4  max-sm:p-1">
     <!-- Booking Overview Section -->
     <div class="bg-white mb-6 rounded-xl  overflow-hidden transform transition-all duration-300 hover:shadow-xl">
       <div class="bg-primary p-4">
-        <div class="flex justify-between items-center">
-          <div class="flex items-center">
-            <Plane class="h-8 w-8 text-white mr-3 transform -rotate-45" />
-            <h2 class="text-2xl font-bold text-white">Booking Overview</h2>
-          </div>
-          <button @click="$router.push({ name: 'AdminCustomerBookings' })" 
-            class="bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg px-4 py-2 flex items-center transition-all duration-300">
-            <Eye class="w-4 h-4 me-2" />
-            View All
-          </button>
-        </div>
-      </div>
-      <div class="p-6">
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <!-- Total Bookings -->
-          <div class="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
-            <div class="absolute -right-6 -bottom-6 opacity-10">
-              <CalendarIcon class="h-24 w-24 text-blue-500" />
+        <div class="flex justify-between items-center gap-2 sm:gap-4">
+            <div class="flex items-center flex-1 min-w-0">
+                <Plane class="h-6 w-6 sm:h-8 sm:w-8 text-white mr-2 sm:mr-3 transform -rotate-45 flex-shrink-0" />
+                <h2 class="text-lg sm:text-2xl font-bold text-white truncate">Booking Overview</h2>
             </div>
-            <div class="z-10 flex items-center">
-              <div class="bg-blue-500 p-3 rounded-lg mr-4">
-                <CalendarIcon class="h-6 w-6 text-white" />
+            <button
+                @click="$router.push({ name: 'AdminCustomerBookings' })"
+                class="bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg flex items-center justify-center transition-all duration-300"
+                :class="{
+                    'p-1.5 gap-0': true,
+                    'sm:py-2 sm:px-4 sm:gap-2': true
+                }"
+            >
+                <Eye class="w-4 h-4" />
+                <span class="hidden sm:inline">View All</span>
+            </button>
+        </div>
+    </div>
+      <div class="p-6 max-sm:p-4">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+          <!-- Total Bookings -->
+            <div class="overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 sm:p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
+
+            <div class="z-10 flex items-center justify-center">
+              <div class="bg-blue-500 p-2 max-[320px]:hidden rounded-lg mr-4">
+                <CalendarIcon class="h-5 w-5 text-white" />
               </div>
               <div>
                 <p class="text-sm font-medium text-blue-600">All Bookings</p>
@@ -253,13 +154,13 @@ onMounted(() => {
 
           <!-- Ticketed -->
           <div class="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg"
-            :class="{ 'ring-2 ring-green-500': activeFilter === 'ticketed' }" 
+            :class="{ 'ring-2 ring-green-500': activeFilter === 'ticketed' }"
             @click="filterBookings('ticketed')">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <CheckCircleIcon class="h-24 w-24 text-green-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-green-500 p-3 rounded-lg mr-4">
+              <div class="bg-green-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <CheckCircleIcon class="h-6 w-6 text-white" />
               </div>
               <div>
@@ -271,13 +172,13 @@ onMounted(() => {
 
           <!-- Total Canceled -->
           <div class="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg"
-            :class="{ 'ring-2 ring-red-500': activeFilter === 'canceled' }" 
+            :class="{ 'ring-2 ring-red-500': activeFilter === 'canceled' }"
             @click="filterBookings('canceled')">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <Ban class="h-24 w-24 text-red-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-red-500 p-3 rounded-lg mr-4">
+              <div class="bg-red-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <Ban class="h-6 w-6 text-white" />
               </div>
               <div>
@@ -289,13 +190,13 @@ onMounted(() => {
 
           <!-- On Hold -->
           <div class="relative overflow-hidden bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg"
-            :class="{ 'ring-2 ring-yellow-500': activeFilter === 'booked' }" 
+            :class="{ 'ring-2 ring-yellow-500': activeFilter === 'booked' }"
             @click="filterBookings('booked')">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <CirclePause class="h-24 w-24 text-yellow-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-yellow-500 p-3 rounded-lg mr-4">
+              <div class="bg-yellow-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <CirclePause class="h-6 w-6 text-white" />
               </div>
               <div>
@@ -307,10 +208,10 @@ onMounted(() => {
         </div>
 
         <!-- Table and Chart Section -->
-        <div class="grid grid-cols-5 gap-6">
+        <div class="grid lg:grid-cols-5 grid-cols-2 gap-6">
           <!-- Table -->
           <div class="col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div class="max-h-96 overflow-auto">
+            <div class="custom-scrollbar max-h-96 overflow-auto">
               <table class="min-w-full">
                 <thead class="bg-gray-50 sticky top-0">
                   <tr>
@@ -340,7 +241,7 @@ onMounted(() => {
                       {{ booking.created_at ? moment(booking.created_at).format('DD-MM-YYYY') : '' }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900">
-                      
+
                        {{ booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
@@ -446,9 +347,9 @@ onMounted(() => {
               </table>
             </div>
           </div>
-          
+
           <!-- Chart -->
-          <div class="col-span-2 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
+          <div class="col-span-2 max-sm:col-span-3 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
             <FlightBookingChart :bookings="bookingsData" />
           </div>
         </div>
@@ -463,7 +364,7 @@ onMounted(() => {
             <UsersRound class="h-8 w-8 text-white mr-3" />
             <h2 class="text-2xl font-bold text-white">Agents Overview</h2>
           </div>
-          <button @click="$router.push({ name: 'Users' })" 
+          <button @click="$router.push({ name: 'TopUpRequest' })"
             class="bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg px-4 py-2 flex items-center transition-all duration-300">
             <Eye class="w-4 h-4 me-2" />
             View All
@@ -472,7 +373,7 @@ onMounted(() => {
       </div>
       <div class="p-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-         
+
           <div class="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <UsersRound class="h-24 w-24 text-blue-500" />
@@ -488,7 +389,7 @@ onMounted(() => {
             </div>
           </div>
 
-      
+
           <div class="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <UserRoundCheck class="h-24 w-24 text-green-500" />
@@ -504,7 +405,7 @@ onMounted(() => {
             </div>
           </div>
 
-         
+
           <div class="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <UserRoundX class="h-24 w-24 text-amber-500" />
@@ -520,7 +421,7 @@ onMounted(() => {
             </div>
           </div>
 
-         
+
           <div class="relative overflow-hidden bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
             <div class="absolute -right-6 -bottom-6 opacity-10">
               <BookUser class="h-24 w-24 text-purple-500" />
@@ -537,7 +438,7 @@ onMounted(() => {
           </div>
         </div>
         <div class="grid grid-cols-5 gap-6 pt-4">
-         
+
           <div class="col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div class="max-h-96 overflow-auto">
               <table class="min-w-full">
@@ -552,7 +453,7 @@ onMounted(() => {
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                      Phone
                     </th>
-                   
+
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
@@ -582,7 +483,7 @@ onMounted(() => {
                       Pending
                     </Badge>
                     </td>
-                   
+
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
                       <button @click="
                       $router.push({
@@ -601,103 +502,108 @@ onMounted(() => {
               </table>
             </div>
           </div>
-          
-        
+
+
           <div class="col-span-2 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
             <UserChart :users="usersSummary" />
           </div>
       </div>
     </div>
 
-   
-    
+
+
     </div> -->
     <div class="bg-white mb-6 rounded-xl shadow-lg overflow-hidden transform transition-all duration-300 hover:shadow-xl">
       <div class="bg-primary p-4">
         <div class="flex justify-between items-center">
           <div class="flex items-center">
             <CircleDollarSign class="h-8 w-8 text-white mr-3" />
-            <h2 class="text-2xl font-bold text-white">Deposits Overview</h2>
+            <h2 class="text-lg sm:text-2xl font-bold text-white truncate">Deposits Overview</h2>
           </div>
-          <button @click="$router.push({ name: 'Users' })" 
-            class="bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg px-4 py-2 flex items-center transition-all duration-300">
-            <Eye class="w-4 h-4 me-2" />
-            View All
+          <button @click="$router.push({ name: 'Users' })"
+            class="bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg flex items-center justify-center transition-all duration-300"
+            :class="{
+                    'p-1.5 gap-0': true,
+                    'sm:py-2 sm:px-4 sm:gap-2': true
+                }">
+            <Eye class="w-4 h-4" />
+                <span class="hidden sm:inline">View All</span>
           </button>
         </div>
       </div>
 
+
       <div class="p-6">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
           <!-- Total Deposits -->
-          <div class="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
-            <div class="absolute -right-6 -bottom-6 opacity-10">
+          <div class="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 max-sm:p-3 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
+            <div class="absolute -right-6 -bottom-6 opacity-10 max-sm:hidden">
               <CircleDollarSign class="h-24 w-24 text-blue-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-blue-500 p-3 rounded-lg mr-4">
+              <div class="bg-blue-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <CircleDollarSign class="h-6 w-6 text-white" />
               </div>
               <div>
                 <p class="text-sm font-medium text-blue-600">Total Deposits</p>
-                <p class="text-xl font-bold text-blue-800">{{ formatAmount(depositTotals.totalDeposits) }}</p>
+                <p class="text-xl max-sm:text-sm font-bold text-blue-800">{{ formatAmount(agentDepositTotals?.totalDeposits || 0) }}</p>
               </div>
             </div>
           </div>
 
           <!-- Approved Deposits -->
-          <div class="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
-            <div class="absolute -right-6 -bottom-6 opacity-10">
+          <div class="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 max-sm:p-3 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
+            <div class="absolute -right-6 -bottom-6 opacity-10 max-sm:hidden">
               <CheckCircleIcon class="h-24 w-24 text-green-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-green-500 p-3 rounded-lg mr-4">
+              <div class="bg-green-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <CheckCircleIcon class="h-6 w-6 text-white" />
               </div>
               <div>
                 <p class="text-sm font-medium text-green-600">Approved Deposits</p>
-                <p class="text-xl font-bold text-green-800">{{ formatAmount(depositTotals.totalApprovedDeposits) }}</p>
+                <p class="text-xl font-bold text-green-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalApprovedDeposits || 0) }}</p>
               </div>
             </div>
           </div>
 
           <!-- Pending Deposits -->
-          <div class="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
-            <div class="absolute -right-6 -bottom-6 opacity-10">
+          <div class="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-5 max-sm:p-3 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
+            <div class="absolute -right-6 -bottom-6 opacity-10 max-sm:hidden">
               <Hourglass class="h-24 w-24 text-amber-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-amber-500 p-3 rounded-lg mr-4">
+              <div class="bg-amber-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <Hourglass class="h-6 w-6 text-white" />
               </div>
               <div>
                 <p class="text-sm font-medium text-amber-600">Pending Deposits</p>
-                <p class="text-xl font-bold text-amber-800">{{ formatAmount(depositTotals.totalPendingDeposits) }}</p>
+                <p class="text-xl font-bold text-amber-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalPendingDeposits || 0) }}</p>
               </div>
             </div>
           </div>
 
           <!-- Rejected Deposits -->
-          <div class="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-5 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
-            <div class="absolute -right-6 -bottom-6 opacity-10">
+          <div class="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-5 max-sm:p-3 flex items-center transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-lg">
+            <div class="absolute -right-6 -bottom-6 opacity-10 max-sm:hidden">
               <X class="h-24 w-24 text-red-500" />
             </div>
             <div class="z-10 flex items-center">
-              <div class="bg-red-500 p-3 rounded-lg mr-4">
+              <div class="bg-red-500 p-3 rounded-lg mr-4 max-[320px]:hidden">
                 <X class="h-6 w-6 text-white" />
               </div>
               <div>
                 <p class="text-sm font-medium text-red-600">Rejected Deposits</p>
-                <p class="text-xl font-bold text-red-800">{{ formatAmount(depositTotals.totalRejectedDeposits) }}</p>
+                <p class="text-xl font-bold text-red-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalRejectedDeposits || 0) }}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div class="grid grid-cols-5 gap-6 p-6">
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 p-6 max-sm:p-4">
           <!-- Table -->
           <div class="col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div class="max-h-96 overflow-auto">
+            <div class="custom-scrollbar max-h-96 overflow-auto">
               <table class="min-w-full">
                 <thead class="bg-gray-50 sticky top-0">
                   <tr>
@@ -722,20 +628,33 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                  <tr v-for="deposit in depositRows" :key="deposit?.id" class="hover:bg-gray-50 transition-colors">
+                  <tr v-for="deposit in agentsDepositData?.deposits" :key="deposit?.id" class="hover:bg-gray-50 transition-colors">
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-900">
                       {{ deposit?.date? moment(deposit?.date).format('DD-MM-YYYY'):'-' }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900">
-                      {{ getDepositName(deposit) }}
+                      {{ deposit?.agent?.agent_data?.company_name || deposit?.agent?.name || deposit?.agent?.email || '-' }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                      {{ formatAmount(deposit?.amount) }}
+                      {{ formatAmount(deposit?.amount || 0) }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                      <Badge :class="getDepositStatusClass(deposit)">
-                        {{ getDepositStatusLabel(deposit) }}
-                      </Badge>
+                        <Badge v-if="deposit?.deposit_status == 'pending'"
+                      class="py-2 px-3 rounded-full text-xs uppercase bg-yellow-100 text-yellow-800 border-yellow-200 cursor-default">
+                      Pending
+                    </Badge>
+                    <Badge v-else-if="deposit?.deposit_status == 'rejected'"
+                      class="py-2 px-3 rounded-full text-xs uppercase bg-red-100 text-red-800 border-red-200 cursor-default">
+                      Rejected
+                    </Badge>
+                    <Badge v-else-if="deposit?.deposit_status == 'approved'"
+                      class="py-2 px-3 rounded-full text-xs uppercase bg-green-100 text-green-800 border-destructive/50 cursor-default">
+                      Approved
+                    </Badge>
+                    <Badge v-else
+                      class="py-2 px-3 rounded-full text-xs uppercase bg-gray-100 text-gray-800 border-gray-200 cursor-default">
+                      {{ deposit?.deposit_status || 'Unknown' }}
+                    </Badge>
                     </td>
                     <!-- <td class="px-6 py-3 whitespace-nowrap">
                       <span class="px-3 uppercase text-xs leading-5 py-1 rounded-full" :class="{
@@ -763,10 +682,10 @@ onMounted(() => {
               </table>
             </div>
           </div>
-          
+
           <!-- Chart -->
-          <div class="col-span-2 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
-            <depositChart  :deposits="depositTotals" />
+          <div class="col-span-2 max-lg:col-span-3 bg-white rounded-xl border border-gray-100   flex items-center justify-center">
+            <depositChart  :deposits="agentDepositTotals" />
           </div>
       </div>
 
@@ -802,5 +721,38 @@ onMounted(() => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+/* custom scrollbar for mobile */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 2px;
+    width: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #e5e7eb;
+    border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #9ca3af;
+    border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #9ca3af #e5e7eb;
+}
+
+/* For Firefox to make it even thinner, use this hack */
+@-moz-document url-prefix() {
+    .custom-scrollbar {
+        scrollbar-width: auto;
+        scrollbar-color: #9ca3af #e5e7eb;
+    }
 }
 </style>

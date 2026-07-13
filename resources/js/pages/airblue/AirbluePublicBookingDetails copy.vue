@@ -799,6 +799,12 @@ onMounted(() => {
                         <ChatBubbleIcon class="h-5 w-5  inline-block mr-1" />
                         Chat
                     </button>
+                    <button @click="toggleFareInfo"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        <EyeOff class="h-5 w-5 inline-block mr-1" />
+                        <span v-if="isDetailsInfoVisible">Hide Fare Details</span>
+                        <span v-else>View Fare Details</span>
+                    </button>
                 </div>
                 <!-- <pre>{{ bookingDetails }}</pre> -->
                 <div class="border" id="print-section">
@@ -822,13 +828,13 @@ onMounted(() => {
                                 <p class="">
                                     {{
                                         agentData?.agent_data?.mobile ||
-                                        "+(+92) 0000000000"
+                                        "+(+92) 3111711123"
                                     }}
                                 </p>
                                 <p class="line-clamp-2">
                                     {{
                                         agentData?.agent_data?.address ||
-                                        "Address1234567" }}
+                                        "Address line 1,Sheikhpura Road,Lahore,Pakistan" }}
                                 </p>
                                 <p class="">
                                     {{
@@ -862,7 +868,7 @@ onMounted(() => {
                                     </p>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
-                                    <p class="">GDS PNR:</p>
+                                    <p class="">PNR:</p>
                                     <p class="font-semibold">
                                         {{ pnrDetails?.bookingId ? pnrDetails?.bookingId : booking?.itinerary_ref || "-"
                                         }}

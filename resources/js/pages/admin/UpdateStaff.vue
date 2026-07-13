@@ -97,7 +97,7 @@
                 required
               >
                 <option value="" disabled selected>Select a role</option>
-                <option v-for="role in staffRoles" :key="role.id" :value="role.id">
+                <option v-for="role in staffRoles" :key="role.id" :value="role.name">
                   {{ role.name }}
                 </option>
               </select>
@@ -128,16 +128,20 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { EyeIcon, EyeOffIcon, ChevronDownIcon } from 'lucide-vue-next';
-import { SAVE_STAFF, UPDATE_STAFF } from '@/services/store/actions.type';
 import { useStore } from "vuex";
 import { useUserStore } from "@/services/stores/user";
 import { useRoute } from "vue-router";
+import axios from 'axios';
 
 const store = useStore();
 const userStore = useUserStore();
 const user = computed(() => userStore.user);
 const route = useRoute();
 const loading = ref(true);
+
+onMounted(() => {
+  fetchRoles();
+});
 
 // Initialize form with empty values first
 const form = ref({
@@ -149,11 +153,16 @@ const form = ref({
 });
 
 // Staff roles data
-const staffRoles = ref([
-  { id: 'admin', name: 'Administrator' },
-  { id: 'reservation', name: 'Reservation Staff' },
-  { id: 'accounts', name: 'accounts' },
-]);
+const staffRoles = ref([]);
+
+const fetchRoles = async () => {
+  try {
+    const response = await axios.get('/api/roles');
+    staffRoles.value = response.data.data;
+  } catch (error) {
+    console.error("Failed to fetch roles", error);
+  }
+};
 
 // UI state
 const showPassword = ref(false);

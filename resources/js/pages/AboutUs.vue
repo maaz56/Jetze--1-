@@ -103,11 +103,11 @@ const companyInfo = ref({
       </div>
     </section>
 
-    <!-- Why Choose Jetze -->
+    <!-- Why Choose APNTicket -->
     <section class="py-20 bg-white">
       <div class="container mx-auto px-6 text-center">
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-12">
-          {{ $t('Why Millions Choose Jetze') }}
+          {{ $t('Why Millions Choose APNTicket') }}
         </h2>
         <div class="grid md:grid-cols-3 gap-10 max-w-5xl mx-auto">
           <div class="bg-primary/5 rounded-2xl p-8 border border-primary/10">
@@ -133,7 +133,7 @@ const companyInfo = ref({
           {{ $t('Ready to Book Your Next Flight?') }}
         </h2>
         <p class="text-xl mb-10 max-w-2xl mx-auto opacity-90">
-          {{ $t('Join millions of smart travelers who save time and money with Jetze.') }}
+          {{ $t('Join millions of smart travelers who save time and money with Jetze.pk') }}
         </p>
         <a
           href="/"

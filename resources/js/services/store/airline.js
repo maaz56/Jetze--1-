@@ -43,6 +43,7 @@ const actions = {
         try {
             const response = await apiService.getAirlines(params);
             commit(SET_AIRLINES, response.data);
+            return response.data;
         } catch (error) {
             //console.log(error);
             toast("Something went wrong.", {

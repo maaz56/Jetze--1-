@@ -3,7 +3,7 @@ import Button from "@/components/ui/button/Button.vue";
 import { Switch } from "@/components/ui/switch";
 import { MoveRight, CircleChevronRight, ChevronRight } from "lucide-vue-next";
 
-import { CalendarIcon, CheckCircleIcon, Receipt, Ban, CirclePause } from "lucide-vue-next";
+import { CalendarIcon, CheckCircleIcon, Receipt, Ban, CirclePause, CircleX } from "lucide-vue-next";
 
 import {
     AlertDialog,
@@ -215,7 +215,7 @@ onMounted(() => {
                                 Bookings Overview
                             </h1>
 
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                                 <!-- Total Bookings -->
                                 <div class="bg-blue-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
                                     :class="{ 'ring-2 ring-blue-500': activeFilter === 'all' }"
@@ -272,6 +272,18 @@ onMounted(() => {
                                         </p>
                                         <p class="text-2xl font-bold text-yellow-800">
                                             {{ bookings?.total_booked || 0 }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="bg-purple-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
+                                    :class="{ 'ring-2 ring-purple-500': activeFilter === 'voided' }"
+                                    @click="filterBookings('voided')">
+                                    <CircleX class="h-8 w-8 text-purple-500 mr-4" />
+                                    <div>
+                                        <p class="text-sm font-medium text-purple-600">Voided</p>
+                                        <p class="text-2xl font-bold text-purple-800">
+                                            {{ bookings?.total_voided || 0 }}
                                         </p>
                                     </div>
                                 </div>
@@ -455,7 +467,9 @@ onMounted(() => {
                                     </div>
                                     
                                 </td>
-                                <td class="py-2 px-4 uppercase">{{ booking.status }}</td>
+                                <td class="py-2 px-4">
+                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                </td>
                                 <td class="px-1 py-4">
                                     <div class="flex space-x-2">
                                         <div class="flex space-x-2">

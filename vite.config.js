@@ -17,6 +17,16 @@ export default defineConfig({
       'radix-vue': '/node_modules/radix-vue',
     },
   },
+  server: {
+    watch: {
+      ignored: [
+        '**/vendor/**',
+        '**/storage/**',
+        '**/bootstrap/cache/**',
+        '**/public/build/**',
+      ],
+    },
+  },
   optimizeDeps: {
     include: ['chart.js']
   }

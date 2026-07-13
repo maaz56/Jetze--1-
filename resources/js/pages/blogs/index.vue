@@ -12,7 +12,7 @@ const isLoading = ref(false);
 onMounted(async () => {
   isLoading.value = true;
   try {
-    await store.dispatch(`blog/${FETCH_BLOGS}`);
+    await store.dispatch(`blog/${FETCH_BLOGS}`, { status: "published" });
     blogs.value = store.getters['blog/blogs'].data;
   } catch (error) {
     console.error(error);
@@ -52,4 +52,3 @@ onMounted(async () => {
     </ul>
   </div>
 </template>
-

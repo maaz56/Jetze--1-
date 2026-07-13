@@ -3,12 +3,17 @@ import {
     FETCH_AIRPORT_MARGINS,
     FETCH_AIRPORTS,
     SAVE_AIRPORT_MARGINS,
+    SAVE_AIRPORT,
+    UPDATE_AIRPORT,
+    DELETE_AIRPORT,
+    FETCH_AIRPORT,
 } from "./actions.type";
 import apiService from "./apiService";
 import {
     IS_LOADING,
     NOT_IS_LOADING,
     SET_AIRPORTS,
+    SET_AIRPORT,
     SET_DESTINATIONS,
     SET_ORIGINS,
     SET_API_ERROR,
@@ -17,6 +22,7 @@ import {
 
 const state = {
     airports: [],
+    airport: {},
     origins: [],
     destinations: [],
     airportMargin: {},
@@ -27,6 +33,9 @@ const state = {
 const getters = {
     airports(state) {
         return state.airports;
+    },
+    airport(state) {
+        return state.airport;
     },
     origins(state) {
         return state.origins;
@@ -46,17 +55,73 @@ const getters = {
 };
 
 const actions = {
+    async [FETCH_AIRPORT]({ commit }, id) {
+        commit(IS_LOADING);
+        try {
+            const response = await apiService.getAirport(id);
+            commit(SET_AIRPORT, response.data.data);
+            return response;
+        } catch (error) {
+            toast("Failed to fetch airport details", { type: "error" });
+            commit(SET_API_ERROR, error);
+            throw error;
+        } finally {
+            commit(NOT_IS_LOADING);
+        }
+    },
+
     async [FETCH_AIRPORTS]({ commit }, params) {
         commit(IS_LOADING);
         try {
             const response = await apiService.getAirports(params);
             commit(SET_AIRPORTS, response.data);
+            return response.data;
         } catch (error) {
-            //console.log(error);
-            toast("Something went wrong.", {
-                type: "error",
-            });
+            toast("Failed to fetch airports", { type: "error" });
             commit(SET_API_ERROR, error);
+        } finally {
+            commit(NOT_IS_LOADING);
+        }
+    },
+
+    async [SAVE_AIRPORT]({ commit }, params) {
+        commit(IS_LOADING);
+        try {
+            const response = await apiService.saveAirport(params);
+            toast("Airport created successfully", { type: "success" });
+            return response;
+        } catch (error) {
+            commit(SET_API_ERROR, error);
+            throw error;
+        } finally {
+            commit(NOT_IS_LOADING);
+        }
+    },
+
+    async [UPDATE_AIRPORT]({ commit }, params) {
+        commit(IS_LOADING);
+        try {
+            const response = await apiService.updateAirport(params);
+            toast("Airport updated successfully", { type: "success" });
+            return response;
+        } catch (error) {
+            commit(SET_API_ERROR, error);
+            throw error;
+        } finally {
+            commit(NOT_IS_LOADING);
+        }
+    },
+
+    async [DELETE_AIRPORT]({ commit }, id) {
+        commit(IS_LOADING);
+        try {
+            const response = await apiService.deleteAirport(id);
+            toast("Airport deleted successfully", { type: "success" });
+            return response;
+        } catch (error) {
+            toast("Failed to delete airport", { type: "error" });
+            commit(SET_API_ERROR, error);
+            throw error;
         } finally {
             commit(NOT_IS_LOADING);
         }
@@ -117,6 +182,10 @@ const mutations = {
     },
     [SET_AIRPORTS](state, data) {
         state.airports = data;
+        state.isLoading = false;
+    },
+    [SET_AIRPORT](state, airport) {
+        state.airport = airport;
         state.isLoading = false;
     },
     [SET_ORIGINS](state, origins) {

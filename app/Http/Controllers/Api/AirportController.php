@@ -13,41 +13,42 @@ class AirportController extends Controller
     /**
      * Display a listing of the resource.
      */
+    
     public function index(Request $request)
     {
-        // $airports = Airport::where(
-        //     'city_name',
-        //     'like',
-        //     '%' . $searchQuery . '%'
-        // )->orWhere(
-        //     'name',
-        //     'like',
-        //     '%' . $searchQuery . '%'
-        // )->orWhere(
-        //     'iata_code',
-        //     'like',
-        //     '%' . $searchQuery . '%'
-        // )->orWhere(
-        //     'iata_city_code',
-        //     'like',
-        //     '%' . $searchQuery . '%'
-        // )->orWhere(
-        //     'iata_country_code',
-        //     'like',
-        //     '%' . $searchQuery . '%'
-        // )->limit(Constants::$PAGE_LIMIT)->get();
-        $airports = Airport::get();
-        return $airports;
+        $searchQuery = $request->input('search_query');
+        $withPagination = filter_var($request->input('with_pagination', false), FILTER_VALIDATE_BOOLEAN);
+        
+        $query = Airport::query();
 
-        return $airports->toArray();
-    }
+        if ($searchQuery) {
+            $query->where(function($q) use ($searchQuery) {
+                $q->where('city_name', 'like', '%' . $searchQuery . '%')
+                  ->orWhere('name', 'like', '%' . $searchQuery . '%')
+                  ->orWhere('iata_code', 'like', '%' . $searchQuery . '%')
+                  ->orWhere('iata_city_code', 'like', '%' . $searchQuery . '%')
+                  ->orWhere('iata_country_code', 'like', '%' . $searchQuery . '%');
+            });
+        }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+        if ($withPagination) {
+            $airports = $query->paginate(15);
+
+            return response()->json([
+                'success' => true,
+                'data' => $airports->items(),
+                'meta' => [
+                    'current_page' => $airports->currentPage(),
+                    'from' => $airports->firstItem(),
+                    'last_page' => $airports->lastPage(),
+                    'per_page' => $airports->perPage(),
+                    'to' => $airports->lastItem(),
+                    'total' => $airports->total(),
+                ]
+            ]);
+        }
+
+        return response()->json($query->get());
     }
 
     /**
@@ -55,21 +56,24 @@ class AirportController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'iata_code' => 'unique:airports|iata_code',
-            'name' => 'required',
+        $validated = $request->validate([
+            'iata_code' => 'required|string|max:10|unique:airports,iata_code',
+            'name' => 'required|string|max:255',
+            'iata_city_code' => 'nullable|string|max:10',
+            'iata_country_code' => 'nullable|string|max:10',
+            'city_name' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'time_zone' => 'nullable|string|max:100',
         ]);
 
-        $airport = new Airport();
-        $airport->iata_city_code = $request->iata_city_code;
-        $airport->iata_country_code = $request->iata_country_code;
-        $airport->iata_code = $request->iata_code;
-        $airport->city_name = $request->city_name;
-        $airport->latitude = $request->latitude;
-        $airport->longitude = $request->longitude;
-        $airport->time_zone = $request->time_zonHomee;
-        $airport->name = $request->name;
-        $airport->save();
+        $airport = Airport::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Airport created successfully',
+            'data' => $airport
+        ], 201);
     }
 
     /**
@@ -77,15 +81,11 @@ class AirportController extends Controller
      */
     public function show(string $id)
     {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
+        $airport = Airport::findOrFail($id);
+        return response()->json([
+            'success' => true,
+            'data' => $airport
+        ]);
     }
 
     /**
@@ -93,22 +93,26 @@ class AirportController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $airport = Airport::findOrFail($request->id);
+        $airport = Airport::findOrFail($id);
 
-        $request->validate([
-            'iata_code' => 'required|unique:iata_code',
-            'name' => 'required',
+        $validated = $request->validate([
+            'iata_code' => 'required|string|max:10|unique:airports,iata_code,' . $id,
+            'name' => 'required|string|max:255',
+            'iata_city_code' => 'nullable|string|max:10',
+            'iata_country_code' => 'nullable|string|max:10',
+            'city_name' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'time_zone' => 'nullable|string|max:100',
         ]);
 
-        $airport->iata_city_code = $request->iata_city_code;
-        $airport->iata_country_code = $request->iata_country_code;
-        $airport->iata_code = $request->iata_code;
-        $airport->city_name = $request->city_name;
-        $airport->latitude = $request->latitude;
-        $airport->longitude = $request->longitude;
-        $airport->time_zone = $request->time_zone;
-        $airport->name = $request->name;
-        $airport->save();
+        $airport->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Airport updated successfully',
+            'data' => $airport
+        ]);
     }
 
     /**
@@ -116,7 +120,13 @@ class AirportController extends Controller
      */
     public function destroy(string $id)
     {
-        Airport::findOrFail($id)->delete();
+        $airport = Airport::findOrFail($id);
+        $airport->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Airport deleted successfully'
+        ]);
     }
 
 
@@ -158,6 +168,58 @@ class AirportController extends Controller
         $margins = AirportMargin::first();
         // Log::info($margins);
         return response()->json($margins);
+    }
+
+    public function nearest(Request $request)
+    {
+        Log::info('Finding nearest airports', $request->all());
+        $validated = $request->validate([
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'limit' => 'nullable|integer|min:1|max:20',
+        ]);
+
+        $latitude = (float) $validated['latitude'];
+        $longitude = (float) $validated['longitude'];
+        $limit = (int) ($validated['limit'] ?? 5);
+
+        $nearestAirports = Airport::query()
+            ->select('*')
+            ->selectRaw(
+                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) as distance_km',
+                [$latitude, $longitude, $latitude]
+            )
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->orderBy('distance_km')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'message' => 'Nearest airports fetched successfully.',
+            'data' => $nearestAirports,
+        ]);
+    }
+
+    public function defaultSuggestions(Request $request)
+    {
+        $validated = $request->validate([
+            'limit' => 'nullable|integer|min:1|max:20',
+        ]);
+
+        $limit = (int) ($validated['limit'] ?? 7);
+
+        $defaultAirports = Airport::query()
+            ->whereNotNull('iata_code')
+            ->where('iata_code', '!=', '')
+            ->orderBy('city_name')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'message' => 'Default airport suggestions fetched successfully.',
+            'data' => $defaultAirports,
+        ]);
     }
 
 

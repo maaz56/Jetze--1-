@@ -1,4 +1,3 @@
-
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
 import { Switch } from "@/components/ui/switch";
@@ -8,8 +7,9 @@ import {
     Receipt,
     MoveRight,
     CircleChevronRight,
-     CirclePause,
-    Ban
+    Ban,
+    CirclePause,
+    CircleX,
 } from "lucide-vue-next";
 
 import {
@@ -36,20 +36,23 @@ import {
 import { calculateLayover, formatDuration } from "@/lib/utils";
 
 import { useStore } from "vuex";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
     FETCH_BOOKINGS,
     FETCH_TRANSACTIONS,
     FETCH_BOOKING_DATA,
-CUSTOMER_BOOKINGS
+    CUSTOMER_BOOKINGS,
+    APPROVE_BOOKING,
 } from "@/services/store/actions.type";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
 import { useUserStore } from "@/services/stores/user";
 import { debounce } from "lodash";
 import { useAuthStore } from "@/services/stores/auth";
+import { useRoute } from "vue-router";
 
 const store = useStore();
+const route = useRoute();
 const authStore = useAuthStore();
 
 const bookings = computed(() => store.getters["flight/customerBookings"]);
@@ -59,6 +62,25 @@ const transactions = computed(() => store.getters["transaction/transactions"]);
 const user = computed(() => authStore.user);
 const emit = defineEmits(['filter-change'])
 const activeFilter = ref('all');
+const now = ref(Date.now());
+let countdownInterval;
+const isStatusDialogOpen = ref(false);
+const statusForm = ref({
+    booking_id: null,
+    status: "booked",
+});
+const statusOptions = [
+    "booked",
+    // "pending",
+    // "approved",
+    // "confirmed",
+    "issued",
+    "ticketed",
+    "requested",
+    "voided",
+    "canceled",
+    // "rejected",
+];
 
 function filterBookings(type) {
     activeFilter.value = type
@@ -96,16 +118,62 @@ const formatDate = (dateString) => {
         day: "numeric",
     });
 };
+
+const getRemainingTime = (expiry) => {
+    if (!expiry) return 'N/A';
+
+    const expiryTime = new Date(String(expiry).replace(' ', 'T')).getTime();
+    const diff = expiryTime - now.value;
+    if (Number.isNaN(expiryTime) || diff <= 0) return 'Expired';
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    let result = '';
+    if (days > 0) result += `${days}d `;
+    if (hours > 0 || days > 0) result += `${hours}h `;
+    return `${result}${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+};
 function fetchBookings() {
+    const selectedUserId = route.query.user_id || route.query.userId;
+
     store.dispatch("flight/" + CUSTOMER_BOOKINGS, {
+        user_id: selectedUserId,
+        userId: selectedUserId,
         userRole: user.value.role,
         bookingFilter: activeFilter.value,
     });
 }
 
+function openStatusDialog(booking) {
+    statusForm.value.booking_id = booking.id;
+    statusForm.value.status = booking.status || "booked";
+    isStatusDialogOpen.value = true;
+}
+
+function updateBookingStatus() {
+    if (!statusForm.value.booking_id || !statusForm.value.status) {
+        return;
+    }
+    store.dispatch("flight/" + APPROVE_BOOKING, {
+        booking_id: statusForm.value.booking_id,
+        status: statusForm.value.status,
+    }).then(() => {
+        isStatusDialogOpen.value = false;
+        fetchBookings();
+    });
+}
+
 onMounted(() => {
+    countdownInterval = setInterval(() => {
+        now.value = Date.now();
+    }, 1000);
     fetchBookings();
 });
+
+onUnmounted(() => clearInterval(countdownInterval));
 </script>
 
 <template>
@@ -124,7 +192,7 @@ onMounted(() => {
                             <h1 class="text-3xl font-bold text-gray-800 mb-6">
                                 Bookings Overview
                             </h1>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                                 <!-- Total Bookings -->
                                 <div class="bg-blue-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
                                     :class="{ 'ring-2 ring-blue-500': activeFilter === 'all' }"
@@ -184,6 +252,18 @@ onMounted(() => {
                                         </p>
                                     </div>
                                 </div>
+
+                                <div class="bg-purple-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
+                                    :class="{ 'ring-2 ring-purple-500': activeFilter === 'voided' }"
+                                    @click="filterBookings('voided')">
+                                    <CircleX class="h-8 w-8 text-purple-500 mr-4" />
+                                    <div>
+                                        <p class="text-sm font-medium text-purple-600">Voided</p>
+                                        <p class="text-2xl font-bold text-purple-800">
+                                            {{ bookings?.total_voided || 0 }}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -205,8 +285,9 @@ onMounted(() => {
                                 </th>
                                 <th scope="col" class="px-4 py-3">PNR</th>
                                 <th scope="col" class="px-4 py-3">Supplier</th>
+                                <th scope="col" class="px-4 py-3">Source</th>
                                 <th scope="col" class="px-4 py-3">Customer Email</th>
-                                <th scope="col" class="px-4 py-3">Rout</th>
+                                <th scope="col" class="px-4 py-3">Route</th>
                                 <th scope="col" class="px-4 py-3">
                                     Passenger Name
                                 </th>
@@ -214,6 +295,7 @@ onMounted(() => {
                                     Travel Date
                                 </th>
                                 <th scope="col" class="px-4 py-3">Status</th>
+                                <th scope="col" class="px-4 py-3">Expiry on</th>
                                 <th scope="col" class="px-4 py-3">Action</th>
                             </tr>
                         </thead>
@@ -233,8 +315,10 @@ onMounted(() => {
                                     {{ booking.itinerary_ref ? booking?.itinerary_ref : booking.pnr }}
                                 </td>
                                 <td class="px-4 py-3">
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.name }}
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.identifier }}
+                                    {{ parseFlightData(booking?.flight_data)?.provider?.name.toUpperCase() || 'N/A' }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ parseFlightData(booking?.flight_data)?.provider?.contentSource?.toUpperCase() || 'N/A' }}
                                 </td>
                                 <td class="px-4 py-3">{{ booking.agency_email }}</td>
                                 <td px-4 py-3>
@@ -338,10 +422,27 @@ onMounted(() => {
                                     </p>
                                     </div>
                                 </td>
-                                <td class="py-2 px-4">{{ booking.status }}</td>
+                                <td class="py-2 px-4">
+                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                </td>
+                                <td class="py-2 px-4 whitespace-nowrap">
+                                    <span v-if="booking?.status?.toLowerCase() === 'booked'"
+                                        class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                                        {{ getRemainingTime(booking.expiry_time) }}
+                                    </span>
+                                    <span v-else
+                                        class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                                        N/A
+                                    </span>
+                                </td>
                                 <td class="px-1 py-4">
                                     <div class="flex space-x-2">
                                         <div class="flex space-x-2">
+                                            <button
+                                                @click="openStatusDialog(booking)"
+                                                class="text-xs font-medium px-2 py-1 rounded border border-primary text-primary hover:bg-primary hover:text-white transition">
+                                                Update Status
+                                            </button>
                                             <button @click="
                                                 $router.push({
                                                     name: 'AdminCustomerBookingsLayout',
@@ -383,5 +484,55 @@ onMounted(() => {
                 </div>
             </div>
         </div>
+
+        <Dialog v-model:open="isStatusDialogOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Update Booking Status</DialogTitle>
+                    <DialogDescription>
+                        Select a new status and save changes for this booking.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="space-y-4 py-2">
+                    <div class="w-64">
+  <label class="block text-sm font-medium text-gray-700 mb-2">
+    Status
+  </label>
+
+  <div class="relative">
+    <select
+      v-model="statusForm.status"
+      class="w-full appearance-none rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-sm
+             focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition"
+    >
+      <option disabled value="">Select status</option>
+      <option
+        v-for="status in statusOptions"
+        :key="status"
+        :value="status"
+      >
+        {{ status }}
+      </option>
+    </select>
+
+    <!-- Custom arrow -->
+    <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
+      ▼
+    </div>
+  </div>
+</div>
+                </div>
+                <DialogFooter>
+                    <button @click="isStatusDialogOpen = false"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button @click="updateBookingStatus"
+                        class="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90">
+                        Save
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>
