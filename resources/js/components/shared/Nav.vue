@@ -126,7 +126,7 @@ onUnmounted(() => {
     <div>
         <nav
         :class="[
-            'fixed top-0 inset-x-0 z-50 text-slate-900 transition-all duration-300',
+            'fixed top-0 inset-x-0 z-40 text-slate-900 transition-all duration-300',
             isScrolled
                 ? 'bg-white/95 backdrop-blur-md shadow-2xl border-b border-slate-200'
                 : 'bg-white/92 backdrop-blur-md border-b border-slate-200',

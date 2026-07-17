@@ -31,10 +31,10 @@ class FlightController extends Controller
         $apiProviders = [
             // ['identifier' => 'AirBlue', 'name' => 'AirBlue'],
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            ['identifier' => 'AT', 'name' => 'Akbar Travels'],
+            // ['identifier' => 'AT', 'name' => 'Akbar Travels'],
 
-            // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
-            // ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
+            ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
+            ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
         ];
         // $apiProviders = array_merge($apiProviders, $sooperProviders);
         return response()->json($apiProviders);
