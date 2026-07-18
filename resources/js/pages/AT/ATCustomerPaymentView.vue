@@ -2,6 +2,7 @@
 
 
   <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+    <pre>{{flightData}}</pre>
     <div class=" mx-auto">
       <div class=" bg-white border mb-6 border-gray-200 mx-auto  py-6 px-4">
         <div class="relative  flex items-center justify-between  px-4">
@@ -1526,6 +1527,9 @@ function confirmBooking() {
         error.value = "No PNR provided.";
         return;
     }
+    const flight = flightData.value?.original?.leg?.flights?.[0]
+        ?? flightData.value?.leg?.flights?.[0];
+
     store.dispatch("flight/" + CONFIRM_BOOKING, {
         pnr: route.query.pnr,
         bookingId: bookingDetails.value[0].id,
@@ -1536,6 +1540,7 @@ function confirmBooking() {
         booking_status: "ticketed",
         booking_source: route.query.booking_source,
         flight_provider: route.query.flight_provider,
+        bookingType: flight?.hold_info == null ? "HP" : "HB",
     });
 
     // Close dialog after successful cancellation
