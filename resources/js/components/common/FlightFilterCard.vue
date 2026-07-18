@@ -338,6 +338,27 @@ const totalTravelers = computed(
         localValue.value.infant,
 );
 const todayDate = new Date().toISOString().split("T")[0];
+const setFlightType = (type) => {
+    localValue.value.flightType = type;
+    if (type === "one-way") {
+        localValue.value.dateRange.end = null;
+    }
+    if (type === "multi-city") {
+        localValue.value.dateRange.start = null;
+        localValue.value.dateRange.end = null;
+    }
+};
+
+const activateReturnTrip = () => {
+    localValue.value.flightType = "return";
+    if (!localValue.value.dateRange.end) {
+        const startDate = localValue.value.dateRange.start || todayDate;
+        const returnDate = new Date(startDate);
+        returnDate.setDate(returnDate.getDate() + 1);
+        localValue.value.dateRange.end = returnDate.toISOString().split("T")[0];
+    }
+};
+
 function resetTravelers() {
     localValue.value.adult = 1;
     localValue.value.child = 0;
@@ -526,7 +547,7 @@ const startCountdown = (remainingTime) => {
                         >
                             <button
                                 type="button"
-                                @click="localValue.flightType = 'return'"
+                                @click="setFlightType('return')"
                                 :class="[
                                     'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                     localValue.flightType === 'return'
@@ -538,10 +559,7 @@ const startCountdown = (remainingTime) => {
                             </button>
                             <button
                                 type="button"
-                                @click="
-                                    localValue.flightType = 'one-way';
-                                    localValue.dateRange.end = null;
-                                "
+                                @click="setFlightType('one-way')"
                                 :class="[
                                     'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                     localValue.flightType === 'one-way'
@@ -553,11 +571,7 @@ const startCountdown = (remainingTime) => {
                             </button>
                             <button
                                 type="button"
-                                @click="
-                                    localValue.flightType = 'multi-city';
-                                    localValue.dateRange.start = null;
-                                    localValue.dateRange.end = null;
-                                "
+                                @click="setFlightType('multi-city')"
                                 :class="[
                                     'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                     localValue.flightType === 'multi-city'
@@ -580,13 +594,16 @@ const startCountdown = (remainingTime) => {
                         localValue.flightType === 'return'
                     "
                 >
-                    <div class=" rounded-xl p-3 sm:p-0">
+                    <div class="rounded-xl p-3 sm:p-0">
                         <div
-                            class="flex flex-col gap-3 sm:gap-1 sm:flex-row items-stretch"
+                            :class="[
+                                'overflow-hidden rounded-md border border-gray-200 bg-white grid grid-cols-1 items-stretch',
+                                'sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.02fr_1.28fr]',
+                            ]"
                         >
-                            <div class="text-start relative w-full">
+                            <div class="filter-booking-cell text-start relative w-full">
                                 <label
-                                    class="hidden  sm:block text-sm font-semibold text-white sm:mb-1"
+                                    class="block text-sm font-semibold text-gray-700 sm:mb-1"
                                 >
                                     FROM
                                 </label>
@@ -598,6 +615,14 @@ const startCountdown = (remainingTime) => {
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
+                                <button
+                                    type="button"
+                                    @click="swapOriginDestination"
+                                    class="absolute -right-5 top-1/2 z-10 hidden w-10 h-10 -translate-y-1/2 bg-white text-black border border-gray-200 rounded-full sm:flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
+                                    aria-label="Swap origin and destination"
+                                >
+                                    <ArrowLeftRight class="w-5 h-5 text-black" />
+                                </button>
                                 <div
                                     v-if="errors.origin"
                                     class="text-destructive mt-1 text-xs"
@@ -606,22 +631,9 @@ const startCountdown = (remainingTime) => {
                                 </div>
                             </div>
 
-                            <div
-                                class="relative hidden sm:flex items-center justify-center w-0 mt-5 py-2 sm:py-0 sm:px-0"
-                            >
-                                <button
-                                    type="button"
-                                    @click="swapOriginDestination"
-                                    class="absolute z-10 w-11 h-11 bg-white text-black border border-gray-200 text-white rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
-                                    aria-label="Swap origin and destination"
-                                >
-                                    <ArrowLeftRight class="w-5 h-5 text-black" />
-                                </button>
-                            </div>
-
-                            <div class="text-start relative w-full">
+                            <div class="filter-booking-cell text-start relative w-full">
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-white sm:mb-1"
+                                    class="block text-sm font-semibold text-gray-700 sm:mb-1"
                                 >
                                     TO
                                 </label>
@@ -641,9 +653,9 @@ const startCountdown = (remainingTime) => {
                                 </div>
                             </div>
 
-                            <div class="w-full mt-1 sm:mt-0 text-start">
+                            <div class="filter-booking-cell w-full text-start">
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                    class="block text-sm font-semibold text-gray-700 mb-1"
                                 >
                                     Departure
                                 </label>
@@ -661,22 +673,31 @@ const startCountdown = (remainingTime) => {
                             </div>
 
                             <div
-                                class="w-full mt-1 sm:mt-0 text-start"
-                                v-if="localValue.flightType === 'return'"
+                                class="filter-booking-cell w-full text-start cursor-pointer"
+                                @click="activateReturnTrip"
                             >
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                    class="block text-sm font-semibold text-gray-700 mb-1"
                                 >
                                     Return
                                 </label>
-                                <Calender
-                                    v-model="localValue.dateRange.end"
-                                    :minValue="
-                                        localValue.dateRange.start ||
-                                        new Date().toLocaleDateString('en-CA')
-                                    "
-                                    class="w-full h-10 sm:h-auto"
-                                />
+                                <template v-if="localValue.flightType === 'return'">
+                                    <Calender
+                                        v-model="localValue.dateRange.end"
+                                        :minValue="
+                                            localValue.dateRange.start ||
+                                            new Date().toLocaleDateString('en-CA')
+                                        "
+                                        class="w-full h-10 sm:h-auto"
+                                    />
+                                </template>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="min-h-[60px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
+                                >
+                                    Tap to add a return date for bigger discounts
+                                </button>
                                 <div
                                     v-if="errors.end"
                                     class="text-destructive mt-1 text-xs"
@@ -685,9 +706,9 @@ const startCountdown = (remainingTime) => {
                                 </div>
                             </div>
 
-                            <div class="w-full mt-1 sm:mt-0 text-start">
+                            <div class="filter-booking-cell w-full text-start">
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-white mb-1"
+                                    class="block text-sm font-semibold text-gray-700 mb-1"
                                 >
                                     Travellers & Class
                                 </label>
@@ -695,7 +716,7 @@ const startCountdown = (remainingTime) => {
                                     <PopoverTrigger as-child>
                                         <button
                                             type="button"
-                                            class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                            class="w-full h-[60px] flex items-center justify-between bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                         >
                                             <div class="text-left">
                                                 <p class="font-bold text-lg">
@@ -931,7 +952,7 @@ const startCountdown = (remainingTime) => {
                                 <PopoverTrigger as-child>
                                     <button
                                         type="button"
-                                        class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                        class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <div class="text-left">
                                             <p class="font-bold text-lg">
@@ -1131,6 +1152,49 @@ const startCountdown = (remainingTime) => {
 </template>
 
 <style scoped>
+.filter-booking-cell {
+    @apply relative min-h-[92px] border-b border-gray-200 px-4 py-3 sm:border-b-0 sm:border-r;
+}
+
+.filter-booking-cell:last-child {
+    @apply sm:border-r-0;
+}
+
+.filter-booking-cell :deep(.min-h-\[110px\]) {
+    min-height: 58px !important;
+    padding: 0 !important;
+}
+
+.filter-booking-cell :deep(.h-\[110px\]) {
+    height: 58px !important;
+    min-height: 58px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.filter-booking-cell :deep(input) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 1.85rem !important;
+}
+
+.filter-booking-cell :deep(.dropdown span.mb-1) {
+    display: none;
+}
+
+.filter-booking-cell :deep(.dropdown .pointer-events-none) {
+    padding-top: 0.6rem;
+}
+
+.filter-booking-cell :deep(.dropdown h2) {
+    font-size: 1.45rem;
+    line-height: 1.75rem;
+}
+
+.filter-booking-cell :deep(.dropdown p) {
+    margin-top: 0.15rem;
+}
+
 /* Additional responsive utilities if needed */
 @media (max-width: 480px) {
 }

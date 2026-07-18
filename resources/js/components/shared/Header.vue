@@ -140,6 +140,8 @@ const flightStore = useFlightStore();
 const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
+const RECENT_SEARCHES_KEY = "recent_search_history";
+const MAX_RECENT_SEARCHES = 4;
 
 const flightType = ref("one-way");
 const flights = computed(() => flightStore.flights);
@@ -153,6 +155,7 @@ const airports = computed(() => store.getters["airport/airports"]);
 const headerDefaultAirportCodes = ["PEW","LHE","SKT","ISB","KHI","MUX","GWD"];
 const airlines = computed(() => store.getters["airline/airlines"]);
 const previousSearch = JSON.parse(localStorage.getItem("previous_search"));
+const recentSearches = ref([]);
 const dropdownPosition = ref();
 const loading = ref(true);
 const error = ref(null);
@@ -261,6 +264,31 @@ const classLabel = computed(() => {
     };
     return map[classType.value] || "Economy";
 });
+
+const setFlightType = (type) => {
+    flightType.value = type;
+    if (type === "one-way") {
+        dateRange.value.end = null;
+    }
+    if (type === "multi-city") {
+        dateRange.value.start = null;
+        dateRange.value.end = null;
+    }
+    initializeSearchParams();
+};
+
+const activateReturnTrip = () => {
+    if (flightType.value !== "return") {
+        flightType.value = "return";
+    }
+    if (!dateRange.value.end) {
+        const startDate = dateRange.value.start || todayDate.value;
+        dateRange.value.end = moment(startDate)
+            .add(1, "days")
+            .format("YYYY-MM-DD");
+    }
+    initializeSearchParams();
+};
 
 const maxTotal = 9;
 const maxAdults = computed(() => {
@@ -667,6 +695,107 @@ const updateLocalStorage = () => {
     searchFlights();
 };
 
+const readRecentSearches = () => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY));
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((item) => item && typeof item === "object")
+            .slice(0, MAX_RECENT_SEARCHES);
+    } catch {
+        return [];
+    }
+};
+
+const writeRecentSearches = (searches) => {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches));
+    recentSearches.value = searches;
+};
+
+const createSearchSignature = (searchParams) =>
+    JSON.stringify({
+        flightType: searchParams.flightType,
+        origin: searchParams.origin ?? null,
+        destination: searchParams.destination ?? null,
+        departure_date: searchParams.departure_date ?? null,
+        return_date: searchParams.return_date ?? null,
+        trips: searchParams.trips ?? null,
+        cabin_class: searchParams.cabin_class,
+        adults: searchParams.adults,
+        children: searchParams.children,
+        infants: searchParams.infants,
+    });
+
+const saveRecentSearch = (searchParams) => {
+    const entry = {
+        ...searchParams,
+        savedAt: Date.now(),
+        signature: createSearchSignature(searchParams),
+    };
+    const deduped = readRecentSearches().filter(
+        (item) => item.signature !== entry.signature,
+    );
+    writeRecentSearches([entry, ...deduped].slice(0, MAX_RECENT_SEARCHES));
+};
+
+const getRecentSearchCities = (search) => {
+    if (search.flightType === "multi-city" && Array.isArray(search.trips)) {
+        return {
+            from: search.trips[0]?.origin || "-",
+            to: search.trips[search.trips.length - 1]?.destination || "-",
+        };
+    }
+    return {
+        from: search.origin || "-",
+        to: search.destination || "-",
+    };
+};
+
+const formatRecentSearchDate = (date) =>
+    date ? moment(date).format("MMM D") : "";
+
+const getRecentSearchDateLabel = (search) => {
+    if (search.flightType === "multi-city" && Array.isArray(search.trips)) {
+        const dates = search.trips
+            .map((trip) => trip?.date)
+            .filter((date) => typeof date === "string" && date);
+        if (!dates.length) return "";
+        const first = formatRecentSearchDate(dates[0]);
+        const last = formatRecentSearchDate(dates[dates.length - 1]);
+        return first === last ? first : `${first} - ${last}`;
+    }
+
+    const departure = formatRecentSearchDate(search.departure_date);
+    const returnDate = formatRecentSearchDate(search.return_date);
+    if (!departure) return "";
+    if (!returnDate || search.flightType === "one-way") return departure;
+    return `${departure} - ${returnDate}`;
+};
+
+const applyRecentSearch = (search) => {
+    flightType.value = search.flightType ?? "one-way";
+    classType.value = search.cabin_class ?? "Y";
+    adults.value = Number(search.adults ?? 1);
+    children.value = Number(search.children ?? 0);
+    infants.value = Number(search.infants ?? 0);
+
+    if (flightType.value === "multi-city") {
+        multiCityTrips.value = Array.isArray(search.trips) ? search.trips : [];
+    } else {
+        origin.value = search.origin ?? null;
+        destination.value = search.destination ?? null;
+        dateRange.value.start = search.departure_date ?? todayDate.value;
+        dateRange.value.end =
+            flightType.value === "return" ? (search.return_date ?? null) : null;
+    }
+
+    localStorage.setItem(
+        "previous_search",
+        JSON.stringify({ ...search, timestamp: Date.now() }),
+    );
+    searchFlights();
+};
+
 const todayDate = computed(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -764,6 +893,7 @@ function searchFlights() {
     }
 
     localStorage.setItem("previous_search", JSON.stringify(searchParams));
+    saveRecentSearch(searchParams);
 
     router.push({
         name: "FlightSearch",
@@ -847,6 +977,7 @@ onMounted(() => {
         fetchFlights();
     }
     initializeSearchParams();
+    recentSearches.value = readRecentSearches();
     applyDefaultAirportSelection();
     if (!dateRange.value.start) {
         dateRange.value.start = todayDate.value;
@@ -946,10 +1077,7 @@ onMounted(() => {
                     >
                         <!-- Round Trip -->
                         <button
-                            @click="
-                                flightType = 'return';
-                                initializeSearchParams();
-                            "
+                            @click="setFlightType('return')"
                             :class="[
                                 'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                 flightType === 'return'
@@ -962,11 +1090,7 @@ onMounted(() => {
 
                         <!-- One Way -->
                         <button
-                            @click="
-                                flightType = 'one-way';
-                                dateRange.end = null;
-                                initializeSearchParams();
-                            "
+                            @click="setFlightType('one-way')"
                             :class="[
                                 'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                 flightType === 'one-way'
@@ -979,12 +1103,7 @@ onMounted(() => {
 
                         <!-- Multi-City -->
                         <button
-                            @click="
-                                flightType = 'multi-city';
-                                dateRange.start = null;
-                                dateRange.end = null;
-                                initializeSearchParams();
-                            "
+                            @click="setFlightType('multi-city')"
                             :class="[
                                 'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
                                 flightType === 'multi-city'
@@ -999,247 +1118,17 @@ onMounted(() => {
 
                 <!-- Main Search Form -->
                 <div class="bg-white rounded-xl sm:pr-0 rtl:pr-0">
-                    <!-- One Way Form -->
-                    <!-- One Way Form -->
-                    <div v-if="flightType === 'one-way'">
+                    <div v-if="flightType !== 'multi-city'">
                         <div
-                            class="flex flex-col gap-3 sm:gap-1 sm:flex-row items-stretch"
+                            class="overflow-hidden rounded-md border border-gray-200 bg-white"
                         >
-                            <!-- From -->
-                            <div class="text-start relative w-full">
-                                <label
-                                    class="hidden sm:block text-sm font-semibold text-gray-700 sm:mb-1"
-                                    >{{ $t("FROM") }}</label
-                                >
-                                <Autocomplete
-                                    v-model="origin"
-                                    :default-value="
-                                        route.query?.origin
-                                            ? route.query?.origin
-                                            : previousSearch?.origin
-                                              ? previousSearch?.origin
-                                              : ''
-                                    "
-                                    :placeholder="$t('origin')"
-                                    :source="airports"
-                                    :default-suggestions="headerDefaultAirportCodes"
-                                    class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                                />
-                            </div>
-                            <!-- Swap Button -->
                             <div
-                                class="relative hidden sm:flex items-center justify-center w-0 mt-5 py-2 sm:py-0 sm:px-0"
+                                class="grid grid-cols-1 sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.02fr_1.28fr] items-stretch"
                             >
-                                <button
-                                    @click="swapAirports"
-                                    type="button"
-                                    class="absolute z-10 w-11 h-11 bg-white border border-gray-200 text-gray-700 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
-                                >
-                                    <svg
-                                        class="w-5 h-5"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                                        ></path>
-                                    </svg>
-                                </button>
-                            </div>
-                            <!-- To -->
-                            <div class="text-start relative w-full">
-                                <label
-                                    class="hidden sm:block text-sm font-semibold text-gray-700 sm:mb-1"
-                                    >{{ $t("TO") }}</label
-                                >
-                                
-                                <Autocomplete
-                                    v-model="destination"
-                                    :icon="'PlaneLanding'"
-                                    :default-value="
-                                        route.query?.destination
-                                            ? route.query?.destination
-                                            : previousSearch?.destination
-                                              ? previousSearch?.destination
-                                              : ''
-                                    "
-                                    :placeholder="$t('destination')"
-                                    :source="airports"
-                                    :default-suggestions="headerDefaultAirportCodes"
-                                    class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                                />
-                            </div>
-                            <!-- Depart Date -->
-                            <div class="w-full mt-1 sm:mt-0">
-                                <div
-                                    class="flex sm:mt-0.5 justify-start items-center"
-                                >
-                                    <label
-                                        class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
-                                        >Departure</label
-                                    >
-                                </div>
-                                <Calender
-                                    v-model="dateRange.start"
-                                    :minValue="
-                                        new Date().toLocaleDateString('en-CA')
-                                    "
-                                    class="w-full h-10 sm:h-auto"
-                                />
-                            </div>
-                            <div class="w-full mt-1 sm:mt-0 text-start">
-                                <label
-                                    class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
-                                    >Travellers & Class</label
-                                >
-                                <Popover v-model:open="isPopoverOpen">
-                                    <PopoverTrigger as-child>
-                                        <button
-                                            type="button"
-                                            class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                                        >
-                                            <div class="text-left">
-                                                <p class="font-bold text-lg">
-                                                    {{ travelersSummary }}
-                                                </p>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ classLabel }}
-                                                </p>
-                                            </div>
-                                            <ChevronDownIcon class="w-4 h-4 opacity-70" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent class="w-80 p-6 rounded-lg border-0 shadow-xl">
-                                        <div class="space-y-6">
-                                            <div class="grid grid-cols-2 gap-2">
-                                                <button
-                                                    @click="classType = 'Y'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        classType === 'Y'
-                                                            ? 'bg-primary text-white'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("economy") }}
-                                                </button>
-                                                <button
-                                                    @click="classType = 'S'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        classType === 'S'
-                                                            ? 'bg-primary text-white'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("premium_economy") }}
-                                                </button>
-                                                <button
-                                                    @click="classType = 'C'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        classType === 'C'
-                                                            ? 'bg-primary text-white'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("business") }}
-                                                </button>
-                                                <button
-                                                    @click="classType = 'F'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        classType === 'F'
-                                                            ? 'bg-primary text-white'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("first class") }}
-                                                </button>
-                                            </div>
-                                            <div class="space-y-5">
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Adult</b> <br>(12 Years) </Label>
-                                                    <NumberField class="w-1/2" id="adult-field-inline" v-model="adults" :max="maxAdults" @update:modelValue="handleAdultChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Child</b> <br> (2-11 Years)</Label>
-                                                    <NumberField class="w-1/2" id="child-field-inline" v-model="children" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Infant</b> <br>(Under 2 Years)</Label>
-                                                    <NumberField class="w-1/2" id="infant-field-inline" v-model="infants" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                            </div>
-                                            <div class="flex justify-between">
-                                                <Button @click="resetTravelers" class="text-sm text-gray-700 font-medium hover:text-gray-900">
-                                                    Reset
-                                                </Button>
-                                                <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
-                                                    Apply
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
-                        <div class="flex justify-end mt-3 sm:mt-4">
-                            <div class="w-full sm:w-40">
-                                <button
-                                    @click="searchFlights"
-                                    class="w-full bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 rounded-full px-3 py-3 text-white font-bold flex items-center justify-center gap-2 text-lg sm:text-2xl"
-                                >
-                                    <Search class="w-4 h-4 sm:w-6 sm:h-6" />
-                                    <span
-                                        v-if="!isLoading"
-                                        class="rtl:text-right ltr:text-left"
-                                    >
-                                        {{ $t("search") }}
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="flex items-center gap-2"
-                                    >
-                                        <LoaderCircle
-                                            class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
-                                        />
-                                        Loading...
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Return Trip Form -->
-                    <div v-else-if="flightType === 'return'">
-                        <div class="flex flex-col gap-3 sm:gap-1 sm:flex-row items-stretch">
                         <!-- From -->
-                        <div class="text-start relative w-full">
+                        <div class="booking-cell text-start relative w-full">
                             <label
-                                class="hidden sm:block text-sm font-semibold text-gray-700 sm:mb-1"
+                                class="block text-sm font-medium text-gray-700 sm:mb-1"
                                 >{{ $t("FROM") }}</label
                             >
                             <Autocomplete
@@ -1256,16 +1145,10 @@ onMounted(() => {
                                 :default-suggestions="headerDefaultAirportCodes"
                                 class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                             />
-                        </div>
-
-                        <!-- Swap Button -->
-                        <div
-                            class="relative hidden sm:flex items-center justify-center w-0 mt-5 py-2 sm:py-0"
-                        >
                             <button
                                 @click="swapAirports"
                                 type="button"
-                                class="absolute z-10 w-11 h-11 bg-white border border-gray-200 text-gray-700 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
+                                class="absolute -right-5 top-1/2 z-10 hidden w-10 h-10 -translate-y-1/2 bg-white border border-gray-200 text-gray-700 rounded-full sm:flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
                             >
                                 <svg
                                     class="w-5 h-5"
@@ -1284,9 +1167,9 @@ onMounted(() => {
                         </div>
 
                         <!-- To -->
-                        <div class="text-start relative w-full">
+                        <div class="booking-cell text-start relative w-full">
                             <label
-                                class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
+                                class="block text-sm font-medium text-gray-700 mb-1"
                                 >{{ $t("TO") }}</label
                             >
                             <Autocomplete
@@ -1306,12 +1189,12 @@ onMounted(() => {
                             />
                         </div>
 
-                        <div class="w-full mt-1 sm:mt-0 text-start">
+                        <div class="booking-cell w-full text-start">
                             <div
                                 class="flex sm:mt-0.5 justify-start items-center"
                             >
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
+                                    class="block text-sm font-medium text-gray-700 mb-1"
                                     >Departure</label
                                 >
                             </div>
@@ -1321,34 +1204,43 @@ onMounted(() => {
                                 class="w-full h-10 sm:h-auto"
                             />
                         </div>
-                        <div class="w-full mt-1 sm:mt-0 text-start">
+                        <div class="booking-cell w-full text-start cursor-pointer" @click="activateReturnTrip">
                             <div
                                 class="flex sm:mt-0.5 justify-start items-center"
                             >
                                 <label
-                                    class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
+                                    class="block text-sm font-medium text-gray-700 mb-1"
                                     >Return</label
                                 >
                             </div>
-                            <Calender
-                                v-model="dateRange.end"
-                                :minValue="
-                                    dateRange.start || new Date().toLocaleDateString('en-CA')
-                                "
-                                class="w-full h-10 sm:h-auto"
-                            />
+                            <template v-if="flightType === 'return'">
+                                <Calender
+                                    v-model="dateRange.end"
+                                    :minValue="
+                                        dateRange.start || new Date().toLocaleDateString('en-CA')
+                                    "
+                                    class="w-full h-10 sm:h-auto"
+                                />
+                            </template>
+                            <button
+                                v-else
+                                type="button"
+                                class="min-h-[60px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
+                            >
+                                Tap to add a return date for bigger discounts
+                            </button>
                         </div>
 
-                        <div class="w-full mt-1 sm:mt-0 text-start">
+                        <div class="booking-cell w-full text-start">
                             <label
-                                class="hidden sm:block text-sm font-semibold text-gray-700 mb-1"
+                                class="block text-sm font-medium text-gray-700 mb-1"
                                 >Travellers & Class</label
                             >
                             <Popover v-model:open="isPopoverOpen">
                                 <PopoverTrigger as-child>
                                     <button
                                         type="button"
-                                        class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                        class="w-full h-[60px] flex items-center justify-between bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <div class="text-left">
                                             <p class="font-bold text-lg">
@@ -1452,10 +1344,30 @@ onMounted(() => {
                                     </div>
                                 </PopoverContent>
                             </Popover>
+                            </div>
                         </div>
-
                         </div>
-                        <div class="flex justify-end mt-3 sm:mt-4">
+                        <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:mt-4">
+                            <div
+                                class="flex flex-wrap items-center gap-2"
+                            >
+                                <button
+                                v-if="recentSearches.length"
+                                    v-for="(search, index) in recentSearches"
+                                    :key="search.signature || `${search.timestamp}-${index}`"
+                                    type="button"
+                                    @click="applyRecentSearch(search)"
+                                    class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-white hover:text-primary"
+                                >
+                                    <ClockIcon class="h-3.5 w-3.5 text-primary" />
+                                    <span>{{ getRecentSearchCities(search).from }}</span>
+                                    <span>-&gt;</span>
+                                    <span>{{ getRecentSearchCities(search).to }}</span>
+                                    <span class="text-gray-500">
+                                        {{ getRecentSearchDateLabel(search) }}
+                                    </span>
+                                </button>
+                            </div>
                             <div class="w-full sm:w-48">
                                 <button
                                     @click="searchFlights"
@@ -1559,7 +1471,7 @@ onMounted(() => {
                                             <PopoverTrigger as-child>
                                                 <button
                                                     type="button"
-                                                    class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded-xl bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                                    class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                                 >
                                                     <div class="text-left">
                                                         <p class="font-bold text-lg">
@@ -1830,6 +1742,49 @@ onMounted(() => {
 <style scoped>
 .animate-fadeIn {
     animation: fadeIn 0.5s ease-in-out;
+}
+
+.booking-cell {
+    @apply relative min-h-[92px] border-b border-gray-200 px-4 py-3 sm:border-b-0 sm:border-r;
+}
+
+.booking-cell:last-child {
+    @apply sm:border-r-0;
+}
+
+.booking-cell :deep(.min-h-\[110px\]) {
+    min-height: 58px !important;
+    padding: 0 !important;
+}
+
+.booking-cell :deep(.h-\[110px\]) {
+    height: 58px !important;
+    min-height: 58px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.booking-cell :deep(input) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 1.85rem !important;
+}
+
+.booking-cell :deep(.dropdown span.mb-1) {
+    display: none;
+}
+
+.booking-cell :deep(.dropdown .pointer-events-none) {
+    padding-top: 0.6rem;
+}
+
+.booking-cell :deep(.dropdown h2) {
+    font-size: 1.45rem;
+    line-height: 1.75rem;
+}
+
+.booking-cell :deep(.dropdown p) {
+    margin-top: 0.15rem;
 }
 
 @keyframes fadeIn {

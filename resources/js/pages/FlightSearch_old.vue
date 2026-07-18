@@ -1,5 +1,5 @@
 <script setup>
-import Header from "../components/shared/Header.vue";
+import Header from "../components/shared/Header.vue/index.js";
 import Nav from "../components/shared/Nav.vue";
 import { initFlowbite } from "flowbite";
 import { computed, onMounted, ref, watch } from "vue";

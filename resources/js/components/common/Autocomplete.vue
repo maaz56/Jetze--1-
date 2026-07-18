@@ -5,7 +5,7 @@
         </label>
         <div class="relative">
             <div :class="[
-                'relative min-h-[110px] w-full cursor-pointer rounded-xl border bg-white p-4 transition-all duration-200',
+                'relative min-h-[110px] w-full cursor-pointer rounded  bg-white p-4 transition-all duration-200',
                 isFocused ? 'border-blue-500 ring-1 ring-blue-500 shadow-lg' : 'border-gray-200 hover:bg-gray-50',
             ]">
                 <span class="mb-1 block text-sm font-medium uppercase tracking-wide text-gray-500">
@@ -46,7 +46,7 @@
 
         <Teleport to="body">
             <ul v-if="isOpen" :style="dropdownStyle"
-                class="z-[9999] mt-1 min-w-[400px] overflow-hidden rounded-xl border-none bg-white shadow-2xl">
+                class="z-[9999] mt-1 min-w-[400px] overflow-hidden rounded border-none bg-white shadow-2xl">
                 <div class="custom-scrollbar max-h-80 overflow-y-auto">
                     <li v-for="(item, index) in searchResults" :key="item.id || index"
                         @click.stop="setSelected(item)" :class="[

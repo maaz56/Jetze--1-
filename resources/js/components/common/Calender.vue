@@ -4,7 +4,7 @@
     <Popover v-model:open="isOpenPopover">
       <PopoverTrigger as-child>
         <Button
-          class="h-[110px] w-full justify-start rounded-xl border border-gray-200 bg-white px-4 shadow-none hover:bg-gray-50 sm:h-[110px]"
+          class="h-[110px] w-full justify-start rounded  bg-white px-4 shadow-none hover:bg-gray-50 sm:h-[110px]"
         >
           <CalendarIcon class="mr-2 h-4 w-4 text-gray-600" />
           <div class="text-left">
