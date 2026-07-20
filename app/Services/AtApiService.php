@@ -26,7 +26,7 @@ class AtApiService
     protected $agentCode;
     protected $browserKey;
     protected $atFlightTransformer;
-    private bool $useMockApi = true;
+    private bool $useMockApi = false;
 
 
     public function __construct()
@@ -49,34 +49,65 @@ class AtApiService
 
 
 
-    protected function getAccessToken()
-    {
-
+   protected function getAccessToken()
+{
+    try {
         $headers = [
             'Content-Type' => 'application/json',
         ];
-        $signBaseUrl = "$this->signBaseUrl/Utils/Signature";
+
+        $signBaseUrl = "{$this->signBaseUrl}/Utils/Signature";
+
         $signaturePayload = [
             'MerchantID' => $this->merchantId,
-            'ApiKey' => $this->apiKey,
-            'ClientID' => $this->clientId,
-            'Password' => $this->password,
-            'AgentCode' => $this->agentCode,
-            'BrowserKey' => $this->browserKey,
+            'ApiKey'      => $this->apiKey,
+            'ClientID'    => $this->clientId,
+            'Password'    => $this->password,
+            'AgentCode'   => $this->agentCode,
+            'BrowserKey'  => $this->browserKey,
         ];
-        // Example method to get an access token from the AT API
-        $response = new Request(
+
+        $request = new Request(
             'POST',
             $signBaseUrl,
             $headers,
             json_encode($signaturePayload)
         );
 
-        $response = $this->client->send($response);
-        $response = json_decode($response->getBody(), true);
+        $response = $this->client->send($request);
+        Log::info($response);
+        return json_decode($response->getBody()->getContents(), true);
 
-        return $response;
+    } catch (RequestException $e) {
+
+        Log::error('Access Token Request Failed', [
+            'message'  => $e->getMessage(),
+            'request'  => $signaturePayload,
+            'response' => $e->hasResponse()
+                ? $e->getResponse()->getBody()->getContents()
+                : null,
+        ]);
+
+        throw $e;
+
+    } catch (GuzzleException $e) {
+
+        Log::error('Guzzle Exception While Fetching Access Token', [
+            'message' => $e->getMessage(),
+        ]);
+
+        throw $e;
+
+    } catch (\Throwable $e) {
+
+        Log::error('Unexpected Error While Fetching Access Token', [
+            'message' => $e->getMessage(),
+            'trace'   => $e->getTraceAsString(),
+        ]);
+
+        throw $e;
     }
+}
 
     public function searchFlights($params)
     {
