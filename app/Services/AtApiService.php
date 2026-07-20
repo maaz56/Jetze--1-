@@ -66,7 +66,8 @@ class AtApiService
             'AgentCode'   => $this->agentCode,
             'BrowserKey'  => $this->browserKey,
         ];
-
+        Log::info($signBaseUrl);
+        Log::info(json_encode($signaturePayload));
         $request = new Request(
             'POST',
             $signBaseUrl,
