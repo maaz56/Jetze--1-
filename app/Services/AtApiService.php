@@ -75,7 +75,6 @@ class AtApiService
         );
 
         $response = $this->client->send($request);
-        Log::info($response);
         return json_decode($response->getBody()->getContents(), true);
 
     } catch (RequestException $e) {
