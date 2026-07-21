@@ -49,7 +49,7 @@ export const useFlightStore = defineStore("flight", {
                     params: requestParams,
                 });
 
-                // console.log(response);
+                console.log(response);
 
                 // Log response for debugging
                 //console.log(JSON.stringify(response.data));

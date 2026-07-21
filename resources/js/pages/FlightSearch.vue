@@ -226,6 +226,7 @@ const timerInterval = ref(null);
 const showDialog = ref(true);
 const isSideSheetOpen = ref(false);
 const isSooperFlihgtDetailsOpen = ref(false);
+const flightDetailsActiveTab = ref("fare-options");
 const selectedFlightId = ref(null);
 const selectedFlight = ref(null);
 const loadingDetails = ref(false);
@@ -276,6 +277,7 @@ async function openSooperFlightDetails(flight) {
     //     flight_id: flightId,
     //     isSooperFlight: true
     // });
+    flightDetailsActiveTab.value = "fare-options";
     isSooperFlihgtDetailsOpen.value = true;
 }
 
@@ -650,6 +652,26 @@ const calculateDuration = (departure, arrival) => {
     const hours = Math.floor(duration.asHours());
     const minutes = duration.minutes();
     return `${hours}h ${minutes}m`;
+};
+
+const getSegmentLayoverMinutes = (segment, nextSegment) => {
+    const explicitLayover = Number(segment?.layover_time);
+    if (Number.isFinite(explicitLayover) && explicitLayover > 0) {
+        return explicitLayover;
+    }
+
+    if (!segment?.arrival_at || !nextSegment?.departure_at) return 0;
+    const arrival = moment.parseZone(segment.arrival_at);
+    const nextDeparture = moment.parseZone(nextSegment.departure_at);
+    const diff = nextDeparture.diff(arrival, "minutes");
+    return diff > 0 ? diff : 0;
+};
+
+const formatLayoverDuration = (minutes) => {
+    const total = Math.max(0, Number(minutes) || 0);
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 // Compute max duration from flights
 const maxDuration = computed(() => {
@@ -3139,69 +3161,79 @@ watch(isLoggedIn, (newVal) => {
         <Transition name="slide-sooper">
             <div
                 v-if="isSooperFlihgtDetailsOpen"
-                class="fixed top-0 right-0 h-full w-full max-w-full sm:w-[90%] md:w-[85%] lg:w-[980px] xl:w-[980px] bg-white shadow-2xl z-40 overflow-y-auto"
+                class="fixed inset-y-0 right-0 flex h-full w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl z-40 sm:w-[94%] sm:max-w-[1120px] sm:rounded-l-xl"
             >
-                <!-- Header - Improved for Mobile -->
+                <!-- Header -->
                 <div
-                    class="sticky top-0 bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 z-10"
+                    class="flex flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-4 sm:px-6"
                 >
-                    <div class="flex items-center gap-2 sm:gap-4">
+                    <div class="flex items-center gap-3 sm:gap-4">
                         <button
                             @click="isSooperFlihgtDetailsOpen = false"
-                            class="text-primary bg-primary/30 h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:text-gray-700 flex items-center justify-center flex-shrink-0"
+                            class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:text-gray-900"
                         >
-                            <X class="w-3 h-3 sm:w-4 sm:h-4" />
+                            <X class="h-4 w-4" />
                         </button>
                         <h2
-                            class="text-base sm:text-xl lg:text-2xl font-bold text-primary truncate"
+                            class="truncate text-lg font-bold text-gray-950 sm:text-xl"
                         >
                             Flight Details
                         </h2>
                     </div>
+                    <div
+                        class="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 sm:flex"
+                    >
+                        <CheckSquare class="h-3.5 w-3.5" />
+                        Verified fare
+                    </div>
                 </div>
 
-                <!-- Main Content -->
-                <div class="p-3 sm:p-4 lg:p-6">
-                    <div
-                        v-if="loadingDetails"
-                        class="flex justify-center items-center h-96"
-                    >
-                        <Spinner />
-                    </div>
+                <div
+                    v-if="loadingDetails"
+                    class="flex min-h-0 flex-1 items-center justify-center"
+                >
+                    <Spinner />
+                </div>
 
-                    <div v-if="selectedFlight" class="space-y-4 sm:space-y-6">
-                        <!-- Main Tabs - Mobile Optimized -->
-                        <Tabs default-value="fare-options" class="w-full">
-                            <!-- Tabs Navigation - Mobile Scrollable -->
-                            <div class="w-full border-b border-primary/40">
+                <div
+                    v-if="selectedFlight"
+                    class="flex min-h-0 flex-1 flex-col"
+                >
+                    <!-- Main Tabs -->
+                    <Tabs
+                        v-model="flightDetailsActiveTab"
+                        default-value="fare-options"
+                        class="flex min-h-0 flex-1 flex-col md:flex-row"
+                    >
+                        <!-- Sidebar Tabs Navigation -->
+                        <aside
+                            class="flex-shrink-0 border-b border-gray-200 bg-gray-50 md:flex md:w-64 md:flex-col md:border-b-0 md:border-r"
+                        >
+                            <div
+                                class="hidden px-5 pb-2 pt-6 text-xs font-bold uppercase tracking-wide text-gray-400 md:block"
+                            >
+                                Review
+                            </div>
+                            <div class="overflow-x-auto px-3 py-3 md:overflow-visible md:px-3 md:py-0">
                                 <TabsList
-                                    class="flex justify-start items-end gap-2 bg-transparent p-0 w-full"
+                                    class="flex h-auto w-max items-center justify-start gap-1 bg-transparent p-0 md:w-full md:flex-col md:items-stretch"
                                 >
                                     <!-- Fare Options -->
                                     <TabsTrigger
                                         value="fare-options"
-                                        class="group relative flex-shrink-0 text-sm sm:text-base font-medium px-5 py-2.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-white data-[state=active]:text-primary data-[state=inactive]:text-gray-600 hover:text-primary transition"
+                                        class="group relative flex-shrink-0 justify-start gap-3 rounded-md border-l-0 border-transparent px-4 py-3 text-sm font-semibold text-gray-500 transition data-[state=active]:bg-primary/10 data-[state=active]:text-primary md:w-full md:border-l-4 md:data-[state=active]:border-primary"
                                     >
+                                        <Ticket class="h-4 w-4" />
                                         Fare Options
-
-                                        <!-- Bottom Arrow -->
-                                        <span
-                                            class="absolute left-1/2 -bottom-[7px] -translate-x-1/2 w-3 h-3 bg-primary rotate-45 hidden group-data-[state=active]:block"
-                                        >
-                                        </span>
                                     </TabsTrigger>
 
                                     <!-- Flight Itinerary -->
                                     <TabsTrigger
                                         value="flight-details"
-                                        class="group relative flex-shrink-0 text-sm sm:text-base font-medium px-5 py-2.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-white data-[state=active]:text-primary data-[state=inactive]:text-gray-600 hover:text-primary transition"
+                                        class="group relative flex-shrink-0 justify-start gap-3 rounded-md border-l-0 border-transparent px-4 py-3 text-sm font-semibold text-gray-500 transition data-[state=active]:bg-primary/10 data-[state=active]:text-primary md:w-full md:border-l-4 md:data-[state=active]:border-primary"
                                     >
+                                        <PlaneTakeoff class="h-4 w-4" />
                                         Flight Itinerary
-
-                                        <span
-                                            class="absolute left-1/2 -bottom-[7px] -translate-x-1/2 w-3 h-3 bg-primary rotate-45 hidden group-data-[state=active]:block"
-                                        >
-                                        </span>
                                     </TabsTrigger>
 
                                     <!-- Fare Rules -->
@@ -3228,355 +3260,246 @@ watch(isLoggedIn, (newVal) => {
     </TabsTrigger> -->
                                     <TabsTrigger
                                         value="fare-breakdown"
-                                        class="group relative flex-shrink-0 text-sm sm:text-base font-medium px-5 py-2.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-white data-[state=active]:text-primary data-[state=inactive]:text-gray-600 hover:text-primary transition"
+                                        class="group relative flex-shrink-0 justify-start gap-3 rounded-md border-l-0 border-transparent px-4 py-3 text-sm font-semibold text-gray-500 transition data-[state=active]:bg-primary/10 data-[state=active]:text-primary md:w-full md:border-l-4 md:data-[state=active]:border-primary"
                                     >
+                                        <BadgeDollarSign class="h-4 w-4" />
                                         Fare Breakdown
-                                        <span
-                                            class="absolute left-1/2 -bottom-[7px] -translate-x-1/2 w-3 h-3 bg-primary rotate-45 hidden group-data-[state=active]:block"
-                                        >
-                                        </span>
                                     </TabsTrigger>
                                     <!-- Baggage -->
                                     <TabsTrigger
                                         value="baggage-details"
-                                        class="group relative flex-shrink-0 text-sm sm:text-base font-medium px-5 py-2.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-white data-[state=active]:text-primary data-[state=inactive]:text-gray-600 hover:text-primary transition"
+                                        class="group relative flex-shrink-0 justify-start gap-3 rounded-md border-l-0 border-transparent px-4 py-3 text-sm font-semibold text-gray-500 transition data-[state=active]:bg-primary/10 data-[state=active]:text-primary md:w-full md:border-l-4 md:data-[state=active]:border-primary"
                                     >
+                                        <Briefcase class="h-4 w-4" />
                                         Baggage
-
-                                        <span
-                                            class="absolute left-1/2 -bottom-[7px] -translate-x-1/2 w-3 h-3 bg-primary rotate-45 hidden group-data-[state=active]:block"
-                                        >
-                                        </span>
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
-
-                            <!-- Flight Details Tab - Mobile Optimized -->
-                            <TabsContent
-                                value="flight-details"
-                                class="mt-4 sm:mt-6"
+                            <div
+                                class="mt-auto hidden items-center gap-2 border-t border-gray-200 px-5 py-4 text-xs text-gray-400 md:flex"
                             >
-                                <!-- Itinerary Display - Responsive Layout -->
+                                <Clock class="h-3.5 w-3.5" />
+                                Fare held for 15 min
+                            </div>
+                        </aside>
+
+                        <div
+                            class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:px-8"
+                        >
+                            <div
+                                v-if="selectedFlight?.leg?.flights?.length"
+                                class="mb-5 space-y-3"
+                            >
                                 <div
-                                    class=""
-                                    v-for="(
-                                        flight, flightIndex
-                                    ) in selectedFlight?.leg?.flights"
+                                    v-for="(summaryFlight, summaryIndex) in selectedFlight.leg.flights"
+                                    :key="summaryFlight?.ref_id || summaryIndex"
+                                    class="overflow-hidden rounded border border-gray-200 bg-white"
                                 >
                                     <div
-                                        class="bg-primary rounded p-2 sm:p-3 lg:p-4 my-2"
+                                        class="flex flex-col gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                                     >
-                                        <div
-                                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2 lg:gap-4"
-                                        >
-                                            <h3
-                                                class="text-sm sm:text-base lg:text-xl font-bold text-white truncate"
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span
+                                                class="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-white px-3 py-1 text-sm font-bold text-primary"
                                             >
-                                                Flight Details:
-                                                {{ flight?.from?.city?.name }} →
-                                                {{ flight?.to?.city?.name }}
-                                            </h3>
-                                            <div
-                                                class="inline-flex items-center rounded px-2 py-1 sm:px-3 sm:py-1 text-xs font-medium gap-1 bg-white flex-shrink-0 mt-1 sm:mt-0"
-                                                :class="
-                                                    flight?.is_refundable
-                                                        ? 'text-green-500'
-                                                        : 'text-red-500'
-                                                "
-                                            >
-                                                <SquareCheckBig
-                                                    class="w-3 h-3 sm:w-4 sm:h-4"
-                                                    v-if="flight?.is_refundable"
+                                                <PlaneTakeoff
+                                                    v-if="route.query.flightType === 'multi-city' || summaryIndex === 0"
+                                                    class="h-4 w-4"
                                                 />
-                                                <SquareX
+                                                <PlaneLanding
                                                     v-else
-                                                    class="w-3 h-3 sm:w-4 sm:h-4"
+                                                    class="h-4 w-4"
                                                 />
-                                                <span
-                                                    class="font-semibold text-xs sm:text-sm"
-                                                >
-                                                    {{
-                                                        flight?.is_refundable
-                                                            ? "Refundable"
-                                                            : "Non-Refundable"
-                                                    }}
-                                                </span>
-                                            </div>
+                                                {{
+                                                    route.query.flightType === "multi-city"
+                                                        ? `Trip ${summaryIndex + 1}`
+                                                        : summaryIndex === 0
+                                                          ? "Departure"
+                                                          : "Return"
+                                                }}
+                                            </span>
+                                            <span class="text-sm font-bold text-gray-950 sm:text-base">
+                                                {{ summaryFlight?.from?.city?.name || summaryFlight?.from?.city?.code }}
+                                                ({{ summaryFlight?.from?.city?.code }})
+                                                →
+                                                {{ summaryFlight?.to?.city?.name || summaryFlight?.to?.city?.code }}
+                                                ({{ summaryFlight?.to?.city?.code }})
+                                            </span>
+                                            <span class="text-xs font-bold text-gray-500 sm:text-sm">
+                                                {{ moment(summaryFlight?.departure_at).format("ddd, DD MMM YYYY") }}
+                                            </span>
                                         </div>
-                                    </div>
-
-                                    <!-- Segments - Mobile Optimized -->
-                                    <div class="border">
-                                        <div
-                                            v-for="(
-                                                segment, segmentIndex
-                                            ) in flight?.segments"
-                                            :key="segmentIndex"
-                                            class="bg-white border overflow-hidden"
-                                        >
-                                            <!-- Layover Info -->
-
-                                            <div
-                                                v-if="segment?.layover_time"
-                                                class="bg-amber-100 border-b border-amber-100 p-2 sm:p-3 lg:p-4"
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span
+                                                v-if="flightDetailsActiveTab === 'flight-details'"
+                                                class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700"
                                             >
-                                                <div
-                                                    class="flex items-center justify-center gap-1 sm:gap-2"
-                                                >
-                                                    <ClockIcon
-                                                        class="w-3 h-3 sm:w-4 sm:h-5 text-amber-600"
+                                                {{ summaryFlight?.has_layovers ? `${summaryFlight?.layovers_count} Stop` : "Non-Stop" }}
+                                            </span>
+                                            <span class="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                                                {{
+                                                    Math.floor(moment.duration(summaryFlight?.travel_time, "m").asHours())
+                                                }}h
+                                                {{ moment.duration(summaryFlight?.travel_time, "m").minutes() }}m
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <template
+                                        v-for="(summarySegment, summarySegmentIndex) in (
+                                            flightDetailsActiveTab === 'flight-details' &&
+                                            summaryFlight?.segments?.length
+                                                ? summaryFlight.segments
+                                                : [summaryFlight]
+                                        )"
+                                        :key="summarySegment?.ref_id || summarySegmentIndex"
+                                    >
+                                        <!-- OUTER ROW: airline | timing | refundable badge -->
+                                        <!-- FIX: flex instead of a 3-column grid. Airline and the badge each take only the
+                                            width they need (shrink-0, fixed-ish), and the route/timing block gets ALL the
+                                            leftover space via flex-1 + justify-center, so it's centered in the row instead
+                                            of hugging the badge on the right. -->
+                                        <div class="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:gap-6">
+
+                                            <!-- Airline (fixed width so it doesn't dictate how much room the route gets) -->
+                                            <div class="flex shrink-0 items-center gap-3 md:w-44">
+                                                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                                    <img
+                                                        v-if="summarySegment?.operating_carrier?.logo || summaryFlight?.operating_carrier?.logo || summaryFlight?.marketing_carrier?.logo"
+                                                        :src="summarySegment?.operating_carrier?.logo || summaryFlight?.operating_carrier?.logo || summaryFlight?.marketing_carrier?.logo"
+                                                        :alt="summarySegment?.operating_carrier?.name || summaryFlight?.operating_carrier?.name || summaryFlight?.marketing_carrier?.name || 'Airline'"
+                                                        class="h-8 w-8 object-contain"
                                                     />
-                                                    <span
-                                                        class="text-xs sm:text-sm font-semibold text-amber-800"
-                                                    >
-                                                        Layover:
+                                                    <PlaneTakeoff v-else class="h-5 w-5 text-primary" />
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <div class="truncate text-sm font-bold text-gray-950 sm:text-base">
+                                                        {{ summarySegment?.operating_carrier?.name || summaryFlight?.operating_carrier?.name || summaryFlight?.marketing_carrier?.name || "Airline" }}
+                                                    </div>
+                                                    <div class="text-xs font-medium text-gray-500">
                                                         {{
-                                                            moment
-                                                                .utc(
-                                                                    moment
-                                                                        .duration(
-                                                                            segment.layover_time,
-                                                                            "minutes",
-                                                                        )
-                                                                        .asMilliseconds(),
-                                                                )
-                                                                .format("HH:mm")
-                                                        }}
-                                                    </span>
+                                                            summarySegment?.operating_carrier?.iata ||
+                                                            summaryFlight?.operating_carrier?.iata ||
+                                                            summaryFlight?.marketing_carrier?.iata
+                                                        }}-{{ formatFlightNumber(summarySegment?.flight_number || summaryFlight?.flight_number) || "N/A" }}
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <!-- Segment Details - Mobile Stacked -->
-                                            <div class="p-2 sm:p-3 lg:p-6">
+                                            <!-- Timing: departure / track / arrival — this is what actually gets centered -->
+                                            <div class="flex flex-1 items-start justify-center gap-4 sm:gap-6">
+
+                                                <!-- Departure -->
+                                                <div class="min-w-0 max-w-[180px] flex-1 text-center">
+                                                    <div class="text-2xl font-bold text-gray-950">
+                                                        {{ moment.parseZone(summarySegment?.departure_at).format("HH:mm") }}
+                                                    </div>
+                                                    <div class="text-sm font-semibold text-gray-500">
+                                                        {{ summarySegment?.from?.iata || summaryFlight?.from?.city?.code }}
+                                                    </div>
+                                                    <div class="mt-1.5 text-xs font-semibold text-gray-800">
+                                                        {{ moment(summarySegment?.departure_at).format("ddd, MMM DD, YYYY") }}
+                                                    </div>
+                                                    <div
+                                                        v-if="flightDetailsActiveTab === 'flight-details'"
+                                                        class="mt-0.5 text-xs text-gray-600"
+                                                    >
+                                                        <div class="line-clamp-2 break-words font-semibold text-gray-900">
+                                                            {{ summarySegment?.from?.name }}
+                                                            <span v-if="summarySegment?.from?.iata" class="font-normal text-gray-500">
+                                                                ({{ summarySegment.from.iata }})
+                                                            </span>
+                                                        </div>
+                                                        <div class="mt-0.5 text-gray-500">
+                                                            Terminal: {{ summarySegment?.from_terminal?.Gate ?? summarySegment?.from_terminal ?? "N/A" }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Track (widened — dashes + plane icon get real room to breathe) -->
+                                                <div class="flex w-36 shrink-0 flex-col items-center gap-1.5 pt-3 sm:w-52">
+                                                    <div class="flex w-full items-center gap-2">
+                                                        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                                                        <span class="min-w-[24px] flex-1 border-t border-dashed border-gray-300"></span>
+                                                        <PlaneTakeoff class="h-4 w-4 shrink-0 text-primary" />
+                                                        <span class="min-w-[24px] flex-1 border-t border-dashed border-gray-300"></span>
+                                                        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                                                    </div>
+                                                    <div class="whitespace-nowrap text-xs font-semibold text-gray-500">
+                                                        {{
+                                                            formatSegmentDuration(summarySegment) ||
+                                                            `${Math.floor(moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").asHours())}h ${moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").minutes()}m`
+                                                        }}
+                                                    </div>
+                                                </div>
+
+                                                <!-- Arrival -->
+                                                <div class="min-w-0 max-w-[180px] flex-1 text-center">
+                                                    <div class="text-2xl font-bold text-gray-950">
+                                                        {{ moment.parseZone(summarySegment?.arrival_at).format("HH:mm") }}
+                                                    </div>
+                                                    <div class="text-sm font-semibold text-gray-500">
+                                                        {{ summarySegment?.to?.iata || summaryFlight?.to?.city?.code }}
+                                                    </div>
+                                                    <div class="mt-1.5 text-xs font-semibold text-gray-800">
+                                                        {{ moment(summarySegment?.arrival_at).format("ddd, MMM DD, YYYY") }}
+                                                    </div>
+                                                    <div
+                                                        v-if="flightDetailsActiveTab === 'flight-details'"
+                                                        class="mt-0.5 text-xs text-gray-600"
+                                                    >
+                                                        <div class="line-clamp-2 break-words font-semibold text-gray-900">
+                                                            {{ summarySegment?.to?.name }}
+                                                            <span v-if="summarySegment?.to?.iata" class="font-normal text-gray-500">
+                                                                ({{ summarySegment.to.iata }})
+                                                            </span>
+                                                        </div>
+                                                        <div class="mt-0.5 text-gray-500">
+                                                            Terminal: {{ summarySegment?.to_terminal?.Gate ?? summarySegment?.to_terminal ?? "N/A" }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Refundable badge (fixed width, pinned to the far side) -->
+                                            <div class="flex shrink-0 justify-end md:w-36">
                                                 <div
-                                                    class="flex flex-col lg:grid lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6"
+                                                    class="inline-flex w-fit items-center gap-1 self-start rounded-full border px-3 py-1 text-xs font-bold md:self-center"
+                                                    :class="
+                                                        summaryFlight?.is_refundable
+                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                            : 'border-red-200 bg-red-50 text-red-700'
+                                                    "
                                                 >
-                                                    <!-- Departure - Mobile First -->
-
-                                                    <div
-                                                        class="flex items-center justify-between space-y-1 sm:space-y-2 lg:space-y-3"
-                                                    >
-                                                        <div
-                                                            class="flex items-center gap-2 px-2 py-1"
-                                                        >
-                                                            <img
-                                                                class="w-6 h-6 sm:w-8 sm:h-8 lg:w-16 lg:h-16 rounded-full border border-gray-100"
-                                                                :src="
-                                                                    segment
-                                                                        ?.operating_carrier
-                                                                        ?.logo
-                                                                "
-                                                                alt=""
-                                                            />
-                                                            <div>
-                                                                <div
-                                                                    class="font-semibold text-xs sm:text-sm text-gray-900"
-                                                                >
-                                                                    {{
-                                                                        segment
-                                                                            ?.operating_carrier
-                                                                            ?.name
-                                                                    }}
-                                                                </div>
-                                                                <div
-                                                                    class="text-xs text-gray-500"
-                                                                >
-                                                                    {{
-                                                                        segment
-                                                                            ?.operating_carrier
-                                                                            ?.iata
-                                                                    }}-{{
-                                                                        formatFlightNumber(
-                                                                            segment?.flight_number,
-                                                                        ) ||
-                                                                        "N/A"
-                                                                    }}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            class="space-y-1 sm:space-y-2 lg:space-y-2"
-                                                        >
-                                                            <div
-                                                                class="text-xs font-medium text-gray-500 uppercase tracking-wide"
-                                                            >
-                                                                Departure
-                                                            </div>
-                                                            <div
-                                                                class="text-sm sm:text-base lg:text-lg font-bold text-gray-900"
-                                                            >
-                                                                {{
-                                                                    formatDate(
-                                                                        segment?.departure_at,
-                                                                    )
-                                                                }}
-                                                            </div>
-
-                                                            <div
-                                                                class="space-y-1"
-                                                            >
-                                                                <div
-                                                                    class="font-semibold text-xs sm:text-sm text-gray-900"
-                                                                >
-                                                                    {{
-                                                                        segment
-                                                                            ?.from
-                                                                            ?.name
-                                                                    }}
-                                                                    <span
-                                                                        class="text-gray-500 font-normal text-xs"
-                                                                        >({{
-                                                                            segment
-                                                                                ?.from
-                                                                                ?.iata
-                                                                        }})</span
-                                                                    >
-                                                                </div>
-                                                                <div
-                                                                    class="text-xs text-gray-500"
-                                                                >
-                                                                    Terminal:
-                                                                    {{
-                                                                        segment
-                                                                            ?.from_terminal
-                                                                            ?.Gate ??
-                                                                        "N/A"
-                                                                    }}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Flight Path - Mobile Compact -->
-                                                    <div
-                                                        class="flex flex-col items-center justify-center space-y-2 sm:space-y-3 lg:space-y-4 py-2 sm:py-0"
-                                                    >
-                                                        <div
-                                                            class="flex items-center gap-1 sm:gap-2 lg:gap-4 w-full"
-                                                        >
-                                                            <span
-                                                                class="text-base sm:text-lg lg:text-xl font-bold text-gray-900"
-                                                            >
-                                                                {{
-                                                                    moment
-                                                                        .parseZone(
-                                                                            segment?.departure_at,
-                                                                        )
-                                                                        .format(
-                                                                            "HH:mm",
-                                                                        )
-                                                                }}
-                                                            </span>
-                                                            <div
-                                                                class="flex-1 relative"
-                                                            >
-                                                                <div
-                                                                    class="absolute left-0 top-1/2 transform -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 lg:w-3 lg:h-3 bg-primary rounded-full"
-                                                                ></div>
-                                                                <div
-                                                                    class="border-t border-dashed border-primary"
-                                                                ></div>
-                                                                <div
-                                                                    class="absolute right-0 top-1/2 transform -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 lg:w-3 lg:h-3 bg-primary rounded-full"
-                                                                ></div>
-                                                            </div>
-                                                            <span
-                                                                class="text-base sm:text-lg lg:text-xl font-bold text-gray-900"
-                                                            >
-                                                                {{
-                                                                    moment
-                                                                        .parseZone(
-                                                                            segment?.arrival_at,
-                                                                        )
-                                                                        .format(
-                                                                            "HH:mm",
-                                                                        )
-                                                                }}
-                                                            </span>
-                                                        </div>
-                                                        <div
-                                                            class="flex justify-between w-full text-xs sm:text-sm text-gray-500 font-medium"
-                                                        >
-                                                            <span>{{
-                                                                segment?.from
-                                                                    ?.iata
-                                                            }}</span>
-                                                            <span>{{
-                                                                segment?.to
-                                                                    ?.iata
-                                                            }}</span>
-                                                        </div>
-                                                        <div
-                                                            v-if="
-                                                                formatSegmentDuration(
-                                                                    segment,
-                                                                )
-                                                            "
-                                                            class="text-[11px] sm:text-xs text-gray-500 font-medium"
-                                                        >
-                                                            Duration:
-                                                            {{
-                                                                formatSegmentDuration(
-                                                                    segment,
-                                                                )
-                                                            }}
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Arrival - Mobile First -->
-                                                    <div
-                                                        class="space-y-1 sm:space-y-2 lg:space-y-2 md:mt-3"
-                                                    >
-                                                        <div
-                                                            class="text-xs font-medium text-gray-500 uppercase tracking-wide"
-                                                        >
-                                                            Arrival
-                                                        </div>
-                                                        <div
-                                                            class="text-sm sm:text-base lg:text-lg font-bold text-gray-900"
-                                                        >
-                                                            {{
-                                                                formatDate(
-                                                                    segment?.arrival_at,
-                                                                )
-                                                            }}
-                                                        </div>
-                                                        <div class="space-y-1">
-                                                            <div
-                                                                class="font-semibold text-xs sm:text-sm text-gray-900"
-                                                            >
-                                                                {{
-                                                                    segment?.to
-                                                                        ?.name
-                                                                }}
-                                                                <span
-                                                                    class="text-gray-500 font-normal text-xs"
-                                                                    >({{
-                                                                        segment
-                                                                            ?.to
-                                                                            ?.iata
-                                                                    }})</span
-                                                                >
-                                                            </div>
-                                                            <div
-                                                                class="text-xs text-gray-500"
-                                                            >
-                                                                Terminal:
-                                                                {{
-                                                                    segment
-                                                                        ?.to_terminal
-                                                                        ?.Gate ??
-                                                                    "N/A"
-                                                                }}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    <SquareCheckBig v-if="summaryFlight?.is_refundable" class="h-3.5 w-3.5" />
+                                                    <SquareX v-else class="h-3.5 w-3.5" />
+                                                    {{ summaryFlight?.is_refundable ? "Refundable" : "Non-Refundable" }}
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+
+                                        <!-- Layover strip -->
+                                        <div
+                                            v-if="
+                                                flightDetailsActiveTab === 'flight-details' &&
+                                                summaryFlight?.segments?.[summarySegmentIndex + 1] &&
+                                                getSegmentLayoverMinutes(summarySegment, summaryFlight.segments[summarySegmentIndex + 1])
+                                            "
+                                            class="flex items-center justify-center gap-2 border-y border-amber-200 bg-amber-100 px-3 py-2.5 text-xs font-semibold text-amber-800"
+                                        >
+                                            <Clock class="h-3.5 w-3.5" />
+                                            Layover:
+                                            {{
+                                                formatLayoverDuration(
+                                                    getSegmentLayoverMinutes(summarySegment, summaryFlight.segments[summarySegmentIndex + 1]),
+                                                )
+                                            }}
+                                        </div>
+                                    </template>
                                 </div>
-                            </TabsContent>
+                            </div>
+
+                            
 
                             <!-- Fare Options Tab - Mobile Optimized -->
                             <TabsContent
@@ -3588,510 +3511,14 @@ watch(isLoggedIn, (newVal) => {
                                     <div class="">
                                         <div
                                             :class="[
-                                                'flex flex-col lg:flex-row gap-4 sm:gap-6',
+                                                'flex flex-col gap-4',
                                                 selectedFlight?.leg?.flights
                                                     .length == 2
                                                     ? ''
                                                     : '',
                                             ]"
                                         >
-                                            <div
-                                                v-for="(
-                                                    leg, legIndex
-                                                ) in selectedFlight?.leg
-                                                    ?.flights"
-                                                :key="legIndex"
-                                                class="mb-4 sm:mb-8 lg:mb-0"
-                                            >
-                                                <!-- Professional Header Strip - Mobile Responsive -->
-                                                <div
-                                                    v-if="
-                                                        selectedFlight?.leg
-                                                            ?.flights.length !==
-                                                        1
-                                                    "
-                                                    class="flex flex-col sm:flex-row items-stretch bg-white rounded sm:rounded overflow-hidden border border-gray-200 mx-auto"
-                                                >
-                                                    <!-- Colored Label (Header) -->
-                                                    <div
-                                                        class="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 text-white font-semibold bg-primary text-xs sm:text-sm relative overflow-hidden w-24 sm:w-28 md:w-32"
-                                                        :style="{
-                                                            clipPath:
-                                                                'polygon(0% 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
-                                                        }"
-                                                    >
-                                                        <!-- Icon -->
-                                                        <PlaneTakeoff
-                                                            v-if="
-                                                                route.query
-                                                                    .flightType ===
-                                                                    'multi-city' ||
-                                                                legIndex === 0
-                                                            "
-                                                            class="w-3 h-3 sm:w-4 sm:h-4"
-                                                        />
-                                                        <PlaneLanding
-                                                            v-else
-                                                            class="w-3 h-3 sm:w-4 sm:h-4"
-                                                        />
-
-                                                        <!-- Label -->
-                                                        <span
-                                                            class="truncate text-sm"
-                                                        >
-                                                            {{
-                                                                route.query
-                                                                    .flightType ===
-                                                                "multi-city"
-                                                                    ? `Trip ${legIndex + 1}`
-                                                                    : legIndex ===
-                                                                        0
-                                                                      ? "Departure"
-                                                                      : "Arrival"
-                                                            }}
-                                                        </span>
-                                                    </div>
-
-                                                    <!-- Route & Info Section -->
-                                                    <div
-                                                        class="flex-1 px-3 sm:px-4 lg:px-5 py-2 sm:py-3 bg-gray-50"
-                                                    >
-                                                        <div
-                                                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2 lg:gap-4"
-                                                        >
-                                                            <!-- Route -->
-                                                            <div
-                                                                class="flex-1 min-w-0"
-                                                            >
-                                                                <div
-                                                                    class="text-sm sm:text-base font-semibold text-gray-900 leading-tight truncate"
-                                                                >
-                                                                    {{
-                                                                        leg
-                                                                            ?.from
-                                                                            ?.city
-                                                                            ?.name ||
-                                                                        leg
-                                                                            ?.from
-                                                                            ?.city
-                                                                            ?.code
-                                                                    }}
-                                                                    ({{
-                                                                        leg
-                                                                            ?.from
-                                                                            ?.city
-                                                                            ?.code
-                                                                    }}) →
-                                                                    {{
-                                                                        leg?.to
-                                                                            ?.city
-                                                                            ?.name ||
-                                                                        leg?.to
-                                                                            ?.city
-                                                                            ?.code
-                                                                    }}
-                                                                    ({{
-                                                                        leg?.to
-                                                                            ?.city
-                                                                            ?.code
-                                                                    }})
-                                                                </div>
-
-                                                                <div
-                                                                    class="text-xs text-gray-600 mt-0.5"
-                                                                >
-                                                                    {{
-                                                                        formatDate(
-                                                                            leg?.departure_at,
-                                                                        )
-                                                                    }}
-                                                                </div>
-                                                            </div>
-
-                                                            <!-- Right Meta - Mobile Stacked -->
-                                                            <div
-                                                                class="flex flex-wrap gap-1 sm:gap-1.5 mt-1 sm:mt-0"
-                                                            >
-                                                                <!-- Stops -->
-                                                                <div
-                                                                    class="mt-2"
-                                                                    data-tooltip-target="tooltip-default"
-                                                                >
-                                                                    <div
-                                                                        v-if="
-                                                                            leg?.has_layovers
-                                                                        "
-                                                                        class=" "
-                                                                    >
-                                                                        <TooltipProvider>
-                                                                            <Tooltip>
-                                                                                <TooltipTrigger
-                                                                                    as-child
-                                                                                >
-                                                                                    <Button
-                                                                                        size="md"
-                                                                                        class="hover:bg-orange-100 px-2 py-1 hover:text-orange-700 rounded-full text-xs border bg-orange-100 border-orange-200 text-orange-700"
-                                                                                        variant="ghost"
-                                                                                    >
-                                                                                        {{
-                                                                                            leg?.layovers_count
-                                                                                        }}
-                                                                                        Stop
-                                                                                    </Button>
-                                                                                </TooltipTrigger>
-                                                                                <TooltipContent
-                                                                                    v-if="
-                                                                                        leg?.has_layovers
-                                                                                    "
-                                                                                >
-                                                                                    {{
-                                                                                        leg
-                                                                                            ?.segments?.[0]
-                                                                                            ?.to
-                                                                                            ?.name
-                                                                                    }}
-                                                                                </TooltipContent>
-                                                                            </Tooltip>
-                                                                        </TooltipProvider>
-                                                                    </div>
-                                                                    <Button
-                                                                        size="md"
-                                                                        v-else
-                                                                        class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium border border-green-200 hover:bg-green-100 hover:text-green-700"
-                                                                        variant="ghost"
-                                                                    >
-                                                                        Non-Stop
-                                                                    </Button>
-                                                                </div>
-
-                                                                <!-- Duration -->
-                                                                <div
-                                                                    class="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold border bg-gray-50 text-gray-700 border-gray-200"
-                                                                >
-                                                                    <Timer
-                                                                        class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500"
-                                                                    />
-                                                                    <span>
-                                                                        {{
-                                                                            Math.floor(
-                                                                                moment
-                                                                                    .duration(
-                                                                                        leg?.travel_time,
-                                                                                        "m",
-                                                                                    )
-                                                                                    .asHours(),
-                                                                            )
-                                                                        }}h
-                                                                        {{
-                                                                            moment
-                                                                                .duration(
-                                                                                    leg?.travel_time,
-                                                                                    "m",
-                                                                                )
-                                                                                .minutes()
-                                                                        }}m
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <!-- Flight Details Grid - Mobile Stacked -->
-                                                <div
-                                                    class="grid grid-cols-1 md:grid-cols-4 gap-3 sm:gap-6 items-center mt-2 sm:mt-4"
-                                                    :class="{
-                                                        'mt-4':
-                                                            selectedFlight?.leg
-                                                                ?.flights
-                                                                .length !== 1,
-                                                    }"
-                                                >
-                                                    <!-- Airline Info - Mobile Center -->
-                                                    <div
-                                                        class="flex flex-col justify-center md:col-span-1"
-                                                        :class="{
-                                                            'ps-0 sm:ps-3':
-                                                                selectedFlight
-                                                                    ?.leg
-                                                                    ?.flights
-                                                                    .length ===
-                                                                1,
-                                                            'ps-0 sm:ps-2':
-                                                                selectedFlight
-                                                                    ?.leg
-                                                                    ?.flights
-                                                                    .length !==
-                                                                1,
-                                                        }"
-                                                    >
-                                                        <div
-                                                            class="flex items-center gap-3 sm:gap-6 justify-center sm:justify-start"
-                                                        >
-                                                            <div
-                                                                v-if="
-                                                                    selectedFlight
-                                                                        ?.leg
-                                                                        ?.flights
-                                                                        .length ===
-                                                                    1
-                                                                "
-                                                                class="mt-2 flex-shrink-0 hidden md:block"
-                                                            >
-                                                                <div
-                                                                    class="w-3 h-3 sm:w-4 sm:h-4 bg-red-600 rounded-full ring-2 sm:ring-4 ring-red-100"
-                                                                ></div>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center gap-3 sm:gap-5"
-                                                            >
-                                                                <img
-                                                                    class="w-10 h-10 sm:w-14 sm:h-14 lg:w-16 lg:h-16 object-contain p-1 sm:p-1.5 bg-white rounded"
-                                                                    :src="
-                                                                        leg
-                                                                            ?.marketing_carrier
-                                                                            ?.logo
-                                                                    "
-                                                                    :alt="
-                                                                        leg
-                                                                            ?.marketing_carrier
-                                                                            ?.name
-                                                                    "
-                                                                />
-                                                                <div
-                                                                    class="text-center sm:text-left"
-                                                                >
-                                                                    <div
-                                                                        class="text-sm sm:text-lg font-semibold text-gray-900"
-                                                                    >
-                                                                        {{
-                                                                            leg
-                                                                                ?.marketing_carrier
-                                                                                ?.name
-                                                                        }}
-                                                                    </div>
-                                                                    <div
-                                                                        class="text-xs sm:text-sm text-gray-600"
-                                                                    >
-                                                                        {{
-                                                                            leg
-                                                                                ?.marketing_carrier
-                                                                                ?.iata
-                                                                        }}-{{
-                                                                            formatFlightNumber(
-                                                                                leg?.flight_number,
-                                                                            )
-                                                                        }}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Timeline Section - Mobile Stacked -->
-                                                    <div
-                                                        class="col-span-1 md:col-span-3 grid grid-cols-3 gap-3 sm:gap-6 items-center mt-3 sm:mt-0"
-                                                    >
-                                                        <!-- Departure -->
-                                                        <div
-                                                            class="text-center"
-                                                        >
-                                                            <div
-                                                                class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900"
-                                                            >
-                                                                {{
-                                                                    moment
-                                                                        .parseZone(
-                                                                            leg?.departure_at,
-                                                                        )
-                                                                        .format(
-                                                                            "HH:mm",
-                                                                        )
-                                                                }}
-                                                            </div>
-                                                            <div
-                                                                class="text-sm sm:text-lg font-semibold text-gray-700 mt-0.5 sm:mt-1"
-                                                            >
-                                                                {{
-                                                                    leg?.from
-                                                                        ?.city
-                                                                        ?.code
-                                                                }}
-                                                            </div>
-                                                            <div
-                                                                class="text-sm text-gray-500"
-                                                            >
-                                                                {{
-                                                                    moment(
-                                                                        leg.departure_at,
-                                                                    ).format(
-                                                                        "ddd, DD MMM YYYY",
-                                                                    )
-                                                                }}
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- Duration & Stops -->
-                                                        <div
-                                                            class="flex flex-col items-center"
-                                                        >
-                                                            <div
-                                                                v-if="
-                                                                    selectedFlight
-                                                                        ?.leg
-                                                                        ?.flights
-                                                                        .length ==
-                                                                    1
-                                                                "
-                                                                class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium text-gray-600 mb-2 sm:mb-3"
-                                                            >
-                                                                <Timer
-                                                                    class="w-3 h-3 sm:w-4 sm:h-4 text-gray-500"
-                                                                />
-                                                                <span>
-                                                                    {{
-                                                                        Math.floor(
-                                                                            moment
-                                                                                .duration(
-                                                                                    leg?.travel_time,
-                                                                                    "m",
-                                                                                )
-                                                                                .asHours(),
-                                                                        )
-                                                                    }}h
-                                                                    {{
-                                                                        moment
-                                                                            .duration(
-                                                                                leg?.travel_time,
-                                                                                "m",
-                                                                            )
-                                                                            .minutes()
-                                                                    }}m
-                                                                </span>
-                                                            </div>
-
-                                                            <div
-                                                                class="relative w-full flex items-center justify-center"
-                                                            >
-                                                                <div
-                                                                    class="flex-1 border-t border-dashed border-gray-300"
-                                                                ></div>
-                                                                <div
-                                                                    class="mx-2 sm:mx-4 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-red-50 flex items-center justify-center shadow-sm"
-                                                                >
-                                                                    <Plane
-                                                                        class="w-4 h-4 sm:w-5 sm:h-5 text-red-600"
-                                                                        strokeWidth="1.8"
-                                                                    />
-                                                                </div>
-                                                                <div
-                                                                    class="flex-1 border-t border-dashed border-gray-300"
-                                                                ></div>
-                                                            </div>
-
-                                                            <div
-                                                                v-if="
-                                                                    selectedFlight
-                                                                        ?.leg
-                                                                        ?.flights
-                                                                        .length ==
-                                                                    1
-                                                                "
-                                                                class="mt-2 sm:mt-3"
-                                                            >
-                                                                <div
-                                                                    class="mt-2"
-                                                                    data-tooltip-target="tooltip-default"
-                                                                >
-                                                                    <div
-                                                                        v-if="
-                                                                            leg?.has_layovers
-                                                                        "
-                                                                        class=" "
-                                                                    >
-                                                                        <TooltipProvider>
-                                                                            <Tooltip>
-                                                                                <TooltipTrigger
-                                                                                    as-child
-                                                                                >
-                                                                                    <Button
-                                                                                        size="md"
-                                                                                        class="hover:bg-orange-100 px-2 py-1 hover:text-orange-700 rounded-full text-xs border bg-orange-100 border-orange-200 text-orange-700"
-                                                                                        variant="ghost"
-                                                                                    >
-                                                                                        {{
-                                                                                            leg?.layovers_count
-                                                                                        }}
-                                                                                        Stop
-                                                                                    </Button>
-                                                                                </TooltipTrigger>
-                                                                                <TooltipContent
-                                                                                    v-if="
-                                                                                        leg?.has_layovers
-                                                                                    "
-                                                                                >
-                                                                                    {{
-                                                                                        leg
-                                                                                            ?.segments?.[0]
-                                                                                            ?.to
-                                                                                            ?.name
-                                                                                    }}
-                                                                                </TooltipContent>
-                                                                            </Tooltip>
-                                                                        </TooltipProvider>
-                                                                    </div>
-                                                                    <Button
-                                                                        size="md"
-                                                                        v-else
-                                                                        class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium border border-green-200 hover:bg-green-100 hover:text-green-700"
-                                                                        variant="ghost"
-                                                                    >
-                                                                        Non-Stop
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- Arrival -->
-                                                        <div
-                                                            class="text-center"
-                                                        >
-                                                            <div
-                                                                class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900"
-                                                            >
-                                                                {{
-                                                                    moment
-                                                                        .parseZone(
-                                                                            leg?.arrival_at,
-                                                                        )
-                                                                        .format(
-                                                                            "HH:mm",
-                                                                        )
-                                                                }}
-                                                            </div>
-                                                            <div
-                                                                class="text-sm sm:text-lg font-semibold text-gray-700 mt-0.5 sm:mt-1"
-                                                            >
-                                                                {{
-                                                                    leg?.to
-                                                                        ?.city
-                                                                        ?.code
-                                                                }}
-                                                            </div>
-                                                            <div
-                                                                class="text-sm text-gray-500"
-                                                            >
-                                                                {{
-                                                                    moment(
-                                                                        leg.arrival_at,
-                                                                    ).format(
-                                                                        "ddd, DD MMM YYYY",
-                                                                    )
-                                                                }}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                           
                                         </div>
 
                                         <!-- Flight Tabs Navigation - Mobile Scrollable -->
@@ -4103,7 +3530,7 @@ watch(isLoggedIn, (newVal) => {
                                             class="w-full mt-4 sm:mt-6"
                                         >
                                             <div
-                                                class="bg-primary rounded p-2 sm:p-3 lg:p-4 mb-2"
+                                                class="mb-2 rounded-md bg-primary p-2 sm:p-3 lg:p-4"
                                             >
                                                 <div
                                                     class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2 lg:gap-4"
@@ -4111,7 +3538,7 @@ watch(isLoggedIn, (newVal) => {
                                                     <h3
                                                         class="flex gap-2 text-sm sm:text-base lg:text-xl font-bold text-white truncate"
                                                     >
-                                                        <TicketCheck />
+                                                        <TicketCheck class="h-5 w-5" />
                                                         Fare Options
                                                     </h3>
                                                 </div>
@@ -4276,9 +3703,9 @@ watch(isLoggedIn, (newVal) => {
                                                     </div>
                                                 </div>
 
-                                                <!-- Fare Options Grid for Current Flight - Mobile Stacked -->
+                                                <!-- Fare Options Rows for Current Flight -->
                                                 <div
-                                                    class="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6"
+                                                    class="flex flex-col gap-3"
                                                 >
                                                     <!-- Fare Card - Mobile Compact -->
                                                     <div
@@ -4292,22 +3719,41 @@ watch(isLoggedIn, (newVal) => {
                                                                 fare.ref_id,
                                                             )
                                                         "
-                                                        class="border border-gray-200 rounded overflow-hidden hover:border-primary transition-all duration-200 cursor-pointer"
+                                                        class="rounded border border-gray-200 bg-white overflow-hidden transition-all duration-200 cursor-pointer hover:border-primary"
                                                         :class="
                                                             selectedFares[
                                                                 flightIndex
                                                             ] === fare.ref_id
-                                                                ? 'border-primary ring-1 sm:ring-2 ring-primary/20'
+                                                                ? 'border-primary bg-primary/5 ring-1 sm:ring-2 ring-primary/20'
                                                                 : ''
                                                         "
                                                     >
                                                         <!-- Fare Header with Price -->
                                                         <div
-                                                            class="bg-gray-50 p-3 sm:p-4 border-b border-gray-200"
+                                                            class="flex flex-col gap-3 bg-blue-50/70 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
                                                         >
                                                             <div
-                                                                class="flex items-center justify-between"
+                                                                class="flex items-center gap-3"
                                                             >
+                                                                <span
+                                                                    class="flex h-5 w-5 items-center justify-center rounded-full border"
+                                                                    :class="
+                                                                        selectedFares[
+                                                                            flightIndex
+                                                                        ] === fare.ref_id
+                                                                            ? 'border-primary'
+                                                                            : 'border-gray-300'
+                                                                    "
+                                                                >
+                                                                    <span
+                                                                        v-if="
+                                                                            selectedFares[
+                                                                                flightIndex
+                                                                            ] === fare.ref_id
+                                                                        "
+                                                                        class="h-2.5 w-2.5 rounded-full bg-primary"
+                                                                    ></span>
+                                                                </span>
                                                                 <h5
                                                                     class="font-bold text-sm sm:text-lg text-gray-800"
                                                                 >
@@ -4318,9 +3764,7 @@ watch(isLoggedIn, (newVal) => {
                                                                     }}
                                                                 </h5>
                                                             </div>
-                                                            <div
-                                                                class="mt-1 sm:mt-2 flex items-baseline"
-                                                            >
+                                                            <div class="flex items-baseline sm:justify-end">
                                                                 <span
                                                                     class="text-lg sm:text-xl lg:text-2xl font-bold text-primary"
                                                                     >{{
@@ -5601,38 +5045,40 @@ watch(isLoggedIn, (newVal) => {
                                     </div>
                                 </div>
                             </TabsContent>
-                        </Tabs>
+                        </div>
+                    </Tabs>
 
-                        <!-- Book Now Strip (Common For All Tabs) -->
+                    <!-- Book Now Strip (Common For All Tabs) -->
+                    <div
+                        class="flex flex-shrink-0 flex-col gap-3 border-t border-gray-200 bg-white px-4 py-4 shadow-[0_-8px_24px_rgba(16,24,40,0.04)] sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                    >
+                        <div class="min-w-0">
+                            <div
+                                class="text-xs font-semibold text-gray-500 sm:text-sm"
+                            >
+                                Total price
+                            </div>
+                            <div
+                                class="truncate text-xl font-extrabold text-gray-950 sm:text-2xl"
+                            >
+                                {{ formatAmount(calculateGrandTotal()) }}
+                            </div>
+                        </div>
                         <div
-                            class="sticky bottom-0 bg-white border-t border-gray-100 p-3 sm:p-4 lg:p-6 mt-4 sm:mt-8 shadow-lg sm:shadow-none"
+                            class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center"
                         >
                             <div
-                                class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4"
+                                class="hidden items-center gap-2 text-sm text-gray-500 sm:flex"
                             >
-                                <div
-                                    class="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2"
-                                >
-                                    <div
-                                        class="text-sm sm:text-base lg:text-xl font-bold text-gray-700"
-                                    >
-                                        Total Price:
-                                    </div>
-                                    <div
-                                        class="text-lg sm:text-xl lg:text-2xl font-bold text-primary"
-                                    >
-                                        {{
-                                            formatAmount(calculateGrandTotal())
-                                        }}
-                                    </div>
-                                </div>
-                                <button
-                                    @click="goToCheckout"
-                                    class="w-full sm:w-auto text-white py-2 sm:py-3 px-4 sm:px-8 rounded text-sm sm:text-base font-semibold transform transition-all duration-200 shadow-lg bg-primary hover:bg-primary/90 hover:scale-105"
-                                >
-                                    <span>{{ $t("book_now") }}</span>
-                                </button>
+                                <CheckSquare class="h-4 w-4 text-emerald-600" />
+                                Secure checkout
                             </div>
+                            <button
+                                @click="goToCheckout"
+                                class="w-full rounded-lg bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-primary/90 sm:w-auto sm:text-base"
+                            >
+                                <span>{{ $t("book_now") }}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
