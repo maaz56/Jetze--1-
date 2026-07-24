@@ -49,65 +49,65 @@ class AtApiService
 
 
 
-   protected function getAccessToken()
-{
-    try {
-        $headers = [
-            'Content-Type' => 'application/json',
-        ];
+    protected function getAccessToken()
+    {
+        try {
+            $headers = [
+                'Content-Type' => 'application/json',
+            ];
 
-        $signBaseUrl = "{$this->signBaseUrl}/Utils/Signature";
+            $signBaseUrl = "{$this->signBaseUrl}/Utils/Signature";
 
-        $signaturePayload = [
-            'MerchantID' => $this->merchantId,
-            'ApiKey'      => $this->apiKey,
-            'ClientID'    => $this->clientId,
-            'Password'    => $this->password,
-            'AgentCode'   => $this->agentCode,
-            'BrowserKey'  => $this->browserKey,
-        ];
-        Log::info($signBaseUrl);
-        Log::info(json_encode($signaturePayload));
-        $request = new Request(
-            'POST',
-            $signBaseUrl,
-            $headers,
-            json_encode($signaturePayload)
-        );
+            $signaturePayload = [
+                'MerchantID' => $this->merchantId,
+                'ApiKey' => $this->apiKey,
+                'ClientID' => $this->clientId,
+                'Password' => $this->password,
+                'AgentCode' => $this->agentCode,
+                'BrowserKey' => $this->browserKey,
+            ];
+            Log::info($signBaseUrl);
+            Log::info(json_encode($signaturePayload));
+            $request = new Request(
+                'POST',
+                $signBaseUrl,
+                $headers,
+                json_encode($signaturePayload)
+            );
 
-        $response = $this->client->send($request);
-        return json_decode($response->getBody()->getContents(), true);
+            $response = $this->client->send($request);
+            return json_decode($response->getBody()->getContents(), true);
 
-    } catch (RequestException $e) {
+        } catch (RequestException $e) {
 
-        Log::error('Access Token Request Failed', [
-            'message'  => $e->getMessage(),
-            'request'  => $signaturePayload,
-            'response' => $e->hasResponse()
-                ? $e->getResponse()->getBody()->getContents()
-                : null,
-        ]);
+            Log::error('Access Token Request Failed', [
+                'message' => $e->getMessage(),
+                'request' => $signaturePayload,
+                'response' => $e->hasResponse()
+                    ? $e->getResponse()->getBody()->getContents()
+                    : null,
+            ]);
 
-        throw $e;
+            throw $e;
 
-    } catch (GuzzleException $e) {
+        } catch (GuzzleException $e) {
 
-        Log::error('Guzzle Exception While Fetching Access Token', [
-            'message' => $e->getMessage(),
-        ]);
+            Log::error('Guzzle Exception While Fetching Access Token', [
+                'message' => $e->getMessage(),
+            ]);
 
-        throw $e;
+            throw $e;
 
-    } catch (\Throwable $e) {
+        } catch (\Throwable $e) {
 
-        Log::error('Unexpected Error While Fetching Access Token', [
-            'message' => $e->getMessage(),
-            'trace'   => $e->getTraceAsString(),
-        ]);
+            Log::error('Unexpected Error While Fetching Access Token', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-        throw $e;
+            throw $e;
+        }
     }
-}
 
     public function searchFlights($params)
     {
@@ -313,79 +313,173 @@ class AtApiService
     }
 
 
-    public function getSearchFlightsRes($tui)
-    {
-        // ✅ MOCK MODE
-        if ($this->useMockApi) {
-            Log::warning('Using MOCK GetExpSearch response.');
+   public function getSearchFlightsRes($tui)
+{
+    // ✅ MOCK MODE
+    if ($this->useMockApi) {
+        Log::warning('Using MOCK GetExpSearch response.');
+        return json_decode(Storage::get('ATResponse.json'), true);
+    }
 
-            // stored JSON file (already using 👍)
-            return json_decode(Storage::get('ATResponse.json'), true);
+    // 🔴 REAL API CODE
+    $accessToken = $this->getAccessToken();
+    $headers = [
+        'Content-Type' => 'application/json',
+        'Authorization' => $accessToken['Token']
+    ];
+
+    $searchResUrl = "$this->flightBaseUrl/flights/GetExpSearch";
+    $payload = [
+        'ClientID' => $this->clientId,
+        'TUI' => $tui,
+    ];
+
+    try {
+        $request = new Request(
+            'POST',
+            $searchResUrl,
+            $headers,
+            json_encode($payload)
+        );
+
+        Log::info('GetExpSearch request payload: ', $payload);
+
+        $response = $this->client->send($request);
+        $body = json_decode($response->getBody(), true);
+        $isComplete = strtolower($body['Completed'] ?? 'false');
+
+        // If already complete, return immediately
+        if ($isComplete === 'true') {
+            Log::info('GetExpSearch completed immediately.');
+            return $body;
         }
 
-        // 🔴 REAL API CODE (UNCHANGED)
-        $accessToken = $this->getAccessToken();
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token']
-        ];
+        // Store initial response as base
+        $mergedResponse = $body;
 
-        $searchResUrl = "$this->flightBaseUrl/flights/GetExpSearch";
-        $payload = [
-            'ClientID' => $this->clientId,
-            'TUI' => $tui,
-        ];
+        // 🔁 Retry until completed
+        while ($isComplete !== 'true') {
+            Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
 
-        try {
-
-
-
-
-
-            // =========================
-            // LIVE API MODE
-            // =========================
-
-            $request = new Request(
-                'POST',
-                $searchResUrl,
-                $headers,
-                json_encode($payload)
-            );
-
-            Log::info('GetExpSearch request payload: ', $payload);
+            sleep(2);
 
             $response = $this->client->send($request);
+            $newBody = json_decode($response->getBody(), true);
+            $isComplete = strtolower($newBody['Completed'] ?? 'false');
 
-            $body = json_decode($response->getBody(), true);
-            $isComplete = strtolower($body['Completed'] ?? 'false');
-
-            // 🔁 Retry until completed
-            while ($isComplete !== 'true') {
-
-                Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
-
-                sleep(2);
-
-                $response = $this->client->send($request);
-                $body = json_decode($response->getBody(), true);
-                $isComplete = strtolower($body['Completed'] ?? 'false');
-            }
-            Log::info('GetExpSearch completed successfully. Response: ', $body);
-            return $body;
-
-        } catch (RequestException $e) {
-
-            Log::error('Error getting search flights result: ' . $e->getMessage());
-
-            if ($e->hasResponse()) {
-                Log::error('Response: ' . $e->getResponse()->getBody());
+            // If new response is complete and has no trips, it might be a completion response
+            if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
+                Log::info('Search completed. Final response received with no trips.');
+                $mergedResponse['Completed'] = 'true';
+                break;
             }
 
-            return null;
+            // Merge trips from new response into merged response
+            if (isset($newBody['Trips']) && $newBody['Trips'] !== null) {
+                // Ensure merged response has Trips structure
+                if (!isset($mergedResponse['Trips']) || $mergedResponse['Trips'] === null) {
+                    $mergedResponse['Trips'] = [];
+                }
+
+                // Handle if Trips is an object with 'Trip' key or direct array
+                $newTrips = $this->extractTrips($newBody['Trips']);
+                $mergedTrips = $this->extractTrips($mergedResponse['Trips']);
+
+                // Merge each trip at the same index
+                foreach ($newTrips as $index => $newTripData) {
+                    if (isset($mergedTrips[$index])) {
+                        // Merge Journey/Segments
+                        if (isset($newTripData['Journey']) && isset($mergedTrips[$index]['Journey'])) {
+                            $existingJourney = is_array($mergedTrips[$index]['Journey']) ? $mergedTrips[$index]['Journey'] : [];
+                            $newJourney = is_array($newTripData['Journey']) ? $newTripData['Journey'] : [];
+                            
+                            // Ensure both are arrays of journeys
+                            if (!isset($existingJourney[0])) {
+                                $existingJourney = [$existingJourney];
+                            }
+                            if (!isset($newJourney[0])) {
+                                $newJourney = [$newJourney];
+                            }
+
+                            $mergedTrips[$index]['Journey'] = array_merge($existingJourney, $newJourney);
+                        }
+
+                        // Merge other fields if needed
+                        foreach ($newTripData as $key => $value) {
+                            if ($key !== 'Journey' && !isset($mergedTrips[$index][$key])) {
+                                $mergedTrips[$index][$key] = $value;
+                            }
+                        }
+                    } else {
+                        // Add new trip if doesn't exist
+                        $mergedTrips[$index] = $newTripData;
+                    }
+                }
+
+                // Update merged response trips
+                $mergedResponse['Trips'] = $mergedTrips;
+            }
+
+            // Update completion status
+            $mergedResponse['Completed'] = $isComplete;
+            
+            // If complete response has Code and Msg, merge them
+            if (isset($newBody['Code'])) {
+                $mergedResponse['Code'] = $newBody['Code'];
+            }
+            if (isset($newBody['Msg'])) {
+                $mergedResponse['Msg'] = $newBody['Msg'];
+            }
+
+            // Update body for next iteration
+            $body = $newBody;
         }
 
+        Log::info('GetExpSearch completed successfully. Merged response: ', $mergedResponse);
+        return $mergedResponse;
+
+    } catch (RequestException $e) {
+        Log::error('Error getting search flights result: ' . $e->getMessage());
+
+        if ($e->hasResponse()) {
+            Log::error('Response: ' . $e->getResponse()->getBody());
+        }
+
+        return null;
     }
+}
+
+/**
+ * Extract trips array from response
+ * Handles both formats:
+ * - ['Trips' => ['Trip' => [...]]]
+ * - ['Trips' => [...]]
+ */
+private function extractTrips($tripsData): array
+{
+    if (empty($tripsData)) {
+        return [];
+    }
+
+    // If Trips is an object with 'Trip' key
+    if (is_array($tripsData) && isset($tripsData['Trip'])) {
+        $trips = $tripsData['Trip'];
+    } else {
+        $trips = $tripsData;
+    }
+
+    // Ensure it's an array
+    if (!is_array($trips)) {
+        return [];
+    }
+
+    // If it's a single trip (associative array), wrap it
+    if (!isset($trips[0])) {
+        return [$trips];
+    }
+
+    return $trips;
+}
     public function getWebSettings($tui)
     {
 

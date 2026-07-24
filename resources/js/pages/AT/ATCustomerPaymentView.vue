@@ -2,7 +2,6 @@
 
 
   <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-    <pre>{{flightData}}</pre>
     <div class=" mx-auto">
       <div class=" bg-white border mb-6 border-gray-200 mx-auto  py-6 px-4">
         <div class="relative  flex items-center justify-between  px-4">

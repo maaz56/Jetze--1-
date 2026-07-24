@@ -280,7 +280,7 @@ class OneApiFlightTransformer
                         $baggage_policies[] = [
                             "segment_ref_id" => $segment['flightSegmentRef'],
                             "title" => 'Economy',
-                            "description" => "1 hand bag(s), up to 7 kg",
+                            "description" => "7kg",
                             "weight_unit" => "kg",
                             "traveler_type" => $paxType,
                             "type" => 'carry',

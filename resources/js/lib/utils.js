@@ -14,7 +14,7 @@ export function formatAmount(amount) {
 
     const formatter = new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: "PKR",
+        currency: "AED",
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });

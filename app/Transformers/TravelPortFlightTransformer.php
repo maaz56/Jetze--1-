@@ -203,7 +203,7 @@ class TravelPortFlightTransformer
                                 'type' => 'carry',
                                 'pieces' => 1,
                                 'weight' => '7kg',
-                                'description' => '1 hand bag upto 7kg',
+                                'description' => '7kg',
                             ];
 
                             // Checked baggage
