@@ -77,6 +77,7 @@ class RegisteredUserController extends Controller
                     'role' => $role,
                     'is_approved' => 0,
                     'is_formFilled' => 1,
+                    'email_verified_at' => now(),
                 ]);
 
                 // ===================================================
@@ -161,6 +162,8 @@ class RegisteredUserController extends Controller
                     'is_approved' => true,
                     'is_formFilled' => true,
                     'role' => $role,
+                    'email_verified_at' => now(),
+
                 ]);
 
                 Customer::create([
