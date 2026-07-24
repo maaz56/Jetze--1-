@@ -13,16 +13,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
-            ['email' => 'Jetze.pk@gmail.com'],
-            [
-                'role' => 'admin',
-                'is_approved' => true,
-                'email_verified_at' => now(),
-                'name' => 'admin',
-                'password' => '901c7cfe@@',
-            ]
-        );
+        // User::updateOrCreate(
+        //     ['email' => 'Jetze.pk@gmail.com'],
+        //     [
+        //         'role' => 'admin',
+        //         'is_approved' => true,
+        //         'email_verified_at' => now(),
+        //         'name' => 'admin',
+        //         'password' => '901c7cfe@@',
+        //     ]
+        // );
 
         // User::updateOrCreate(
         //     ['email' => 'admin@Jetze.pk'],
@@ -34,16 +34,16 @@ class DatabaseSeeder extends Seeder
         //     ]
         // );
         
-        // User::updateOrCreate(
-        //     ['email' => 'admin@gmail.com'],
-        //     [
-        //         'role' => 'admin',
-        //         'is_approved' => true,
-        //         'name' => 'admin',
-        //         'password' => bcrypt('admin1234'),
-        //         'email_verified_at' => now()
-        //     ]
-        // );
+        User::updateOrCreate(
+            ['email' => 'admin@gmail.com'],
+            [
+                'role' => 'admin',
+                'is_approved' => true,
+                'name' => 'admin',
+                'password' => bcrypt('admin1234'),
+                'email_verified_at' => now()
+            ]
+        );
 
 
 
