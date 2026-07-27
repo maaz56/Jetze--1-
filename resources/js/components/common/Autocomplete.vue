@@ -5,8 +5,8 @@
         </label>
         <div class="relative">
             <div :class="[
-                'relative min-h-[110px] w-full cursor-pointer rounded  bg-white p-4 transition-all duration-200',
-                isFocused ? 'border-blue-500 ring-1 ring-blue-500 shadow-lg' : 'border-gray-200 hover:bg-gray-50',
+                'relative min-h-[110px] w-full cursor-pointer overflow-hidden rounded border-none bg-white p-4 shadow-none transition-all duration-200',
+                isFocused ? 'ring-0' : 'hover:bg-gray-50',
             ]">
                 <span class="mb-1 block text-sm font-medium uppercase tracking-wide text-gray-500">
                     {{ placeholder || 'From' }}
@@ -16,7 +16,7 @@
                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                     :name="`${uniqueId}-search`" data-lpignore="true"
                     :class="[
-                        'absolute inset-0 z-10 h-full w-full cursor-pointer border-none bg-transparent px-4 pt-7 text-3xl font-black text-gray-900 outline-none ring-0',
+                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent px-4 pr-12 pt-8 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
                         !isFocused ? 'text-transparent caret-transparent' : '',
                     ]"
                     @input="handleInput" @keydown="handleKeydown" @focus="handleFocus" @click="handleInputClick"
@@ -24,13 +24,13 @@
 
                 <div v-if="!isFocused" class="relative pointer-events-none">
                     <template v-if="displayValue">
-                        <h2 class="truncate text-3xl font-black leading-tight text-gray-900">{{ displayValue.city }}</h2>
+                        <h2 class="max-w-full truncate text-2xl font-black leading-tight text-gray-900 sm:text-3xl">{{ displayValue.city }}</h2>
                         <p class="mt-1 truncate text-sm font-medium text-gray-600">
                             {{ displayValue.iata }}, {{ selectedItem.name }}{{ displayValue.country ? ' ' + displayValue.country : '' }}
                         </p>
                     </template>
                     <template v-else>
-                        <h2 class="text-3xl font-black leading-tight text-gray-400">Select City</h2>
+                        <h2 class="truncate text-2xl font-black leading-tight text-gray-400 sm:text-3xl">Select City</h2>
                         <p class="mt-1 text-sm text-gray-400">Airport Name, Country</p>
                     </template>
                 </div>
@@ -206,10 +206,7 @@ const updatePosition = () => {
 
 const formatSelection = (item) => {
     if (!item) return "";
-    const iata = item.iata_code || "";
-    const city = item.city_name || "";
-    const country = getCountryName(item) || "";
-    return [iata, city, country].filter(Boolean).join("-");
+    return item.iata_code || "";
 };
 
 const displayValue = computed(() => {
@@ -324,7 +321,13 @@ const updateSearchResults = debounce(() => {
         }
         isLoading.value = false;
     }
-}, 300);
+}, 600);
+
+const clearSelectedValue = () => {
+    search.value = "";
+    selectedItem.value = null;
+    emit("update:modelValue", "");
+};
 
 watch(search, () => {
     isLoading.value = true;
@@ -342,8 +345,6 @@ function handleInput(event) {
         dropdownId: uniqueId.value,
     };
     search.value = event.target.value;
-    emit("update:modelValue", search.value);
-    updateSearchResults();
     nextTick(() => {
         updatePosition(); // Update dropdown position when opening
     });
@@ -351,6 +352,9 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
+    if (search.value || selectedItem.value) {
+        clearSelectedValue();
+    }
     // Show dropdown on focus, including default suggestions when input is empty.
     isOpen.value = true;
     eventBus.value = {
@@ -366,10 +370,8 @@ function handleFocus() {
 
 function handleInputClick() {
     // If an airport is already selected, clear it fully on click.
-    if (selectedItem.value) {
-        search.value = "";
-        selectedItem.value = null;
-        emit("update:modelValue", "");
+    if (search.value || selectedItem.value) {
+        clearSelectedValue();
     }
 
     isOpen.value = true;
@@ -475,6 +477,8 @@ onBeforeUnmount(() => {
 
 // Watch for changes to modelValue
 watch(() => props.modelValue, (newValue) => {
+    if (isFocused.value) return;
+
     if (newValue !== search.value || !selectedItem.value) {
         syncSelectionFromModelValue(newValue);
     }

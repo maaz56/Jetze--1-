@@ -14,7 +14,6 @@ class AtFlightTransformer
 
     public function fromAT($flightData, $params)
     {
-        Log::info('AT Flight Data Received for Transformation: ' . json_encode($flightData));
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
         $processed = $this->atFlightProcessor($flightData, $params);
         $results = [];
@@ -250,7 +249,6 @@ class AtFlightTransformer
             ];
         }
         
-        Log::info('final transformed results: ' . json_encode($results));
         return $results;
     }
 

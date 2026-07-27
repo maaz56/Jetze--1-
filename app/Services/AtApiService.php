@@ -189,7 +189,6 @@ class AtApiService
                 json_encode($payload)
             );
 
-            Log::info('Express Search request payload: ', $payload);
 
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);

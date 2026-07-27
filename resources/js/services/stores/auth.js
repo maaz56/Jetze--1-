@@ -115,7 +115,10 @@ export const useAuthStore = defineStore("auth", {
                 if (response?.data?.skip_otp && response?.data?.token?.plainTextToken) {
                     localStorage.setItem("access_token", response.data.token.plainTextToken);
                     await this.fetchUser();
-                    router.push(getUserHomeRoute(this));
+                    const homeRoute = getUserHomeRoute(this);
+                    if (homeRoute) {
+                        router.push(homeRoute);
+                    }
                 }
                 this.success = response?.status===200 || false;
                 return response;
@@ -150,7 +153,10 @@ export const useAuthStore = defineStore("auth", {
                 if (this.success) {
                     this.isLoggedIn = true;
                     this.isDialogOpen = false;
-                    router.push(getUserHomeRoute(this));
+                    const homeRoute = getUserHomeRoute(this);
+                    if (homeRoute) {
+                        router.push(homeRoute);
+                    }
                 }
 
                 return response.data;
@@ -173,7 +179,6 @@ export const useAuthStore = defineStore("auth", {
                 localStorage.setItem("access_token", response.data.token.plainTextToken);
                 
                 await this.fetchUser();
-                router.push(getUserHomeRoute(this));
                 
                 return response;
             } catch (error) {
