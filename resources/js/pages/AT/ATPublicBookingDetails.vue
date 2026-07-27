@@ -58,9 +58,9 @@ import {
 } from "@/services/store/actions.type";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
-import Spinner from "@/components/common/Spinner.vue";
 import { SEND_EMAIL } from "@/services/store/actions.type";
 import { ChatBubbleIcon } from "@radix-icons/vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 
 
 const store = useStore();
@@ -74,8 +74,9 @@ const loading = ref(true);
 const isBookingDetailsLoading = ref(true);
 const isPnrDetailsLoading = ref(true);
 const isAgentLoading = ref(true);
+const actionLoading = ref(false);
 const error = ref(null);
-const isLoading = computed(() => store.getters['flight/isLoading']);
+const isLoading = computed(() => isBookingDetailsLoading.value || isPnrDetailsLoading.value || isAgentLoading.value || actionLoading.value || store.getters['flight/isLoading']);
 const CustomerMargin = computed(
     () => store.getters["customerMargin/customerMargin"],
 );
@@ -382,7 +383,7 @@ function handleConfirmDialogOpen() {
 
 function handleCancelBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
 
     try {
         if (!pnr) {
@@ -417,7 +418,7 @@ function handleCancelBooking() {
     } catch (err) {
         error.value = err.message || 'Failed to cancel booking';
     } finally {
-        isLoading.value = false;
+        actionLoading.value = false;
         fetchBookingDetails();
     }
 };
@@ -467,25 +468,29 @@ function cancelBooking() {
         error.value = err.message || 'Failed to cancel booking';
     });
 }
-function confirmBooking() {
+async function confirmBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
     if (!pnr) {
         error.value = "No PNR provided.";
+        actionLoading.value = false;
         return;
     }
-    store.dispatch("flight/" + CONFIRM_BOOKING, {
-        pnr: route.query.pnr,
-        bookingId: bookingDetails.value[0].id,
-        booking_uuid: pnrData.value?.data?.uuid ?? "null",
-        booking_status: "ticketed",
-        booking_source: route.query.booking_source,
-        amount: parseFloat(pnrData?.data?.billable_price || 0),
-    });
+    try {
+        await store.dispatch("flight/" + CONFIRM_BOOKING, {
+            pnr: route.query.pnr,
+            bookingId: bookingDetails.value[0].id,
+            booking_uuid: pnrData.value?.data?.uuid ?? "null",
+            booking_status: "ticketed",
+            booking_source: route.query.booking_source,
+            amount: parseFloat(pnrData?.data?.billable_price || 0),
+        });
 
-    // Close dialog after successful cancellation
-    isConfirmDialogOpen.value = false;
-    fetchBookingDetails();
+        isConfirmDialogOpen.value = false;
+        await fetchBookingDetails();
+    } finally {
+        actionLoading.value = false;
+    }
 }
 
 const formatDate = (dateString) => {
@@ -1100,10 +1105,12 @@ onMounted(() => {
                                 </div>
                             </div>
                         </div>
-                <div v-if=" isLoading"
-                 class="absolute inset-0 flex items-center justify-center z-50">
-                     <Spinner />
-                </div>
+                <ATFlowLoader
+                    v-if="isLoading"
+                    title="Loading booking details"
+                    message="We are refreshing the AT booking, PNR, and customer fare details."
+                    :steps="['Booking', 'PNR', 'Details']"
+                />
                 <!-- Main Content with Chat Sidebar -->
                 <div class="flex gap-4" >
                     <!-- Print Section - Main Content -->

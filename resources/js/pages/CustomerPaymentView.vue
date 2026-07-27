@@ -3,7 +3,6 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { watch } from 'vue';
 import TravelPortCustomerPaymentView from './Travelport/TravelPortCustomerPaymentView.vue';
-import AirblueCustomerPaymentView from './airblue/AirblueCustomerPaymentView.vue';
 import OneApiCustomerPaymentView from './OneApi/OneApiCustomerPaymentView.vue';
 import ATCustomerPaymentView from './AT/ATCustomerPaymentView.vue';
 
@@ -18,7 +17,6 @@ watch(provider,()=>{
 </script>
 <template>
     <TravelPortCustomerPaymentView v-if="provider === 'travelport' && flight_mode === 'B2C'" />
-    <AirblueCustomerPaymentView v-else-if="provider === 'airblue' && flight_mode === 'B2C'" />
     <OneApiCustomerPaymentView v-else-if="provider === 'OneApi' && flight_mode === 'B2C'" />
     <ATCustomerPaymentView v-else-if="provider === 'at' && flight_mode === 'B2C'" />
 </template>

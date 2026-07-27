@@ -76,7 +76,7 @@
                             $totalFlights = count($flights);
                             $providerRaw = (string) ($booking->flight_provider ?? $flightData['provider']['name'] ?? '');
                             $providerLower = strtolower(trim($providerRaw));
-                            $flightProvider = $providerLower === 'oneapi' ? 'OneApi' : ($providerLower === 'airblue' ? 'airblue' : 'travelport');
+                            $flightProvider = $providerLower === 'oneapi' ? 'OneApi' : 'travelport';
                             $flightMode = (string) ($booking->booking_mode ?? 'B2C');
                             $bookingSource = (string) ($booking->booking_source ?? 'web');
                             $bookingId = (string) ($booking->id ?? '');
@@ -95,16 +95,9 @@
                                 $paymentParams['flight_id'] = $flightId;
                             }
                             $payNowUrl = rtrim($loginUrl ?? config('app.frontend_url'), '/') . $paymentPath . '?' . http_build_query($paymentParams);
-                            $selectSeatUrl = rtrim($loginUrl ?? config('app.frontend_url'), '/') . '/ancillaries/view?' . http_build_query($paymentParams);
-                            $isAirblue = $providerLower === 'airblue';
-                            $ancillariesSelectedRaw = strtolower(trim((string) ($booking->is_ancillaries_selected ?? '')));
-                            $isAncillariesSelected = in_array($ancillariesSelectedRaw, ['1', 'true', 'yes'], true);
-                            $showSelectSeatCta = $isAirblue && !$isAncillariesSelected;
-                            $primaryCtaLabel = $showSelectSeatCta ? 'Select Seat' : 'Pay Now';
-                            $primaryCtaUrl = $showSelectSeatCta ? $selectSeatUrl : $payNowUrl;
-                            $ctaDescription = $showSelectSeatCta
-                                ? 'Seat selection is mandatory before payment for Airblue bookings. Please select seats to continue.'
-                                : 'Proceed directly to your booking payment screen, or log in to manage seats, baggage, and full itinerary details.';
+                            $primaryCtaLabel = 'Pay Now';
+                            $primaryCtaUrl = $payNowUrl;
+                            $ctaDescription = 'Proceed directly to your booking payment screen, or log in to manage seats, baggage, and full itinerary details.';
                             $resolvedUserName = trim((string) ($userName ?? ''));
                             if ($resolvedUserName === '') {
                                 $userFirstName = trim((string) ($booking->main_first_name ?? ''));

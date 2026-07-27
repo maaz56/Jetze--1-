@@ -6,7 +6,6 @@ import SooperAgentBookingDetailsOffline from './Sooper/SooperAgentBookingDetails
 import AirsialAgentBookingDetailsOffline from './Airsial/AirsialAgentBookingDetailsOffline.vue';
 import { ref } from 'vue';
 import { onMounted } from 'vue';
-import AirblueAgentBookingDetails from './airblue/AirblueAgentBookingDetails.vue';
 import TravelPortAgentBookingDetailsOffline from './Travelport/TravelPortAgentBookingDetailsOffline.vue';
 const router = useRouter();
 const route = useRoute();

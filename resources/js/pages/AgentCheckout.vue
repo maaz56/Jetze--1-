@@ -6,7 +6,6 @@ import AirsialFlightCheckout from './Airsial/AirsialFlightCheckout.vue';
 import PIAFlightCheckout from './PIA/PIAFlightCheckout.vue';
 import { onMounted, ref } from 'vue';
 import FlydubaiFlightCheckout from './FlyDubai/FlydubaiFlightCheckout.vue';
-import AirblueFlightCheckout from './airblue/AirblueFlightCheckout.vue';
 import TravelPortFlightCheckout from './Travelport/TravelPortFlightCheckout.vue';
 const router = useRouter();
 const route = useRoute();
@@ -22,6 +21,5 @@ onMounted(()=>{
     <PIAFlightCheckout v-if="provider === 'PIA' && flight_mode === 'B2B'" />
     <FlydubaiFlightCheckout v-if="provider === 'flydubai' && flight_mode === 'B2B'" />
     <SabreFlightCheckout v-if="provider === 'sabre' && flight_mode === 'B2B'" />
-    <AirblueFlightCheckout v-if="provider === 'airblue' && flight_mode === 'B2B'" />
     <TravelPortFlightCheckout v-if="provider === 'travelport' && flight_mode === 'B2B'" />
 </template>

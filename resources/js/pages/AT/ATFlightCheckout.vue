@@ -1,5 +1,5 @@
 <script setup>
-import Spinner from "@/components/common/Spinner.vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import Button from "@/components/ui/button/Button.vue";
 import CountryDropdown from "@/components/common/CountryDropdown.vue";
 import Calender from '@/components/common/Calender.vue';
@@ -1652,9 +1652,13 @@ const goBack = () => {
                 </button>
             </div>
         </div>
-    <div v-if="isLoading" class="flex items-center justify-center md:container h-[50vh] bg-white rounded-lg">
-        <Spinner />
-    </div>
+    <ATFlowLoader
+        v-if="isLoading"
+        title="Preparing checkout"
+        message="We are validating fare, passenger rules, and available add-ons for this AT booking."
+        :fullscreen="false"
+        :steps="['Fare', 'Rules', 'Add-ons']"
+    />
     
     <!-- Custom System Problem Dialog -->
     <!-- <div v-if="qouteError" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

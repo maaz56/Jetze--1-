@@ -8,7 +8,7 @@ import { useAuthStore } from "@/services/stores/auth";
 import html2pdf from "html2pdf.js";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
-import Spinner from "@/components/common/Spinner.vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";
 import {
@@ -32,9 +32,14 @@ const authStore = useAuthStore();
 
 // Reactive state
 const isBookingDetailsLoading = ref(true);
-const isPnrDetailsLoading = ref(true);
+const isPnrDetailsLoading = ref(false);
 const isAgentLoading = ref(true);
+const actionLoading = ref(false);
 const isLoading = computed(() =>
+  isBookingDetailsLoading.value ||
+  isPnrDetailsLoading.value ||
+  isAgentLoading.value ||
+  actionLoading.value ||
   store.getters["flight/isLoading"]
 );
 
@@ -440,28 +445,32 @@ const closeDialogue = () => {
     }, // Pass relevant query parameters if needed
   });
 };
-function confirmBooking() {
+async function confirmBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
     if (!pnr) {
         error.value = "No PNR provided.";
+        actionLoading.value = false;
         return;
     }
-    store.dispatch("flight/" + CONFIRM_BOOKING, {
-        pnr: route.query.pnr,
-        bookingId: bookingDetails.value[0].id,
-        TUI: pnrData.value?.TUI ?? "null",
-        TransactionID: pnrData.value?.TransactionID ?? "null",
-        net_amount: pnrData.value?.NetAmount ?? "null",
-        booking_status: "ticketed",
-        booking_source: route.query.booking_source,
-        flight_provider: route.query.flight_provider,
-        totalTicketPrice: totalTicketPrice.value,
-    });
+    try {
+        await store.dispatch("flight/" + CONFIRM_BOOKING, {
+            pnr: route.query.pnr,
+            bookingId: bookingDetails.value[0].id,
+            TUI: pnrData.value?.TUI ?? "null",
+            TransactionID: pnrData.value?.TransactionID ?? "null",
+            net_amount: pnrData.value?.NetAmount ?? "null",
+            booking_status: "ticketed",
+            booking_source: route.query.booking_source,
+            flight_provider: route.query.flight_provider,
+            totalTicketPrice: totalTicketPrice.value,
+        });
 
-    // Close dialog after successful cancellation
-    isConfirmDialogOpen.value = false;
-    fetchBookingDetails();
+        isConfirmDialogOpen.value = false;
+        await fetchBookingDetails();
+    } finally {
+        actionLoading.value = false;
+    }
 }
 
 // Alrajhi Payment
@@ -930,7 +939,7 @@ onMounted(async () => {
                 <!-- Confirm Button -->
                 <Button @click="processPayment" :disabled="!paymentMethod || processing"
                   class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 mt-4">
-                  <Spinner v-if="processing" class="mr-2 h-4 w-4" />
+                  <span v-if="processing" class="at-inline-spinner"></span>
                   {{ processing ? 'Processing...' : `Pay ${formatAmount(calculateGrandTotal())}` }}
                 </Button>
 
@@ -983,7 +992,7 @@ onMounted(async () => {
         <div class="flex justify-end gap-3">
           <Button @click="closePaymentDialog">Cancel</Button>
           <Button @click="handlePayment" :disabled="processing" class="bg-primary text-white">
-            <Spinner v-if="processing" class="mr-2 h-4 w-4" />
+            <span v-if="processing" class="at-inline-spinner"></span>
             Pay {{ formatAmount(amount) }}
           </Button>
         </div>
@@ -1030,7 +1039,28 @@ onMounted(async () => {
   </div>
 
   <!-- Loading -->
-  <div v-else class="fixed inset-0 bg-white/75 flex items-center justify-center z-50">
-    <Spinner />
-  </div>
+  <ATFlowLoader
+    v-else
+    title="Loading payment"
+    message="We are refreshing booking details and preparing your secure payment options."
+    :steps="['Booking', 'Fare', 'Payment']"
+  />
 </template>
+
+<style scoped>
+.at-inline-spinner {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.38);
+  border-top-color: #ffffff;
+  border-radius: 9999px;
+  animation: at-inline-spin 0.7s linear infinite;
+}
+
+@keyframes at-inline-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

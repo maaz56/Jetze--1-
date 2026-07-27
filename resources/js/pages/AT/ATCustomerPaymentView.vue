@@ -63,13 +63,13 @@
 
         </div>
       </div>
-      <div v-if="isLoading || isPaymentLoading" class="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div class="bg-white p-6 max-w-md w-full mx-4">
-          <div class="flex flex-col items-center space-y-3">
-            <Spinner />
-          </div>
-        </div>
-      </div>
+      <ATFlowLoader
+        v-if="isLoading || isPaymentLoading"
+        title="Preparing payment"
+        message="We are loading your booking, fare summary, and available payment methods."
+        :fullscreen="false"
+        :steps="['Booking', 'Fare', 'Pay']"
+      />
       <!-- Main Container -->
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Payment Methods Section -->
@@ -740,7 +740,7 @@
         <div class="flex justify-end gap-3">
           <Button @click="closePaymentDialog">Cancel</Button>
           <Button @click="handlePayment" :disabled="processing" class="bg-primary text-white">
-            <Spinner v-if="processing" class="mr-2 h-4 w-4" />
+            <span v-if="processing" class="at-inline-spinner"></span>
             Pay {{ formatAmount(amount) }}
           </Button>
         </div>
@@ -817,6 +817,7 @@
             </button>
             <button @click="completePayment" :disabled="isProcessing"
               class="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 disabled:bg-slate-300 text-white rounded font-semibold transition-colors">
+              <span v-if="isProcessing" class="at-inline-spinner"></span>
               {{ isProcessing ? 'Processing...' : 'Confirm Payment' }}
             </button>
           </div>
@@ -850,7 +851,7 @@ import { useAuthStore } from "@/services/stores/auth";
 import html2pdf from "html2pdf.js";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
-import Spinner from "@/components/common/Spinner.vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";
 import {
@@ -882,9 +883,14 @@ const authStore = useAuthStore();
 
 // Reactive state
 const isBookingDetailsLoading = ref(true);
-const isPnrDetailsLoading = ref(true);
+const isPnrDetailsLoading = ref(false);
 const isAgentLoading = ref(true);
+const actionLoading = ref(false);
 const isLoading = computed(() =>
+  isBookingDetailsLoading.value ||
+  isPnrDetailsLoading.value ||
+  isAgentLoading.value ||
+  actionLoading.value ||
   store.getters["flight/isLoading"]
 );
 const isPaymentLoading = computed(() =>
@@ -1519,32 +1525,36 @@ watch(paymentStatus, () => {
 });
 
 
-function confirmBooking() {
+async function confirmBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
     if (!pnr) {
         error.value = "No PNR provided.";
+        actionLoading.value = false;
         return;
     }
     const flight = flightData.value?.original?.leg?.flights?.[0]
         ?? flightData.value?.leg?.flights?.[0];
 
-    store.dispatch("flight/" + CONFIRM_BOOKING, {
-        pnr: route.query.pnr,
-        bookingId: bookingDetails.value[0].id,
-        TUI: pnrData.value?.TUI ?? "null",
-        pnrData: pnrData.value ?? "null",
-        FareType : pnrData.value?.FareType ?? "null",
-        net_amount: pnrData.value?.NetAmount ?? "null",
-        booking_status: "ticketed",
-        booking_source: route.query.booking_source,
-        flight_provider: route.query.flight_provider,
-        bookingType: flight?.hold_info == null ? "HP" : "HB",
-    });
+    try {
+        await store.dispatch("flight/" + CONFIRM_BOOKING, {
+            pnr: route.query.pnr,
+            bookingId: bookingDetails.value[0].id,
+            TUI: pnrData.value?.TUI ?? "null",
+            pnrData: pnrData.value ?? "null",
+            FareType : pnrData.value?.FareType ?? "null",
+            net_amount: pnrData.value?.NetAmount ?? "null",
+            booking_status: "ticketed",
+            booking_source: route.query.booking_source,
+            flight_provider: route.query.flight_provider,
+            bookingType: flight?.hold_info == null ? "HP" : "HB",
+        });
 
-    // Close dialog after successful cancellation
-    isConfirmDialogOpen.value = false;
-    fetchBookingDetails();
+        isConfirmDialogOpen.value = false;
+        await fetchBookingDetails();
+    } finally {
+        actionLoading.value = false;
+    }
 }
 
 // Alrajhi Payment
@@ -1984,6 +1994,24 @@ const paymentModalDescription = computed(() => {
 /* Payment method hover effect */
 .hover\:shadow-sm {
   transition: box-shadow 0.3s ease;
+}
+
+.at-inline-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  vertical-align: -0.125em;
+  border: 2px solid rgba(255, 255, 255, 0.38);
+  border-top-color: #ffffff;
+  border-radius: 9999px;
+  animation: at-inline-spin 0.7s linear infinite;
+}
+
+@keyframes at-inline-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Scrollbar styling */

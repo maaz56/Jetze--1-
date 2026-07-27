@@ -6,7 +6,6 @@ use App\Attributes\FlightAttributes;
 use App\Models\Aircraft;
 use App\Models\Airline;
 use App\Models\Airport;
-use App\Transformers\AirblueFlightTransformer;
 use App\Transformers\AirsialFlightTransformer;
 use App\Transformers\AtFlightTransformer;
 use App\Transformers\FlightTransformer;
@@ -35,8 +34,6 @@ class FlightAggregationService
     protected $flyDubaiFlightTransformer;
     protected $piaFlightTransformer;
 
-    protected $airBlueFlightTransformer;
-
     protected $travelPortService;
     protected $oneApiFlightTransformer;
     protected $atApiService;
@@ -45,7 +42,7 @@ class FlightAggregationService
 
 
 
-    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, AirblueFlightTransformer $airblueFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService,SegmentMarginService $segmentMarginService, PromotionService $promotionService)
+    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService,SegmentMarginService $segmentMarginService, PromotionService $promotionService)
     {
         $this->sabreApiService = $sabreApiService;
         $this->sooperApiService = $sooperApiService;
@@ -54,7 +51,6 @@ class FlightAggregationService
         $this->airsialFlightTransformer = $airsialFlightTransformer;
         $this->flyDubaiFlightTransformer = $flyDubaiFlightTransformer;
         $this->piaFlightTransformer = $piaFlightTransformer;
-        $this->airBlueFlightTransformer = $airblueFlightTransformer;
         $this->oneApiFlightTransformer = $oneApiFlightTransformer;
         $this->atApiService = $atApiService;
         $this->segmentMarginService = $segmentMarginService;
@@ -88,14 +84,6 @@ class FlightAggregationService
         }
         if ($params['airline'] == 'Sabre') {
             $sabreFlights = $this->sabreApiService->searchFlights($params);
-        }
-        if ($params['airline'] == 'AirBlue') {
-            $airBlueApiService = new AirBlueApiService();
-            $airBlueFlights = $airBlueApiService->searchFlights($params);
-            // Log::info("AirBlue Response: " . json_encode($airBlueFlights));
-            // Transform AirBlue flights
-            $transformedFlights = $this->airBlueFlightTransformer->fromAirBlue($airBlueFlights, $params);
-            Log::info("Transformed AirBlue Flights: " . json_encode($transformedFlights));
         }
         if ($params['airline'] == 'flydubai') {
             $flyDubaiApiService = new FlyDubaiApiService();

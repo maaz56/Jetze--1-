@@ -51,9 +51,9 @@ import {
 } from "@/services/store/actions.type";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
-import Spinner from "@/components/common/Spinner.vue";
 import { SEND_EMAIL } from "../../services/store/actions.type";
 import Label from "@/components/common/Label.vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 
 
 const store = useStore();
@@ -67,8 +67,9 @@ const loading = ref(true);
 const isBookingDetailsLoading = ref(true);
 const isPnrDetailsLoading = ref(true);
 const isAgentLoading = ref(true);
+const actionLoading = ref(false);
 const error = ref(null);
-const isLoading = computed(() => isBookingDetailsLoading.value || isPnrDetailsLoading.value || isAgentLoading.value || store.getters['flight/isLoading']);
+const isLoading = computed(() => isBookingDetailsLoading.value || isPnrDetailsLoading.value || isAgentLoading.value || actionLoading.value || store.getters['flight/isLoading']);
 
 
 const user = computed(() => authStore.user);
@@ -397,33 +398,37 @@ function handleConfirmDialogOpen() {
     isConfirmDialogOpen.value = true;
 }
 
-function confirmBooking() {
+async function confirmBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
     if (!pnr) {
         error.value = "No PNR provided.";
+        actionLoading.value = false;
         return;
     }
-    store.dispatch("flight/" + CONFIRM_BOOKING, {
-        pnr: route.query.pnr,
-        bookingId: bookingDetails.value[0].id,
-        TUI: pnrData.value?.TUI ?? "null",
-        TransactionID: pnrData.value?.TransactionID ?? "null",
-        net_amount: pnrData.value?.NetAmount ?? "null",
-        booking_status: "ticketed",
-        booking_source: route.query.booking_source,
-        flight_provider: route.query.flight_provider,
-        totalTicketPrice: totalTicketPrice.value,
-    });
+    try {
+        await store.dispatch("flight/" + CONFIRM_BOOKING, {
+            pnr: route.query.pnr,
+            bookingId: bookingDetails.value[0].id,
+            TUI: pnrData.value?.TUI ?? "null",
+            TransactionID: pnrData.value?.TransactionID ?? "null",
+            net_amount: pnrData.value?.NetAmount ?? "null",
+            booking_status: "ticketed",
+            booking_source: route.query.booking_source,
+            flight_provider: route.query.flight_provider,
+            totalTicketPrice: totalTicketPrice.value,
+        });
 
-    // Close dialog after successful cancellation
-    isConfirmDialogOpen.value = false;
-    fetchBookingDetails();
+        isConfirmDialogOpen.value = false;
+        await fetchBookingDetails();
+    } finally {
+        actionLoading.value = false;
+    }
 }
 
 function handleCancelBooking() {
     error.value = '';
-    isLoading.value = true;
+    actionLoading.value = true;
 
     try {
         if (!pnr) {
@@ -458,7 +463,7 @@ function handleCancelBooking() {
     } catch (err) {
         error.value = err.message || 'Failed to cancel booking';
     } finally {
-        isLoading.value = false;
+        actionLoading.value = false;
         fetchBookingDetails();
     }
 };
@@ -765,9 +770,12 @@ onMounted(() => {
 
 <template>
     <section>
-        <div v-if="isLoading" class="fixed inset-0 bg-gray-100 bg-opacity-75 flex items-center justify-center z-50">
-            <Spinner />
-        </div>
+        <ATFlowLoader
+            v-if="isLoading"
+            title="Loading booking details"
+            message="We are refreshing the AT booking, fare, and ticket information."
+            :steps="['Booking', 'PNR', 'Ticket']"
+        />
 
         <div v-else class="min-h-screen bg-gray-100">
             <div v-if="route?.query?.booking_source == 1">

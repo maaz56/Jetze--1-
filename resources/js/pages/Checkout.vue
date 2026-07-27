@@ -7,7 +7,6 @@ import { watch } from 'vue';
 import PIACustomerFlightCheckout from './PIA/PIACustomerFlightCheckout.vue';
 import AirsialCustomerFlightCheckout from './Airsial/AirsialCustomerFlightCheckout.vue';
 import FlydubaiCustomerFlightCheckout from './FlyDubai/FlydubaiCustomerFlightCheckout.vue';
-import AirblueCustomerFlightCheckout from './airblue/AirblueCustomerFlightCheckout.vue';
 import TravelPortCustomerFlightCheckout from './Travelport/TravelPortCustomerFlightCheckout.vue';
 import OneApiCustomerFlightCheckout from './OneApi/OneApiCustomerFlightCheckout.vue';
 import ATCustomerFlightCheckout from './AT/ATCustomerFlightCheckout.vue';

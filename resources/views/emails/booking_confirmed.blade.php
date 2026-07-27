@@ -78,7 +78,6 @@
                                     $providerLower = strtolower(trim($providerRaw));
                                     $flightProvider = match ($providerLower) {
                                         'oneapi' => 'OneApi',
-                                        'airblue' => 'airblue',
                                         'sabre' => 'sabre',
                                         'airsial' => 'airsial',
                                         'travelport' => 'travelport',

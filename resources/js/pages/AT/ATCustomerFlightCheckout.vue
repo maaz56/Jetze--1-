@@ -1,5 +1,5 @@
 <script setup>
-import Spinner from "@/components/common/Spinner.vue";
+import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import Button from "@/components/ui/button/Button.vue";
 import Input from "@/components/ui/input/Input.vue";
 import Label from "@/components/ui/label/Label.vue";
@@ -2011,14 +2011,12 @@ watch(flight, () => {
 
 <template>
     <!-- Loading State -->
-    <div v-if="isLoading" class="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div class="bg-white shadow-md p-6 max-w-md w-full mx-4">
-            <div class="flex flex-col items-center space-y-3">
-                <Spinner />
-                <p class="text-gray-500 text-sm">Loading flight details...</p>
-            </div>
-        </div>
-    </div>
+    <ATFlowLoader
+        v-if="isLoading"
+        title="Preparing checkout"
+        message="We are loading your flight details, fare rules, and traveller form."
+        :steps="['Flight', 'Fare', 'Travellers']"
+    />
     <!-- <div v-if="qouteError" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div class="bg-white rounded shadow-xl max-w-md w-full p-6">
             <div class="flex items-start justify-between mb-4">
@@ -3564,13 +3562,12 @@ watch(flight, () => {
                 </div>
             </div>
         </div>
-        <div v-if="isLoading" class="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div class="bg-white p-6 max-w-md w-full mx-4">
-                <div class="flex flex-col items-center space-y-3">
-                    <Spinner />
-                </div>
-            </div>
-        </div>
+        <ATFlowLoader
+            v-if="isLoading"
+            title="Preparing booking preview"
+            message="We are validating traveller details, fare total, and selected add-ons."
+            :steps="['Travellers', 'Add-ons', 'Preview']"
+        />
         <div v-else class="max-w-7xl mx-auto px-3 sm:px-4">
             <!-- Preview Header -->
             <div class="mb-4">
@@ -4079,7 +4076,7 @@ watch(flight, () => {
                         </div>
                         <Button @click="handlePaymentMethod('hold')" :disabled="isPaymentMethodsVisible || isSubmitting"
                             class="w-full bg-primary hover:bg-primary/50 text-white py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm disabled:opacity-50">
-                            <Spinner v-if="isSubmitting" class="w-4 h-4 mr-1" />
+                            <span v-if="isSubmitting" class="at-inline-spinner"></span>
                             {{ isSubmitting ? "Saving..." : "Next Step" }}
                             <ArrowRight v-if="!isSubmitting" class="w-4 h-4" />
 
@@ -4255,7 +4252,7 @@ watch(flight, () => {
                     Cancel
                 </Button>
                 <Button @click="handlePayment" :disabled="processing" class="bg-primary hover:bg-primary/90 text-white">
-                    <Spinner v-if="processing" class="mr-2" />
+                    <span v-if="processing" class="at-inline-spinner"></span>
                     Pay {{ formatAmount(amount) }}
                 </Button>
             </div>
@@ -4450,6 +4447,24 @@ label {
 .btn:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+.at-inline-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.5rem;
+    vertical-align: -0.125em;
+    border: 2px solid rgba(255, 255, 255, 0.38);
+    border-top-color: #ffffff;
+    border-radius: 9999px;
+    animation: at-inline-spin 0.7s linear infinite;
+}
+
+@keyframes at-inline-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @media (max-width: 768px) {
