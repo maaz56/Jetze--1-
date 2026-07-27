@@ -1243,7 +1243,7 @@ onMounted(() => {
                             </div>
 
                             <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                {{ moment.utc(moment.duration(segment.flight_time, "minutes").asMilliseconds()).format("HH:mm") }}
+                                {{ (segment.flight_time) }}
                             </p>
                         </div>
 

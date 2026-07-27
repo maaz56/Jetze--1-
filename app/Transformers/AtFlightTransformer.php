@@ -68,7 +68,7 @@ class AtFlightTransformer
                             "aircraft" => $fields[8] ?? $flight['AirCraft'] ?? null,
                             "arrival_at" => $fields[5] ?? null,
                             "departure_at" => $fields[4] ?? null,
-                            "flight_number" => ($fields[0] ?? '') . ($fields[1] ?? ''),
+                            "flight_number" =>  ($fields[1] ?? ''),
                             "flight_time" => $fields[8] ?? null,
                             "cabin_class" => $flight['Cabin'] ?? 'E',
                             "operating_carrier" => [
@@ -97,7 +97,7 @@ class AtFlightTransformer
                             "aircraft" => $seg['Equipment'] ?? null,
                             "arrival_at" => $connectionArrival,
                             "departure_at" => $connectionDeparture,
-                            "flight_number" => $seg['VAC'] . $seg['FlightNo'],
+                            "flight_number" => $seg['FlightNo'],
                             "flight_time" => $connectionDuration,
                             "cabin_class" => $seg['Cabin'] ?? 'E',
                             "operating_carrier" => [
@@ -186,7 +186,7 @@ class AtFlightTransformer
                         "margin_type" => "markup",
                         "margin_amount" => 0,
                         "billable_price" => $fare['NetFare'] ?? 0,
-                        "is_refundable" => (bool) ($fare['Refundable'] ?? false),
+                        "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
                         "fare_policies" => [],
                         "passenger_fares" => [
                             [
@@ -223,7 +223,9 @@ class AtFlightTransformer
                     "has_layovers" => $connections > 0,
                     "layovers_count" => $connections,
                     "change_of_plane" => $connections > 0,
-                    "marketing_carrier" => $segments[0]['operating_carrier']
+                    "marketing_carrier" => $segments[0]['operating_carrier'],
+                    "is_refundable" => $fares[0]['is_refundable'],
+                    "flight_number" => $segments[0]['flight_number']
                 ];
             }
 
@@ -392,6 +394,8 @@ class AtFlightTransformer
         elseif ($flightType === 'one-way') {
             $final = $this->groupAllFares($trips[0]['Journey']);
         }
+
+        Log::info('Final here' , $final);
        
 
         return [
@@ -529,6 +533,8 @@ class AtFlightTransformer
         $final = [];
         $processedFlights = [];
 
+        // Log::info('journey grouping : ' ,  $journeys);
+
         foreach ($journeys as $baseJourney) {
             $flightKey = implode('_', [
                 $baseJourney['VAC'] ?? '',
@@ -604,6 +610,7 @@ class AtFlightTransformer
     
     private function mapFare(array $journey): array
     {
+        // Log::info('map journey : ', $journey);
         return [
             'FareClass' => $journey['FareClass'] ?? null,
             'ReturnIdentifier' => $journey['ReturnIdentifier'] ?? null,
