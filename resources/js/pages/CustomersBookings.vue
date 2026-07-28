@@ -319,7 +319,6 @@ onMounted(() => {
                                     Booking ID
                                 </th>
                                 <th scope="col" class="px-4 py-3">PNR</th>
-                                <th scope="col" class="px-4 py-3">Source</th>
 
                                 <th scope="col" class="px-4 py-3">Supplier</th>
                                 <th scope="col" class="px-4 py-3">Rout</th>
@@ -352,10 +351,7 @@ onMounted(() => {
                                 <td class="px-4 py-3">
                                     {{ booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr }}
                                 </td>
-                                <td class="px-4 py-3">
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.source || 'N/A' }}
-
-                                </td>
+                                
                                 <td class="px-4 py-3">
                                      <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"
                                             :key="flightIndex" class="flex gap-2 justify-start items-center">

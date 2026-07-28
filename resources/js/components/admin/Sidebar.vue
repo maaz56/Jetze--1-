@@ -23,7 +23,7 @@
     ></div>
 
 
-  <aside :class="[
+  <aside v-bind="attrs" :class="[
     'fixed lg:relative w-64 h-screen bg-white border-r border-gray-200 shadow-sm flex flex-col transition-transform duration-300 z-40',
     isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
 ]">
@@ -31,7 +31,7 @@
 
     <!-- Logo and App Name -->
     <div class="p-4 border-b border-gray-100 bg-white/30">
-      <router-link  class="flex items-center space-x-3">
+      <router-link :to="{ name: 'Dashboard' }" class="flex items-center space-x-3">
         <img src="/public/assets/logo.png" alt="logo" class="w-auto h-10" />
       </router-link>
     </div>
@@ -197,13 +197,17 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from "vue";
 import { useStore } from 'vuex';
 import SocialLinks from "../common/SocialLinks.vue";
 import { GearIcon } from "@radix-icons/vue";
 import { useAuthStore } from "@/services/stores/auth";
 const store = useStore();
 const authStore = useAuthStore();
+defineOptions({
+  inheritAttrs: false,
+});
+const attrs = useAttrs();
 const menuSections = [
   // {
   //   title: "Agent / Users",

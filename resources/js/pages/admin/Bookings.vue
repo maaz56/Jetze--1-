@@ -226,7 +226,6 @@ onMounted(() => {
                                 <th scope="col" class="px-4 py-3">PNR</th>
                                 <th scope="col" class="px-4 py-3">Agent Email</th>
                                 <th scope="col" class="px-4 py-3">Supplier</th>
-                                <th scope="col" class="px-4 py-3">Source</th>
                                 <th scope="col" class="px-4 py-3">Route</th>
                                 <th scope="col" class="px-4 py-3">Passenger Name</th>
                                 <th scope="col" class="px-4 py-3">Travel Date</th>
@@ -261,10 +260,7 @@ onMounted(() => {
                                     </div>
 
                                 </td>
-                                <td class="px-4 py-3">
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.source?.toUpperCase() || 'N/A' }}
-
-                                </td>
+                                
 
                                 <td px-4 py-3>
                                     <div v-if="booking?.booking_source == 1">
@@ -284,51 +280,7 @@ onMounted(() => {
 
                                         </div>
                                     </div>
-                                    <div v-else>
-                                        <div v-if="booking.flight_data" class="">
-                                            <div v-for="(leg, legIndex
-                                            ) in parseFlightData(booking.flight_data,).legs" :key="legIndex" class="">
-                                                <div v-for="(stop, stopIndex
-                                                ) in leg.stops" :key="stopIndex" class="">
-                                                    <div class="flex gap-2 justify-start items-center">
-                                                        <!-- Departure -->
-                                                        <div class=" ">
-                                                            <div class="">
-                                                                {{
-                                                                    stop.departure
-                                                                        .airport
-                                                                        .city_name
-                                                                }}
-
-                                                                ({{
-                                                                    stop.departure
-                                                                        .airport
-                                                                        .iata_code
-                                                                }})
-                                                            </div>
-                                                        </div>
-                                                        To
-                                                        <!--     Arrival -->
-                                                        <div class="">
-                                                            <div class="">
-                                                                {{
-                                                                    stop.arrival
-                                                                        .airport
-                                                                        .city_name
-                                                                }}
-                                                                ({{
-                                                                    stop.arrival
-                                                                        .airport
-                                                                        .iata_code
-                                                                }})
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    
                                 </td>
                                 <td>
                                     <div v-for="passenger in booking.pessangers" :key="passenger.id" class="mb-2">
@@ -341,7 +293,7 @@ onMounted(() => {
                                             </div>
                                         </div>
                                     </div>
-                                </td>
+                                </td>u
                                 <td px-4 py-3>
                                     <div v-if="booking?.booking_source == 1">
                                         <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"

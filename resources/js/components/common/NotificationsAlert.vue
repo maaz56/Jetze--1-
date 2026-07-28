@@ -11,13 +11,21 @@ import {
 import { useAuthStore } from "@/services/stores/auth";
 import { Bell } from 'lucide-vue-next';
 import Pusher from 'pusher-js';
-import { computed, defineProps, onMounted, ref } from 'vue';
+import { computed, defineProps, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useStore } from 'vuex';
 
 const props = defineProps({
     isAdmin: {
         type: Boolean,
         default: false
+    },
+    disableAnimation: {
+        type: Boolean,
+        default: false
+    },
+    buttonClass: {
+        type: String,
+        default: ""
     }
 });
 
@@ -28,6 +36,10 @@ const user = computed(() => authStore.user);
 // Notifications array for real-time updates
 const notifications = ref([]);
 const messages = ref([]); // For storing received messages
+let notificationInterval = null;
+let pusher = null;
+let channel = null;
+let channelEvent = null;
 
 const fetchedNotifications = computed(() => store.getters['notification/notifications'] || []);
 const isLoading = computed(() => store.getters['notification/isLoading']);
@@ -50,29 +62,48 @@ function clearAllNotifications() {
 const readAtCounter = computed(() => {
     return fetchedNotifications.value.filter(n => !n.read_at).length;
 });
+const notificationButtonClass = computed(() => {
+    return props.buttonClass || "rounded-full h-10 w-10 sm:h-11 sm:w-11 hover:bg-white/20";
+});
 
 onMounted(() => {
     fetchNotifications();
     // Listen for notifications on user-specific channel
     const pusherKey = import.meta.env.VITE_APP_PUSHER_APP_KEY;
-    const interval = setInterval(() => {
-        const pusher = new Pusher(pusherKey, {
+    notificationInterval = setInterval(() => {
+        pusher = new Pusher(pusherKey, {
             cluster: 'ap2'
         });
         const userId = user.value?.id;
         if (userId || props.isAdmin) {
             const subscribe = props.isAdmin ? 'admin-notification' : `is-approved-${userId}`;
-            const event = props.isAdmin ? 'admin-event' : `approval-event`;
-            const channel = pusher.subscribe(subscribe);
-            channel.bind(event, function (data) {
+            channelEvent = props.isAdmin ? 'admin-event' : `approval-event`;
+            channel = pusher.subscribe(subscribe);
+            channel.bind(channelEvent, function (data) {
                 // Make data reactive and commit to Vuex state
                 const reactiveData = { ...data };
                 const currentNotifications = store.getters['notification/notifications'] || [];
                 store.commit('notification/setNotifications', [reactiveData, ...currentNotifications]);
             });
-            clearInterval(interval);
+            clearInterval(notificationInterval);
+            notificationInterval = null;
         }
     }, 10000);
+});
+
+onBeforeUnmount(() => {
+    if (notificationInterval) {
+        clearInterval(notificationInterval);
+        notificationInterval = null;
+    }
+
+    if (channel && channelEvent) {
+        channel.unbind(channelEvent);
+    }
+
+    if (pusher) {
+        pusher.disconnect();
+    }
 });
 </script>
 
@@ -80,11 +111,12 @@ onMounted(() => {
     <div>
         <DropdownMenu>
             <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="rounded-full h-10 w-10 sm:h-11 sm:w-11 hover:bg-white/20">
+                <Button variant="ghost" size="icon" :class="notificationButtonClass">
                     <div class="relative">
                         <Bell class="h-4 sm:h-5 w-4 sm:w-5" />
                         <span v-if="readAtCounter" class="absolute bottom-3 left-3 flex h-3 w-3">
                             <span
+                                v-if="!disableAnimation"
                                 class="animate-bounce absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-3 w-3 bg-green-400"></span>
                         </span>

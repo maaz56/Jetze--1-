@@ -1,25 +1,24 @@
 <script setup>
+import { computed, defineAsyncComponent } from 'vue';
+import { useRoute } from 'vue-router';
 
-import { useRoute, useRouter } from 'vue-router';
-import { onMounted, ref } from 'vue';
-import SabreAdminCustomerBookingDetails from './Sabre/SabreAdminCustomerBookingDetails.vue';
-import AirsialAdminCustomerBookingDetails from './Airsial/AirsialAdminCustomerBookingDetails.vue';
-import TravelPortAdminCustomerBookingDetails from './Travelport/TravelPortAdminCustomerBookingDetails.vue';
-import OneApiAdminCustomerBookingDetails from './OneApi/OneApiAdminCustomerBookingDetails.vue';
-// import SooperAgentBookingDetailsOffline from './Sooper/SooperAgentBookingDetailsOffline.vue';
-const router = useRouter();
+const bookingDetailsComponents = {
+    'sabre:B2C': defineAsyncComponent(() => import('./Sabre/SabreAdminCustomerBookingDetails.vue')),
+    'airsial:B2C': defineAsyncComponent(() => import('./Airsial/AirsialAdminCustomerBookingDetails.vue')),
+    'travelport:B2C': defineAsyncComponent(() => import('./Travelport/TravelPortAdminCustomerBookingDetails.vue')),
+    'OneApi:B2C': defineAsyncComponent(() => import('./OneApi/OneApiAdminCustomerBookingDetails.vue')),
+    'at:B2C': defineAsyncComponent(() => import('./AT/ATAdminCustomerBookingDetailsOffline.vue')),
+};
+
 const route = useRoute();
-const provider = ref(route.query.flight_provider);
-const flight_mode = ref(route.query.flight_mode);
-onMounted(()=>{
-    provider.value = route.query.flight_provider;
-    flight_mode.value = route.query.flight_mode;
-})
+const selectedComponentKey = computed(() => `${route.query.flight_provider}:${route.query.flight_mode}`);
+const selectedComponent = computed(() => bookingDetailsComponents[selectedComponentKey.value] || null);
 </script>
+
 <template>
-    <SabreAdminCustomerBookingDetails v-if="provider === 'sabre' && flight_mode === 'B2C'" />
-    <AirsialAdminCustomerBookingDetails v-if="provider === 'airsial' && flight_mode === 'B2C'" />
-    <TravelPortAdminCustomerBookingDetails v-if="provider === 'travelport' && flight_mode === 'B2C'" />
-    <OneApiAdminCustomerBookingDetails v-if="provider === 'OneApi' && flight_mode === 'B2C'" />
-    <!-- <SooperAgentBookingDetailsOffline v-if="provider === 'sooper' && flight_mode === 'B2B'" /> -->
+    <component
+        :is="selectedComponent"
+        v-if="selectedComponent"
+        :key="selectedComponentKey"
+    />
 </template>

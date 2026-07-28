@@ -285,7 +285,6 @@ onUnmounted(() => clearInterval(countdownInterval));
                                 </th>
                                 <th scope="col" class="px-4 py-3">PNR</th>
                                 <th scope="col" class="px-4 py-3">Supplier</th>
-                                <th scope="col" class="px-4 py-3">Source</th>
                                 <th scope="col" class="px-4 py-3">Customer Email</th>
                                 <th scope="col" class="px-4 py-3">Route</th>
                                 <th scope="col" class="px-4 py-3">
@@ -317,9 +316,7 @@ onUnmounted(() => clearInterval(countdownInterval));
                                 <td class="px-4 py-3">
                                     {{ parseFlightData(booking?.flight_data)?.provider?.name.toUpperCase() || 'N/A' }}
                                 </td>
-                                <td class="px-4 py-3">
-                                    {{ parseFlightData(booking?.flight_data)?.provider?.contentSource?.toUpperCase() || 'N/A' }}
-                                </td>
+                                
                                 <td class="px-4 py-3">{{ booking.agency_email }}</td>
                                 <td px-4 py-3>
                                     <div v-if="booking?.booking_source == 1">
@@ -338,60 +335,7 @@ onUnmounted(() => clearInterval(countdownInterval));
 
                                         </div>
                                     </div>
-                                    <div v-else>
-                                        <div v-if="booking.flight_data" class="">
-                                            <div v-for="(leg, legIndex
-                                            ) in parseFlightData(booking.flight_data,).legs" :key="legIndex" class="">
-                                                <div v-for="(stop, stopIndex
-                                                ) in leg.stops" :key="stopIndex" class="">
-                                                    <div class="flex gap-2 justify-start items-center">
-                                                        <!-- Departure -->
-                                                        <div class=" ">
-                                                            <div class="">
-                                                                {{
-                                                                    stop.departure
-                                                                        .airport
-                                                                        .city_name
-                                                                }}
-
-                                                                ({{
-                                                                    stop.departure
-                                                                        .airport
-                                                                        .iata_code
-                                                                }})
-                                                            </div>
-                                                        </div>
-                                                        To
-                                                        <!--     Arrival -->
-                                                        <div class="">
-                                                            <div class="">
-                                                                {{
-                                                                    stop.arrival
-                                                                        .airport
-                                                                        .city_name
-                                                                }}
-                                                                ({{
-                                                                    stop.arrival
-                                                                        .airport
-                                                                        .iata_code
-                                                                }})
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- <div
-                                                    v-if="
-                                                        stopIndex <
-                                                        leg.stops.length - 1
-                                                    "
-                                                    class=" text-center text-gray-600"
-                                                >
-                                                    ↓ Connection ↓
-                                                </div> -->
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    
                                 </td>
 
                                 <td>
