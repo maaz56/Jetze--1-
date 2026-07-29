@@ -18,6 +18,8 @@ class AtApiService
     private const DM_VALIDATION_CACHE_PREFIX = 'AT_DM_VALIDATION_';
     private const ACCESS_TOKEN_CACHE_KEY = 'AT_ACCESS_TOKEN';
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
+    private const HTTP_TIMEOUT_SECONDS = 300;
+    private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -37,6 +39,8 @@ class AtApiService
 
         $this->client = new Client([
             'verify' => config('at.ca_bundle'),
+            'timeout' => self::HTTP_TIMEOUT_SECONDS,
+            'connect_timeout' => self::HTTP_CONNECT_TIMEOUT_SECONDS,
         ]);
         Log::info('AT API CA bundle configured: ' . config('at.ca_bundle'));
         $this->signBaseUrl = config('at.sign_base_url');
