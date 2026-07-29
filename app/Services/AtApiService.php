@@ -20,9 +20,9 @@ class AtApiService
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
     private const HTTP_TIMEOUT_SECONDS = 300;
     private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
-    private const SIGNATURE_HTTP_TIMEOUT_SECONDS = 30;
-    private const PNR_HTTP_TIMEOUT_SECONDS = 30;
-    private const PNR_STATUS_HTTP_TIMEOUT_SECONDS = 30;
+    private const SIGNATURE_HTTP_TIMEOUT_SECONDS = 10;
+    private const PNR_HTTP_TIMEOUT_SECONDS = 25;
+    private const PNR_STATUS_HTTP_TIMEOUT_SECONDS = 10;
     private const PNR_HTTP_CONNECT_TIMEOUT_SECONDS = 10;
 
     protected $signBaseUrl;
