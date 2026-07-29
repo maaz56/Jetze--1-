@@ -20,6 +20,10 @@ class AtApiService
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
     private const HTTP_TIMEOUT_SECONDS = 300;
     private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
+    private const SIGNATURE_HTTP_TIMEOUT_SECONDS = 10;
+    private const PNR_HTTP_TIMEOUT_SECONDS = 25;
+    private const PNR_STATUS_HTTP_TIMEOUT_SECONDS = 10;
+    private const PNR_HTTP_CONNECT_TIMEOUT_SECONDS = 10;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -90,7 +94,10 @@ class AtApiService
                 json_encode($signaturePayload)
             );
 
-            $response = $this->client->send($request);
+            $response = $this->client->send($request, [
+                'timeout' => self::SIGNATURE_HTTP_TIMEOUT_SECONDS,
+                'connect_timeout' => self::PNR_HTTP_CONNECT_TIMEOUT_SECONDS,
+            ]);
             $responseBody = (string) $response->getBody();
             $accessToken = json_decode($responseBody, true);
 
@@ -1288,7 +1295,10 @@ private function extractTrips($tripsData): array
                 json_encode($payload)
             );
 
-            $response = $this->client->send($request);
+            $response = $this->client->send($request, [
+                'timeout' => self::PNR_STATUS_HTTP_TIMEOUT_SECONDS,
+                'connect_timeout' => self::PNR_HTTP_CONNECT_TIMEOUT_SECONDS,
+            ]);
 
             $body = json_decode($response->getBody(), true);
 
@@ -1296,34 +1306,38 @@ private function extractTrips($tripsData): array
 
             return $body;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
 
             Log::error('Get Itinerary Status Error: ' . $e->getMessage());
-            return null;
+            return [
+                'error' => true,
+                'message' => 'Unable to fetch AT itinerary status.',
+            ];
         }
     }
     public function getBookingDetails($request)
     {
         Log::info('Getting booking details with PNR: ' . $request->pnr);
-        $accessToken = $this->getAccessToken();
-        Log::info($accessToken);
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token'],
-        ];
-
-        $bookingDetailsUrl = "{$this->flightBaseUrl}/Utils/RetrieveBooking";
-
-        $payload = [
-            "ReferenceType" => "T",
-            "TUI" => "",
-            "ReferenceNumber" => $request->pnr ?? "",
-            'ClientID' => $accessToken['ClientID'],
-        ];
-
-        Log::info('Get Booking Details payload (final): ', $payload);
 
         try {
+            $accessToken = $this->getAccessToken();
+            Log::info($accessToken);
+            $headers = [
+                'Content-Type' => 'application/json',
+                'Authorization' => $accessToken['Token'],
+            ];
+
+            $bookingDetailsUrl = "{$this->flightBaseUrl}/Utils/RetrieveBooking";
+
+            $payload = [
+                "ReferenceType" => "T",
+                "TUI" => "",
+                "ReferenceNumber" => $request->pnr ?? "",
+                'ClientID' => $accessToken['ClientID'],
+            ];
+
+            Log::info('Get Booking Details payload (final): ', $payload);
+
             $req = new \GuzzleHttp\Psr7\Request(
                 'POST',
                 $bookingDetailsUrl,
@@ -1331,7 +1345,10 @@ private function extractTrips($tripsData): array
                 json_encode($payload)
             );
 
-            $response = $this->client->send($req);
+            $response = $this->client->send($req, [
+                'timeout' => self::PNR_HTTP_TIMEOUT_SECONDS,
+                'connect_timeout' => self::PNR_HTTP_CONNECT_TIMEOUT_SECONDS,
+            ]);
             $responseBody = json_decode($response->getBody(), true);
 
             Log::info('Get Booking Details response: ', $responseBody);
@@ -1349,7 +1366,17 @@ private function extractTrips($tripsData): array
                 Log::error('Response: ' . $e->getResponse()->getBody());
             }
 
-            return null;
+            return [
+                'error' => true,
+                'message' => 'AT booking details request failed or timed out.',
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Unexpected error getting AT Booking Details: ' . $e->getMessage());
+
+            return [
+                'error' => true,
+                'message' => 'Unable to fetch AT booking details.',
+            ];
         }
     }
 
