@@ -1,11 +1,12 @@
 <?php
 namespace App\Services;
 use App\Transformers\AtFlightTransformer;
-use Cache;
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Request;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -15,6 +16,8 @@ use Illuminate\Support\Str;
 class AtApiService
 {
     private const DM_VALIDATION_CACHE_PREFIX = 'AT_DM_VALIDATION_';
+    private const ACCESS_TOKEN_CACHE_KEY = 'AT_ACCESS_TOKEN';
+    private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -51,6 +54,13 @@ class AtApiService
 
     protected function getAccessToken()
     {
+        $cachedAccessToken = Cache::get(self::ACCESS_TOKEN_CACHE_KEY);
+
+        if (is_array($cachedAccessToken) && !empty($cachedAccessToken['Token'])) {
+            Log::info('AT access token loaded from cache.');
+            return $cachedAccessToken;
+        }
+
         try {
             $headers = [
                 'Content-Type' => 'application/json',
@@ -76,7 +86,26 @@ class AtApiService
             );
 
             $response = $this->client->send($request);
-            return json_decode($response->getBody()->getContents(), true);
+            $responseBody = (string) $response->getBody();
+            $accessToken = json_decode($responseBody, true);
+
+            if (!is_array($accessToken) || empty($accessToken['Token'])) {
+                Log::warning('AT access token response missing token.', [
+                    'response' => $accessToken,
+                ]);
+
+                return $accessToken;
+            }
+
+            Cache::put(
+                self::ACCESS_TOKEN_CACHE_KEY,
+                $accessToken,
+                now()->addMinutes(self::ACCESS_TOKEN_CACHE_TTL_MINUTES)
+            );
+
+            Log::info('AT access token cached for ' . self::ACCESS_TOKEN_CACHE_TTL_MINUTES . ' minutes.');
+
+            return $accessToken;
 
         } catch (RequestException $e) {
 
