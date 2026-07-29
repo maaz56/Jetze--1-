@@ -54,12 +54,13 @@ class AtApiService
 
     protected function getAccessToken()
     {
-        $cachedAccessToken = Cache::get(self::ACCESS_TOKEN_CACHE_KEY);
+        $cachedAccessToken = $this->getCachedAccessToken();
 
-        if (is_array($cachedAccessToken) && !empty($cachedAccessToken['Token'])) {
-            Log::info('AT access token loaded from cache.');
+        if ($cachedAccessToken) {
             return $cachedAccessToken;
         }
+
+        $signaturePayload = [];
 
         try {
             $headers = [
@@ -97,13 +98,7 @@ class AtApiService
                 return $accessToken;
             }
 
-            Cache::put(
-                self::ACCESS_TOKEN_CACHE_KEY,
-                $accessToken,
-                now()->addMinutes(self::ACCESS_TOKEN_CACHE_TTL_MINUTES)
-            );
-
-            Log::info('AT access token cached for ' . self::ACCESS_TOKEN_CACHE_TTL_MINUTES . ' minutes.');
+            $this->cacheAccessToken($accessToken);
 
             return $accessToken;
 
@@ -135,6 +130,41 @@ class AtApiService
             ]);
 
             throw $e;
+        }
+    }
+
+    private function getCachedAccessToken(): ?array
+    {
+        try {
+            $cachedAccessToken = Cache::get(self::ACCESS_TOKEN_CACHE_KEY);
+
+            if (is_array($cachedAccessToken) && !empty($cachedAccessToken['Token'])) {
+                Log::info('AT access token loaded from cache.');
+                return $cachedAccessToken;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Unable to read AT access token from cache.', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
+    }
+
+    private function cacheAccessToken(array $accessToken): void
+    {
+        try {
+            Cache::put(
+                self::ACCESS_TOKEN_CACHE_KEY,
+                $accessToken,
+                now()->addMinutes(self::ACCESS_TOKEN_CACHE_TTL_MINUTES)
+            );
+
+            Log::info('AT access token cached for ' . self::ACCESS_TOKEN_CACHE_TTL_MINUTES . ' minutes.');
+        } catch (\Throwable $e) {
+            Log::warning('Unable to cache AT access token.', [
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
