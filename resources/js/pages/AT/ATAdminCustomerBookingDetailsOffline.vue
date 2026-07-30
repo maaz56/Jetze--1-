@@ -574,7 +574,7 @@ function parsePnrResponse() {
     }
 
 
-            fetchPnrDetails();
+            // fetchPnrDetails();
 
 }
 

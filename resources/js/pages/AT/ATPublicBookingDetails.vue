@@ -76,7 +76,7 @@ const isPnrDetailsLoading = ref(true);
 const isAgentLoading = ref(true);
 const actionLoading = ref(false);
 const error = ref(null);
-const isLoading = computed(() => isBookingDetailsLoading.value || isPnrDetailsLoading.value || isAgentLoading.value || actionLoading.value || store.getters['flight/isLoading']);
+const isLoading = computed(() => isBookingDetailsLoading.value);
 const CustomerMargin = computed(
     () => store.getters["customerMargin/customerMargin"],
 );
@@ -1015,7 +1015,7 @@ onMounted(() => {
     fetchModifyRequestData();
     fetchBookingDetails();
     fetchCustomerMarginValues();
-    fetchPnrDetails();
+    //fetchPnrDetails();
 });
 </script>
 
