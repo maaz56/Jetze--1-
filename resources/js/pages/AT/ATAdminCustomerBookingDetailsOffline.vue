@@ -71,7 +71,7 @@ const isAgentLoading = ref(true);
 const actionLoading = ref(false);
 const agent_id = route.query.agent_id;
 const error = ref(null);
-const isLoading = computed(() => isBookingDetailsLoading.value || isPnrDetailsLoading.value || isAgentLoading.value || actionLoading.value || store.getters['flight/isLoading']);
+const isLoading = computed(() => isBookingDetailsLoading.value );
 
 
 const user = computed(() => authStore.user);
