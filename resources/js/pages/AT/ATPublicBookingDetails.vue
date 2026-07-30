@@ -463,7 +463,7 @@ function cancelBooking() {
         // Close dialog after successful cancellation
         isDialogOpen.value = false;
         fetchBookingDetails();
-        // fetchPnrDetails();
+        fetchPnrDetails();
     }).catch((err) => {
         error.value = err.message || 'Failed to cancel booking';
     });
@@ -1015,7 +1015,7 @@ onMounted(() => {
     fetchModifyRequestData();
     fetchBookingDetails();
     fetchCustomerMarginValues();
-    //fetchPnrDetails();
+    fetchPnrDetails();
 });
 </script>
 
