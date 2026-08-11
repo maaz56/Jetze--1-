@@ -1,5 +1,5 @@
 <script setup>
-import { Building, Facebook, Instagram, Mail, MapPin, Phone, Youtube } from "lucide-vue-next";
+import { Building, Facebook, Instagram, Mail, MapPin, Phone, Plane, Youtube } from "lucide-vue-next";
 
 import { ref, computed, onMounted } from "vue";
 import { useStore } from "vuex";
@@ -8,7 +8,6 @@ import { FETCH_POPULAR_ROUTES, FETCH_TOP_AIRLINES } from "@/services/store/actio
 
 const store = useStore();
 const routesData = computed(() => store.getters['cms/popularRoutes']);
-
 
 const popularRoutes = computed(() => routesData.value.data || []);
 const topAirlines = computed(() => store.getters['cms/topAirlines']);
@@ -90,92 +89,85 @@ const scrollToTop = () => {
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 };
 
+// Global offices — one card per branch, airport-code badge kept as a small
+// nod to the travel business without breaking from the site's light/blue look.
+const offices = [
+  {
+    code: 'LHE',
+    tag: 'Head Office',
+    city: 'Lahore, Pakistan',
+    address: 'Office No. 305, 3rd Floor, Big City Plaza, Liberty Roundabout, Main Boulevard, Gulberg III, Lahore 54660, Pakistan.',
+    phone: '+92 300 7690691',
+    tel: '+923007690691',
+  },
+  {
+    code: 'DXB',
+    tag: 'Regional Office',
+    city: 'Dubai, UAE',
+    address: 'Office 14, First Floor, Dubai National Insurance Building, Opposite Deira City Centre, Port Saeed, Deira, Dubai, United Arab Emirates.',
+    phone: '+971 54 5299909',
+    tel: '+971545299909',
+  },
+  {
+    code: 'MNL',
+    tag: 'Regional Office',
+    city: 'Manila, Philippines',
+    address: 'Corporate Plaza, High Street South, Makati City 1630, Metro Manila, Philippines.',
+    phone: '+63 908 3986939',
+    tel: '+639083986939',
+  },
+];
 
 onMounted(() => {
   fetchPopularRoutes();
   fetchTopAirlines();
 });
-
-
-
-
-
 </script>
 
 <template>
-  <!-- Main Footer - Clean Professional Design -->
+  <!-- Main Footer -->
   <footer class="bg-gray-100 text-gray-800">
-    <!-- Top Contact Section -->
-    <div class="py-12 bg-white">
+
+    <!-- ============ Global Offices ============ -->
+    <div class="py-12 bg-white border-b border-gray-100">
       <div class="container mx-auto px-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <!-- Phone -->
-          <div class="text-center md:text-left">
-            <div class="flex justify-center md:justify-start items-center mb-4">
-              <div class="bg-primary p-3 text-white mr-4">
-                <Phone class="w-5 h-5" />
-              </div>
-              <h3 class="text-lg font-bold text-gray-900">Phone</h3>
-            </div>
-            <div class="space-y-2">
-              <p class="text-gray-600">
-                <span class="font-medium">UAN:</span> (+92) 0000000000
-              </p>
-              <p class="text-gray-600">
-                <span class="font-medium">Complaints:</span> (+92) 0000000000
-              </p>
-            </div>
-          </div>
-          
-          <!-- Address -->
-          <div class="text-center md:text-left">
-            <div class="flex justify-center md:justify-start items-center mb-4">
-              <div class="bg-primary p-3 text-white mr-4">
-                <MapPin class="w-5 h-5" />
-              </div>
-              <h3 class="text-lg font-bold text-gray-900">Address</h3>
-            </div>
-            <p class="text-gray-600">
-              Address1234<br>
-              Address1234
-            </p>
-          </div>
-          
-          <!-- Company Info -->
-          <div class="text-center md:text-left">
-            <div class="flex justify-center md:justify-start items-center mb-4">
+        <div class="flex items-center gap-2 mb-8">
+          <Plane class="w-5 h-5 text-primary" />
+          <h2 class="text-lg font-bold text-gray-900">Our Offices</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div v-for="office in offices" :key="office.code"
+               class="border border-gray-200 rounded-lg p-6 hover:border-primary/40 hover:shadow-md transition-all duration-200">
+            <div class="flex items-center mb-4">
               <div class="bg-primary p-3 text-white mr-4">
                 <Building class="w-5 h-5" />
               </div>
-              <h3 class="text-lg font-bold text-gray-900">Company Info</h3>
-            </div>
-            <p class="text-gray-600 text-sm">
-              Established in 2012, ISO & IATA certified travel management company.
-            </p>
-          </div>
-          
-          <!-- Email -->
-          <div class="text-center md:text-left">
-            <div class="flex justify-center md:justify-start items-center mb-4">
-              <div class="bg-primary p-3 text-white mr-4">
-                <Mail class="w-5 h-5" />
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-base font-bold text-gray-900">{{ office.code }}</span>
+                  <span class="text-xs font-medium text-primary bg-primary/10 rounded px-2 py-0.5">{{ office.tag }}</span>
+                </div>
+                <p class="text-sm text-gray-500">{{ office.city }}</p>
               </div>
-              <h3 class="text-lg font-bold text-gray-900">Our Emails</h3>
             </div>
-            <div class="space-y-2">
-              <p class="text-gray-600">
-                <span class="font-medium">Support:</span> support@Jetze.pk
-              </p>
-              <p class="text-gray-600">
-                <span class="font-medium">Finance:</span> 
-              </p>
-            </div>
+
+            <p class="text-gray-600 text-sm flex gap-2 mb-3">
+              <MapPin class="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+              <span>{{ office.address }}</span>
+            </p>
+
+            <a :href="`tel:${office.tel}`"
+               class="text-sm font-medium text-gray-800 hover:text-primary transition-colors flex items-center gap-2">
+              <Phone class="w-4 h-4 text-gray-400" />
+              <span>{{ office.phone }}</span>
+            </a>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Main Footer Content -->
+    <!-- ============ Main Footer Content ============ -->
     <div class="py-16">
       <div class="container mx-auto px-4">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -184,46 +176,43 @@ onMounted(() => {
             <div class="mb-8">
               <img src="/public/assets/logo.png" class="h-10 mb-6" alt="Jetze Logo" />
               <p class="text-gray-600 mb-8">
-                We Provide All Type of Domestic and International Air Tickets. 
+                We Provide All Type of Domestic and International Air Tickets.
                 Your trusted travel partner since 2012.
               </p>
             </div>
-            
+
+            <div class="space-y-2 mb-8">
+              <a href="mailto:support@Jetze.pk" class="flex items-center gap-2 text-gray-600 hover:text-primary transition-colors text-sm">
+                <Mail class="w-4 h-4 text-primary" />
+                <span>support@Jetze.pk</span>
+              </a>
+              <a href="tel:+923007690691" class="flex items-center gap-2 text-gray-600 hover:text-primary transition-colors text-sm">
+                <Phone class="w-4 h-4 text-primary" />
+                <span>UAN (+92) 300 7690691</span>
+              </a>
+            </div>
+
             <!-- Social Media -->
             <div class="flex space-x-4 mb-8">
-              <a href="https://www.facebook.com/Jetzet/" target="_blank" 
-                 class="bg-gray-100 hover:bg-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
+              <a href="https://www.facebook.com/Jetzet/" target="_blank"
+                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
                 <Facebook class="w-5 h-5" />
               </a>
-              <a href="https://www.instagram.com/Jetze.pk/" target="_blank" 
-                 class="bg-gray-100 hover:bg-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
+              <a href="https://www.instagram.com/Jetze.pk/" target="_blank"
+                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
                 <Instagram class="w-5 h-5" />
               </a>
-              <a href="https://www.youtube.com/@Jetze" target="_blank" 
-                 class="bg-gray-100 hover:bg-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
+              <a href="https://www.youtube.com/@Jetze" target="_blank"
+                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
                 <Youtube class="w-5 h-5" />
               </a>
             </div>
-            
-            <!-- Partner Logos -->
-            <!-- <div class="grid grid-cols-3 gap-4">
-              <div class="p-4 bg-gray-50 flex items-center justify-center">
-                <img src="/public/assets/logo_img_2.png" class="h-8 object-contain" alt="toursview" />
-              </div>
-              <div class="p-4 bg-gray-50 flex items-center justify-center">
-                <img src="/public/assets/logo_img_3.png" class="h-8 object-contain" alt="uniquetravels" />
-              </div>
-              <div class="p-4 bg-gray-50 flex items-center justify-center">
-                <img src="/public/assets/logo_img_7.png" class="h-8 object-contain" alt="minsa" />
-              </div>
-            </div> -->
           </div>
-          
-          <!-- Quick Links & Newsletter -->
+
+          <!-- Quick Links -->
           <div class="lg:col-span-8">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
-              <!-- Company Links -->
-           
+
               <div class="md:col-span-2">
                 <h3 class="text-lg font-bold text-gray-900 mb-4 uppercase tracking-wider">Top Airlines</h3>
                 <div class="grid grid-cols-2 gap-4">
@@ -280,101 +269,76 @@ onMounted(() => {
 
               <div>
                 <h3 class="text-lg font-bold text-gray-900 mb-2">Company</h3>
-                <ul class="">
+                <ul class="space-y-1">
                   <li>
-                    <a href="/about/us" 
+                    <a href="/about/us"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       About Us
                     </a>
-                    <!-- <router-link :to="{ name: 'AboutUs' }" 
-                      class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
-                      About Us
-                    </router-link> -->
                   </li>
                   <li>
-                    <a href="/contact/us" 
+                    <a href="/contact/us"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       Contact Us
                     </a>
-                    <!-- <router-link :to="{ name: 'ClientContactUs' }" 
-                      class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
-                      Contact Us
-                    </router-link> -->
                   </li>
-                   <li>
-                    <a href="/blogs" 
+                  <li>
+                    <a href="/blogs"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       Blogs
                     </a>
-                    <!-- <router-link :to="{ name: 'ClientContactUs' }" 
-                      class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
-                      Contact Us
-                    </router-link> -->
                   </li>
                 </ul>
               </div>
+
               <div>
                 <h3 class="text-lg font-bold text-gray-900 mb-2">Help</h3>
-                <ul class="">
+                <ul class="space-y-1">
                   <li>
-                    <a href="/how-to-use-abhi-pay-bank-transfer" 
+                    <a href="/how-to-use-abhi-pay-bank-transfer"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       How To Use AbhiPay&nbsp;Bank Transfer
                     </a>
-                    <!-- <router-link :to="{ name: 'HowToPay' }" 
-                      class="text-gray-600 text-sm hover:text-primary hover:font-medium transition-all duration-200 inline-block">
-How To Use AbhiPay&nbsp;Bank Transfer
-                    </router-link> -->
                   </li>
-                 
                 </ul>
-              </div>
-              
-              <!-- Legal Links -->
-              <div>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">Legal</h3>
-                <ul class="">
+
+                <h3 class="text-lg font-bold text-gray-900 mb-2 mt-8">Legal</h3>
+                <ul class="space-y-1">
                   <li>
-                    <a href="/privacy-policy" 
+                    <a href="/privacy-policy"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       Privacy Policy
                     </a>
                   </li>
                   <li>
-                    <a href="#" 
+                    <a href="#"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       Licensing
                     </a>
                   </li>
                   <li>
-                    <a href="/terms-condition" 
+                    <a href="/terms-condition"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       Terms & Conditions
                     </a>
                   </li>
                 </ul>
               </div>
-              
-              <!-- Newsletter -->
-              
+
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Bottom Copyright Bar -->
+    <!-- ============ Bottom Copyright Bar ============ -->
     <div class="bg-gray-900 text-center py-8">
       <div class="container mx-auto px-4">
         <div class="flex flex-col md:flex-row justify-between items-center">
-          <!-- Copyright -->
-          <div class="mb-4 md:mb-0 text-center md:text-left">
-            <p class="text-gray-400">
-              © {{ new Date().getFullYear() }} <span class="text-white font-medium">Jetze</span>. All Rights Reserved.
-            </p>
-          </div>
-          
-         
+          <p class="text-gray-400 mb-4 md:mb-0">
+            © {{ new Date().getFullYear() }} <span class="text-white font-medium">Jetze</span>. All Rights Reserved.
+          </p>
+          <p class="text-gray-500 text-sm tracking-wide">Lahore &middot; Dubai &middot; Manila</p>
         </div>
       </div>
     </div>

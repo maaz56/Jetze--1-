@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { MapPin, Phone, Mail, Send, MessageCircle } from 'lucide-vue-next';
 import apiService from "@/services/store/apiService";
 
@@ -62,22 +62,54 @@ const handleSubmit = async () => {
     isSubmitting.value = false;
   }
 };
+
+// Global offices — kept in sync with the footer's office list.
+const offices = [
+  {
+    code: 'LHE',
+    tag: 'Head Office',
+    city: 'Lahore, Pakistan',
+    address: 'Office No. 305, 3rd Floor, Big City Plaza, Liberty Roundabout, Main Boulevard, Gulberg III, Lahore 54660, Pakistan.',
+    phone: '+92 300 7690691',
+    tel: '+923007690691',
+  },
+  {
+    code: 'DXB',
+    tag: 'Regional Office',
+    city: 'Dubai, UAE',
+    address: 'Office 14, First Floor, Dubai National Insurance Building, Opposite Deira City Centre, Port Saeed, Deira, Dubai, United Arab Emirates.',
+    phone: '+971 54 5299909',
+    tel: '+971545299909',
+  },
+  {
+    code: 'MNL',
+    tag: 'Regional Office',
+    city: 'Manila, Philippines',
+    address: 'Corporate Plaza, High Street South, Makati City 1630, Metro Manila, Philippines.',
+    phone: '+63 908 3986939',
+    tel: '+639083986939',
+  },
+];
+
+const activeOfficeIndex = ref(0);
+const activeOffice = computed(() => offices[activeOfficeIndex.value]);
+const activeMapSrc = computed(
+  () => `https://www.google.com/maps?q=${encodeURIComponent(activeOffice.value.address)}&output=embed`
+);
 </script>
 
 <template>
   <!-- Hero Section - Clean & Professional -->
   <section class="relative h-64 bg-white">
-    <div class="absolute inset-0 bg-">
-      <div class="container mx-auto px-6 h-full flex items-center">
-        <div>
-          <h1 class="text-4xl md:text-5xl font-bold text-secondary">
-            Contact <span class="text-primary">Jetze</span>
-          </h1>
-          <div class="h-1 w-24 bg-primary mt-4"></div>
-          <p class="mt-6 text-lg  max-w-2xl text-gray-900">
-            Professional travel solutions with 24/7 support. Reach out for bookings, inquiries, or assistance.
-          </p>
-        </div>
+    <div class="container mx-auto px-6 h-full flex items-center">
+      <div>
+        <h1 class="text-4xl md:text-5xl font-bold text-secondary">
+          Contact <span class="text-primary">Jetze</span>
+        </h1>
+        <div class="h-1 w-24 bg-primary mt-4"></div>
+        <p class="mt-6 text-lg max-w-2xl text-gray-900">
+          Professional travel solutions with 24/7 support. Reach out for bookings, inquiries, or assistance.
+        </p>
       </div>
     </div>
   </section>
@@ -87,7 +119,7 @@ const handleSubmit = async () => {
     <div class="container mx-auto px-6">
       <!-- Two Column Layout -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         <!-- Contact Information Column -->
         <div class="lg:col-span-1">
           <!-- Quick Contact Cards -->
@@ -98,22 +130,17 @@ const handleSubmit = async () => {
               </div>
               <h2 class="text-2xl font-bold text-gray-900">Quick Contact</h2>
             </div>
-            
+
             <div class="space-y-4">
               <div class="p-5 bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
-                <div class="text-sm font-medium text-gray-500 mb-1">24/7 Support Line</div>
-                <div class="text-lg font-bold text-gray-900">+92 00000000</div>
+                <div class="text-sm font-medium text-gray-500 mb-1">24/7 Support Line (UAN)</div>
+                <div class="text-lg font-bold text-gray-900">+92 300 7690691</div>
               </div>
-              
+
               <div class="p-5 bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
                 <div class="text-sm font-medium text-gray-500 mb-1">Email Support</div>
                 <div class="text-lg font-bold text-gray-900">support@Jetze.pk</div>
               </div>
-              
-              <!-- <div class="p-5 bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
-                <div class="text-sm font-medium text-gray-500 mb-1">Finance Department</div>
-                <div class="text-lg font-bold text-gray-900"></div>
-              </div> -->
             </div>
           </div>
 
@@ -136,20 +163,25 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <!-- Address -->
+          <!-- Our Offices -->
           <div>
-            <h3 class="text-lg font-bold text-gray-900 mb-4">Head Office</h3>
-            <div class="p-5 bg-gray-50">
-              <div class="flex items-start">
-                <div class="w-8 h-8 bg-primary text-white flex items-center justify-center mr-3 mt-1">
-                  <MapPin class="w-4 h-4" />
-                </div>
-                <div>
-                  <p class="text-gray-700">
-                    Address line 1<br>
-                    Address line 2<br>
-                    State
-                  </p>
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Our Offices</h3>
+            <div class="space-y-3">
+              <div v-for="office in offices" :key="office.code" class="p-5 bg-gray-50">
+                <div class="flex items-start">
+                  <div class="w-8 h-8 bg-primary text-white flex items-center justify-center mr-3 mt-1 shrink-0">
+                    <MapPin class="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="font-bold text-gray-900 text-sm">{{ office.code }}</span>
+                      <span class="text-xs font-medium text-primary bg-primary/10 rounded px-2 py-0.5">{{ office.tag }}</span>
+                    </div>
+                    <p class="text-gray-700 text-sm leading-relaxed">{{ office.address }}</p>
+                    <a :href="`tel:${office.tel}`" class="text-sm font-medium text-gray-900 hover:text-primary transition-colors mt-1 inline-block">
+                      {{ office.phone }}
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -237,7 +269,7 @@ const handleSubmit = async () => {
                 <span v-if="isSubmitting" class="w-5 h-5 border-2 border-white border-t-transparent animate-spin"></span>
                 {{ isSubmitting ? 'Sending Message...' : 'Send Message' }}
               </button>
-              
+
               <button type="button" @click="resetForm"
                 class="px-8 py-4 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors duration-200">
                 Clear Form
@@ -259,7 +291,7 @@ const handleSubmit = async () => {
                   <div class="text-sm text-gray-600">Instant chat support</div>
                 </div>
               </a>
-              
+
               <a href="mailto:support@Jetze.pk"
                 class="p-5 bg-blue-50 hover:bg-blue-100 border border-blue-100 flex items-center gap-3 transition-colors duration-200">
                 <div class="w-10 h-10 bg-blue-600 text-white flex items-center justify-center">
@@ -270,7 +302,7 @@ const handleSubmit = async () => {
                   <div class="text-sm text-gray-600">support@Jetze.pk</div>
                 </div>
               </a>
-              
+
               <a href="tel:+923111711123"
                 class="p-5 bg-purple-50 hover:bg-purple-100 border border-purple-100 flex items-center gap-3 transition-colors duration-200">
                 <div class="w-10 h-10 bg-purple-600 text-white flex items-center justify-center">
@@ -278,7 +310,7 @@ const handleSubmit = async () => {
                 </div>
                 <div>
                   <div class="font-medium text-gray-900">Phone Call</div>
-                  <div class="text-sm text-gray-600">+92 00000000</div>
+                  <div class="text-sm text-gray-600">+92 311 1711123</div>
                 </div>
               </a>
             </div>
@@ -288,25 +320,44 @@ const handleSubmit = async () => {
 
       <!-- Map Section -->
       <div class="mt-16">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Find Our Office</h2>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h2 class="text-2xl font-bold text-gray-900">Find Our Office</h2>
+
+          <!-- Office tabs -->
+          <div class="inline-flex bg-gray-100 p-1 self-start">
+            <button
+              v-for="(office, index) in offices"
+              :key="office.code"
+              type="button"
+              @click="activeOfficeIndex = index"
+              :class="[
+                'px-4 py-2 text-sm font-medium transition-colors duration-200',
+                activeOfficeIndex === index
+                  ? 'bg-primary text-white'
+                  : 'text-gray-600 hover:text-primary'
+              ]">
+              {{ office.code }} — {{ office.city.split(',')[0] }}
+            </button>
+          </div>
+        </div>
+
         <div class="h-96">
           <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105846.83214733186!2d71.39277959726564!3d33.9998919!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x38d917a16b712b9b%3A0x300a41edde3f384e!2sEtimad%20Travels%20Peshawar!5e0!3m2!1sen!2s!4v1772100822225!5m2!1sen!2s"
-            width="100%" 
-            height="100%" 
+            :key="activeOffice.code"
+            :src="activeMapSrc"
+            width="100%"
+            height="100%"
             style="border:0;"
-            allowfullscreen="" 
-            loading="lazy" 
+            allowfullscreen=""
+            loading="lazy"
             referrerpolicy="no-referrer-when-downgrade"
             class="w-full h-full"
-            title="Jetze Office Location">
+            :title="`Jetze Office Location - ${activeOffice.city}`">
           </iframe>
         </div>
       </div>
     </div>
   </section>
-
- 
 </template>
 
 <style scoped>

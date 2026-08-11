@@ -20,14 +20,25 @@
             <aside>
                 <div class="mb-8">
                     <div class="mb-6 flex items-center">
-                        <div class="mr-3 flex h-10 w-10 items-center justify-center bg-primary text-white">☎</div>
+                        <div class="mr-3 flex h-10 w-10 items-center justify-center bg-primary text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                            </svg>
+                        </div>
                         <h2 class="text-2xl font-bold text-gray-900">Quick Contact</h2>
                     </div>
                     <div class="space-y-4">
-                        <div class="bg-gray-50 p-5 transition hover:bg-gray-100"><div class="mb-1 text-sm font-medium text-gray-500">24/7 Support Line</div><a href="tel:+923111711123" class="text-lg font-bold text-gray-900">+92 00000000</a></div>
-                        <div class="bg-gray-50 p-5 transition hover:bg-gray-100"><div class="mb-1 text-sm font-medium text-gray-500">Email Support</div><a href="mailto:support@Jetze.pk" class="break-all text-lg font-bold text-gray-900">support@Jetze.pk</a></div>
+                        <div class="bg-gray-50 p-5 transition hover:bg-gray-100">
+                            <div class="mb-1 text-sm font-medium text-gray-500">24/7 Support Line (UAN)</div>
+                            <a href="tel:+923007690691" class="text-lg font-bold text-gray-900">+92 300 7690691</a>
+                        </div>
+                        <div class="bg-gray-50 p-5 transition hover:bg-gray-100">
+                            <div class="mb-1 text-sm font-medium text-gray-500">Email Support</div>
+                            <a href="mailto:support@Jetze.pk" class="break-all text-lg font-bold text-gray-900">support@Jetze.pk</a>
+                        </div>
                     </div>
                 </div>
+
                 <div class="mb-8">
                     <h3 class="mb-4 text-lg font-bold text-gray-900">Office Hours</h3>
                     <div class="bg-gray-50 p-5 text-sm">
@@ -36,9 +47,56 @@
                         <div class="flex justify-between py-3"><span class="text-gray-700">Emergency Support</span><span class="font-medium text-green-600">Always Available</span></div>
                     </div>
                 </div>
+
                 <div>
-                    <h3 class="mb-4 text-lg font-bold text-gray-900">Head Office</h3>
-                    <div class="bg-gray-50 p-5"><div class="flex items-start"><div class="mr-3 mt-1 flex h-8 w-8 items-center justify-center bg-primary text-white">●</div><p class="text-gray-700">Address line 1<br>Address line 2<br>State</p></div></div>
+                    <h3 class="mb-4 text-lg font-bold text-gray-900">Our Offices</h3>
+                    <div class="space-y-3">
+                        @php
+                            $offices = [
+                                [
+                                    'code' => 'LHE',
+                                    'tag' => 'Head Office',
+                                    'address' => 'Office No. 305, 3rd Floor, Big City Plaza, Liberty Roundabout, Main Boulevard, Gulberg III, Lahore 54660, Pakistan.',
+                                    'phone' => '+92 300 7690691',
+                                    'tel' => '+923007690691',
+                                ],
+                                [
+                                    'code' => 'DXB',
+                                    'tag' => 'Regional Office',
+                                    'address' => 'Office 14, First Floor, Dubai National Insurance Building, Opposite Deira City Centre, Port Saeed, Deira, Dubai, United Arab Emirates.',
+                                    'phone' => '+971 54 5299909',
+                                    'tel' => '+971545299909',
+                                ],
+                                [
+                                    'code' => 'MNL',
+                                    'tag' => 'Regional Office',
+                                    'address' => 'Corporate Plaza, High Street South, Makati City 1630, Metro Manila, Philippines.',
+                                    'phone' => '+63 908 3986939',
+                                    'tel' => '+639083986939',
+                                ],
+                            ];
+                        @endphp
+                        @foreach ($offices as $office)
+                            <div class="bg-gray-50 p-5">
+                                <div class="flex items-start">
+                                    <div class="mr-3 mt-1 flex h-8 w-8 shrink-0 items-center justify-center bg-primary text-white">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="mb-1 flex items-center gap-2">
+                                            <span class="text-sm font-bold text-gray-900">{{ $office['code'] }}</span>
+                                            <span class="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{{ $office['tag'] }}</span>
+                                        </div>
+                                        <p class="text-sm leading-relaxed text-gray-700">{{ $office['address'] }}</p>
+                                        <a href="tel:{{ $office['tel'] }}" class="mt-1 inline-block text-sm font-medium text-gray-900 transition hover:text-primary">{{ $office['phone'] }}</a>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </aside>
 
@@ -62,7 +120,12 @@
                     </div>
                     <label class="block text-sm font-medium text-gray-700">Message<textarea name="message" rows="6" required minlength="10" maxlength="5000" class="mt-2 w-full resize-none border border-gray-300 px-4 py-3 outline-none focus:border-primary focus:ring-1 focus:ring-primary" placeholder="Please describe your inquiry in detail..."></textarea></label>
                     <div class="flex flex-col gap-4 pt-2 sm:flex-row">
-                        <button id="contact-submit" type="submit" class="bg-primary px-8 py-4 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">Send Message</button>
+                        <button id="contact-submit" type="submit" class="flex items-center justify-center gap-3 bg-primary px-8 py-4 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.77 59.77 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                            </svg>
+                            <span id="contact-submit-label">Send Message</span>
+                        </button>
                         <button id="contact-reset" type="reset" class="border border-gray-300 px-8 py-4 font-medium text-gray-700 transition hover:bg-gray-50">Clear Form</button>
                     </div>
                 </form>
@@ -70,17 +133,47 @@
                 <div class="mt-16">
                     <h3 class="mb-6 text-xl font-bold text-gray-900">Other Ways to Contact Us</h3>
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <a href="https://wa.me/923111711123" target="_blank" rel="noopener" class="flex items-center gap-3 border border-green-100 bg-green-50 p-5 transition hover:bg-green-100"><span class="flex h-10 w-10 items-center justify-center bg-green-600 text-white">W</span><span><strong class="block text-gray-900">WhatsApp</strong><small class="text-gray-600">Instant chat support</small></span></a>
-                        <a href="mailto:support@Jetze.pk" class="flex items-center gap-3 border border-blue-100 bg-blue-50 p-5 transition hover:bg-blue-100"><span class="flex h-10 w-10 items-center justify-center bg-blue-600 text-white">@</span><span class="min-w-0"><strong class="block text-gray-900">Email</strong><small class="break-all text-gray-600">support@Jetze.pk</small></span></a>
-                        <a href="tel:+923111711123" class="flex items-center gap-3 border border-purple-100 bg-purple-50 p-5 transition hover:bg-purple-100"><span class="flex h-10 w-10 items-center justify-center bg-purple-600 text-white">☎</span><span><strong class="block text-gray-900">Phone Call</strong><small class="text-gray-600">+92 00000000</small></span></a>
+                        <a href="https://wa.me/923111711123" target="_blank" rel="noopener" class="flex items-center gap-3 border border-green-100 bg-green-50 p-5 transition hover:bg-green-100">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-green-600 text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.227V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                                </svg>
+                            </span>
+                            <span><strong class="block text-gray-900">WhatsApp</strong><small class="text-gray-600">Instant chat support</small></span>
+                        </a>
+                        <a href="mailto:support@Jetze.pk" class="flex items-center gap-3 border border-blue-100 bg-blue-50 p-5 transition hover:bg-blue-100">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-blue-600 text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                                </svg>
+                            </span>
+                            <span class="min-w-0"><strong class="block text-gray-900">Email</strong><small class="break-all text-gray-600">support@Jetze.pk</small></span>
+                        </a>
+                        <a href="tel:+923111711123" class="flex items-center gap-3 border border-purple-100 bg-purple-50 p-5 transition hover:bg-purple-100">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-purple-600 text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                                </svg>
+                            </span>
+                            <span><strong class="block text-gray-900">Phone Call</strong><small class="text-gray-600">+92 311 1711123</small></span>
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="mt-16">
-            <h2 class="mb-6 text-2xl font-bold text-gray-900">Find Our Office</h2>
-            <div class="h-96"><iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105846.83214733186!2d71.39277959726564!3d33.9998919!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x38d917a16b712b9b%3A0x300a41edde3f384e!2sEtimad%20Travels%20Peshawar!5e0!3m2!1sen!2s!4v1772100822225!5m2!1sen!2s" class="h-full w-full" style="border:0" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Jetze Office Location"></iframe></div>
+            <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="text-2xl font-bold text-gray-900">Find Our Office</h2>
+                <div class="inline-flex self-start bg-gray-100 p-1" id="office-map-tabs">
+                    <button type="button" data-office="LHE" class="office-map-tab bg-primary px-4 py-2 text-sm font-medium text-white transition" data-address="Office No. 305, 3rd Floor, Big City Plaza, Liberty Roundabout, Main Boulevard, Gulberg III, Lahore 54660, Pakistan">LHE — Lahore</button>
+                    <button type="button" data-office="DXB" class="office-map-tab px-4 py-2 text-sm font-medium text-gray-600 transition hover:text-primary" data-address="Office 14, First Floor, Dubai National Insurance Building, Opposite Deira City Centre, Port Saeed, Deira, Dubai, United Arab Emirates">DXB — Dubai</button>
+                    <button type="button" data-office="MNL" class="office-map-tab px-4 py-2 text-sm font-medium text-gray-600 transition hover:text-primary" data-address="Corporate Plaza, High Street South, Makati City 1630, Metro Manila, Philippines">MNL — Manila</button>
+                </div>
+            </div>
+            <div class="h-96">
+                <iframe id="office-map-frame" src="https://www.google.com/maps?q={{ urlencode('Office No. 305, 3rd Floor, Big City Plaza, Liberty Roundabout, Main Boulevard, Gulberg III, Lahore 54660, Pakistan') }}&output=embed" class="h-full w-full" style="border:0" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Jetze Office Location"></iframe>
+            </div>
         </div>
     </div>
 </section>
@@ -92,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('contact-form');
     const startedAt = document.getElementById('form-started-at');
     const submit = document.getElementById('contact-submit');
+    const submitLabel = document.getElementById('contact-submit-label');
     const success = document.getElementById('contact-success');
     const errorBox = document.getElementById('contact-error');
     const resetStartedAt = () => { startedAt.value = Date.now(); };
@@ -108,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         success.classList.add('hidden');
         errorBox.classList.add('hidden');
         submit.disabled = true;
-        submit.textContent = 'Sending Message...';
+        submitLabel.textContent = 'Sending Message...';
         const payload = Object.fromEntries(new FormData(form).entries());
         payload.form_started_at = Number(payload.form_started_at);
 
@@ -131,8 +225,23 @@ document.addEventListener('DOMContentLoaded', () => {
             errorBox.classList.remove('hidden');
         } finally {
             submit.disabled = false;
-            submit.textContent = 'Send Message';
+            submitLabel.textContent = 'Send Message';
         }
+    });
+
+    // Office map switcher
+    const tabs = document.querySelectorAll('.office-map-tab');
+    const mapFrame = document.getElementById('office-map-frame');
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            tabs.forEach((t) => {
+                t.classList.remove('bg-primary', 'text-white');
+                t.classList.add('text-gray-600');
+            });
+            tab.classList.add('bg-primary', 'text-white');
+            tab.classList.remove('text-gray-600');
+            mapFrame.src = `https://www.google.com/maps?q=${encodeURIComponent(tab.dataset.address)}&output=embed`;
+        });
     });
 });
 </script>
