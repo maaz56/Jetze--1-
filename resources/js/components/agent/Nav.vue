@@ -7,11 +7,23 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import router from "@/config/router";
-import { formatAmount } from "@/lib/utils";
+import {
+    formatAmount,
+    getSelectedCurrencyCode,
+    setSelectedCurrencyCode,
+} from "@/lib/utils";
 import {
     FETCH_AGENT_DATA,
-    FETCH_AGENT_LEDGER
+    FETCH_AGENT_LEDGER,
+    FETCH_CURRENCIES,
 } from "@/services/store/actions.type";
 import { useAuthStore } from "@/services/stores/auth";
 import { useMagicKeys } from "@vueuse/core";
@@ -36,6 +48,26 @@ const user = computed(() => authStore.user);
 const store = useStore();
 const user_id = computed(() => user?.value?.id);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const currencies = computed(() => store.getters["currency/currencies"] || []);
+const selectedCurrencyCode = ref(getSelectedCurrencyCode());
+const currencyOptions = computed(() => {
+    if (currencies.value.length > 0) {
+        return currencies.value.filter((currency) => currency?.code);
+    }
+
+    return [
+        {
+            code: selectedCurrencyCode.value,
+            name: selectedCurrencyCode.value,
+        },
+    ];
+});
+const selectedCurrency = computed(() =>
+    currencies.value.find((currency) => currency.code === selectedCurrencyCode.value),
+);
+const selectedCurrencySymbol = computed(
+    () => selectedCurrency.value?.symbol || selectedCurrencyCode.value,
+);
 
 const mobileMenuOpen = ref(false);
 const open = ref(false);
@@ -84,6 +116,20 @@ function fetchAgent() {
     }
 }
 
+function fetchCurrencies() {
+    store.dispatch(`currency/${FETCH_CURRENCIES}`);
+}
+
+function formatBalanceAmount(amount) {
+    const numericAmount =
+        typeof amount === "string" ? Number(amount.replace(/,/g, "")) : Number(amount);
+
+    return new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
+}
+
 watch([Meta_J, Ctrl_J], (v) => {
     if (v[0] || v[1]) handleOpenChange();
 });
@@ -92,6 +138,26 @@ watch(user_id, (newUserId) => {
         fetchAgentLedger();
         fetchAgent();
     }
+});
+
+watch(
+    currencies,
+    (list) => {
+        if (!list.length) return;
+
+        const currentExists = list.some(
+            (currency) => currency.code === selectedCurrencyCode.value,
+        );
+
+        if (!currentExists) {
+            selectedCurrencyCode.value = setSelectedCurrencyCode(list[0].code);
+        }
+    },
+    { immediate: true },
+);
+
+watch(selectedCurrencyCode, (value) => {
+    setSelectedCurrencyCode(value);
 });
 
 function handleOpenChange() {
@@ -111,6 +177,7 @@ onMounted(() => {
         fetchAgentLedger();
         fetchAgent();
     }
+    fetchCurrencies();
     // Listen for notifications on public channel only
    
 
@@ -177,9 +244,33 @@ onMounted(() => {
             <!-- Right Section: Wallet & User Menu -->
             <div class="flex items-center space-x-2 sm:space-x-4">
                 <!-- Wallet Balance - Hidden on Mobile -->
-                <div class="hidden sm:flex items-center bg-gray-50 text-gray-700 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md">
-                    <Wallet class="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    <span class="text-xs sm:text-sm font-medium">{{ formatAmount(agentLedger?.balance) }}</span>
+                <div class="hidden sm:flex items-center bg-gray-50 text-gray-700 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md gap-3 shrink-0 whitespace-nowrap">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500">Balance</span>
+                        <div class="flex items-center">
+                            <Wallet class="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                            <span class="text-xs sm:text-sm font-medium">{{ selectedCurrencySymbol }}</span>
+                            <span class="mx-1 text-gray-300">|</span>
+                            <span class="text-xs sm:text-sm font-medium">{{ formatBalanceAmount(agentLedger?.balance) }}</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500">Currency</span>
+                        <Select v-model="selectedCurrencyCode">
+                            <SelectTrigger class="h-8 w-[88px] rounded border border-gray-200 bg-white px-2 text-xs sm:text-sm text-gray-700 shadow-sm focus:ring-0">
+                                <SelectValue placeholder="Currency" />
+                            </SelectTrigger>
+                        <SelectContent :body-lock="false" class="rounded border border-gray-200 bg-white shadow-xl">
+                                <SelectItem
+                                    v-for="currency in currencyOptions"
+                                    :key="currency.code"
+                                    :value="currency.code"
+                                >
+                                    {{ currency.code }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <!-- Notifications -->

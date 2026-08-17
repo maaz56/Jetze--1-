@@ -91,6 +91,7 @@ import {
     formatAmount,
     formatDuration,
     calculateLayover,
+    getSelectedCurrencyCode,
 } from "@/lib/utils";
 import { useFlightStore } from "@/services/stores/flight";
 import { useAuthStore } from "@/services/stores/auth";
@@ -619,7 +620,7 @@ const fetchFlights = () => {
             airline: selectedAirline.value,
             timestamp: Date.now(),
             flightType: flightType.value,
-            currencyCode: localStorage.getItem("currencyCode") || "PKR",
+            currencyCode: getSelectedCurrencyCode(),
         };
     } else {
         if (origin.value && destination.value && dateRange.value.start) {
@@ -636,7 +637,7 @@ const fetchFlights = () => {
                 selectedAirline: selectedAirline.value,
                 timestamp: Date.now(),
                 flightType: flightType.value,
-                currencyCode: localStorage.getItem("currencyCode") || "PKR",
+                currencyCode: getSelectedCurrencyCode(),
             };
         }
     }

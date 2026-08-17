@@ -2450,7 +2450,7 @@ watch(isLoggedIn, (newVal) => {
                                     <div
                                         class="flex-1 flex items-center justify-between gap-4"
                                     >
-                                        <div>
+                                        <div class="w-16">
                                             <div
                                                 class="text-2xl font-black text-gray-900"
                                             >
@@ -2511,7 +2511,7 @@ watch(isLoggedIn, (newVal) => {
                                                 }}m</span
                                             >
                                             <div
-                                                class="relative w-full flex items-center"
+                                                class="relative w-full flex justify-center items-center"
                                             >
                                                 <div
                                                     class="h-[2px] w-full bg-emerald-400 rounded-full opacity-60"
@@ -3471,10 +3471,12 @@ watch(isLoggedIn, (newVal) => {
                                             width they need (shrink-0, fixed-ish), and the route/timing block gets ALL the
                                             leftover space via flex-1 + justify-center, so it's centered in the row instead
                                             of hugging the badge on the right. -->
-                                        <div class="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:gap-6">
+                                        <div
+                                            class="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_minmax(0,12rem)_minmax(0,10rem)] md:items-center md:gap-6"
+                                        >
 
                                             <!-- Airline (fixed width so it doesn't dictate how much room the route gets) -->
-                                            <div class="flex shrink-0 items-center gap-3 md:w-44">
+                                            <div class="flex shrink-0 items-center gap-3 md:min-w-0">
                                                 <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-100">
                                                     <img
                                                         v-if="summarySegment?.operating_carrier?.logo || summaryFlight?.operating_carrier?.logo || summaryFlight?.marketing_carrier?.logo"
@@ -3488,7 +3490,7 @@ watch(isLoggedIn, (newVal) => {
                                                     <div class="truncate text-sm font-bold text-gray-950 sm:text-base">
                                                         {{ summarySegment?.operating_carrier?.name || summaryFlight?.operating_carrier?.name || summaryFlight?.marketing_carrier?.name || "Airline" }}
                                                     </div>
-                                                    <div class="text-xs font-medium text-gray-500">
+                                                    <div class="truncate text-xs font-medium text-gray-500">
                                                         {{
                                                             summarySegment?.operating_carrier?.iata ||
                                                             summaryFlight?.operating_carrier?.iata ||
@@ -3499,17 +3501,17 @@ watch(isLoggedIn, (newVal) => {
                                             </div>
 
                                             <!-- Timing: departure / track / arrival — this is what actually gets centered -->
-                                            <div class="flex flex-1 items-start justify-center gap-4 sm:gap-6">
+                                            <div class="flex min-w-0 items-start justify-center gap-4 sm:gap-6 md:justify-self-center md:w-[26rem]">
 
                                                 <!-- Departure -->
-                                                <div class="min-w-0 max-w-[180px] flex-1 text-center">
+                                                <div class="min-w-0 flex-1 text-center md:max-w-[9rem]">
                                                     <div class="text-2xl font-bold text-gray-950">
                                                         {{ moment.parseZone(summarySegment?.departure_at).format("HH:mm") }}
                                                     </div>
-                                                    <div class="text-sm font-semibold text-gray-500">
+                                                    <div class="truncate text-sm font-semibold text-gray-500">
                                                         {{ summarySegment?.from?.iata || summaryFlight?.from?.city?.code }}
                                                     </div>
-                                                    <div class="mt-1.5 text-sm font-semibold text-gray-800">
+                                                    <div class="mt-1.5 truncate text-sm font-semibold text-gray-800">
                                                         {{ moment(summarySegment?.departure_at).format("ddd, MMM DD, YYYY") }}
                                                     </div>
                                                     <div
@@ -3529,12 +3531,12 @@ watch(isLoggedIn, (newVal) => {
                                                 </div>
 
                                                 <!-- Track (widened — dashes + plane icon get real room to breathe) -->
-                                                <div class="flex w-36 shrink-0 flex-col items-center gap-1.5 pt-3 sm:w-52">
+                                                <div class="flex w-full max-w-[10rem] shrink-0 flex-col items-center gap-1.5 pt-3 sm:max-w-[10rem]">
                                                     <div class="flex w-full items-center gap-2">
                                                         <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
-                                                        <span class="min-w-[24px] flex-1 border-t border-dashed border-gray-300"></span>
+                                                        <span class="h-px min-w-[24px] flex-1 bg-emerald-300"></span>
                                                         <PlaneTakeoff class="h-4 w-4 shrink-0 text-primary" />
-                                                        <span class="min-w-[24px] flex-1 border-t border-dashed border-gray-300"></span>
+                                                        <span class="h-px min-w-[24px] flex-1 bg-emerald-300"></span>
                                                         <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                                                     </div>
                                                     <div class="whitespace-nowrap text-xs font-semibold text-gray-500">
@@ -3546,14 +3548,14 @@ watch(isLoggedIn, (newVal) => {
                                                 </div>
 
                                                 <!-- Arrival -->
-                                                <div class="min-w-0 max-w-[180px] flex-1 text-center">
+                                                <div class="min-w-0 flex-1 text-center md:max-w-[9rem]">
                                                     <div class="text-2xl font-bold text-gray-950">
                                                         {{ moment.parseZone(summarySegment?.arrival_at).format("HH:mm") }}
                                                     </div>
-                                                    <div class="text-sm font-semibold text-gray-500">
+                                                    <div class="truncate text-sm font-semibold text-gray-500">
                                                         {{ summarySegment?.to?.iata || summaryFlight?.to?.city?.code }}
                                                     </div>
-                                                    <div class="mt-1.5 text-sm font-semibold text-gray-800">
+                                                    <div class="mt-1.5 truncate text-sm font-semibold text-gray-800">
                                                         {{ moment(summarySegment?.arrival_at).format("ddd, MMM DD, YYYY") }}
                                                     </div>
                                                     <div
@@ -3574,7 +3576,7 @@ watch(isLoggedIn, (newVal) => {
                                             </div>
 
                                             <!-- Refundable badge (fixed width, pinned to the far side) -->
-                                            <div class="flex shrink-0 justify-end md:w-36">
+                                            <div class="flex shrink-0 justify-end md:justify-self-end">
                                                 <div
                                                     class="inline-flex w-fit items-center gap-1 self-start rounded-full border px-3 py-1 text-xs font-bold md:self-center"
                                                     :class="
@@ -4781,7 +4783,7 @@ watch(isLoggedIn, (newVal) => {
                                                                                             p.traveler_type ===
                                                                                                 travelerType &&
                                                                                             p.type ===
-                                                                                                "checked",
+                                                                                                "checkIn",
                                                                                     )
                                                                                         ?.description ||
                                                                                     "Not Included"

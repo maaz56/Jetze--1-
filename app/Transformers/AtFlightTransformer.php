@@ -156,6 +156,14 @@ class AtFlightTransformer
                     foreach ($travelerTypes as $travelerType) {
                         foreach ($segments as $segment) {
                             $baggagePolicies[] = [
+                                "type" => "carry",
+                                "pieces" => 1,
+                                "weight" => 7,
+                                "description" => '1 handbag 7kg allowed',
+                                "traveler_type" => $travelerType,
+                                "segment_ref_id" => $segment['ref_id'],
+                            ];
+                            $baggagePolicies[] = [
                                 "type" => "checkIn",
                                 "pieces" => $pieces,
                                 "weight" => $weight,

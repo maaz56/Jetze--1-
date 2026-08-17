@@ -17,6 +17,7 @@ import {
 
 const state = {
     cities: [],
+    currencies: [],
     isLoading: false,
     apiErrors: []
 }

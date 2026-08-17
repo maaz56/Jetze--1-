@@ -1,3 +1,4 @@
+import { ref } from "vue";
 import { clsx } from "clsx";
 import moment from "moment";
 import { twMerge } from "tailwind-merge";
@@ -6,35 +7,72 @@ export function cn(...inputs) {
     return twMerge(clsx(inputs));
 }
 
-export function formatAmount(amount) {
+const DEFAULT_CURRENCY_CODE = "AED";
+const selectedCurrencyCodeState = ref(readStoredCurrencyCode());
+
+function readStoredCurrencyCode() {
+    if (typeof localStorage === "undefined") {
+        return DEFAULT_CURRENCY_CODE;
+    }
+
+    return normalizeCurrencyCode(localStorage.getItem("currencyCode"));
+}
+
+function normalizeCurrencyCode(currencyCode) {
+    const code = String(currencyCode || "").trim().toUpperCase();
+
+    if (/^[A-Z]{3}$/.test(code)) {
+        return code;
+    }
+
+    return DEFAULT_CURRENCY_CODE;
+}
+
+export function getSelectedCurrencyCode() {
+    return selectedCurrencyCodeState.value;
+}
+
+export function setSelectedCurrencyCode(currencyCode) {
+    const normalizedCode = normalizeCurrencyCode(currencyCode);
+    selectedCurrencyCodeState.value = normalizedCode;
+
+    if (typeof localStorage !== "undefined") {
+        localStorage.setItem("currencyCode", normalizedCode);
+    }
+
+    return normalizedCode;
+}
+
+export function formatAmount(amount, currencyCode = selectedCurrencyCodeState.value) {
+    return formatAmountWithCurrency(amount, currencyCode);
+}
+
+export function formatAmountWithCurrency(amount, currencyCode) {
     const numericAmount =
         typeof amount === "string"
             ? Number(amount.replace(/,/g, ""))
             : Number(amount);
 
-    const formatter = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "AED",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+    const normalizedCode = normalizeCurrencyCode(currencyCode);
+    let formatter;
+
+    try {
+        formatter = new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: normalizedCode,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    } catch {
+        formatter = null;
+    }
+
+    if (!formatter) {
+        return `${normalizedCode} ${Number.isFinite(numericAmount) ? numericAmount.toFixed(2) : "0.00"}`;
+    }
 
     return formatter.format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
-// export function formatAmount(amount) {
-//   if (isNaN(amount)) return "₨0.00";
-
-//   const rounded = Math.round(amount * 100) / 100; // round to 2 decimals
-
-//   const formatter = new Intl.NumberFormat("en-US", {
-//     style: "currency",
-//     currency: "PKR",
-//     minimumFractionDigits: 2,
-//     maximumFractionDigits: 2,
-//   });
-
-//   return formatter.format(rounded);
-// }
 
 export const formatDate = (date) =>
     new Date(date).toLocaleDateString("en-US", {

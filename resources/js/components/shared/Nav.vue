@@ -9,11 +9,18 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
-import { FETCH_AGENT_LEDGER } from "@/services/store/actions.type";
+import { FETCH_AGENT_LEDGER, FETCH_CURRENCIES } from "@/services/store/actions.type";
 import Button from "../ui/button/Button.vue";
 import { 
     BookCheck, 
@@ -32,7 +39,10 @@ import {
     Building2,
     BadgeDollarSignIcon
 } from "lucide-vue-next";
-import { formatAmount } from "@/lib/utils";
+import {
+    getSelectedCurrencyCode,
+    setSelectedCurrencyCode,
+} from "@/lib/utils";
 import { useAuthStore } from "@/services/stores/auth";
 import { useStore } from "vuex";
 
@@ -46,6 +56,26 @@ const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const currencies = computed(() => store.getters["currency/currencies"] || []);
+const selectedCurrencyCode = ref(getSelectedCurrencyCode());
+const currencyOptions = computed(() => {
+    if (currencies.value.length > 0) {
+        return currencies.value.filter((currency) => currency?.code);
+    }
+
+    return [
+        {
+            code: selectedCurrencyCode.value,
+            name: selectedCurrencyCode.value,
+        },
+    ];
+});
+const selectedCurrency = computed(() =>
+    currencies.value.find((currency) => currency.code === selectedCurrencyCode.value),
+);
+const selectedCurrencySymbol = computed(
+    () => selectedCurrency.value?.symbol || selectedCurrencyCode.value,
+);
 const loading = ref(true);
 const error = ref(null);
 const isLoginMode = ref(true)
@@ -68,6 +98,10 @@ function fetchAgentLedger() {
     }
 }
 
+function fetchCurrencies() {
+    store.dispatch(`currency/${FETCH_CURRENCIES}`);
+}
+
 function handleLogout() {
     authStore.logout();
 }
@@ -86,6 +120,16 @@ function goToDashboard(tab) {
     } else {
         router.push({ name: 'Home' });
     }
+}
+
+function formatBalanceAmount(amount) {
+    const numericAmount =
+        typeof amount === "string" ? Number(amount.replace(/,/g, "")) : Number(amount);
+
+    return new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
 
 // Updated navLinks to match the "Title + Subtitle" style of the image
@@ -110,8 +154,29 @@ watch(user, (newUser) => {
     if (newUser) fetchAgentLedger();
 });
 
+watch(
+    currencies,
+    (list) => {
+        if (!list.length) return;
+
+        const currentExists = list.some(
+            (currency) => currency.code === selectedCurrencyCode.value,
+        );
+
+        if (!currentExists) {
+            selectedCurrencyCode.value = setSelectedCurrencyCode(list[0].code);
+        }
+    },
+    { immediate: true },
+);
+
+watch(selectedCurrencyCode, (value) => {
+    setSelectedCurrencyCode(value);
+});
+
 onMounted(() => {
     if (user.value?.id) fetchAgentLedger();
+    fetchCurrencies();
     initFlowbite();
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -176,15 +241,34 @@ onUnmounted(() => {
                         </component>
                     </div>
 
-                    <div v-if="user" class="hidden md:flex items-center px-4 border-l border-slate-200 gap-3">
+                    <div v-if="user" class="hidden md:flex items-center px-4 border-l border-slate-200 gap-4 shrink-0 whitespace-nowrap">
                         <div class="flex flex-col items-end">
                             <span class="text-[10px] text-slate-500 uppercase tracking-wider">Balance</span>
                             <div class="flex items-center font-bold text-green-600">
                                 <Wallet class="h-3 w-3 mr-1" />
-                                <span class="text-sm">{{ formatAmount(agentLedger?.balance) }}</span>
+                                <span class="text-sm">{{ selectedCurrencySymbol }}</span>
+                                <span class="mx-1 text-slate-300">|</span>
+                                <span class="text-sm">{{ formatBalanceAmount(agentLedger?.balance) }}</span>
                             </div>
                         </div>
-                        <button @click="goToDashboard('deposits')" class="bg-green-600 hover:bg-green-500 p-1.5 rounded-full transition-colors">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-slate-500 uppercase tracking-wider">Currency</span>
+                            <Select v-model="selectedCurrencyCode">
+                                <SelectTrigger class="h-9 w-[92px] rounded border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 shadow-sm focus:ring-0">
+                                    <SelectValue placeholder="Currency" />
+                                </SelectTrigger>
+                                <SelectContent :body-lock="false" class="rounded border border-slate-200 bg-white shadow-xl">
+                                    <SelectItem
+                                        v-for="currency in currencyOptions"
+                                        :key="currency.code"
+                                        :value="currency.code"
+                                    >
+                                        {{ currency.code }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <button @click="goToDashboard('deposits')" class="bg-green-600 hover:bg-green-500 p-1.5 rounded-full transition-colors flex-none">
                             <Coins class="h-4 w-4" />
                         </button>
                     </div>
