@@ -1,5 +1,5 @@
 <script setup>
-import { Building, Facebook, Instagram, Mail, MapPin, Phone, Plane, Youtube } from "lucide-vue-next";
+import { Building, Mail, MapPin, Phone, Plane } from "lucide-vue-next";
 
 import { ref, computed, onMounted } from "vue";
 import { useStore } from "vuex";
@@ -194,17 +194,24 @@ onMounted(() => {
 
             <!-- Social Media -->
             <div class="flex space-x-4 mb-8">
+              <a href="https://www.tiktok.com/@Jetze.pk" target="_blank" rel="noopener noreferrer" aria-label="TikTok"
+                 class="bg-white border border-gray-200 hover:border-primary p-3 transition-all duration-200">
+                <img src="/public/assets/tiktok.png" alt="TikTok" class="w-8 h-8 object-contain" />
+              </a>
               <a href="https://www.facebook.com/Jetzet/" target="_blank"
-                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
-                <Facebook class="w-5 h-5" />
+                 rel="noopener noreferrer" aria-label="Facebook"
+                 class="bg-white border border-gray-200 hover:border-primary p-1 transition-all duration-200">
+                <img src="/public/assets/fb.png" alt="Facebook" class="w-12 h-12 object-contain" />
               </a>
               <a href="https://www.instagram.com/Jetze.pk/" target="_blank"
-                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
-                <Instagram class="w-5 h-5" />
+                 rel="noopener noreferrer" aria-label="Instagram"
+                 class="bg-white border border-gray-200 hover:border-primary p-3 transition-all duration-200">
+                <img src="/public/assets/instagram.png" alt="Instagram" class="w-8 h-8 object-contain" />
               </a>
               <a href="https://www.youtube.com/@Jetze" target="_blank"
-                 class="bg-white border border-gray-200 hover:bg-primary hover:border-primary hover:text-white p-3 text-gray-600 transition-all duration-200">
-                <Youtube class="w-5 h-5" />
+                 rel="noopener noreferrer" aria-label="YouTube"
+                 class="bg-white border border-gray-200 hover:border-primary p-1 transition-all duration-200">
+                <img src="/public/assets/yt.png" alt="YouTube" class="w-12 h-12 object-contain" />
               </a>
             </div>
           </div>

@@ -123,7 +123,7 @@ const activeTab = ref("flights");
 const tabs = [
     { id: "flights", name: "Flights", icon: '/plane.png'  },
     { id: "hotels", name: "Hotels", icon:  '/residential.png' },
-    { id: "Umrah Packages", name: "Umrah Packages", icon:  '/package.png' },
+    { id: "Holidays", name: "Holidays", icon:  '/holidays.png' },
 ];
 
 const setActiveTab = (tabId) => {

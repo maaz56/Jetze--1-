@@ -133,29 +133,21 @@
                 <div class="mt-16">
                     <h3 class="mb-6 text-xl font-bold text-gray-900">Other Ways to Contact Us</h3>
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <a href="https://wa.me/923111711123" target="_blank" rel="noopener" class="flex items-center gap-3 border border-green-100 bg-green-50 p-5 transition hover:bg-green-100">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-green-600 text-white">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.227V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                                </svg>
-                            </span>
+                        <a href="https://wa.me/00923007690691" target="_blank" rel="noopener" class="flex items-center gap-3 border border-green-100 bg-green-50 p-3 transition hover:bg-green-100">
+                            <img src="{{ asset('assets/whatsapp.png') }}" alt="WhatsApp" class="h-16 w-16 shrink-0 object-contain" />
                             <span><strong class="block text-gray-900">WhatsApp</strong><small class="text-gray-600">Instant chat support</small></span>
                         </a>
-                        <a href="mailto:support@Jetze.pk" class="flex items-center gap-3 border border-blue-100 bg-blue-50 p-5 transition hover:bg-blue-100">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-blue-600 text-white">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                                </svg>
-                            </span>
+                        <a href="mailto:support@Jetze.pk" class="flex items-center gap-3 border border-blue-100 bg-blue-50 p-3 transition hover:bg-blue-100">
+                            <img src="{{ asset('assets/email.png') }}" alt="Email" class="h-10 w-10 shrink-0 object-contain" />
                             <span class="min-w-0"><strong class="block text-gray-900">Email</strong><small class="break-all text-gray-600">support@Jetze.pk</small></span>
                         </a>
-                        <a href="tel:+923111711123" class="flex items-center gap-3 border border-purple-100 bg-purple-50 p-5 transition hover:bg-purple-100">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center bg-purple-600 text-white">
+                        <a href="tel:+00923007690691" class="flex items-center gap-3 border border-purple-100 bg-purple-50 p-3 transition hover:bg-purple-100">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-600 text-white">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                                 </svg>
                             </span>
-                            <span><strong class="block text-gray-900">Phone Call</strong><small class="text-gray-600">+92 311 1711123</small></span>
+                            <span><strong class="block text-gray-900">Phone Call</strong><small class="text-gray-600">+92 300 7690691</small></span>
                         </a>
                     </div>
                 </div>
