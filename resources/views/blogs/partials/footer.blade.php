@@ -7,21 +7,21 @@
             </p>
 
             <div class="mt-6 flex space-x-4" aria-label="Social media links">
-                <a href="https://www.tiktok.com/@Jetze.pk" target="_blank" rel="noopener noreferrer" aria-label="TikTok"
+                <a href="https://www.tiktok.com/@user8107574618184?is_from_webapp=1&sender_device=pc" target="_blank" rel="noopener noreferrer" aria-label="TikTok"
                    class="bg-white border border-gray-200 hover:border-primary p-3 transition-all duration-200">
                     <img src="{{ asset('assets/tiktok.png') }}" alt="TikTok" class="w-8 h-8 object-contain">
                 </a>
-                <a href="https://www.facebook.com/Jetzet/" target="_blank"
+                <a href="https://www.facebook.com/share/1CDZXjBz3Y/" target="_blank"
                    rel="noopener noreferrer" aria-label="Facebook"
                    class="bg-white border border-gray-200 hover:border-primary p-1 transition-all duration-200">
                     <img src="{{ asset('assets/fb.png') }}" alt="Facebook" class="w-12 h-12 object-contain">
                 </a>
-                <a href="https://www.instagram.com/Jetze.pk/" target="_blank"
+                <a href="https://www.instagram.com/jetze.pk?igsh=MWllOTRpNTVwMm5peA==" target="_blank"
                    rel="noopener noreferrer" aria-label="Instagram"
                    class="bg-white border border-gray-200 hover:border-primary p-3 transition-all duration-200">
                     <img src="{{ asset('assets/instagram.png') }}" alt="Instagram" class="w-8 h-8 object-contain">
                 </a>
-                <a href="https://www.youtube.com/@Jetze" target="_blank"
+                <a href="#" target="_blank"
                    rel="noopener noreferrer" aria-label="YouTube"
                    class="bg-white border border-gray-200 hover:border-primary p-1 transition-all duration-200">
                     <img src="{{ asset('assets/yt.png') }}" alt="YouTube" class="w-12 h-12 object-contain">
