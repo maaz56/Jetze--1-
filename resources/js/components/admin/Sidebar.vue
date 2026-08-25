@@ -264,12 +264,12 @@ const menuSections = [
         icon: Banknote,
         permission: 'view-ledger'
       },
-      {
-        name: "Profit Loss Report",
-        to: { name: "ProfitLossReport" },
-        icon: Banknote,
-        permission: 'view-ledger'
-      },
+      // {
+      //   name: "Profit Loss Report",
+      //   to: { name: "ProfitLossReport" },
+      //   icon: Banknote,
+      //   permission: 'view-ledger'
+      // },
     ],
   },
   // {

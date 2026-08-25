@@ -56,6 +56,7 @@ const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
 const paymentType = ref();
+const selectedCurrencyCode = ref(getSelectedCurrencyCode());
 const depositCurrency = ref(getSelectedCurrencyCode());
 const additionalDetails = ref("");
 const user_id = computed(() => user.value?.id);
@@ -165,7 +166,7 @@ const formatCurrency = (value) => {
 function fetchAgentLedger() {
     if (user_id.value) {
         try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
+            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value, currency_code: selectedCurrencyCode.value });
             loading.value = false;
         } catch (err) {
             error.value = "Failed to load user data. Please try again.";
@@ -223,7 +224,7 @@ async function fetchAgentDeposits() {
     loading.value = true;
     error.value = null;
     try {
-        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
+        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value, currency_code: selectedCurrencyCode.value });
     } catch (err) {
         console.error("Error fetching agent deposits:", err);
         error.value = "Failed to load user deposit data. Please try again.";
@@ -287,7 +288,8 @@ async function shareDialogOnWhatsApp() {
     }
 }
 
-const refreshForCurrencyChange = () => {
+const refreshForCurrencyChange = (event) => {
+    selectedCurrencyCode.value = event?.detail?.code || getSelectedCurrencyCode();
     fetchAgentDeposits();
     fetchAgentLedger();
 };
@@ -331,7 +333,7 @@ watch(user, (newUser) => {
                                 </p>
                             </div>
                         </div>
-                        <div class="bg-green-50 rounded-lg p-4 flex items-center">
+                        <!-- <div class="bg-green-50 rounded-lg p-4 flex items-center">
                             <CheckCircleIcon class="h-8 w-8 text-green-500 mr-4" />
                             <div>
                                 <p class="text-sm font-medium text-green-600">Approved Deposits</p>
@@ -348,7 +350,7 @@ watch(user, (newUser) => {
                                     {{ formatAmount(agentDepositData?.totalPendingDeposits?.amount, agentDepositData?.totalPendingDeposits?.currency) }}
                                 </p>
                             </div>
-                        </div>
+                        </div> -->
                     </div>
                     <p v-if="agentDepositData?.legacy_unconverted_count"
                         class="mt-3 text-sm text-amber-700">
@@ -595,7 +597,7 @@ watch(user, (newUser) => {
                                                 {{ deposit.deposit_status || "_" }}
                                             </span>
                                         </td>
-                                        <td class="px-1 py-4">{{ formatAmount(deposit.display_money?.amount ?? deposit.source_money?.amount, deposit.display_money?.currency ?? deposit.source_money?.currency) }}</td>
+                                        <td class="px-1 py-4">{{ formatAmount(deposit.source_money?.amount ?? deposit.amount, deposit.source_money?.currency ?? deposit.currency) }}</td>
                                         <td class="px-1 py-4">
                                             <div class="flex space-x-2">
                                                 <button @click="openDialog(deposit)"
@@ -687,7 +689,7 @@ watch(user, (newUser) => {
                                             <div class="space-y-1">
                                                 <p class="font-medium text-gray-500">Amount</p>
                                                 <p class="font-bold text-gray-900">{{
-                                                    formatAmount(selectedDeposit?.display_money?.amount ?? selectedDeposit?.source_money?.amount, selectedDeposit?.display_money?.currency ?? selectedDeposit?.source_money?.currency) ||
+                                                    formatAmount(selectedDeposit?.source_money?.amount ?? selectedDeposit?.amount, selectedDeposit?.source_money?.currency ?? selectedDeposit?.currency) ||
                                                     'N/A' }}
                                                 </p>
                                             </div>

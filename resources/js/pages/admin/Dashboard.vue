@@ -92,6 +92,13 @@ const latestBookings = computed(() => {
   return (bookings.value?.bookings || []).slice(0, 15);
 });
 
+function formatMoney(money, fallbackAmount = 0, fallbackCurrency = 'AED') {
+  const amount = money && typeof money === 'object' ? money.amount : money;
+  const currency = money && typeof money === 'object' ? money.currency : fallbackCurrency;
+
+  return formatAmount(amount ?? fallbackAmount, currency ?? fallbackCurrency);
+}
+
 function fetchTotalApprovedDepost() {
   store.dispatch("deposit/" + FETCH_TOTAL_APPROVED_DEPOSIT);
 }
@@ -547,7 +554,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-blue-600">Total Deposits</p>
-                <p class="text-xl max-sm:text-sm font-bold text-blue-800">{{ formatAmount(agentDepositTotals?.totalDeposits || 0) }}</p>
+                <p class="text-xl max-sm:text-sm font-bold text-blue-800">{{ formatMoney(agentDepositTotals?.totalDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -563,7 +570,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-green-600">Approved Deposits</p>
-                <p class="text-xl font-bold text-green-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalApprovedDeposits || 0) }}</p>
+                <p class="text-xl font-bold text-green-800 max-sm:text-sm">{{ formatMoney(agentDepositTotals?.totalApprovedDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -579,7 +586,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-amber-600">Pending Deposits</p>
-                <p class="text-xl font-bold text-amber-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalPendingDeposits || 0) }}</p>
+                <p class="text-xl font-bold text-amber-800 max-sm:text-sm">{{ formatMoney(agentDepositTotals?.totalPendingDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -595,7 +602,7 @@ onMounted(() => {
               </div>
               <div>
                 <p class="text-sm font-medium text-red-600">Rejected Deposits</p>
-                <p class="text-xl font-bold text-red-800 max-sm:text-sm">{{ formatAmount(agentDepositTotals?.totalRejectedDeposits || 0) }}</p>
+                <p class="text-xl font-bold text-red-800 max-sm:text-sm">{{ formatMoney(agentDepositTotals?.totalRejectedDeposits) }}</p>
               </div>
             </div>
           </div>
@@ -637,7 +644,12 @@ onMounted(() => {
                       {{ deposit?.agent?.agent_data?.company_name || deposit?.agent?.name || deposit?.agent?.email || '-' }}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                      {{ formatAmount(deposit?.amount || 0) }}
+                      <div class="font-medium text-gray-900">
+                        {{ formatMoney(deposit?.base_money, deposit?.aed_amount, 'AED') }}
+                      </div>
+                      <div class="text-[11px] text-gray-500">
+                        Deposited: {{ formatMoney(deposit?.source_money, deposit?.amount, deposit?.currency) }}
+                      </div>
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-500">
                         <Badge v-if="deposit?.deposit_status == 'pending'"

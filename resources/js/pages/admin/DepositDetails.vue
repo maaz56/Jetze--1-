@@ -12,6 +12,7 @@ import {
 import { ArrowLeftIcon, ReceiptIcon } from "lucide-vue-next";
 import { Ban } from "lucide-vue-next";
 import { upperCase } from "lodash";
+import { formatAmount } from "@/lib/utils";
 
 const store = useStore();
 const route = useRoute();
@@ -133,6 +134,11 @@ const formatDate = (dateString) => {
         day: "numeric",
     });
 };
+
+function formatMoney(money, fallbackAmount = null, fallbackCurrency = "AED") {
+    return formatAmount(money?.amount ?? fallbackAmount, money?.currency ?? fallbackCurrency);
+}
+
 onMounted(() => {
     fetchDepostDetails();
 });
@@ -222,9 +228,16 @@ onMounted(() => {
         <!-- Summary Cards -->
         <div class="mt-6 grid grid-cols-3 gap-4">
           <div class="p-4 bg-gray-50 rounded-lg">
-            <h3 class="text-sm font-medium text-gray-500">Amount</h3>
+            <h3 class="text-sm font-medium text-gray-500">Deposited Amount</h3>
             <p class="mt-1 text-xl font-semibold text-gray-900">
-              Rs: {{ depositDetails?.deposit?.amount }}
+              {{ formatMoney(depositDetails?.deposit?.source_money, depositDetails?.deposit?.amount, depositDetails?.deposit?.currency) }}
+            </p>
+          </div>
+
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-500">AED Amount</h3>
+            <p class="mt-1 text-xl font-semibold text-gray-900">
+              {{ depositDetails?.deposit?.base_money ? formatMoney(depositDetails?.deposit?.base_money, depositDetails?.deposit?.aed_amount, 'AED') : '_' }}
             </p>
           </div>
 

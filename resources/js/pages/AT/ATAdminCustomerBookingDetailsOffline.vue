@@ -37,7 +37,7 @@ import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
-import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
+import { cn, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
 
 import {
     FETCH_BOOKING_DATA,
@@ -48,13 +48,13 @@ import {
     CONFIRM_BOOKING,
     FETCH_AGENT_LEDGER,
     VOID_BOOKING,
-    VOID_REQUEST,
 } from "@/services/store/actions.type";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
 import { SEND_EMAIL } from "../../services/store/actions.type";
 import Label from "@/components/common/Label.vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
+import { Textarea } from "@/components/ui/textarea";
 
 
 const store = useStore();
@@ -80,40 +80,37 @@ const agentData = computed(() => store.getters["user/agentData"]);
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
 
-/**
- * Read the permanent amount and currency locked from the checkout quote.
- */
-const lockedBookingMoney = computed(() => {
+/** Read the permanent AED accounting amount locked from the checkout quote. */
+const lockedAdminBookingMoney = computed(() => {
     const booking = bookingDetails.value?.[0];
     const snapshot = booking?.price_snapshot;
-    const amount = snapshot?.selling_amount ?? booking?.selling_amount;
-    const currency = snapshot?.selling_currency ?? booking?.selling_currency;
+    const amount = snapshot?.aed_amount ?? booking?.aed_amount;
 
-    if (amount === null || amount === undefined || !currency) {
+    if (amount === null || amount === undefined) {
         return null;
     }
 
     return {
         amount: Number(amount),
-        currency: String(currency).toUpperCase(),
+        currency: "AED",
     };
 });
 
-/** Format the booking's locked checkout total in its saved currency. */
+/** Format the booking's locked total in AED for admin pages. */
 function formatLockedBookingAmount() {
-    if (!lockedBookingMoney.value || Number.isNaN(lockedBookingMoney.value.amount)) {
+    if (!lockedAdminBookingMoney.value || Number.isNaN(lockedAdminBookingMoney.value.amount)) {
         return 'Price unavailable';
     }
 
     return formatAmountWithCurrency(
-        lockedBookingMoney.value.amount,
-        lockedBookingMoney.value.currency,
+        lockedAdminBookingMoney.value.amount,
+        lockedAdminBookingMoney.value.currency,
     );
 }
 
-/** Format an individual selected fare with its converted booking display amount. */
+/** Format an individual selected fare in AED for admin pages. */
 function formatSelectedFareMoney(fare) {
-    const money = fare?.display_money;
+    const money = fare?.base_money?.total_price ?? fare?.base_money;
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
         return formatAmountWithCurrency(money.amount, money.currency);
@@ -122,13 +119,29 @@ function formatSelectedFareMoney(fare) {
     return formatLockedBookingAmount();
 }
 
-/** Format zero add-ons in the same saved booking currency. */
-function formatBookingAddOnsAmount(amount) {
-    if (Number(amount || 0) === 0 && lockedBookingMoney.value) {
-        return formatAmountWithCurrency(0, lockedBookingMoney.value.currency);
+/** Format selected fare taxes in AED for admin pages. */
+function formatSelectedFareTaxesMoney(fare) {
+    const money = fare?.passenger_fares?.[0]?.base_money?.taxes;
+
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return formatAmountWithCurrency(money.amount, money.currency);
     }
 
-    return formatAmount(amount || 0);
+    return formatAmountWithCurrency(0, "AED");
+}
+
+/** Format PNR tax totals as AED on admin pages. */
+function formatPnrTaxesAmount(amount) {
+    return formatAmountWithCurrency(amount || 0, "AED");
+}
+
+/** Format add-ons in AED on admin pages. */
+function formatBookingAddOnsAmount(amount) {
+    if (Number(amount || 0) === 0) {
+        return formatAmountWithCurrency(0, "AED");
+    }
+
+    return "Included in AED total";
 }
 
 const booking_id = route.query.booking_id;
@@ -142,7 +155,11 @@ const isDialogOpen = ref(false);
 const isEmailDialogOpen = ref(false);
 const isConfirmDialogOpen = ref(false);
 const isLowBalanceDialogOpen = ref(false);
-const isVoidDialogOpen = ref(false);
+const isChargesOpen = ref(false);
+const charges = ref("");
+const chargesDate = ref("");
+const chargesDec = ref("");
+const validationErrors = ref([]);
 const passengerCount = ref();
 const agentAmount = ref();
 const agentDiscount = ref();
@@ -156,6 +173,13 @@ const booking = ref(null);
 const flightData = ref(null);
 const isDetailsInfoVisible = ref(true);
 const totalTicketPrice = ref(0);
+const voidChargesTotalAmount = computed(() => lockedAdminBookingMoney.value?.amount ?? Number(totalTicketPrice.value || 0));
+const voidRefundAmount = computed(() => {
+    const total = Number(voidChargesTotalAmount.value || 0);
+    const charge = Number(charges.value || 0);
+
+    return Math.max(total - (Number.isFinite(charge) ? charge : 0), 0);
+});
 
 
 function sendEmail() {
@@ -251,30 +275,62 @@ async function fetchBookingDetails() {
 
 }
 
-async function voidRequest() {
-    if (!booking_id) {
-        error.value = "No booking ID provided.";
-        isBookingDetailsLoading.value = false;
+function openChargesDialog() {
+    validationErrors.value = [];
+    chargesDate.value ||= new Date().toISOString().slice(0, 10);
+    isChargesOpen.value = true;
+}
+
+async function saveCharges() {
+    const errors = [];
+    const voidChargeAmount = Number(charges.value);
+    const totalAmount = Number(voidChargesTotalAmount.value || 0);
+
+    if (!Number.isFinite(voidChargeAmount) || voidChargeAmount < 0) {
+        errors.push("Void charge must be AED 0 or greater.");
+    }
+
+    if (voidChargeAmount > totalAmount) {
+        errors.push("Void charge cannot be greater than the locked booking total.");
+    }
+
+    if (!chargesDate.value) {
+        errors.push("Date is required.");
+    }
+
+    if (!chargesDec.value) {
+        errors.push("Description is required.");
+    }
+
+    if (errors.length > 0) {
+        validationErrors.value = errors;
         return;
     }
-    try {
-        await store.dispatch(`flight/${VOID_REQUEST}`, {
-            pnr: pnr,
 
-            booking_uuid: pnrData.value?.data?.uuid ?? "null",
-            billable_price: pnrData.value?.data?.billable_price ?? "null",
-            currency: pnrData.value?.data?.currency?.code ?? "null",
-            pnr: route.query.pnr,
-            bookingId: bookingDetails.value[0].id,
-            booking_status: "voided",
-            booking_source: route.query.booking_source,
+    validationErrors.value = [];
+    actionLoading.value = true;
+
+    try {
+        await store.dispatch(`flight/${VOID_BOOKING}`, {
+            bookingId: bookingDetails.value?.[0]?.id,
+            flight_provider: "at",
+            void_charge_aed: voidChargeAmount,
+            void_date: chargesDate.value,
+            void_description: chargesDec.value,
         });
-        isVoidDialogOpen.value = false;
-    } catch (err) {
-        error.value = "Failed to fetch booking details.";
-    } finally {
-        isBookingDetailsLoading.value = false;
+
+        charges.value = "";
+        chargesDate.value = "";
+        chargesDec.value = "";
+        isChargesOpen.value = false;
+
+        fetchAgentLedger();
         fetchBookingDetails();
+    } catch (error) {
+        validationErrors.value = ["Something went wrong. Please try again."];
+        console.error(error);
+    } finally {
+        actionLoading.value = false;
     }
 }
 
@@ -851,31 +907,54 @@ onMounted(() => {
                         <span v-else>View Fare Details</span>
                     </button>
 
-                    <!-- Trigger Button -->
-                    <button
-                        :hidden="['canceled', 'requested', 'booked', 'voided'].includes(booking?.status?.toLowerCase())"
-                        :disabled="['canceled', 'requested', 'voided'].includes(booking?.status?.toLowerCase())"
-                        @click="isVoidDialogOpen = true"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2">
-                        {{ isVoided ? 'Void Request Sent' : 'Void Booking' }}
-
-                    </button>
-                    <Dialog :open="isVoidDialogOpen" @update:open="isVoidDialogOpen = $event">
-                        <DialogContent class="sm:max-w-md">
+                    <!-- Void charges dialog -->
+                    <Dialog :open="isChargesOpen" @update:open="isChargesOpen = $event">
+                        <button
+                            :hidden="['canceled', 'requested', 'booked', 'voided'].includes(booking?.status?.toLowerCase())"
+                            :disabled="['canceled', 'requested', 'voided'].includes(booking?.status?.toLowerCase())"
+                            @click="openChargesDialog"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            Void Booking
+                        </button>
+                        <DialogContent class="sm:max-w-[425px]">
                             <DialogHeader>
-                                <DialogTitle class="text-lg font-semibold">Confirm Void</DialogTitle>
+                                <DialogTitle class="text-2xl">Void Booking</DialogTitle>
                             </DialogHeader>
-                            <div class="text-sm text-gray-700 mb-4">
-                                Are you sure you want to void this booking? This action cannot be undone.
+
+                            <div v-if="validationErrors.length > 0">
+                                <ul class="bg-red-100 p-4 rounded-md border border-destructive list-disc list-inside text-destructive">
+                                    <li v-for="error in validationErrors" :key="error">
+                                        {{ error }}
+                                    </li>
+                                </ul>
                             </div>
-                            <div class="flex justify-end gap-2">
-                                <Button variant="secondary" @click="isVoidDialogOpen = false">
-                                    Cancel
+
+                            <form @submit.prevent="saveCharges">
+                                <div class="mb-3">
+                                    <Label for="totalCharges" title="Locked Booking Total (AED)" />
+                                    <Input type="number" :model-value="voidChargesTotalAmount" readonly id="totalCharges"
+                                        placeholder="Amount in AED" />
+                                </div>
+                                <div class="mb-3">
+                                    <Label for="charges" title="Void Charges (AED)" />
+                                    <Input type="number" min="0" step="0.01" v-model="charges" id="charges" placeholder="0.00" />
+                                </div>
+                                <div class="mb-3">
+                                    <Label for="refundAmount" title="Net Wallet Refund (AED)" />
+                                    <Input type="number" :model-value="voidRefundAmount" readonly id="refundAmount" />
+                                </div>
+                                <div class="mb-3">
+                                    <Label for="chargesDate" title="Void Settlement Date" />
+                                    <Input type="date" v-model="chargesDate" id="chargesDate" />
+                                </div>
+                                <div class="mb-3">
+                                    <Label for="chargesDec" title="Void Reason / Notes" />
+                                    <Textarea type="text" v-model="chargesDec" id="chargesDec" placeholder="Enter void reason or notes" />
+                                </div>
+                                <Button type="submit" class="float-right" :disabled="actionLoading">
+                                    {{ actionLoading ? "Voiding..." : "Confirm Void" }}
                                 </Button>
-                                <Button variant="destructive" @click="voidRequest">
-                                    Confirm
-                                </Button>
-                            </div>
+                            </form>
                         </DialogContent>
                     </Dialog>
 
@@ -1375,7 +1454,7 @@ onMounted(() => {
                                             </td>
 
                                             <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                {{ formatAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}
+                                                {{ formatPnrTaxesAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}
                                             </td>
                                             <td class="py-4 px-2 uppercase font-bold text-slate-950 print:text-gray-900">
                                                 {{ formatLockedBookingAmount() }}
@@ -1409,7 +1488,7 @@ onMounted(() => {
                                                 </td>
 
                                                 <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                    {{ formatAmount(calculateTaxes(fare)) }}
+                                                    {{ formatSelectedFareTaxesMoney(fare) }}
                                                 </td>
 
                                                 <td class="py-4 px-2 uppercase font-bold text-slate-950 print:text-gray-900">

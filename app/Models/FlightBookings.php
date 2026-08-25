@@ -37,6 +37,12 @@ class FlightBookings extends Model
         return $this->belongsTo(BookingPriceSnapshot::class, 'price_snapshot_id');
     }
 
+    /** Get the immutable financial result created when this booking is voided. */
+    public function voidSnapshot()
+    {
+        return $this->hasOne(BookingVoidSnapshot::class, 'booking_id');
+    }
+
     /**
      * Get every provider response saved during this booking's lifecycle.
      */

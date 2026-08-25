@@ -121,7 +121,17 @@ class DepositDataController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            $deposits = DepositData::with(['agent.agentData', 'bank'])
+            $depositQuery = DepositData::with(['agent.agentData', 'bank'])
+                ->when($request->userId, fn ($query) => $query->where('agent_id', $request->userId));
+
+            $totalApprovedDeposits = (clone $depositQuery)
+                ->where('deposit_status', 'approved')
+                ->sum('aed_amount');
+            $totalPendingDeposits = (clone $depositQuery)
+                ->where('deposit_status', 'pending')
+                ->sum('aed_amount');
+
+            $deposits = $depositQuery
                 ->orderBy('date', 'desc')
                 ->get()
                 ->map(fn (DepositData $deposit) => $this->presentDeposit($deposit, $request->currency_code));
@@ -129,6 +139,11 @@ class DepositDataController extends Controller
             return response()->json([
                 'message' => 'All deposits retrieved successfully',
                 'deposits' => $deposits,
+                'totalApprovedDeposits' => $this->displayMoney($totalApprovedDeposits, $request->currency_code),
+                'totalPendingDeposits' => $this->displayMoney($totalPendingDeposits, $request->currency_code),
+                'legacy_unconverted_count' => (clone $depositQuery)
+                    ->whereNull('aed_amount')
+                    ->count(),
             ]);
 
 
@@ -410,37 +425,44 @@ class DepositDataController extends Controller
 
         if (!$agentId) {
             $totalApprovedDeposits = DepositData::where('deposit_status', 'approved') // Filter deposits by approved status
-                ->sum('amount'); // Calculate the total amount of approved deposits
-                $totalDeposits = DepositData:: sum('amount'); // Calculate the total amount of approved deposits
+                ->sum('aed_amount'); // Calculate AED value of approved deposits
+                $totalDeposits = DepositData::sum('aed_amount'); // Calculate AED value of all deposits
                 $totalRejectedDeposits = DepositData::where('deposit_status', 'rejected') // Filter deposits by approved status
-                ->sum('amount');
+                ->sum('aed_amount');
             $totalPendingDeposits = DepositData::where('deposit_status', 'pending') // Filter deposits by approved status
-                ->sum('amount');
+                ->sum('aed_amount');
         } else {
             // Fetch approved deposits for the agent and calculate the total
             $totalApprovedDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'approved') // Filter deposits by approved status
-                ->sum('amount'); // Calculate the total amount of approved deposits
+                ->sum('aed_amount'); // Calculate AED value of approved deposits
 
             $totalPendingDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'pending') // Filter deposits by approved status
-                ->sum('amount');
+                ->sum('aed_amount');
 
             $totalRejectedDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'rejected')
-                ->sum('amount');
+                ->sum('aed_amount');
 
             $totalDeposits = DepositData::where('agent_id', $agentId)
-                ->sum('amount');
+                ->sum('aed_amount');
         }
 
         
+        $conversion = app(CurrencyConversionService::class);
+
         return response()->json([
             'message' => 'Total approved deposits calculated successfully',
-            'totalApprovedDeposits' => $totalApprovedDeposits,
-            'totalPendingDeposits' => $totalPendingDeposits,
-            'totalDeposits' => $totalDeposits,
-            'totalRejectedDeposits' => $totalRejectedDeposits,
+            'totalApprovedDeposits' => $conversion->makeMoney($totalApprovedDeposits ?? 0, 'AED'),
+            'totalPendingDeposits' => $conversion->makeMoney($totalPendingDeposits ?? 0, 'AED'),
+            'totalDeposits' => $conversion->makeMoney($totalDeposits ?? 0, 'AED'),
+            'totalRejectedDeposits' => $conversion->makeMoney($totalRejectedDeposits ?? 0, 'AED'),
+            'totalApprovedDepositsAmount' => (float) ($totalApprovedDeposits ?? 0),
+            'totalPendingDepositsAmount' => (float) ($totalPendingDeposits ?? 0),
+            'totalDepositsAmount' => (float) ($totalDeposits ?? 0),
+            'totalRejectedDepositsAmount' => (float) ($totalRejectedDeposits ?? 0),
+            'currency' => 'AED',
         ]);
     }
 

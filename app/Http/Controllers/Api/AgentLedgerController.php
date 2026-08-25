@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AdminBooking;
 use App\Models\AgentCharge;
+use App\Models\AgentLedgerEntry;
 use App\Models\DepositData;
 use App\Models\FlightBookings;
 use App\Models\OfflineBooking;
@@ -32,6 +33,7 @@ class AgentLedgerController extends Controller
             // Fetch all deposits with user data
             $deposits = DepositData::with('agent.agentData')
                 ->where('deposit_status', 'approved')
+                ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
                 ->when($startDate, fn($q) => $q->whereDate('date', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
@@ -51,6 +53,7 @@ class AgentLedgerController extends Controller
             // Fetch all flight bookings with user data
             $flightBookings = FlightBookings::with('agent.agentData')
                 ->whereIn('status', ['ticketed', 'issued','voided'])
+                ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
                 // Card/One-bill approved transactions are paid externally,
                 // so they should not reduce agent wallet ledger balance.
                 ->where(function ($q) {
@@ -78,7 +81,8 @@ class AgentLedgerController extends Controller
                     'itinerary_ref as pnr_ref',
                     'agent_id',
                 ]);
-            $offlineBookings = OfflineBooking::where('agent_id', $agentId)
+            $offlineBookings = OfflineBooking::query()
+                ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
@@ -97,6 +101,7 @@ class AgentLedgerController extends Controller
                 ]);
             // Fetch all admin bookings with user data
             $adminBookings = AdminBooking::with('agent.agentData')
+                ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
@@ -116,6 +121,7 @@ class AgentLedgerController extends Controller
             // Fetch all agent charges with user data
             $agentCharges = AgentCharge::with('agent.agentData')
                 ->where('is_approved', 1)
+                ->when($agentId, fn($q) => $q->where('user_id', $agentId))
                 ->when($startDate, fn($q) => $q->whereDate('date', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
@@ -130,6 +136,26 @@ class AgentLedgerController extends Controller
                     DB::raw('NULL as flight_provider'),
                     DB::raw('NULL as pnr_ref'),
                     'user_id as agent_id',
+                ]);
+
+            // Immutable wallet movements created by a booking void settlement.
+            $voidLedgerEntries = AgentLedgerEntry::query()
+                ->where('currency', 'AED')
+                ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
+                ->when($startDate, fn($q) => $q->whereDate('effective_date', '>=', $startDate))
+                ->when($endDate, fn($q) => $q->whereDate('effective_date', '<=', $endDate))
+                ->select([
+                    'effective_date as date',
+                    DB::raw('CASE WHEN direction = "debit" THEN aed_amount ELSE NULL END as debit'),
+                    DB::raw('CASE WHEN direction = "credit" THEN aed_amount ELSE NULL END as credit'),
+                    'entry_type as transaction_type',
+                    'booking_id as reference_id',
+                    'description as details',
+                    DB::raw('id as record_id'),
+                    DB::raw('NULL as booking_source'),
+                    DB::raw('"at" as flight_provider'),
+                    DB::raw('NULL as pnr_ref'),
+                    'agent_id',
                 ]);
 
         } else {
@@ -231,6 +257,25 @@ class AgentLedgerController extends Controller
                     DB::raw('NULL as flight_provider'),
                     DB::raw('NULL as pnr_ref'),
                 ]);
+
+            // Immutable wallet movements created by a booking void settlement.
+            $voidLedgerEntries = AgentLedgerEntry::query()
+                ->where('agent_id', $agentId)
+                ->where('currency', 'AED')
+                ->when($startDate, fn($q) => $q->whereDate('effective_date', '>=', $startDate))
+                ->when($endDate, fn($q) => $q->whereDate('effective_date', '<=', $endDate))
+                ->select([
+                    'effective_date as date',
+                    DB::raw('CASE WHEN direction = "debit" THEN aed_amount ELSE NULL END as debit'),
+                    DB::raw('CASE WHEN direction = "credit" THEN aed_amount ELSE NULL END as credit'),
+                    'entry_type as transaction_type',
+                    'booking_id as reference_id',
+                    'description as details',
+                    DB::raw('id as record_id'),
+                    DB::raw('NULL as booking_source'),
+                    DB::raw('"at" as flight_provider'),
+                    DB::raw('NULL as pnr_ref'),
+                ]);
         }
 
         // Combine all transactions
@@ -238,28 +283,20 @@ class AgentLedgerController extends Controller
             ->unionAll($flightBookings)
             ->unionAll($adminBookings)
             ->unionAll($agentCharges)
+            ->unionAll($voidLedgerEntries)
             ->unionAll($offlineBookings)
             ->orderBy('date', 'asc')
+            ->orderBy('record_id', 'asc')
             ->get();
         $balance = 0;
 
-        if ($userRole === 'admin') {
-            $ledger = $transactions->map(function ($transaction) use (&$balance) {
-                $transaction->debit = $transaction->debit ?? 0;
-                $transaction->credit = $transaction->credit ?? 0;
-                $balance += $transaction->debit - $transaction->credit;
-                $transaction->balance = $balance;
-                return $transaction;
-            });
-        } else {
-            $ledger = $transactions->map(function ($transaction) use (&$balance) {
-                $transaction->debit = $transaction->debit ?? 0;
-                $transaction->credit = $transaction->credit ?? 0;
-                $balance += $transaction->credit - $transaction->debit;
-                $transaction->balance = $balance;
-                return $transaction;
-            });
-        }
+        $ledger = $transactions->map(function ($transaction) use (&$balance) {
+            $transaction->debit = $transaction->debit ?? 0;
+            $transaction->credit = $transaction->credit ?? 0;
+            $balance += $transaction->credit - $transaction->debit;
+            $transaction->balance = $balance;
+            return $transaction;
+        });
 
         return response()->json([
             'status' => 'success',

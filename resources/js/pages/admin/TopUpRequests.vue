@@ -1,7 +1,7 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
 import { SwitchRoot, SwitchThumb, useForwardPropsEmits } from "radix-vue";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { CircleChevronRight } from "lucide-vue-next";
 import { EyeIcon, TrashIcon, LoaderIcon, InboxIcon } from "lucide-vue-next";
 
@@ -54,6 +54,10 @@ function fetchAgentsDeposits() {
     }
 }
 
+function formatMoney(money, fallbackAmount = null, fallbackCurrency = "AED") {
+    return formatAmount(money?.amount ?? fallbackAmount, money?.currency ?? fallbackCurrency);
+}
+
 onMounted(() => {
     fetchAgentsDeposits();
 });
@@ -77,7 +81,8 @@ onMounted(() => {
                                 <th class="px-4 py-3 text-left">User</th>
                                 <th class="px-4 py-3 text-left">Type</th>
                                 <th class="px-4 py-3 text-left">Status</th>
-                                <th class="px-4 py-3 text-right">Amount</th>
+                                <th class="px-4 py-3 text-right">Deposited Amount</th>
+                                <th class="px-4 py-3 text-right">AED Amount</th>
                                 <th class="px-4 py-3 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -107,8 +112,11 @@ onMounted(() => {
                                         {{ deposit.deposit_status || '_' }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-right">
-                                    {{ deposit.amount || "_" }}
+                                <td class="px-4 py-3 text-right font-medium">
+                                    {{ formatMoney(deposit.source_money, deposit.amount, deposit.currency) }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-600">
+                                    {{ deposit.base_money ? formatMoney(deposit.base_money, deposit.aed_amount, 'AED') : "_" }}
                                 </td>
                                 <td class="px-4 py-3 text-center">
                                     <button @click="

@@ -21,7 +21,7 @@
               </span>
               <div>
                 <p class="text-sm text-blue-700 font-medium">Total</p>
-                <p class="text-xl font-bold text-blue-900">{{ formatAmount(normalizedDeposits.totalDeposits) }}</p>
+                <p class="text-xl font-bold text-blue-900">{{ formatAmount(normalizedDeposits.totalDeposits, 'AED') }}</p>
               </div>
             </div>
 
@@ -31,7 +31,7 @@
               </span>
               <div>
                 <p class="text-sm text-green-700 font-medium">Approved</p>
-                <p class="text-xl font-bold text-green-900">{{ formatAmount(normalizedDeposits.totalApprovedDeposits) }}</p>
+                <p class="text-xl font-bold text-green-900">{{ formatAmount(normalizedDeposits.totalApprovedDeposits, 'AED') }}</p>
               </div>
             </div>
 
@@ -41,7 +41,7 @@
               </span>
               <div>
                 <p class="text-sm text-yellow-700 font-medium">Pending</p>
-                <p class="text-xl font-bold text-yellow-900">{{ formatAmount(normalizedDeposits.totalPendingDeposits) }}</p>
+                <p class="text-xl font-bold text-yellow-900">{{ formatAmount(normalizedDeposits.totalPendingDeposits, 'AED') }}</p>
               </div>
             </div>
 
@@ -51,7 +51,7 @@
               </span>
               <div>
                 <p class="text-sm text-red-700 font-medium">Rejected</p>
-                <p class="text-xl font-bold text-red-900"> {{ formatAmount(normalizedDeposits.totalRejectedDeposits) }}</p>
+                <p class="text-xl font-bold text-red-900"> {{ formatAmount(normalizedDeposits.totalRejectedDeposits, 'AED') }}</p>
               </div>
             </div>
           </div>
@@ -83,7 +83,8 @@
   })
 
   const toAmount = (value) => {
-      const amount = typeof value === 'string' ? Number(value.replace(/,/g, '')) : Number(value)
+      const rawAmount = value && typeof value === 'object' ? value.amount : value
+      const amount = typeof rawAmount === 'string' ? Number(rawAmount.replace(/,/g, '')) : Number(rawAmount)
       return Number.isFinite(amount) ? amount : 0
   }
 
@@ -151,7 +152,7 @@
                       const value = context.raw || 0;
                       const total = normalizedDeposits.value.totalDeposits;
                       const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                      return `${label}: ${formatAmount(value)} (${percentage}%)`;
+                      return `${label}: ${formatAmount(value, 'AED')} (${percentage}%)`;
                   }
               }
           },

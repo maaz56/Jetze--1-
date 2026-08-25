@@ -24,6 +24,7 @@ use App\Services\PIAApiService;
 use App\Services\SabreApiService;
 use App\Services\AtApiService;
 use App\Services\BookingPricingService;
+use App\Services\BookingVoidSettlementService;
 use App\Services\PriceQuoteService;
 use App\Services\ProviderBookingEventService;
 use App\Transformers\AtAncillaryTransformer;
@@ -58,6 +59,7 @@ class BookingController extends Controller
     protected $utilityService;
     protected $priceQuoteService;
     protected $bookingPricingService;
+    protected $bookingVoidSettlementService;
     protected $providerBookingEventService;
 
     public function __construct(
@@ -71,6 +73,7 @@ class BookingController extends Controller
         UtilityService $utilityService,
         PriceQuoteService $priceQuoteService,
         BookingPricingService $bookingPricingService,
+        BookingVoidSettlementService $bookingVoidSettlementService,
         ProviderBookingEventService $providerBookingEventService,
     ) {
         $this->sabreApiService = $sabreApiService;
@@ -84,6 +87,7 @@ class BookingController extends Controller
         $this->utilityService = $utilityService;
         $this->priceQuoteService = $priceQuoteService;
         $this->bookingPricingService = $bookingPricingService;
+        $this->bookingVoidSettlementService = $bookingVoidSettlementService;
         $this->providerBookingEventService = $providerBookingEventService;
     }
 
@@ -1392,12 +1396,6 @@ class BookingController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
-        if ($this->isVoidWindowClosed($booking)) {
-            return response()->json([
-                'message' => 'Void is only available until midnight on the issuance date.',
-            ], 422);
-        }
-
         // Update booking status to voided
         $booking->status = 'requested';
         $booking->save();
@@ -1419,10 +1417,28 @@ class BookingController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
-        if ($this->isVoidWindowClosed($booking)) {
+        // AT currently confirms a void locally until its provider endpoint is available.
+        // Financial settlement is created only after this local confirmation succeeds.
+        if (strtolower((string) $request->flight_provider) === 'at') {
+            $validated = $request->validate([
+                'void_charge_aed' => 'required|numeric|min:0',
+                'void_date' => 'required|date',
+                'void_description' => 'required|string|max:2000',
+            ]);
+
+            $voidSnapshot = $this->bookingVoidSettlementService->settleAtWalletVoid(
+                $booking,
+                (string) $validated['void_charge_aed'],
+                $validated['void_date'],
+                $validated['void_description'],
+                $request->user()?->id,
+            );
+
             return response()->json([
-                'message' => 'Void is only available until midnight on the issuance date.',
-            ], 422);
+                'message' => 'Booking voided and wallet settlement completed successfully.',
+                'booking' => $booking->fresh('priceSnapshot'),
+                'void_snapshot' => $voidSnapshot,
+            ]);
         }
 
         if ($request->flight_provider == 'sooper') {
@@ -1485,21 +1501,6 @@ class BookingController extends Controller
             ]);
         }
 
-    }
-
-    private function isVoidWindowClosed(FlightBookings $booking): bool
-    {
-        if (!in_array(strtolower((string) $booking->status), ['ticketed', 'issued'], true)) {
-            return true;
-        }
-
-        if (!$booking->issuance_date) {
-            return true;
-        }
-
-        return now()->startOfDay()->greaterThan(
-            Carbon::parse($booking->issuance_date)->startOfDay()
-        );
     }
 
     public function getPublicBookings(Request $request)

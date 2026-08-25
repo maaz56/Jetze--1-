@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useStore } from "vuex";
 import { useRoute, useRouter } from "vue-router";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -16,8 +16,12 @@ import {
     CheckCircleIcon,
     Plus,
     Receipt,
-    TicketCheck,
     ShoppingCart,
+    Ban,
+    CheckCircle2,
+    CirclePause,
+    Clock,
+    DollarSign,
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -44,10 +48,10 @@ import {
 import {
     FETCH_AGENT_DATA,
     UPDATE_USER_STATUS,
-    FETCH_TOTAL_APPROVED_DEPOSIT,
+    FETCH_DEPOSIT_DATA,
     SAVE_AGENT_MARGIN,
     FETCH_AGENT_LEDGER,
-    FETCH_BOOKING_DATA,
+    CUSTOMER_BOOKINGS,
     SAVE_AGENT_CHARGES,
     UPDATE_CARD_ALLOWANCE,
     FETCH_CUSTOMER_DATA
@@ -82,21 +86,27 @@ let isLicenseOpen = ref(false);
 const agentData = computed(() => store.getters["customer/customer"]);
 const isSaving = computed(() => store.getters["user/isSaving"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
-const bookings = computed(() => store.getters["flight/bookingData"]);
+const bookings = computed(() => store.getters["flight/customerBookings"]);
 const agentDepositData = computed(() => store.getters["deposit/depositData"]);
-const agentDepositTotals = computed(() => store.getters["deposit/totalApprovedDeposit"]);
+const activeFilter = ref("all");
 
 
 
 
-const totalApprovedDeposit = computed(
-    () => store.getters["deposit/totalApprovedDeposit"],
-);
+const isFormValid = computed(() => charges.value && chargesDate.value && chargesDec.value);
+const customerRole = computed(() => agentData.value?.user?.role || agentData.value?.role || "customer");
+const customerBookingMode = computed(() => customerRole.value === "customer" ? "B2C" : "B2B");
+
+function formatAdminMoney(money, fallbackAmount = 0) {
+    return formatAmount(money?.amount ?? fallbackAmount, money?.currency ?? "AED");
+}
+
 function fetchAgentLedger() {
     if (route.query.customer_id) {
         try {
             store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
                 userId: route.query.customer_id,
+                currency_code: "AED",
             });
             loading.value = false;
         } catch (err) {
@@ -125,11 +135,12 @@ function updateCardAllowance() {
     fetchAgent();
 }
 
-function fetchTotalApprovedDepost() {
+function fetchCustomerDeposits() {
     if (route.query.customer_id) {
         try {
-            store.dispatch(`deposit/${FETCH_TOTAL_APPROVED_DEPOSIT}`, {
+            store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, {
                 userId: route.query.customer_id,
+                currency_code: "AED",
             });
             loading.value = false;
         } catch (err) {
@@ -142,11 +153,11 @@ function fetchTotalApprovedDepost() {
     }
 }
 
-function fetchAgent() {
+async function fetchAgent() {
     if (route.query.customer_id) {
         console.log('Fetching agent with ID: ' + route.query.customer_id);
         try {
-            store.dispatch(`customer/${FETCH_CUSTOMER_DATA}`, {
+            await store.dispatch(`customer/${FETCH_CUSTOMER_DATA}`, {
                 id: route.query.customer_id,
             });
             loading.value = false;
@@ -324,15 +335,6 @@ function updateUserStatus() {
     fetchAgent();
 }
 
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat("en-US", {
-        style: "decimal",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(value);
-};
-
-
 function handleFileUpload(event) {
     const file = event.target.files[0]
     error.value = null
@@ -372,18 +374,26 @@ function fetchBookingsData() {
         error.value = "No user ID provided.";
         return;
     }
-    store.dispatch("flight/" + FETCH_BOOKING_DATA, {
-        userRole: "agent",
+    store.dispatch("flight/" + CUSTOMER_BOOKINGS, {
+        user_id: route.query.customer_id,
+        userRole: customerRole.value,
         userId: route.query.customer_id,
+        booking_mode: customerBookingMode.value,
+        bookingFilter: activeFilter.value,
     });
 }
 
-onMounted(() => {
+function filterBookings(status) {
+    activeFilter.value = status;
+    fetchBookingsData();
+}
+
+onMounted(async () => {
     // fetchUser();
 
     fetchAgentLedger();
-    fetchAgent();
-    fetchTotalApprovedDepost();
+    await fetchAgent();
+    fetchCustomerDeposits();
     fetchBookingsData();
     //fetchAgentDeposits();
 
@@ -512,9 +522,9 @@ onMounted(() => {
                                         </Select>
                                     </div>
                                     <div class="mb-3">
-                                        <Label for="amount">Amount in </Label>
+                                        <Label for="amount">Amount in AED</Label>
                                         <Input class="" type="number" v-model="charges" id="charges"
-                                            placeholder="Amount in " />
+                                            placeholder="Amount in AED" />
                                     </div>
                                     <div class="mb-3">
                                         <Label for="amount">Date</Label>
@@ -530,7 +540,7 @@ onMounted(() => {
                                         <Textarea class="bg-white" type="text" v-model="chargesDec" id="chargesDec"
                                             placeholder="Description" />
                                     </div>
-                                    <Button :disabled="!isFormValid && isSaving" type="submit"
+                                    <Button :disabled="!isFormValid || isSaving" type="submit"
                                         class="float-right text-white">
                                         {{ isSaving ? 'Saving...' : 'Save' }}
                                     </Button>
@@ -550,7 +560,7 @@ onMounted(() => {
                         <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
                             <p class="text-sm text-blue-600 font-medium">Current Balance</p>
                             <p class="text-2xl font-bold text-blue-800 mt-1">
-                                {{ formatAmount(agentLedger?.balance) }}
+                                {{ formatAdminMoney(agentLedger?.balance_money, agentLedger?.balance) }}
                             </p>
                         </div>
 
@@ -558,7 +568,7 @@ onMounted(() => {
                             class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
                             <p class="text-sm text-green-600 font-medium">Approved Deposits</p>
                             <p class="text-2xl font-bold text-green-800 mt-1">
-                                {{ formatAmount(agentDepositTotals?.totalApprovedDeposits) }}
+                                {{ formatAdminMoney(agentDepositData?.totalApprovedDeposits) }}
                             </p>
                         </div>
 
@@ -566,7 +576,7 @@ onMounted(() => {
                             class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-lg border border-yellow-200">
                             <p class="text-sm text-yellow-600 font-medium">Pending Deposits</p>
                             <p class="text-2xl font-bold text-yellow-800 mt-1">
-                                {{ formatAmount(agentDepositTotals?.totalPendingDeposits) }}
+                                {{ formatAdminMoney(agentDepositData?.totalPendingDeposits) }}
                             </p>
                         </div>
 
@@ -584,7 +594,7 @@ onMounted(() => {
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-800">Bookings Overview</h3>
                         <Button v-if="authUser?.role === 'admin'"
-                            @click="$router.push({ name: 'AdminCustomerBookings', query: { userId: agentData?.user?.id, userRole: agentData?.role } })"
+                            @click="$router.push({ name: 'AdminCustomerBookings', query: { userId: agentData?.user?.id || agentData?.id, userRole: customerRole } })"
                             size="sm" class="flex items-center gap-2">
                             <ShoppingCart class="w-4 h-4" />
                             View All
@@ -638,50 +648,6 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <!-- Deposits Overview -->
-                <div class="bg-white rounded-xl border shadow-sm p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800">Deposits Overview</h3>
-                        <Button v-if="authUser?.role === 'admin'"
-                            @click="$router.push({ name: 'AgentDetailDeposits', query: { userId: agentData.id, userRole: agentData.role } })"
-                            size="sm" class="flex items-center gap-2">
-                            <Receipt class="w-4 h-4" />
-                            View All
-                        </Button>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center">
-                            <DollarSign class="w-9 h-9 text-blue-600 mr-3" />
-                            <div>
-                                <p class="text-sm font-medium text-blue-700">Current Balance</p>
-                                <p class="text-xl font-bold text-blue-900">
-                                    {{ formatAmount(agentLedger?.balance) }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-                            <CheckCircle2 class="w-9 h-9 text-green-600 mr-3" />
-                            <div>
-                                <p class="text-sm font-medium text-green-700">Approved Deposits</p>
-                                <p class="text-xl font-bold text-green-900">
-                                    {{ formatAmount(agentDepositTotals?.totalApprovedDeposits) }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center">
-                            <Clock class="w-9 h-9 text-yellow-600 mr-3" />
-                            <div>
-                                <p class="text-sm font-medium text-yellow-700">Pending Deposits</p>
-                                <p class="text-xl font-bold text-yellow-900">
-                                    {{ formatAmount(agentDepositTotals?.totalPendingDeposits) }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div>

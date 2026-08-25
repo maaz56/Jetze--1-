@@ -21,6 +21,7 @@ import {
 import { computed, onMounted, ref } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import Spinner from "@/components/common/Spinner.vue";
+import { formatAmount } from "@/lib/utils";
 
 const store = useStore();
 const authStore = useAuthStore();
@@ -52,6 +53,10 @@ function openDialog(charge) {
 function closeDialog() {
     selectedCharge.value = null;
     isDialogOpen.value = false;
+}
+
+function formatChargeAmount(amount) {
+    return formatAmount(amount || 0, "AED");
 }
 
 function updateChargeStatus(e) {
@@ -117,7 +122,7 @@ onMounted(() => {
                             <tr v-for="item in allCharges" :key="item.id" class="border-b dark:border-gray-700">
                                 <td class="px-4 py-3">{{ item.agent.agent_data?.agent_uid }}_{{ item.id + 1000 }}</td>
                                 <td class="px-4 py-3">{{ item.date }}</td>
-                                <td class="px-4 py-3">{{ item.amount }}</td>
+                                <td class="px-4 py-3">{{ formatChargeAmount(item.amount) }}</td>
                                 <td class="px-4 py-3">
                                     {{ item.payment_type }}
                                 </td>
@@ -180,7 +185,7 @@ onMounted(() => {
                             <p class="text-sm text-gray-800">{{ selectedCharge?.date }}</p>
 
                             <p class="text-sm font-medium text-gray-600">Amount</p>
-                            <p class="text-sm text-gray-800">{{ selectedCharge?.amount }}</p>
+                            <p class="text-sm text-gray-800">{{ formatChargeAmount(selectedCharge?.amount) }}</p>
 
                             <p class="text-sm font-medium text-gray-600">Type</p>
                             <p class="text-sm text-gray-800">{{ selectedCharge?.payment_type }}</p>
