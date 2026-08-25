@@ -17,6 +17,18 @@ class DepositData extends Model
     {
         return $this->belongsTo(User::class, 'agent_id'); // 'agent_id' links to 'users.id'
     }
+
+    /** Return the bank account selected when this deposit was submitted. */
+    public function bank()
+    {
+        return $this->belongsTo(Bank::class);
+    }
+
+    /** Return the admin who approved this deposit. */
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
     protected static function boot()
     {
         parent::boot();

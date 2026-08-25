@@ -2879,58 +2879,15 @@ watch(flight, () => {
                                                         <span class="text-xs font-medium">{{
                                                             formatAmount(calculateTaxes(fare)) }}</span>
                                                     </div>
-                                                    <div v-if="ancillaries" class="flex justify-between items-center">
-                                                        <span class="text-xs text-gray-500">Add-ones</span>
-                                                        <span class="text-xs font-medium">
-                                                            {{formatAmount(
-                                                                ["baggage", "seat", "meal"].reduce((sum, group) => {
-                                                                    const extras = extraCharges[flightIndex]?.[group] || {};
-
-                                                                    // Loop over segments → passengers/items
-                                                                    const groupTotal = Object.values(extras).reduce((gSum,
-                                                                        segmentGroup) => {
-                                                                        if (!segmentGroup) return gSum;
-                                                                        return gSum + Object.values(segmentGroup).reduce((sSum,
-                                                                            item) => {
-                                                                            const price = item.price || item.amount || 0;
-                                                                            const qty = item.qty || 1;
-                                                                            return sSum + price;
-                                                                        }, 0);
-                                                                    }, 0);
-
-                                                            return sum + groupTotal;
-                                                            }, 0)
-                                                            ) }}
-
-
-                                                        </span>
-
-                                                    </div>
+                                                    
                                                     <div class="border-t border-gray-200 pt-2">
                                                         <div class="flex justify-between items-center">
                                                             <span
                                                                 class="text-sm font-medium text-gray-900">Subtotal</span>
                                                             <span class="text-sm font-semibold text-primary">
                                                                 {{formatAmount(
-                                                                    calculateTotalFare(fare) +
-                                                                    ["baggage", "seat", "meal"].reduce((sum, group) => {
-                                                                        const extras = extraCharges[flightIndex]?.[group] || {};
-
-                                                                        // Loop deeper: segment → passenger/item
-                                                                        const groupTotal = Object.values(extras).reduce((gSum,
-                                                                            segmentGroup) => {
-                                                                            if (!segmentGroup) return gSum;
-                                                                            return gSum + Object.values(segmentGroup).reduce((sSum,
-                                                                                item) => {
-                                                                                const price = item.price || item.amount || 0;
-                                                                                const qty = item.qty || 1;
-                                                                                return sSum + price;
-                                                                            }, 0);
-                                                                        }, 0);
-
-                                                                        return sum + groupTotal;
-                                                                }, 0)
-                                                                )}}
+                                                                    calculateTotalFare(fare) )
+                                                                }}
                                                             </span>
 
 

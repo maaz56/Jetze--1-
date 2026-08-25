@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 
 
@@ -651,6 +652,60 @@ private function extractTrips($tripsData): array
         }
     }
 
+    /**
+     * Reprice the selected AT fares and return only the booking values for a quote.
+     */
+    public function priceQuote(array $flight, array $fareReferences): array
+    {
+        $selectedFares = array_flip($fareReferences);
+        $legs = [];
+
+        foreach (data_get($flight, 'leg.flights', []) as $flightItem) {
+            foreach ($flightItem['fares'] ?? [] as $fare) {
+                if (!isset($selectedFares[$fare['ref_id'] ?? ''])) {
+                    continue;
+                }
+
+                $legs[] = [
+                    'Index' => $flightItem['flight_index'] ?? null,
+                    'selectedFare' => $fare,
+                ];
+                break;
+            }
+        }
+
+        if (count($legs) !== count($fareReferences)) {
+            throw ValidationException::withMessages([
+                'fare_references' => 'One or more selected AT fares could not be repriced.',
+            ]);
+        }
+
+        $pricingRequest = \Illuminate\Http\Request::create('/', 'POST', [
+            'ref_id' => data_get($flight, 'provider.TUI'),
+            'flight_provider' => 'AT',
+            'provider' => 'AT',
+            'fareType' => data_get($flight, 'provider.fare_type'),
+            'legs' => $legs,
+        ]);
+        $pricingResponse = $this->sendPriceRequest($pricingRequest);
+        $tui = data_get($pricingResponse, 'TUI');
+        $netAmount = data_get($pricingResponse, 'NetAmount');
+
+        if (!is_array($pricingResponse) || empty($tui) || !is_numeric($netAmount)) {
+            throw ValidationException::withMessages([
+                'flight_ref_id' => 'AT could not confirm the latest fare. Please search again.',
+            ]);
+        }
+
+        return [
+            'tui' => $tui,
+            'net_amount' => (string) $netAmount,
+            'currency' => strtoupper((string) (data_get($pricingResponse, 'CurrencyCode') ?? data_get($flight, 'currencyCode'))),
+            'fare_type' => data_get($pricingResponse, 'FareType') ?? data_get($flight, 'provider.fare_type'),
+            'priced_at' => now()->toIso8601String(),
+        ];
+    }
+
     public function getPricer($request)
     {
         $accessToken = $this->getAccessToken();
@@ -816,55 +871,9 @@ private function extractTrips($tripsData): array
             ];
         }
 
-        $SSR = [];
-        $totalAmount = 0;
-
-        $selectedExtras = $params['selectedExtras'] ?? [];
-
-        if (is_array($selectedExtras)) {
-            foreach ($selectedExtras as $flightExtras) {
-                if (!is_array($flightExtras))
-                    continue;
-
-                foreach ($flightExtras as $group => $segments) { // baggage / seat / meal
-                    if (!is_array($segments))
-                        continue;
-
-                    foreach ($segments as $segment) {
-                        if (!is_array($segment))
-                            continue;
-
-                        foreach ($segment as $pax) {
-                            if (!is_array($pax))
-                                continue;
-
-                            foreach ($pax as $item) {
-                                if (
-                                    !is_array($item) ||
-                                    !isset($item['FUID'], $item['PaxID'], $item['SSID'])
-                                ) {
-                                    continue;
-                                }
-
-                                // Calculate amount
-                                $price = $item['Charge']
-                                    ?? $item['SSRNetAmount']
-                                    ?? 0;
-
-                                $totalAmount += (float) $price;
-
-                                // Build SSR payload
-                                $SSR[] = [
-                                    'FUID' => (int) $item['FUID'],
-                                    'PaxID' => (int) $item['PaxID'],
-                                    'SSID' => (int) $item['SSID'],
-                                ];
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        $quoteSsrPayload = $this->buildQuoteSsrPayload($params['quote_ancillary_items'] ?? null);
+        $SSR = $quoteSsrPayload['SSR'];
+        $totalAmount = $quoteSsrPayload['SSRAmount'];
 
         if ($fareType === 'DM') {
             return $this->bookDmMultiCityTrips(
@@ -892,8 +901,9 @@ private function extractTrips($tripsData): array
             'PLP' => [],
             'SSR' => $SSR,
             'CrossSell' => [],
-            'NetAmount' => $netAmount,
-            'SSRAmount' => $totalAmount,
+            // AT expects the priced fare amount and SSR amount as separate numeric values.
+            'NetAmount' => $this->atNumericAmount($netAmount),
+            'SSRAmount' => $this->atNumericAmount($totalAmount),
             'ClientID' => $clientId,
             'HoldInfo' => $holdInfo,
             'DeviceID' => '',
@@ -981,7 +991,7 @@ private function extractTrips($tripsData): array
 
             $trips[] = [
                 'Amount' => 0,
-                'Index' => "", // 1, 2, 3...
+                'Index' => '',
                 'OrderID' => $index + 1, // keep static or change if needed
                 'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
             ];
@@ -1053,7 +1063,7 @@ private function extractTrips($tripsData): array
 
             $trips[] = [
                 'Amount' => 0,
-                'Index' => "", // 1, 2, 3...
+                'Index' => '',
                 'OrderID' => $index + 1, // keep static or change if needed
                 'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
             ];
@@ -1551,6 +1561,10 @@ private function extractTrips($tripsData): array
 
     private function buildDmSsrPayload($params, int $tripIndex): array
     {
+        if (isset($params['quote_ancillary_items'])) {
+            return $this->buildQuoteSsrPayload($params['quote_ancillary_items'], $tripIndex);
+        }
+
         $SSR = [];
         $totalAmount = 0;
         $selectedExtras = $params['selectedExtras'][$tripIndex] ?? [];
@@ -1603,6 +1617,57 @@ private function extractTrips($tripsData): array
         }
 
         return ['SSR' => $SSR, 'SSRAmount' => $totalAmount];
+    }
+
+    /**
+     * Build AT's SSR payload from ancillary lines locked on the active server-side quote.
+     */
+    private function buildQuoteSsrPayload(mixed $quoteItems, ?int $tripIndex = null): array
+    {
+        if (!is_array($quoteItems)) {
+            throw ValidationException::withMessages([
+                'quote_id' => 'A valid price quote is required before booking an AT flight.',
+            ]);
+        }
+
+        $ssr = [];
+        $totalAmount = '0';
+
+        foreach ($quoteItems as $item) {
+            if (!is_array($item) || ($tripIndex !== null && (int) ($item['trip_index'] ?? -1) !== $tripIndex)) {
+                continue;
+            }
+
+            $references = $item['provider_references'] ?? [];
+
+            if (
+                !is_array($references)
+                || !isset($references['fuid'], $references['pax_id'], $references['ssid'])
+                || !is_numeric($item['provider_amount'] ?? null)
+            ) {
+                throw ValidationException::withMessages([
+                    'quote_id' => 'A locked ancillary selection is incomplete. Please refresh the options.',
+                ]);
+            }
+
+            $ssr[] = [
+                'FUID' => (int) $references['fuid'],
+                'PaxID' => (int) $references['pax_id'],
+                'SSID' => (int) $references['ssid'],
+            ];
+            $totalAmount = bcadd($totalAmount, (string) $item['provider_amount'], 8);
+        }
+
+        return ['SSR' => $ssr, 'SSRAmount' => $totalAmount];
+    }
+
+    /** Convert a locked decimal to AT's numeric JSON format at the provider boundary. */
+    private function atNumericAmount(mixed $amount): int|float
+    {
+        $normalized = rtrim(rtrim((string) $amount, '0'), '.');
+        $normalized = $normalized === '' || $normalized === '-0' ? '0' : $normalized;
+
+        return str_contains($normalized, '.') ? (float) $normalized : (int) $normalized;
     }
 
     private function bookDmMultiCityTrips($params, ?array $cachedValidationResponse, array $headers, string $bookingUrl, $clientId, array $contactInfo, array $travellers): ?array

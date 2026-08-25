@@ -29,4 +29,20 @@ class FlightBookings extends Model
         return $this->hasOne(BookingInvoice::class, 'booking_id');
     }
 
+    /**
+     * Get the permanent financial snapshot created after booking succeeds.
+     */
+    public function priceSnapshot()
+    {
+        return $this->belongsTo(BookingPriceSnapshot::class, 'price_snapshot_id');
+    }
+
+    /**
+     * Get every provider response saved during this booking's lifecycle.
+     */
+    public function providerEvents()
+    {
+        return $this->hasMany(ProviderBookingEvent::class, 'booking_id');
+    }
+
 }

@@ -5,10 +5,10 @@ import { Input } from "@/components/ui/input";
 import { RefreshCcw, Search, ArrowLeft, ImageIcon, UploadIcon, SaveIcon, UserPlusIcon, CalendarIcon, CheckCircleIcon, Receipt, EyeIcon, TrashIcon, LoaderIcon, InboxIcon, Printer, Download, Share } from "lucide-vue-next";
 import { useAuthStore } from "@/services/stores/auth";
 import { useStore } from "vuex";
-import { computed, onMounted, ref, watch, nextTick } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { formatAmount, cn } from "@/lib/utils";
+import { formatAmount, cn, getSelectedCurrencyCode } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -23,7 +23,7 @@ import {
     SAVE_DEPOSIT_DATA,
     DELETE_DEPOSIT_DATA,
     FETCH_AGENT_LEDGER,
-    FETCH_BANKS,
+    FETCH_CURRENCIES,
 } from "@/services/store/actions.type";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RangeCalendar } from '@/components/ui/range-calendar';
@@ -45,13 +45,13 @@ const agentDepositData = computed(() => store.getters["deposit/depositData"]);
 const showDialog = ref(false);
 const selectedDeposit = ref(null);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
-const banks = computed(() => store.getters["bank/banks"] || []);
+const currencies = computed(() => store.getters["currency/currencies"] || []);
 
 const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
 const paymentType = ref("");
-const selectedBank = ref(null);
+const depositCurrency = ref(getSelectedCurrencyCode());
 const additionalDetails = ref("");
 const user_id = computed(() => user.value?.id);
 const loading = ref(true);
@@ -69,8 +69,8 @@ function closeDialog() {
     selectedDeposit.value = null;
 }
 
-function fetchBanks() {
-    store.dispatch("bank/" + FETCH_BANKS);
+function fetchCurrencies() {
+    store.dispatch("currency/" + FETCH_CURRENCIES);
 }
 
 const handleReceiptImage = (event) => {
@@ -88,7 +88,7 @@ const formatCurrency = (value) => {
 function fetchAgentLedger() {
     if (user_id.value) {
         try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value });
+            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
             loading.value = false;
         } catch (err) {
             error.value = "Failed to load user data. Please try again.";
@@ -100,16 +100,12 @@ function fetchAgentLedger() {
     }
 }
 
-const selectBank = (bank) => {
-    selectedBank.value = bank;
-    paymentType.value = bank ? `${bank.bank_name} - ${bank.account_title} - ${bank.account_number}` : "";
-};
-
 async function handleDepositData() {
     formErrors.value = [];
     if (!date.value) formErrors.value.push("Date field is required.");
     if (!amount.value) formErrors.value.push("Amount field is required.");
     if (!paymentType.value) formErrors.value.push("Payment type is required.");
+    if (!depositCurrency.value) formErrors.value.push("Currency is required.");
     if (formErrors.value.length > 0) return;
 
     loading.value = true;
@@ -124,8 +120,7 @@ async function handleDepositData() {
         }
         depositData.append("payment_type", paymentType.value);
         depositData.append("additional_details", additionalDetails.value);
-        depositData.append("agent_id", user.value.id);
-        depositData.append("currency", selectedBank.value?.currency || "PKR");
+        depositData.append("currency", depositCurrency.value);
 
         await store.dispatch(`deposit/${SAVE_DEPOSIT_DATA}`, depositData);
         date.value = new Date().toISOString().slice(0, 10);
@@ -150,7 +145,7 @@ async function fetchAgentDeposits() {
     loading.value = true;
     error.value = null;
     try {
-        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value });
+        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
     } catch (err) {
         console.error("Error fetching agent deposits:", err);
         error.value = "Failed to load user deposit data. Please try again.";
@@ -205,13 +200,21 @@ async function shareDialogOnWhatsApp() {
     }
 }
 
+const refreshForCurrencyChange = () => {
+    fetchAgentDeposits();
+    fetchAgentLedger();
+};
+
 onMounted(() => {
     if (user.value?.id) {
         fetchAgentDeposits();
         fetchAgentLedger();
-        fetchBanks();
+        fetchCurrencies();
     }
+    window.addEventListener("currency-changed", refreshForCurrencyChange);
 });
+
+onBeforeUnmount(() => window.removeEventListener("currency-changed", refreshForCurrencyChange));
 
 watch(user, (newUser) => {
     if (newUser?.id) {
@@ -246,7 +249,7 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-gray-600">Balance</p>
                                 <p class="text-2xl font-bold text-gray-800">
-                                    {{ formatAmount(agentLedger?.balance || 0) }}
+                                    {{ formatAmount(agentLedger?.balance_money?.amount, agentLedger?.balance_money?.currency) }}
                                 </p>
                             </div>
                         </div>
@@ -255,7 +258,7 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-gray-600">Approved Deposits</p>
                                 <p class="text-2xl font-bold text-gray-800">
-                                    {{ formatAmount(agentDepositData?.totalApprovedDeposits || 0) }}
+                                    {{ formatAmount(agentDepositData?.totalApprovedDeposits?.amount, agentDepositData?.totalApprovedDeposits?.currency) }}
                                 </p>
                             </div>
                         </div>
@@ -264,40 +267,15 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-yellow-600">Total Pending Deposits</p>
                                 <p class="text-2xl font-bold text-yellow-800">
-                                    {{ formatAmount(agentDepositData?.totalPendingDeposits || 0) }}
+                                    {{ formatAmount(agentDepositData?.totalPendingDeposits?.amount, agentDepositData?.totalPendingDeposits?.currency) }}
                                 </p>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="mb-3">
-        <div class="max-w-full mx-auto">
-            <div class="bg-white rounded-lg overflow-hidden">
-                <div class="p-6">
-                    <h1 class="text-2xl font-bold text-gray-800 mb-2">Select Banks to Deposit</h1>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div v-for="bank in banks" :key="bank.id"
-                            class="bg-gray-50 rounded-lg p-4 flex items-center cursor-pointer hover:bg-gray-100 transition"
-                            :class="{ 'ring-2 ring-primary': selectedBank?.id === bank.id }" @click="selectBank(bank)">
-                            <Receipt v-if="!bank?.logo_path" class="h-8 w-8 text-yellow-500 mr-4" />
-                            <img v-else :src="bank?.logo_path" alt="Bank Logo" class="h-8 w-8 mr-4" />
-                            <div>
-                                <p class="text-md font-medium text-gray-600">{{ bank?.bank_name || 'N/A' }}</p>
-                                <p class="text-xl font-semibold text-gray-800">{{ bank?.account_title || 'N/A' }}</p>
-                                <p class="text-xl font-medium text-gray-800">
-                                    Account: <span class="text-lg font-normal">{{ bank?.account_number || 'N/A'
-                                        }}</span>
-                                </p>
-                                <p class="text-xl font-medium text-gray-800">
-                                    IBAN : <span class="text-lg font-normal">{{ bank?.iban || 'N/A'
-                                        }}</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    <p v-if="agentDepositData?.legacy_unconverted_count"
+                        class="mt-3 text-sm text-amber-700">
+                        {{ agentDepositData.legacy_unconverted_count }} older deposit(s) are excluded from the AED balance because their locked historical rate is unavailable.
+                    </p>
                 </div>
             </div>
         </div>
@@ -305,7 +283,7 @@ watch(user, (newUser) => {
     <div class="bg-white p-4 rounded-lg mb-3">
         <span class="text-2xl font-bold">New Deposit</span>
         <form @submit.prevent="handleDepositData" class="space-y-6">
-            <div class="grid grid-cols-5 gap-2">
+            <div class="grid grid-cols-6 gap-2">
                 <div class="grid">
                     <label>Date</label>
                     <Calender v-model="date" :type="'date'" />
@@ -326,22 +304,12 @@ watch(user, (newUser) => {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectGroup>
-                                <SelectLabel>Banks</SelectLabel>
+                                <SelectLabel>Payment method</SelectLabel>
                                 <SelectItem 
                                     value="cash">
                                     <div class="flex items-center gap-2">
                                         <span class="truncate max-w-[150px] block">
                                             Cash
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem v-for="bank in banks" :key="bank.id"
-                                    :value="`${bank.bank_name} - ${bank.account_title} - ${bank.account_number}`">
-                                    <div class="flex items-center gap-2">
-                                        <img v-if="bank?.logo_path" :src="bank.logo_path" :alt="bank.bank_name"
-                                            class="w-5 h-5 object-contain shrink-0" />
-                                        <span class="truncate max-w-[150px] block">
-                                            {{ bank.bank_name }} - {{ bank.account_title }} - {{ bank.account_number }}
                                         </span>
                                     </div>
                                 </SelectItem>
@@ -351,9 +319,14 @@ watch(user, (newUser) => {
                 </div>
                 <div class="grid">
                     <label>Currency</label>
-                    <input
-                        class="flex h-10 w-full rounded-md transition-all duration-75 border border-input hover:border-2 hover:border-primary/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        :value="selectedBank?.currency || 'N/A'"  />
+                    <Select v-model="depositCurrency">
+                        <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem v-for="currency in currencies" :key="currency.code" :value="currency.code">
+                                {{ currency.code }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div class="grid">
                     <label>Additional details</label>
@@ -366,7 +339,7 @@ watch(user, (newUser) => {
                     <li>Payments made after banking hours will be processed on the next working day.</li>
                     <li>Attach a proper payment slip including reference, sender, and beneficiary bank details to avoid
                         delays in processing.</li>
-                    <li>Please ensure to transfer payments only from your Travel Agency Bank Accounts.</li>
+                    <li>Attach a receipt so the admin can verify the deposit.</li>
                     <li>
                         To register your bank account with us, please send an email to
                         <a href="mailto:support@Jetze.pk"
@@ -473,7 +446,7 @@ watch(user, (newUser) => {
                                             {{ deposit.deposit_status || "_" }}
                                         </span>
                                     </td>
-                                    <td class="px-1 py-4">{{ deposit.amount || "_" }}</td>
+                                    <td class="px-1 py-4">{{ formatAmount(deposit.display_money?.amount ?? deposit.source_money?.amount, deposit.display_money?.currency ?? deposit.source_money?.currency) }}</td>
                                     <td class="px-1 py-4">
                                         <div class="flex space-x-2">
                                             <button @click="openDialog(deposit)"
@@ -544,7 +517,7 @@ watch(user, (newUser) => {
                                         </div>
                                         <div class="space-y-1">
                                             <p class="font-medium text-gray-500">Amount</p>
-                                            <p class="font-bold text-gray-900">{{ selectedDeposit?.amount || 'N/A' }}
+                                            <p class="font-bold text-gray-900">{{ formatAmount(selectedDeposit?.display_money?.amount ?? selectedDeposit?.source_money?.amount, selectedDeposit?.display_money?.currency ?? selectedDeposit?.source_money?.currency) }}
                                             </p>
                                         </div>
                                         <div class="space-y-1">

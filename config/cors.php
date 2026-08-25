@@ -35,7 +35,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000'), 'https://www.Jetze.pk'],
+    'allowed_origins' => array_filter([
+        env('FRONTEND_URL', 'http://localhost:3000'),
+        env('FRONTEND_AE_URL', 'https://jetze.ae'),
+        'https://jetze.pk',
+        'https://www.jetze.pk',
+        'https://www.jetze.ae',
+    ]),
     
 
     'allowed_origins_patterns' => [],

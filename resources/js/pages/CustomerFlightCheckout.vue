@@ -864,6 +864,7 @@ async function saveBooking(type) {
             agency_mobile: "1234567890",
             agency_email: "customer@gmail.com",
             amount: amount.value,
+            quote_id: route.query.quote_id,
             flight: flight.value,
             booking_status_setting: bookingStatusSetting?.value.bookingStatus,
             flight_source: route?.query.flight_source,

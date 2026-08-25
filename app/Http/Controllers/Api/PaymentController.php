@@ -7,6 +7,8 @@ use App\Models\Customer;
 use App\Models\CustomerSetting;
 use App\Models\DepositData;
 use App\Models\FlightBookings;
+use App\Services\BookingPricingService;
+use App\Services\CurrencyConversionService;
 use Auth;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -24,20 +26,10 @@ class PaymentController extends Controller
     protected $abhiPayMerchant;
     protected $abhiPayInvoiceSecretKey;
 
-    private function resolveOneBillCharge(float $amount): float
-    {
-        $customerSetting = CustomerSetting::first();
-        if (!$customerSetting) {
-            return 0;
-        }
-
-        $fixedCharge = (float) ($customerSetting->one_bill_fixed_charge ?? 0);
-
-
-        return $fixedCharge;
-    }
-
-    public function __construct()
+    public function __construct(
+        private readonly BookingPricingService $bookingPricingService,
+        private readonly CurrencyConversionService $currencyConversionService,
+    )
     {
         $this->abhiPayBaseURl = env(
             'ABHIPAY_URL',
@@ -62,16 +54,41 @@ class PaymentController extends Controller
             '1290F54BD5A04E3980A478D565F88773'
         );
     }
+
+    private function resolveOneBillCharge(float $amount): float
+    {
+        $customerSetting = CustomerSetting::first();
+        if (!$customerSetting) {
+            return 0;
+        }
+
+        $fixedCharge = (float) ($customerSetting->one_bill_fixed_charge ?? 0);
+
+
+        return $fixedCharge;
+    }
+
+
+    /**
+     * Create a Stripe payment intent from a booking's locked price snapshot.
+     */
     public function createIntent(Request $request)
     {
-        Log::info(config('services.stripe.secret'));
+        $request->validate(['booking_id' => ['required', 'integer']]);
+
+        $booking = FlightBookings::findOrFail($request->booking_id);
+        $snapshot = $this->bookingPricingService->snapshotFor($booking);
+        $currency = strtolower($snapshot->selling_currency);
+
         Stripe::setApiKey(config('services.stripe.secret'));
-        Log::info($request);
-        $amount = $request->amount;
 
         $intent = PaymentIntent::create([
-            'amount' => $amount,
-            'currency' => 'aed',
+            'amount' => $this->toMinorUnits($snapshot->selling_amount, $snapshot->selling_currency),
+            'currency' => $currency,
+            'metadata' => [
+                'booking_id' => (string) $booking->id,
+                'price_snapshot_id' => (string) $snapshot->id,
+            ],
             'automatic_payment_methods' => [
                 'enabled' => true,
             ],
@@ -79,11 +96,18 @@ class PaymentController extends Controller
 
         return response()->json([
             'clientSecret' => $intent->client_secret,
+            'amount' => $snapshot->selling_amount,
+            'currency' => strtoupper($currency),
         ]);
     }
 
+    /**
+     * Start an AbhiPay payment after replacing browser values with locked booking money.
+     */
     public function initializeAbhiPay(Request $request)
     {
+        $this->applyLockedBookingMoney($request);
+
         if ($request->paymentMethod === 'abhipay-bank') {
             return $this->initializeAbhiPayBank($request);
         } else if ($request->paymentMethod === 'abhipay') {
@@ -683,6 +707,51 @@ class PaymentController extends Controller
             ], 500);
         }
 
+    }
+
+    // Helper functions
+
+    /**
+     * Replace browser payment values with the booking's permanent snapshot values.
+     */
+    private function applyLockedBookingMoney(Request $request): void
+    {
+        if (!$request->filled('booking_id')) {
+            return;
+        }
+
+        $booking = FlightBookings::findOrFail($request->booking_id);
+
+        if (!$booking->price_snapshot_id) {
+            if (strtolower((string) $booking->flight_provider) === 'at') {
+                abort(422, 'A locked price snapshot is required before payment.');
+            }
+
+            return;
+        }
+
+        $snapshot = $this->bookingPricingService->snapshotFor($booking);
+
+        $request->merge([
+            'amount' => $snapshot->selling_amount,
+            'currency' => $snapshot->selling_currency,
+        ]);
+    }
+
+    /**
+     * Convert a decimal amount to the smallest currency unit required by Stripe.
+     */
+    private function toMinorUnits(string $amount, string $currencyCode): int
+    {
+        $decimalPlaces = $this->currencyConversionService->decimalPlacesFor($currencyCode);
+        $factor = '1' . str_repeat('0', $decimalPlaces);
+        $minorUnits = bcmul($amount, $factor, 0);
+
+        if (bccomp($minorUnits, '0', 0) <= 0) {
+            abort(422, 'The locked payment amount must be greater than zero.');
+        }
+
+        return (int) $minorUnits;
     }
 
 

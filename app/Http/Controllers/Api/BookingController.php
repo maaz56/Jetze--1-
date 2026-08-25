@@ -23,6 +23,10 @@ use App\Services\OneApiService;
 use App\Services\PIAApiService;
 use App\Services\SabreApiService;
 use App\Services\AtApiService;
+use App\Services\BookingPricingService;
+use App\Services\PriceQuoteService;
+use App\Services\ProviderBookingEventService;
+use App\Transformers\AtAncillaryTransformer;
 
 // use App\Services\SafepayService;
 use App\Services\SooperApiService;
@@ -52,6 +56,9 @@ class BookingController extends Controller
     protected $oneApiService;
     protected $travelportApiService;
     protected $utilityService;
+    protected $priceQuoteService;
+    protected $bookingPricingService;
+    protected $providerBookingEventService;
 
     public function __construct(
         SabreApiService $sabreApiService,
@@ -61,7 +68,10 @@ class BookingController extends Controller
         FlyDubaiApiService $flydubaiApiService,
         TravelPortService $travelportApiService,
         OneApiService $oneApiService,
-        UtilityService $utilityService
+        UtilityService $utilityService,
+        PriceQuoteService $priceQuoteService,
+        BookingPricingService $bookingPricingService,
+        ProviderBookingEventService $providerBookingEventService,
     ) {
         $this->sabreApiService = $sabreApiService;
         // $this->safepayService = $safepayService;
@@ -72,6 +82,9 @@ class BookingController extends Controller
         $this->flydubaiApiService = $flydubaiApiService;
         $this->oneApiService = $oneApiService;
         $this->utilityService = $utilityService;
+        $this->priceQuoteService = $priceQuoteService;
+        $this->bookingPricingService = $bookingPricingService;
+        $this->providerBookingEventService = $providerBookingEventService;
     }
 
     public function index(Request $request)
@@ -169,7 +182,7 @@ class BookingController extends Controller
 
 
         //$bookingDetail = FlightBookings::with('pessangers')->where('id', $request->bookingId)->get();
-        $bookingDetail = FlightBookings::with('pessangers', 'bookingInvoice')
+        $bookingDetail = FlightBookings::with('pessangers', 'bookingInvoice', 'priceSnapshot')
             ->where('id', $request->bookingId)
             ->orWhere('flight_id', $request->bookingId)
             ->get(); // Assuming flight_id is in the request
@@ -184,11 +197,11 @@ class BookingController extends Controller
 
 
         if ($request->bookingSource == 1) {
-            $bookingDetail = FlightBookings::with('pessangers')
+            $bookingDetail = FlightBookings::with('pessangers', 'priceSnapshot')
                 ->where('id', $request->bookingId)
                 ->get(); // Assuming flight_id is in the request
         } else {
-            $bookingDetail = FlightBookings::with('pessangers')
+            $bookingDetail = FlightBookings::with('pessangers', 'priceSnapshot')
                 ->where('id', $request->bookingId)
                 ->get(); // Assuming flight_id is in the request
         }
@@ -216,7 +229,8 @@ class BookingController extends Controller
 
     public function store(Request $request)
     {
-        
+        $priceQuote = $this->loadBookingQuote($request);
+
         $pnrResponse = null;
         $airlinePnr = null;
         $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
@@ -527,6 +541,18 @@ class BookingController extends Controller
             'status' => $request->booking_status ?? 'booked', // falls back to safe default
         ]);
 
+        if ($priceQuote) {
+            $this->bookingPricingService->createSnapshot($flightBooking, $priceQuote);
+        }
+
+        $this->providerBookingEventService->record(
+            $flightBooking,
+            (string) $request->flight_provider,
+            'book',
+            $pnrResponse,
+            $itineraryRef ?? null,
+        );
+
 
         // Store travellers
         // Insert Travellers
@@ -576,6 +602,97 @@ class BookingController extends Controller
             'message' => 'Booking confirmed successfully',
             'booking' => $flightBooking,
         ], 200);
+    }
+
+    // Helper functions
+
+    /**
+     * Replace AT checkout price data with the active server-side quote values.
+     */
+    private function loadBookingQuote(Request $request)
+    {
+        $requestedProvider = strtolower((string) $request->input('flight_provider'));
+
+        if (!$request->filled('quote_id')) {
+            if ($requestedProvider === 'at') {
+                abort(422, 'A valid price quote is required before booking an AT flight.');
+            }
+
+            return null;
+        }
+
+        $quote = $this->priceQuoteService->findActive($request->string('quote_id')->toString(), $request->user());
+        $flight = $quote->flight_data;
+        $providerPricing = $quote->provider_pricing_data ?? [];
+        $quoteAncillaryItems = $quote->items()
+            ->active()
+            ->orderBy('trip_index')
+            ->orderBy('journey_index')
+            ->orderBy('segment_index')
+            ->orderBy('passenger_id')
+            ->get();
+        $addOnSellingAmount = $quoteAncillaryItems->reduce(
+            fn (string $total, $item) => bcadd($total, (string) $item->display_amount, 8),
+            '0',
+        );
+
+        if (strtolower($quote->provider) === 'at') {
+            $bookingTui = data_get($providerPricing, 'tui') ?? data_get($flight, 'provider.TUI');
+            $fareNetAmount = data_get($providerPricing, 'net_amount');
+
+            if (!$bookingTui || !is_numeric($fareNetAmount)) {
+                abort(422, 'The latest AT fare is unavailable. Please search again before booking.');
+            }
+
+            if ($quoteAncillaryItems->contains(
+                fn ($item) => strtoupper($item->provider_currency) !== strtoupper($quote->provider_currency),
+            )) {
+                abort(422, 'An ancillary currency does not match the locked AT fare. Please refresh the options.');
+            }
+        }
+
+        $request->merge([
+            'flight' => $flight,
+            'flight_id' => data_get($flight, 'leg.ref_id'),
+            'flight_provider' => strtolower($quote->provider),
+            'fare_reference' => $quote->selected_fare_references,
+            'amount' => $quote->display_amount,
+            'currency' => $quote->display_currency,
+            'add_ones_amount' => $addOnSellingAmount,
+            'TUI' => data_get($providerPricing, 'tui') ?? data_get($flight, 'provider.TUI'),
+            'NetAmount' => $fareNetAmount,
+            'fareType' => data_get($providerPricing, 'fare_type') ?? data_get($flight, 'provider.fare_type'),
+            // Never pass browser ancillary fields to AT. These are the quote's locked provider references.
+            'quote_ancillary_items' => $quoteAncillaryItems->map(fn ($item) => [
+                'trip_index' => $item->trip_index,
+                'provider_references' => $item->provider_references,
+                'provider_amount' => $item->provider_amount,
+            ])->values()->all(),
+            'selectedExtras' => [],
+        ]);
+
+        return $quote;
+    }
+
+    /**
+     * Find the local booking linked to a provider PNR/details request.
+     */
+    private function findBookingForProviderEvent(Request $request): ?FlightBookings
+    {
+        $bookingId = $request->input('booking_id') ?? $request->input('bookingId');
+
+        if ($bookingId) {
+            return FlightBookings::find($bookingId);
+        }
+
+        if ($request->filled('pnr')) {
+            return FlightBookings::query()
+                ->where('itinerary_ref', $request->pnr)
+                ->orWhere('pnr', $request->pnr)
+                ->first();
+        }
+
+        return null;
     }
 
     public function getMyTravellers(Request $request)
@@ -692,6 +809,19 @@ class BookingController extends Controller
             $atApiService = new AtApiService();
             $pnrData = $atApiService->getBookingDetails($request);
         }
+
+        $booking = $this->findBookingForProviderEvent($request);
+
+        if ($booking) {
+            $this->providerBookingEventService->record(
+                $booking,
+                (string) ($request->flight_provider ?? $booking->flight_provider),
+                'pnr_fetch',
+                $pnrData,
+                $request->pnr,
+            );
+        }
+
         return response()->json([
             'message' => 'PNR Details fetched successfully',
             'data' => $pnrData
@@ -728,6 +858,13 @@ class BookingController extends Controller
             $booking->status = $request->booking_status;
             $booking->pnr = $request->pnr;
             $booking->save();
+            $this->providerBookingEventService->record(
+                $booking,
+                'sooper',
+                'cancel',
+                $res,
+                $request->pnr,
+            );
             $this->sendBookingCanceledMail($booking);
 
             Log::info($booking);
@@ -748,6 +885,13 @@ class BookingController extends Controller
                 $booking = FlightBookings::where('id', $request->bookingId)->first();
                 $booking->status = 'canceled';
                 $booking->save();
+                $this->providerBookingEventService->record(
+                    $booking,
+                    'sabre',
+                    'cancel',
+                    $pnrStatus,
+                    $request->pnr,
+                );
                 $this->sendBookingCanceledMail($booking);
             }
             return $pnrStatus;
@@ -764,12 +908,26 @@ class BookingController extends Controller
              $booking = FlightBookings::where('id', $request->bookingId)->first();
                 $booking->status = 'canceled';
                 $booking->save();
+                $this->providerBookingEventService->record(
+                    $booking,
+                    'travelport',
+                    'cancel',
+                    $pnrStatus,
+                    $request->pnr,
+                );
                 $this->sendBookingCanceledMail($booking);
             return $pnrStatus;
         }else if ($request->booking_source == 'OneApi') {
               $booking = FlightBookings::where('id', $request->bookingId)->first();
                 $booking->status = 'canceled';
                 $booking->save();
+                $this->providerBookingEventService->record(
+                    $booking,
+                    'oneapi',
+                    'cancel',
+                    null,
+                    $request->pnr,
+                );
                 $this->sendBookingCanceledMail($booking);
                 return response()->json([
                     'message' => 'Booking Canceled successfully',
@@ -917,6 +1075,14 @@ class BookingController extends Controller
 
             $booking->save();
 
+            $this->providerBookingEventService->record(
+                $booking,
+                (string) $request->flight_provider,
+                'ticket',
+                $res,
+                $request->pnr,
+            );
+
             $this->sendBookingStatusMail($booking, $booking->status);
         }
 
@@ -933,7 +1099,6 @@ class BookingController extends Controller
             'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed,booked,issued,requested,voided',
             'airline_pnr' => 'nullable|string',
             'ticket_number' => 'nullable|string',
-            'is_manually_issued' => 'nullable|boolean',
         ]);
         $booking = FlightBookings::where('id', $request->booking_id)->first();
         if (!$booking) {
@@ -950,12 +1115,8 @@ class BookingController extends Controller
         if ($request->has('ticket_number')) {
             $booking->ticket_number = $request->ticket_number;
         }
-        if ($request->has('is_manually_issued')) {
-            $booking->is_manually_issued = (bool) $request->is_manually_issued;
-        } elseif (auth()->check() && auth()->user()->role === 'admin' && in_array($request->status, ['issued', 'ticketed'], true)) {
-            // If admin is updating ticket status directly, treat it as a manual issue by default.
-            $booking->is_manually_issued = true;
-        }
+        // A status update is a standard booking update and must retain normal ledger treatment.
+        $booking->is_manually_issued = false;
         $booking->save();
 
         if ($previousStatus !== strtolower((string) $booking->status)) {
@@ -1178,8 +1339,18 @@ class BookingController extends Controller
 
         } else if (strtolower($request->flight_provider) === 'at') {
             $atApiService = new AtApiService();
+            $quote = null;
 
-            $response = $atApiService->fetchAncillaries($request->body);
+            if ($request->quote_id && $request->user()) {
+                $quote = $this->priceQuoteService->findActive($request->quote_id, $request->user());
+            }
+
+            $rawResponse = $atApiService->fetchAncillaries($request->body);
+            $response = app(AtAncillaryTransformer::class)->transform(
+                $rawResponse,
+                $quote?->display_currency ?? data_get($request->body, 'currency_code', 'AED'),
+                $quote?->provider_currency ?? 'AED',
+            );
         }
 
         return response()->json([
@@ -1266,6 +1437,13 @@ class BookingController extends Controller
             Log::info($booking->status);
             $booking->status = $request->booking_status;
             $booking->save();
+            $this->providerBookingEventService->record(
+                $booking,
+                'sooper',
+                'void',
+                $res,
+                $request->pnr,
+            );
             return response()->json([
                 'message' => 'Booking voided successfully',
                 'booking' => $booking,
@@ -1293,6 +1471,13 @@ class BookingController extends Controller
             Log::info($booking->status);
             $booking->status = $request->booking_status;
             $booking->save();
+            $this->providerBookingEventService->record(
+                $booking,
+                'travelport',
+                'void',
+                $res,
+                $request->pnr,
+            );
             return response()->json([
                 'message' => 'Booking voided successfully',
                 'booking' => $booking,
@@ -1330,7 +1515,7 @@ class BookingController extends Controller
         }
 
         // Base query
-        $query = FlightBookings::with('pessangers', 'user.agentData')
+        $query = FlightBookings::with('pessangers', 'user.agentData', 'priceSnapshot')
             ->where('main_email', $request->email)
             ->where('itinerary_ref', $request->refCode);
         Log::info($query->get());

@@ -609,11 +609,13 @@ const actions = {
     },
 
     async [FETCH_ANCILLARIES](context, params) {
-        context.commit(IS_LOADING);
         try {
-            const response = await apiService.fetchAncillaries(params);
+            const response = params.quote_id && String(params.flight_provider).toLowerCase() === "at"
+                ? await apiService.getQuoteAncillaries(params.quote_id)
+                : await apiService.fetchAncillaries(params);
             console.log(response.data);
             context.commit(SET_ANCILLARIES, response.data);
+            return response.data;
         } catch (error) {
             console.log(error);
             context.commit(SET_API_ERROR, error);

@@ -4,11 +4,11 @@ import { Input } from "@/components/ui/input";
 import { RefreshCcw, Search, ArrowLeft, ImageIcon, UploadIcon, SaveIcon, UserPlusIcon, CalendarIcon, CheckCircleIcon, Receipt, EyeIcon, TrashIcon, LoaderIcon, InboxIcon, Printer, Download, Share, CreditCard, ExternalLink } from "lucide-vue-next";
 import { useAuthStore } from "@/services/stores/auth";
 import { useStore } from "vuex";
-import { computed, onMounted, ref, watch, nextTick } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { formatAmount, cn } from "@/lib/utils";
+import { formatAmount, cn, getSelectedCurrencyCode } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -23,7 +23,7 @@ import {
     SAVE_DEPOSIT_DATA,
     DELETE_DEPOSIT_DATA,
     FETCH_AGENT_LEDGER,
-    FETCH_BANKS,
+    FETCH_CURRENCIES,
     INITIALIZE_ABHI_PAY,
     CHECK_PAYMENT_STATUS,
 } from "@/services/store/actions.type";
@@ -48,7 +48,7 @@ const agentDepositData = computed(() => store.getters["deposit/depositData"]);
 const showDialog = ref(false);
 const selectedDeposit = ref(null);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
-const banks = computed(() => store.getters["bank/banks"] || []);
+const currencies = computed(() => store.getters["currency/currencies"] || []);
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const deposit = computed(() => store.getters["payment/deposit"]);
 const isCheckingPaymentStatus = computed(() => store.getters["payment/isCheckingPaymentStatus"]);
@@ -56,7 +56,7 @@ const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
 const paymentType = ref();
-const selectedBank = ref(null);
+const depositCurrency = ref(getSelectedCurrencyCode());
 const additionalDetails = ref("");
 const user_id = computed(() => user.value?.id);
 const loading = ref(true);
@@ -67,7 +67,7 @@ const formErrors = ref([]);
 const isBankTransferType = (type) => {
     if (!type) return false;
     const normalizedType = String(type).trim().toLowerCase();
-    return normalizedType !== "abhipay-deposit" && normalizedType !== "cash";
+    return normalizedType !== "abhipay-deposit";
 };
 
 // Abhi Pay specific refs
@@ -77,20 +77,6 @@ const abhiPayAdditionalDetails = ref("");
 const abhiPayCurrency = ref("PKR");
 const generatedBillId = ref();
 const showBillId = ref(false);
-const banksWithOneBill = computed(() => {
-    return [
-        {
-            id: "onebill",
-            bank_name: "1Bill ",
-            account_title: "Instant Digital Payment",
-            account_number: "-",
-            iban: "-",
-            currency: "PKR",
-            isOneBill: true,
-        },
-        ...(banks.value || [])
-    ];
-});
 watch(abhiPayResponse, (newResponse) => {
     if (newResponse?.response?.payload?.consumerNumber) {
         generatedBillId.value = newResponse.response.payload.consumerNumber;
@@ -105,6 +91,9 @@ watch(deposit, (newDeposit) => {
 watch(paymentType, (newType) => {
     if (!isBankTransferType(newType)) {
         receiptImage.value = null;
+    }
+    if (newType === "abhipay-deposit") {
+        depositCurrency.value = "PKR";
     }
 });
 
@@ -157,8 +146,8 @@ function closeDialog() {
     selectedDeposit.value = null;
 }
 
-function fetchBanks() {
-    store.dispatch("bank/" + FETCH_BANKS);
+function fetchCurrencies() {
+    store.dispatch("currency/" + FETCH_CURRENCIES);
 }
 
 const handleReceiptImage = (event) => {
@@ -176,7 +165,7 @@ const formatCurrency = (value) => {
 function fetchAgentLedger() {
     if (user_id.value) {
         try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value });
+            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
             loading.value = false;
         } catch (err) {
             error.value = "Failed to load user data. Please try again.";
@@ -188,24 +177,12 @@ function fetchAgentLedger() {
     }
 }
 
-const selectBank = (bank) => {
-    selectedBank.value = bank;
-
-    if (bank.isOneBill) {
-        paymentType.value = "abhipay-deposit";
-        receiptImage.value = null;
-    } else {
-        paymentType.value = bank
-            ? `${bank.bank_name} - ${bank.account_title} - ${bank.account_number}`
-            : "";
-    }
-};
-
 async function handleDepositData() {
     formErrors.value = [];
     if (!date.value) formErrors.value.push("Date field is required.");
     if (!amount.value) formErrors.value.push("Amount field is required.");
     if (!paymentType.value) formErrors.value.push("Payment type is required.");
+    if (!depositCurrency.value) formErrors.value.push("Currency is required.");
     if (formErrors.value.length > 0) return;
 
     loading.value = true;
@@ -220,8 +197,7 @@ async function handleDepositData() {
         }
         depositData.append("payment_type", paymentType.value);
         depositData.append("additional_details", additionalDetails.value);
-        depositData.append("agent_id", user.value.id);
-        depositData.append("currency", selectedBank.value?.currency || "PKR");
+        depositData.append("currency", depositCurrency.value);
         depositData.append("payment_method", "bank");
 
         await store.dispatch(`deposit/${SAVE_DEPOSIT_DATA}`, depositData);
@@ -247,7 +223,7 @@ async function fetchAgentDeposits() {
     loading.value = true;
     error.value = null;
     try {
-        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value });
+        await store.dispatch(`deposit/${FETCH_DEPOSIT_DATA}`, { userId: user_id.value, currency_code: getSelectedCurrencyCode() });
     } catch (err) {
         console.error("Error fetching agent deposits:", err);
         error.value = "Failed to load user deposit data. Please try again.";
@@ -311,13 +287,21 @@ async function shareDialogOnWhatsApp() {
     }
 }
 
+const refreshForCurrencyChange = () => {
+    fetchAgentDeposits();
+    fetchAgentLedger();
+};
+
 onMounted(() => {
     if (user.value?.id) {
         fetchAgentDeposits();
         fetchAgentLedger();
-        fetchBanks();
+        fetchCurrencies();
     }
+    window.addEventListener("currency-changed", refreshForCurrencyChange);
 });
+
+onBeforeUnmount(() => window.removeEventListener("currency-changed", refreshForCurrencyChange));
 
 watch(user, (newUser) => {
     if (newUser?.id) {
@@ -343,7 +327,7 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-primary">Balance</p>
                                 <p class="text-2xl font-bold text-primary">
-                                    {{ formatAmount(agentLedger?.balance || 0) }}
+                                    {{ formatAmount(agentLedger?.balance_money?.amount, agentLedger?.balance_money?.currency) }}
                                 </p>
                             </div>
                         </div>
@@ -352,7 +336,7 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-green-600">Approved Deposits</p>
                                 <p class="text-2xl font-bold text-green-800">
-                                    {{ formatAmount(agentDepositData?.totalApprovedDeposits || 0) }}
+                                    {{ formatAmount(agentDepositData?.totalApprovedDeposits?.amount, agentDepositData?.totalApprovedDeposits?.currency) }}
                                 </p>
                             </div>
                         </div>
@@ -361,52 +345,22 @@ watch(user, (newUser) => {
                             <div>
                                 <p class="text-sm font-medium text-yellow-600">Total Pending Deposits</p>
                                 <p class="text-2xl font-bold text-yellow-800">
-                                    {{ formatAmount(agentDepositData?.totalPendingDeposits || 0) }}
+                                    {{ formatAmount(agentDepositData?.totalPendingDeposits?.amount, agentDepositData?.totalPendingDeposits?.currency) }}
                                 </p>
                             </div>
                         </div>
                     </div>
+                    <p v-if="agentDepositData?.legacy_unconverted_count"
+                        class="mt-3 text-sm text-amber-700">
+                        {{ agentDepositData.legacy_unconverted_count }} older deposit(s) are excluded from the AED balance because their locked historical rate is unavailable.
+                    </p>
                 </div>
             </div>
         </div>
 
-        <div class="mb-3">
-            <div class="max-w-full mx-auto">
-                <div class="">
-                    <div class="">
-                        <h1 class="text-2xl font-bold text-gray-800 mb-2">Select Banks to Deposit</h1>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div v-for="bank in banksWithOneBill" :key="bank.id"
-                                class="bg-primary/10 rounded-lg p-4 flex items-center cursor-pointer hover:bg-gray-100 h-full"
-                                :class="{
-                                    'ring-1 ring-primary': selectedBank?.id === bank.id,
-                                    'bg-green-50': bank.isOneBill
-                                }" @click="selectBank(bank)">
-                                <img v-if="bank.isOneBill" src="https://1link.net.pk/assets/images/logo.png"
-                                    alt="1 BILL" class="h-8 w-8 text-primary mr-4 hero-logo flex-shrink-0">
-                                <Receipt v-else-if="!bank?.logo_path" class="h-8 w-8 text-primary mr-4 flex-shrink-0" />
-                                <img v-else :src="bank?.logo_path" class="h-8 w-8 mr-4 flex-shrink-0" />
-
-                                <div class="flex-1">
-                                    <p class="text-xs sm:text-sm font-medium text-gray-600">{{ bank.bank_name }}</p>
-                                    <p class="text-sm sm:text-base font-semibold text-gray-800 break-words">{{ bank.account_title }}</p>
-                                    <p v-if="!bank.isOneBill" class="text-xs sm:text-sm text-gray-700 break-words">
-                                        Account: {{ bank.account_number }}
-                                    </p>
-                                    <p v-if="!bank.isOneBill" class="text-xs sm:text-sm text-gray-700 break-words">
-                                        IBAN: {{ bank.iban }}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bank Deposit Section (Existing) -->
+        <!-- Deposit section -->
         <div class="bg-white rounded-lg mb-3">
-            <span class="text-2xl font-bold">New Deposit - Bank Transfer</span>
+            <span class="text-2xl font-bold">New Deposit</span>
             <div class="space-y-6">
                 <div class="grid grid-cols-5 max-[425px]:grid-cols-2 gap-2">
                     <div class="grid">
@@ -429,7 +383,7 @@ watch(user, (newUser) => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectGroup>
-                                    <SelectLabel>Banks</SelectLabel>
+                                    <SelectLabel>Payment method</SelectLabel>
                                     <SelectItem value="abhipay-deposit">
                                         <div class="flex items-center gap-2">
                                             <span class="truncate max-w-[150px] block">
@@ -444,26 +398,20 @@ watch(user, (newUser) => {
                                             </span>
                                         </div>
                                     </SelectItem>
-                                    <SelectItem v-for="bank in banks" :key="bank.id"
-                                        :value="`${bank.bank_name} - ${bank.account_title} - ${bank.account_number}`">
-                                        <div class="flex items-center gap-2">
-                                            <img v-if="bank?.logo_path" :src="bank.logo_path" :alt="bank.bank_name"
-                                                class="w-5 h-5 object-contain shrink-0" />
-                                            <span class="truncate max-w-[150px] max-[320px]:max-w-[93px] block">
-                                                {{ bank.bank_name }} - {{ bank.account_title }} - {{ bank.account_number
-                                                }}
-                                            </span>
-                                        </div>
-                                    </SelectItem>
                                 </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
                     <div class="grid">
                         <label>Currency</label>
-                        <input
-                            class="flex h-10 w-full rounded-md transition-all duration-75 border border-primary hover:border-2 hover:border-primary/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            :value="selectedBank?.currency || 'PKR'" />
+                        <Select v-model="depositCurrency" :disabled="paymentType === 'abhipay-deposit'">
+                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="currency in currencies" :key="currency.code" :value="currency.code">
+                                    {{ currency.code }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div class="grid">
@@ -491,7 +439,7 @@ watch(user, (newUser) => {
                                 to
                                 avoid
                                 delays in processing.</li>
-                            <li>Please ensure to transfer payments only from your Travel Agency Bank Accounts.</li>
+                            <li>Attach a receipt for cash deposits so the admin can verify them.</li>
                             <li>
                                 To register your bank account with us, please send an email to
                                 <a href="mailto:support@Jetze.pk"
@@ -647,7 +595,7 @@ watch(user, (newUser) => {
                                                 {{ deposit.deposit_status || "_" }}
                                             </span>
                                         </td>
-                                        <td class="px-1 py-4">{{ deposit.amount || "_" }}</td>
+                                        <td class="px-1 py-4">{{ formatAmount(deposit.display_money?.amount ?? deposit.source_money?.amount, deposit.display_money?.currency ?? deposit.source_money?.currency) }}</td>
                                         <td class="px-1 py-4">
                                             <div class="flex space-x-2">
                                                 <button @click="openDialog(deposit)"
@@ -739,7 +687,7 @@ watch(user, (newUser) => {
                                             <div class="space-y-1">
                                                 <p class="font-medium text-gray-500">Amount</p>
                                                 <p class="font-bold text-gray-900">{{
-                                                    formatAmount(selectedDeposit?.amount) ||
+                                                    formatAmount(selectedDeposit?.display_money?.amount ?? selectedDeposit?.source_money?.amount, selectedDeposit?.display_money?.currency ?? selectedDeposit?.source_money?.currency) ||
                                                     'N/A' }}
                                                 </p>
                                             </div>

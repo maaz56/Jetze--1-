@@ -8,22 +8,24 @@ use App\Models\AgentCharge;
 use App\Models\DepositData;
 use App\Models\FlightBookings;
 use App\Models\OfflineBooking;
+use App\Services\CurrencyConversionService;
 use DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Log;
 
 class AgentLedgerController extends Controller
 {
 
+    /** Return the ledger in AED accounting values with a selected-currency display view. */
     public function index(Request $request)
     {
-
-       // Log::info($request->all());
-
-        $userRole = $request->userRole;
-        $agentId = $request->userId;
+        $actor = $request->user();
+        $userRole = $actor->role;
+        $agentId = $userRole === 'admin' ? $request->userId : $actor->id;
         $startDate = $request->startDate;
         $endDate = $request->endDate;
+        $displayCurrency = $userRole === 'admin' ? 'AED' : ($request->currency_code ?: 'AED');
 
         // Fetch deposits (credits)
         if ($userRole === 'admin') {
@@ -35,7 +37,7 @@ class AgentLedgerController extends Controller
                 ->select([
                     'date',
                     DB::raw('NULL as debit'),
-                    'amount as credit',
+                    'aed_amount as credit',
                     DB::raw('"deposit" as transaction_type'),
                     'receipt_reference as reference_id',
                     'additional_details as details',
@@ -65,11 +67,11 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN 0 ELSE amount END as debit'),
+                    DB::raw('COALESCE(aed_amount, amount) as debit'),
                     DB::raw('NULL as credit'),
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually_issued" ELSE "booking" END as transaction_type'),
+                    DB::raw('"booking" as transaction_type'),
                     'id as reference_id',
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually issued" ELSE flight_id END as details'),
+                    'flight_id as details',
                     DB::raw('id as record_id'),
                     'booking_source',
                     'flight_provider',
@@ -139,7 +141,7 @@ class AgentLedgerController extends Controller
                 ->select([
                     'date',
                     DB::raw('NULL as debit'),
-                    'amount as credit',
+                    'aed_amount as credit',
                     DB::raw('"deposit" as transaction_type'),
                     'receipt_reference as reference_id',
                     'additional_details as details',
@@ -168,11 +170,11 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN 0 ELSE amount END as debit'),
+                    DB::raw('COALESCE(aed_amount, amount) as debit'),
                     DB::raw('NULL as credit'),
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually_issued" ELSE "booking" END as transaction_type'),
+                    DB::raw('"booking" as transaction_type'),
                     'id as reference_id',
-                    DB::raw('CASE WHEN is_manually_issued = 1 THEN "manually issued" ELSE flight_id END as details'),
+                    'flight_id as details',
                     DB::raw('id as record_id'),
                     'booking_source',
                     'flight_provider',
@@ -241,7 +243,7 @@ class AgentLedgerController extends Controller
             ->get();
         $balance = 0;
 
-        if ($request->userRole === 'admin') {
+        if ($userRole === 'admin') {
             $ledger = $transactions->map(function ($transaction) use (&$balance) {
                 $transaction->debit = $transaction->debit ?? 0;
                 $transaction->credit = $transaction->credit ?? 0;
@@ -259,13 +261,45 @@ class AgentLedgerController extends Controller
             });
         }
 
-
-
         return response()->json([
             'status' => 'success',
-            'ledger' => $ledger,
+            'accounting_currency' => 'AED',
+            'display_currency' => $displayCurrency,
+            'ledger' => $this->presentLedger($ledger, $displayCurrency),
             'balance' => $balance,
+            'balance_money' => $this->displayMoney($balance, $displayCurrency),
         ]);
+    }
+
+    /** Add AED and selected-currency money objects while preserving numeric ledger fields. */
+    private function presentLedger(Collection $ledger, string $displayCurrency): Collection
+    {
+        return $ledger->map(function ($transaction) use ($displayCurrency) {
+            $transaction->setAttribute('debit_money', $this->displayMoney($transaction->debit ?? 0, $displayCurrency));
+            $transaction->setAttribute('credit_money', $this->displayMoney($transaction->credit ?? 0, $displayCurrency));
+            $transaction->setAttribute('balance_money', $this->displayMoney($transaction->balance ?? 0, $displayCurrency));
+
+            return $transaction;
+        });
+    }
+
+    /** Convert an AED ledger value only for display. */
+    private function displayMoney(mixed $aedAmount, string $displayCurrency): array
+    {
+        $amount = (string) ($aedAmount ?? 0);
+        $isNegative = bccomp($amount, '0', 8) < 0;
+        $absoluteAmount = $isNegative ? bcsub('0', $amount, 12) : $amount;
+        $money = app(CurrencyConversionService::class)->convertMoney(
+            $absoluteAmount,
+            'AED',
+            $displayCurrency,
+        );
+
+        if ($isNegative) {
+            $money['amount'] = '-' . $money['amount'];
+        }
+
+        return $money;
     }
 
     public function profitLossReport(Request $request)

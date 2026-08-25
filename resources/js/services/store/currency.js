@@ -1,7 +1,6 @@
 import apiService from "./apiService";
 import { toast } from "vue3-toastify";
 import {
-    DELETE_CURRENCY,
     FETCH_CITIES,
     FETCH_CURRENCIES,
     SAVE_CURRENCY,
@@ -53,6 +52,7 @@ const actions = {
                 "type": "error",
             })
             context.commit(SET_API_ERROR, error);
+            context.commit(NOT_IS_LOADING);
         }
     },
     async [FETCH_CURRENCIES](context, params) {
@@ -68,6 +68,7 @@ const actions = {
                 "type": "error",
             })
             context.commit(SET_API_ERROR, error);
+            context.commit(NOT_IS_LOADING);
         }
     },
     async [UPDATE_CURRENCY](context, params) {
@@ -85,26 +86,10 @@ const actions = {
                 "type": "error",
             })
             context.commit(SET_API_ERROR, error);
+            context.commit(NOT_IS_LOADING);
         }
     },
 
-    async [DELETE_CURRENCY](context, id) {
-        context.commit(IS_LOADING);
-        try {
-            const response = await apiService.deleteCurrency(id);
-            toast("Currency deleted successfully.", {
-                type: "success",
-            });
-            context.commit(NOT_IS_LOADING);
-            return response;
-        } catch (error) {
-            console.log(error);
-            toast('Something went wrong.', {
-                "type": "error",
-            })
-            context.commit(SET_API_ERROR, error);
-        }
-    },
 }
 
 const mutations = {

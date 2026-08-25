@@ -27,7 +27,7 @@ import { calculateLayover, formatDateTime } from "@/lib/utils";
 
 import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
-import { formatAmount } from "@/lib/utils";
+import { formatAmountWithCurrency } from "@/lib/utils";
 
 import { useAuthStore } from "@/services/stores/auth";
 
@@ -117,9 +117,11 @@ const capitalize = (string) => {
 };
 const formatTransactionType = (transactionType) => {
   if (!transactionType) return "-";
-  if (transactionType === "manually_issued") return "Manually Issued";
   return capitalize(transactionType.replaceAll("_", " "));
 };
+
+/** Format every admin ledger amount in the fixed AED accounting currency. */
+const formatAdminAmount = (amount) => formatAmountWithCurrency(amount ?? 0, "AED");
 watch(user_role, (newUserRole) => {
   if (newUserRole) {
     fetchAdminLedger();
@@ -259,10 +261,6 @@ onMounted(() => {
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
                     <div>{{ formatTransactionType(transaction?.transaction_type) }}</div>
-                    <p v-if="transaction?.transaction_type === 'manually_issued'"
-                      class="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                      Manually issued (no ledger deduction)
-                    </p>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
                     {{ transaction.reference_id }}
@@ -273,21 +271,21 @@ onMounted(() => {
                   <td class="px-6 py-4 text-sm text-red-600">
                     <!-- Display Debit value, if 0 show '-' -->
                     {{
-                      transaction.credit !== "0"
-                        ? formatAmount(transaction.credit)
+                      Number(transaction.credit ?? 0) !== 0
+                        ? formatAdminAmount(transaction.credit)
                         : "-"
                     }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">
                     <!-- Display Credit value, if 0 show '-' -->
                     {{
-                      transaction?.debit !== "0"
-                        ? formatAmount(transaction?.debit)
+                      Number(transaction.debit ?? 0) !== 0
+                        ? formatAdminAmount(transaction?.debit)
                         : "-"
                     }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
-                    {{ formatAmount(transaction.balance) }}
+                    {{ formatAdminAmount(transaction.balance) }}
                   </td>
                 </tr>
               </tbody>
@@ -298,7 +296,7 @@ onMounted(() => {
                     Total Balance
                   </td>
                   <td class="px-6 py-4 text-gray-900">
-                    {{ formatAmount(agentLedger?.balance ?? 0) }}
+                    {{ formatAdminAmount(agentLedger?.balance ?? 0) }}
                   </td>
                 </tr>
               </tfoot>
@@ -318,7 +316,7 @@ onMounted(() => {
       </footer>
       <div class=" hidden print:block bg-gray-50 font-semibold mt-4">
         <p class="px-6 py-4 text-right text-gray-700">
-          Total Balance:  {{ formatAmount(agentLedger?.balance ?? 0) }}
+          Total Balance:  {{ formatAdminAmount(agentLedger?.balance ?? 0) }}
         </p>
       </div>
     </div>

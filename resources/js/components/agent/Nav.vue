@@ -87,6 +87,7 @@ function fetchAgentLedger() {
         try {
             store.dispatch("ledger/" + FETCH_AGENT_LEDGER, {
                 userId: user_id.value,
+                currency_code: selectedCurrencyCode.value,
             });
             loading.value = false;
         } catch (err) {
@@ -157,7 +158,14 @@ watch(
 );
 
 watch(selectedCurrencyCode, (value) => {
-    setSelectedCurrencyCode(value);
+    const domainCurrency = setSelectedCurrencyCode(value);
+
+    if (domainCurrency !== value) {
+        selectedCurrencyCode.value = domainCurrency;
+        return;
+    }
+
+    fetchAgentLedger();
 });
 
 function handleOpenChange() {
@@ -251,7 +259,7 @@ onMounted(() => {
                             <Wallet class="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                             <span class="text-xs sm:text-sm font-medium">{{ selectedCurrencySymbol }}</span>
                             <span class="mx-1 text-gray-300">|</span>
-                            <span class="text-xs sm:text-sm font-medium">{{ formatBalanceAmount(agentLedger?.balance) }}</span>
+                            <span class="text-xs sm:text-sm font-medium">{{ formatBalanceAmount(agentLedger?.balance_money?.amount) }}</span>
                         </div>
                     </div>
                     <div class="flex flex-col">
@@ -330,8 +338,8 @@ onMounted(() => {
                 <!-- Phone -->
                 <div class="flex items-center group">
                     <Phone class="h-4 w-4 mr-2 text-primary" />
-                    <a href="tel:+923111448111" class="text-sm text-primary-400 hover:text-gray-200">
-                         (+92) 3111711123
+                    <a href="tel:+923007690691" class="text-sm text-primary-400 hover:text-gray-200">
+                         UAN (+92) 300 7690691
                     </a>
                 </div>
 
@@ -359,7 +367,7 @@ onMounted(() => {
                 <!-- Wallet for Mobile -->
                 <div class="flex items-center bg-gray-50 text-gray-700 px-3 py-2 rounded-md w-fit mt-2">
                     <Wallet class="h-4 w-4 mr-2" />
-                    <span class="text-sm font-medium">{{ formatAmount(agentLedger?.balance) }}</span>
+                    <span class="text-sm font-medium">{{ formatAmount(agentLedger?.balance_money?.amount, agentLedger?.balance_money?.currency) }}</span>
                 </div>
             </div>
         </div>

@@ -142,6 +142,10 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('/approved-deposits-total', [DepositDataController::class, 'getApprovedDepositsTotal']);
 
     Route::get('flights', [FlightController::class, 'index']);
+    Route::post('flight-quotes', [FlightController::class, 'createPriceQuote'])->middleware('auth:sanctum');
+    Route::get('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'showQuoteAncillaries'])->middleware('auth:sanctum');
+    Route::put('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'updateQuoteAncillaries'])->middleware('auth:sanctum');
+    Route::get('flight-quotes/{quoteUuid}', [FlightController::class, 'showPriceQuote'])->middleware('auth:sanctum');
     Route::get('flight/{id}/{supplier}/{isSooperFlight}', [FlightController::class, 'show']);
     Route::get('flight-quotation', [FlightController::class, 'sendQuotation']);
     Route::get('booking-details', [FlightController::class, 'getBookingDetails']);
@@ -160,7 +164,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::post('send-offline-booking-email', [OfflineBookingController::class, 'sendEmail']);
 
 
-    Route::post('bookings', [BookingController::class, 'store']);
+    Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
     Route::get('get-bookings', [BookingController::class, 'index']);
     Route::get('get-flight-booking-details', [BookingController::class, 'getBookingDetails']);
     // Route::post('cancel-pnr', [BookingController::class, 'cancelPnrDetails']);
@@ -185,7 +189,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
 
     Route::post('currencies', [CurrencyController::class, 'store']);
     Route::post('update-currencies', [CurrencyController::class, 'update']);
-    Route::delete('currencies', [CurrencyController::class, 'destroy']);
+    Route::get('currencies/{code}/rate-history', [CurrencyController::class, 'rateHistory']);
 
     Route::get('banks', [BankController::class, 'index']);
     Route::post('banks', [BankController::class, 'store']);
@@ -270,7 +274,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('get-customer-margin-values', [CustomerMarginController::class, 'index']);
 
     Route::get('countries', [CountryController::class, 'index']);
-    Route::post('bookings', [BookingController::class, 'store']);
+    Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
     Route::get('get-customer-flight-booking-details', [BookingController::class, 'getCustomerBookingDetails']);
 
     Route::get('customers', [CustomerController::class, 'getCustomers']);
@@ -332,7 +336,7 @@ Route::post('save-customer-margin-values', [CustomerMarginController::class, 'up
 Route::get('get-booking-status-settings', [AdminSettingsController::class, 'getBookiongStatusSettings']);
 Route::get('get-customer-margin-values', [CustomerMarginController::class, 'index']);
 Route::get('countries', [CountryController::class, 'index']);
-Route::post('bookings', [BookingController::class, 'store']);
+Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
 Route::get('get-customer-flight-booking-details', [BookingController::class, 'getCustomerBookingDetails']);
 Route::post('send-sooper-quote', [BookingController::class, 'sendSooperQuote']);
 Route::post('send-add-to-cart', [FlyDubaiController::class, 'AddToCart']);

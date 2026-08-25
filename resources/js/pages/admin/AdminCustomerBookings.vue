@@ -367,7 +367,7 @@ onUnmounted(() => clearInterval(countdownInterval));
                                     </div>
                                 </td>
                                 <td class="py-2 px-4">
-                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                    {{ booking.status?.toUpperCase() }}
                                 </td>
                                 <td class="py-2 px-4 whitespace-nowrap">
                                     <span v-if="booking?.status?.toLowerCase() === 'booked'"

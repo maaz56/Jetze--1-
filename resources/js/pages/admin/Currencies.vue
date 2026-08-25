@@ -10,7 +10,7 @@
                         </div>
                         <h1 class="text-3xl font-bold text-gray-900">Currencies</h1>
                         <p class="max-w-2xl text-sm text-gray-600">
-                            Keep exchange rates, symbols, and currency labels organized from a single admin screen.
+                            Base currency is AED. Each rate shows the AED value of one currency unit.
                         </p>
                     </div>
 
@@ -35,7 +35,7 @@
                                             Add New Currency
                                         </DialogTitle>
                                         <DialogDescription class="text-sm leading-6 text-gray-500">
-                                            Create a new currency entry. Base currency remains <strong>AED</strong>.
+                                            Create a new currency entry. AED remains the fixed base currency.
                                         </DialogDescription>
                                     </DialogHeader>
 
@@ -60,9 +60,15 @@
                                         </div>
 
                                         <div class="grid gap-2">
-                                            <Label for="exchange_rate" class="text-sm font-medium text-gray-700">Exchange Rate</Label>
+                                            <Label for="exchange_rate" class="text-sm font-medium text-gray-700">1 currency = AED</Label>
                                             <Input id="exchange_rate" v-model.number="newCurrency.exchange_rate" type="number"
-                                                step="0.000001" placeholder="278.50" class="font-mono" />
+                                                step="0.000001" placeholder="0.013000" class="font-mono" />
+                                        </div>
+
+                                        <div v-if="newCurrency.code !== 'AED'" class="grid gap-2">
+                                            <Label for="rate-change-reason" class="text-sm font-medium text-gray-700">Rate reason</Label>
+                                            <Input id="rate-change-reason" v-model="newCurrency.rate_change_reason"
+                                                placeholder="e.g. Updated supplier conversion rate" />
                                         </div>
                                     </div>
 
@@ -137,6 +143,7 @@
                                 <TableHead class="text-gray-700">Code</TableHead>
                                 <TableHead class="text-gray-700">Symbol</TableHead>
                                 <TableHead class="text-gray-700">Exchange Rate</TableHead>
+                                <TableHead class="text-gray-700">Status</TableHead>
                                 <TableHead class="text-right text-gray-700">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -172,13 +179,28 @@
 
                                 <TableCell>
                                     <div class="flex items-center gap-3">
-                                        <Input v-model.number="currency.exchange_rate" type="number" step="0.000001"
-                                            class="h-11 w-36 rounded border-gray-200 bg-white font-mono text-right text-sm shadow-none"
-                                            @blur="updateRate(currency.code, currency.exchange_rate)" />
                                         <div class="flex flex-col">
                                             <span class="text-sm font-medium text-gray-700">{{ formatRate(currency.exchange_rate) }}</span>
-                                            <span class="text-xs text-gray-500">per USD</span>
+                                            <span class="text-xs text-gray-500">1 {{ currency.code }} = AED</span>
                                         </div>
+                                    </div>
+                                </TableCell>
+
+                                <TableCell>
+                                    <div class="flex items-center gap-2">
+                                        <Switch
+                                            :checked="Boolean(currency.is_enabled)"
+                                            :disabled="currency.is_base"
+                                            @update:checked="(value) => updateCurrencyStatus(currency, value)"
+                                        />
+                                        <Badge
+                                            variant="outline"
+                                            :class="currency.is_enabled
+                                                ? 'border-green-200 bg-green-50 text-green-700'
+                                                : 'border-gray-200 bg-gray-50 text-gray-600'"
+                                        >
+                                            {{ currency.is_base ? 'Base' : (currency.is_enabled ? 'Enabled' : 'Disabled') }}
+                                        </Badge>
                                     </div>
                                 </TableCell>
 
@@ -200,7 +222,7 @@
                                                             Update Currency
                                                         </DialogTitle>
                                                         <DialogDescription class="text-sm leading-6 text-gray-500">
-                                                            Update the label, symbol, or exchange rate for this currency.
+                                                            Update the label, symbol, or AED rate for this currency.
                                                         </DialogDescription>
                                                     </DialogHeader>
 
@@ -228,10 +250,17 @@
                                                         </div>
 
                                                         <div class="grid gap-2">
-                                                            <Label for="update-exchange_rate" class="text-sm font-medium text-gray-700">Exchange Rate</Label>
+                                                            <Label for="update-exchange_rate" class="text-sm font-medium text-gray-700">1 currency = AED</Label>
                                                             <Input id="update-exchange_rate" v-model.number="newCurrency.exchange_rate"
-                                                                type="number" step="0.000001" placeholder="278.50"
+                                                                type="number" step="0.000001" placeholder="0.013000"
+                                                                :disabled="selectedCurrency?.is_base"
                                                                 class="font-mono" />
+                                                        </div>
+
+                                                        <div v-if="!selectedCurrency?.is_base" class="grid gap-2">
+                                                            <Label for="update-rate-change-reason" class="text-sm font-medium text-gray-700">Rate reason</Label>
+                                                            <Input id="update-rate-change-reason" v-model="newCurrency.rate_change_reason"
+                                                                placeholder="Required only when changing the rate" />
                                                         </div>
                                                     </div>
 
@@ -249,12 +278,6 @@
                                                 </div>
                                             </DialogContent>
                                         </Dialog>
-
-                                        <Button size="sm" variant="destructive"
-                                            @click="confirmDeleteCurrency(currency.code)"
-                                            class="h-10 rounded shadow-none">
-                                            <Trash2 class="h-4 w-4" />
-                                        </Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -263,30 +286,6 @@
                 </div>
             </div>
         </div>
-
-        <AlertDialog v-model:open="showDeleteCurrencyDialog">
-            <AlertDialogContent class="border-0 bg-white shadow-2xl">
-                <AlertDialogHeader>
-                    <AlertDialogTitle class="text-2xl font-semibold text-gray-900">
-                        Delete Currency
-                    </AlertDialogTitle>
-                    <AlertDialogDescription class="space-y-2 text-sm leading-6 text-gray-500">
-                        Remove <strong class="text-gray-900">{{ currencyToDelete }}</strong> permanently?
-                        <span class="block text-amber-600">
-                            This action cannot be undone and may affect pricing calculations.
-                        </span>
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter class="gap-3">
-                    <AlertDialogCancel @click="showDeleteCurrencyDialog = false">
-                        Cancel
-                    </AlertDialogCancel>
-                    <AlertDialogAction @click="deleteCurrency" class="bg-destructive text-white">
-                        Delete Permanently
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
     </div>
 </template>
 
@@ -301,26 +300,17 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, DollarSign, PenBox, Plus, RefreshCcw, Search, Sparkles, Trash2 } from "lucide-vue-next";
+import { Switch } from "@/components/ui/switch";
+import { ArrowLeft, DollarSign, PenBox, Plus, RefreshCcw, Search, Sparkles } from "lucide-vue-next";
 import { toast } from "vue3-toastify";
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStore } from "vuex";
-import { DELETE_CURRENCY, FETCH_CURRENCIES, SAVE_CURRENCY, UPDATE_CURRENCY } from "@/services/store/actions.type";
+import { FETCH_CURRENCIES, SAVE_CURRENCY, UPDATE_CURRENCY } from "@/services/store/actions.type";
 
 const router = useRouter();
 const store = useStore();
@@ -329,8 +319,6 @@ const store = useStore();
 const isLoading = computed(() => store.getters["currency/isLoading"]);
 const showAddCurrencyDialog = ref(false);
 const showUpdateCurrencyDialog = ref(false);
-const showDeleteCurrencyDialog = ref(false);
-const currencyToDelete = ref("");
 const currencies = computed(() => store.getters["currency/currencies"] || []);
 const searchTerm = ref("");
 const newCurrency = ref({
@@ -338,6 +326,7 @@ const newCurrency = ref({
     name: "",
     symbol: "",
     exchange_rate: null,
+    rate_change_reason: "",
 });
 const selectedCurrency = ref(null);
 const filteredCurrencies = computed(() => {
@@ -378,9 +367,30 @@ function formatRate(value) {
 
 
 function resetAndClose() {
-    newCurrency.value = { code: "", name: "", symbol: "", exchange_rate: null };
+    newCurrency.value = {
+        code: "",
+        name: "",
+        symbol: "",
+        exchange_rate: null,
+        rate_change_reason: "",
+    };
     showAddCurrencyDialog.value = false;
     showUpdateCurrencyDialog.value = false;
+}
+
+function currencyPayload(currency, overrides = {}) {
+    const exchangeRate = Number(currency.exchange_rate);
+
+    return {
+        code: String(currency.code || "").toUpperCase(),
+        name: String(currency.name || "").trim(),
+        symbol: String(currency.symbol || "").trim(),
+        exchange_rate: Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : null,
+        decimal_places: Number(currency.decimal_places ?? 2),
+        is_enabled: Boolean(currency.is_enabled),
+        rate_change_reason: "",
+        ...overrides,
+    };
 }
 
 function fetchCurrencies() {
@@ -392,10 +402,22 @@ function addNewCurrency() {
         code: newCurrency.value.code.toUpperCase(),
         name: newCurrency.value.name.trim(),
         symbol: newCurrency.value.symbol.trim(),
-        exchange_rate: parseFloat(newCurrency.value.exchange_rate),
+        exchange_rate: Number(newCurrency.value.exchange_rate),
+        is_enabled: true,
+        rate_change_reason: newCurrency.value.rate_change_reason.trim(),
     };
-    store.dispatch("currency/" + SAVE_CURRENCY, currency);
-    resetAndClose();
+
+    if (currency.code !== "AED" && !currency.rate_change_reason) {
+        toast.error("Please add a reason for the initial rate.");
+        return;
+    }
+
+    store.dispatch("currency/" + SAVE_CURRENCY, currency).then((response) => {
+        if (response) {
+            fetchCurrencies();
+            resetAndClose();
+        }
+    });
 }
 
 function updateCurrencyDialog(code) {
@@ -407,6 +429,7 @@ function updateCurrencyDialog(code) {
             name: selectedCurrency.value.name,
             symbol: selectedCurrency.value.symbol,
             exchange_rate: selectedCurrency.value.exchange_rate,
+            rate_change_reason: "",
         };
     }
 
@@ -414,47 +437,31 @@ function updateCurrencyDialog(code) {
 
 function updateCurrency() {
     if (selectedCurrency.value) {
-        const currency = {
+        const currency = currencyPayload(selectedCurrency.value, {
             code: newCurrency.value.code.toUpperCase(),
             name: newCurrency.value.name.trim(),
             symbol: newCurrency.value.symbol.trim(),
-            exchange_rate: parseFloat(newCurrency.value.exchange_rate),
-        };
-        store.dispatch("currency/" + UPDATE_CURRENCY, currency).then(() => {
-            fetchCurrencies();
-            toast.success("Currency updated successfully");
-        }).catch((error) => {
-            toast.error("Failed to update currency");
+            exchange_rate: Number(newCurrency.value.exchange_rate),
+            rate_change_reason: newCurrency.value.rate_change_reason.trim(),
+        });
+        store.dispatch("currency/" + UPDATE_CURRENCY, currency).then((response) => {
+            if (response) {
+                fetchCurrencies();
+                toast.success("Currency updated successfully");
+                resetAndClose();
+            }
         });
     }
-    resetAndClose();
 }
 
-function updateRate(code, newRate) {
-    const currency = currencies.value.find(c => c.code === code);
-    if (currency && newRate > 0) {
-        currency.exchange_rate = parseFloat(newRate);
-    }
-    store.dispatch("currency/" + UPDATE_CURRENCY, currency);
-}
-
-function confirmDeleteCurrency(code) {
-    currencyToDelete.value = code;
-    showDeleteCurrencyDialog.value = true;
-}
-
-function deleteCurrency() {
-    if (!currencyToDelete.value) {
+function updateCurrencyStatus(currency, isEnabled) {
+    if (currency.is_base) {
         return;
     }
 
-    store.dispatch("currency/" + DELETE_CURRENCY, {
-        code: currencyToDelete.value,
-    }).then(() => {
-        showDeleteCurrencyDialog.value = false;
-        currencyToDelete.value = "";
-        fetchCurrencies();
-    });
+    store.dispatch("currency/" + UPDATE_CURRENCY, currencyPayload(currency, {
+        is_enabled: isEnabled,
+    })).then(fetchCurrencies);
 }
 
 

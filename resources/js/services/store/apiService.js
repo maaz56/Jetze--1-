@@ -181,6 +181,12 @@ export default {
              params
         );
     },
+    getQuoteAncillaries(quoteId) {
+        return apiClient.get(`/flight-quotes/${quoteId}/ancillaries`);
+    },
+    updateQuoteAncillaries(quoteId, params) {
+        return apiClient.put(`/flight-quotes/${quoteId}/ancillaries`, params);
+    },
     patchAncillaries(params) {
         return apiClient.post("/patch-ancillaries", params);
     },
@@ -535,9 +541,6 @@ export default {
 
     saveCurrency(params) {
         return apiClient.post("/currencies", params);
-    },
-    deleteCurrency(params) {
-        return apiClient.delete("/currencies", {params});
     },
     fetchCurrencies(params) {
         return apiClient.get("/currencies", {

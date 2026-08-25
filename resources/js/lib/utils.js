@@ -10,7 +10,34 @@ export function cn(...inputs) {
 const DEFAULT_CURRENCY_CODE = "AED";
 const selectedCurrencyCodeState = ref(readStoredCurrencyCode());
 
+/** Return the currency permanently assigned to the current public domain. */
+export function getDomainCurrencyCode(hostname) {
+    const host = String(
+        hostname ??
+            (typeof window !== "undefined" ? window.location.hostname : ""),
+    )
+        .trim()
+        .toLowerCase()
+        .replace(/^www\./, "");
+
+    if (host === "ae" || host.endsWith(".ae")) {
+        return "AED";
+    }
+
+    if (host === "pk" || host.endsWith(".pk")) {
+        return "PKR";
+    }
+
+    return null;
+}
+
 function readStoredCurrencyCode() {
+    const domainCurrency = getDomainCurrencyCode();
+
+    if (domainCurrency) {
+        return domainCurrency;
+    }
+
     if (typeof localStorage === "undefined") {
         return DEFAULT_CURRENCY_CODE;
     }
@@ -29,15 +56,21 @@ function normalizeCurrencyCode(currencyCode) {
 }
 
 export function getSelectedCurrencyCode() {
-    return selectedCurrencyCodeState.value;
+    return getDomainCurrencyCode() || selectedCurrencyCodeState.value;
 }
 
 export function setSelectedCurrencyCode(currencyCode) {
-    const normalizedCode = normalizeCurrencyCode(currencyCode);
+    const normalizedCode = getDomainCurrencyCode() || normalizeCurrencyCode(currencyCode);
     selectedCurrencyCodeState.value = normalizedCode;
 
     if (typeof localStorage !== "undefined") {
         localStorage.setItem("currencyCode", normalizedCode);
+    }
+
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(
+            new CustomEvent("currency-changed", { detail: { code: normalizedCode } }),
+        );
     }
 
     return normalizedCode;

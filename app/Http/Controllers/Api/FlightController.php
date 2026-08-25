@@ -3,25 +3,44 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\AtApiService;
+use App\Services\AncillaryPricingService;
 use App\Services\FlightAggregationService;
+use App\Services\PriceQuoteService;
 use App\Services\SooperApiService;
+use App\Transformers\AtAncillaryTransformer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 
 class FlightController extends Controller
 {
     protected $flightAggregator;
+    protected $atApiService;
     protected $sooperApiService;
+    protected $priceQuoteService;
+    protected $ancillaryPricingService;
+    protected $atAncillaryTransformer;
 
-    public function __construct(FlightAggregationService $flightAggregationService, SooperApiService $sooperApiService)
+    public function __construct(
+        FlightAggregationService $flightAggregationService,
+        AtApiService $atApiService,
+        SooperApiService $sooperApiService,
+        PriceQuoteService $priceQuoteService,
+        AncillaryPricingService $ancillaryPricingService,
+        AtAncillaryTransformer $atAncillaryTransformer,
+    )
     {
         $this->flightAggregator = $flightAggregationService;
-
+        $this->atApiService = $atApiService;
         $this->sooperApiService = $sooperApiService;
+        $this->priceQuoteService = $priceQuoteService;
+        $this->ancillaryPricingService = $ancillaryPricingService;
+        $this->atAncillaryTransformer = $atAncillaryTransformer;
     }
     public function fetchProviders()
     {
@@ -43,6 +62,7 @@ class FlightController extends Controller
     {
         // Determine the flight type
         $flightType = $request->flightType;
+        $currencyCode = $this->currencyCodeForRequest($request);
         // Log::info($request->airline);
         // Initialize params array
         $params = [
@@ -52,7 +72,7 @@ class FlightController extends Controller
             'children' => $request->children ?? 0,
             'infants' => $request->infants ?? 0,
             'flight_type' => $flightType,
-            'currency_code' => $request->currencyCode ?? 'PKR', // Default to PKR if not provided
+            'currency_code' => $currencyCode,
             'flexible_plus_minus_3' => filter_var($request->flexible_plus_minus_3 ?? false, FILTER_VALIDATE_BOOLEAN),
         ];
 
@@ -66,8 +86,8 @@ class FlightController extends Controller
             $params['return_date'] = $request->return_date; // Will be null for one-way
         }
 
-        // Generate a unique cache key prefix based on user or session
-        $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
+        // Use the Sanctum-authenticated user so search and checkout share one cache key.
+        $cacheKeyPrefix = $this->flightCacheKey($request);
 
         Cache::forget($cacheKeyPrefix . '_previous_search');
         Cache::forget($cacheKeyPrefix . '_flights');
@@ -76,14 +96,35 @@ class FlightController extends Controller
         Cache::forget($cacheKeyPrefix . '_currency_code');
         // Store previous search parameters in the cache with TTL
         Cache::put($cacheKeyPrefix . '_previous_search', $params, now()->addHour());
-        Cache::put($cacheKeyPrefix . '_currency_code', $request->currencyCode, now()->addHour());
+        Cache::put($cacheKeyPrefix . '_currency_code', $currencyCode, now()->addHour());
         // Fetch flights from the aggregator
         $flights = $this->flightAggregator->getFlights($params);
         // Log::info('Flights Data: ' . json_encode($flights, JSON_PRETTY_PRINT));
         $sabreFlights = $flights['results'];
         // $sooperFlights = $flights['sooperFlights'];
 
-        // Cache Sabre flights and Sooper flights with TTL
+        // A search token works for logged-in users and guests because API sessions
+        // are not reliable as a cache identity for public search requests.
+        $searchToken = (string) Str::uuid();
+
+        // Cache every selectable flight separately for the 15-minute quote window.
+        foreach ($sabreFlights as &$flight) {
+            $flightReference = data_get($flight, 'leg.ref_id');
+
+            if ($flightReference) {
+                $flight['quote_search_token'] = $searchToken;
+
+                Cache::put(
+                    $this->quoteFlightCacheKey($searchToken, $flightReference),
+                    $flight,
+                    now()->addMinutes(15),
+                );
+            }
+        }
+        unset($flight);
+
+        // Keep the existing legacy flight-detail cache behaviour unchanged.
+        Cache::put($cacheKeyPrefix . '_sooper_flights', $sabreFlights, now()->addMinutes(15));
 
 
         // Initialize an empty array for airlines
@@ -278,6 +319,337 @@ class FlightController extends Controller
             // 'cheapest_flights_by_airline' => $cheapestFlightsByAirline,
             // 'previous_search' => Cache::get($cacheKeyPrefix . '_previous_search'),
             // 'available_airlines' => Cache::get($cacheKeyPrefix . '_available_airlines'),
+        ];
+    }
+
+    /**
+     * Create a server-side quote from selected fares in the current search result.
+     */
+    public function createPriceQuote(Request $request)
+    {
+        $validated = $request->validate([
+            'flight_ref_id' => ['required', 'string'],
+            'fare_references' => ['required', 'array', 'min:1'],
+            'fare_references.*' => ['required', 'string'],
+            'currency_code' => ['required', 'string', 'size:3'],
+            'search_token' => ['required', 'uuid'],
+        ]);
+
+        $flight = Cache::get(
+            $this->quoteFlightCacheKey(
+                $validated['search_token'],
+                $validated['flight_ref_id'],
+            ),
+        );
+
+        if (!is_array($flight)) {
+            return response()->json([
+                'message' => 'Your search has expired. Please search again before continuing.',
+            ], 422);
+        }
+
+        $quote = $this->priceQuoteService->create(
+            $request->user(),
+            $flight,
+            $validated['fare_references'],
+            $this->currencyCodeForRequest($request, $validated['currency_code']),
+        );
+
+        if (strtoupper($quote->provider) === 'AT') {
+            $providerPricing = $this->atApiService->priceQuote(
+                $flight,
+                $validated['fare_references'],
+            );
+            $quote = $this->priceQuoteService->refreshProviderPricing(
+                $quote,
+                $providerPricing,
+            );
+        }
+
+        return response()->json($this->quoteResponse($quote), 201);
+    }
+
+    /**
+     * Return an active quote for the current user and checkout screen.
+     */
+    public function showPriceQuote(Request $request, string $quoteUuid)
+    {
+        $quote = $this->priceQuoteService->findActive($quoteUuid, $request->user());
+
+        return response()->json($this->quoteResponse($quote));
+    }
+
+    /**
+     * Load ancillary options from AT using the quote's locked fare and display currency.
+     */
+    public function showQuoteAncillaries(Request $request, string $quoteUuid)
+    {
+        $quote = $this->priceQuoteService->findActive($quoteUuid, $request->user());
+        $ancillaries = $this->atAncillaryResponse($quote);
+
+        return response()->json([
+            'message' => 'Ancillaries fetched successfully',
+            'ancillaries' => $ancillaries,
+            'quote' => $this->quoteResponse($quote),
+        ]);
+    }
+
+    /**
+     * Validate browser selection references against AT options and lock them on the quote.
+     */
+    public function updateQuoteAncillaries(Request $request, string $quoteUuid)
+    {
+        $validated = $request->validate([
+            'selections' => ['present', 'array'],
+            'selections.*.type' => ['required', 'string', 'in:baggage,meal,seat'],
+            'selections.*.trip_index' => ['required', 'integer', 'min:0'],
+            'selections.*.journey_index' => ['required', 'integer', 'min:0'],
+            'selections.*.segment_index' => ['required', 'integer', 'min:0'],
+            'selections.*.passenger_id' => ['required', 'integer', 'min:1'],
+            'selections.*.ssid' => ['required', 'integer', 'min:1'],
+        ]);
+        $quote = $this->priceQuoteService->findActive($quoteUuid, $request->user());
+        $ancillaries = $this->atAncillaryResponse($quote);
+        $selections = array_map(
+            fn (array $selection) => $this->validatedAtSelection($ancillaries, $selection),
+            $validated['selections'],
+        );
+        $quote = $this->ancillaryPricingService->replaceSelections($quote, $selections);
+
+        return response()->json([
+            'message' => 'Ancillaries updated successfully',
+            'quote' => $this->quoteResponse($quote),
+        ]);
+    }
+
+    // Helper functions
+
+    /**
+     * Build the per-user search cache key used by search and checkout.
+     */
+    private function flightCacheKey(Request $request): string
+    {
+        return $request->user()
+            ? 'flights_' . $request->user()->id
+            : 'flights_' . session()->getId();
+    }
+
+    /** Resolve public-domain currency, with the frontend Origin taking priority for a shared API host. */
+    private function currencyCodeForRequest(Request $request, ?string $fallback = null): string
+    {
+        $originHost = parse_url((string) $request->header('Origin'), PHP_URL_HOST);
+        $host = strtolower((string) ($originHost ?: $request->getHost()));
+        $host = preg_replace('/^www\./', '', $host);
+
+        if ($host === 'ae' || str_ends_with($host, '.ae')) {
+            return 'AED';
+        }
+
+        if ($host === 'pk' || str_ends_with($host, '.pk')) {
+            return 'PKR';
+        }
+
+        return strtoupper($fallback ?: $request->input('currencyCode', 'AED'));
+    }
+
+    /**
+     * Build the cache key for one selectable flight in a specific search.
+     */
+    private function quoteFlightCacheKey(string $searchToken, string $flightReference): string
+    {
+        return 'flight_quote_' . $searchToken . '_' . $flightReference;
+    }
+
+    /**
+     * Return only the quote data required by checkout.
+     */
+    private function quoteResponse($quote): array
+    {
+        $totals = $this->ancillaryPricingService->ancillaryTotals($quote);
+
+        return [
+            'quote_id' => $quote->uuid,
+            'provider_money' => [
+                'amount' => $quote->provider_amount,
+                'currency' => $quote->provider_currency,
+            ],
+            'base_money' => [
+                'amount' => $quote->aed_amount,
+                'currency' => 'AED',
+            ],
+            'display_money' => [
+                'amount' => $quote->display_amount,
+                'currency' => $quote->display_currency,
+            ],
+            'ancillary_money' => $totals,
+            'ancillary_totals_by_trip' => $this->ancillaryPricingService->ancillaryTotalsByTrip($quote),
+            'ancillary_items' => $quote->items()
+                ->active()
+                ->orderBy('trip_index')
+                ->orderBy('journey_index')
+                ->orderBy('segment_index')
+                ->orderBy('passenger_id')
+                ->get()
+                ->map(fn ($item) => [
+                    'type' => $item->type,
+                    'title' => $item->title,
+                    'trip_index' => $item->trip_index,
+                    'journey_index' => $item->journey_index,
+                    'segment_index' => $item->segment_index,
+                    'passenger_id' => $item->passenger_id,
+                    'provider_references' => $item->provider_references,
+                    'provider_money' => [
+                        'amount' => $item->provider_amount,
+                        'currency' => $item->provider_currency,
+                    ],
+                    'base_money' => [
+                        'amount' => $item->aed_amount,
+                        'currency' => 'AED',
+                    ],
+                    'display_money' => [
+                        'amount' => $item->display_amount,
+                        'currency' => $item->display_currency,
+                    ],
+                ])
+                ->values(),
+            'provider_pricing' => $quote->provider_pricing_data,
+            'expires_at' => $quote->expires_at->toIso8601String(),
+            'server_now' => now()->toIso8601String(),
+        ];
+    }
+
+    /** Fetch and map AT ancillary options using only the current quote's trusted fare data. */
+    private function atAncillaryResponse($quote): array
+    {
+        if (strtoupper($quote->provider) !== 'AT') {
+            abort(422, 'Ancillaries are currently available for AT quotes only.');
+        }
+
+        $rawResponse = $this->atApiService->fetchAncillaries($this->atAncillaryRequestData($quote));
+        $ancillaries = $this->atAncillaryTransformer->transform(
+            $rawResponse,
+            $quote->display_currency,
+            $quote->provider_currency,
+        );
+
+        return $this->ancillaryPricingService->applyQuoteRates($ancillaries, $quote);
+    }
+
+    /** Build AT's ancillary request from server-side quote data, never from browser fares or TUI. */
+    private function atAncillaryRequestData($quote): array
+    {
+        $legs = [];
+
+        foreach (data_get($quote->flight_data, 'leg.flights', []) as $flight) {
+            $selectedFare = collect($flight['fares'] ?? [])
+                ->first(fn (array $fare) => in_array(
+                    $fare['ref_id'] ?? null,
+                    $quote->selected_fare_references,
+                    true,
+                ));
+
+            if (!$selectedFare) {
+                continue;
+            }
+
+            $legs[] = [
+                'Index' => $flight['flight_index'] ?? null,
+                'selectedFare' => $selectedFare,
+            ];
+        }
+
+        if (count($legs) !== count($quote->selected_fare_references)) {
+            abort(422, 'The selected fare is no longer available for ancillary pricing.');
+        }
+
+        $tui = data_get($quote->provider_pricing_data, 'tui');
+
+        if (!$tui) {
+            abort(422, 'The latest provider price is unavailable for ancillary pricing.');
+        }
+
+        return [
+            'ref_id' => $tui,
+            'fareType' => data_get($quote->provider_pricing_data, 'fare_type')
+                ?? data_get($quote->flight_data, 'provider.fare_type'),
+            'legs' => $legs,
+        ];
+    }
+
+    /** Match one browser reference with a currently available AT option and derive trusted money. */
+    private function validatedAtSelection(array $ancillaries, array $selection): array
+    {
+        $isSeat = $selection['type'] === 'seat';
+        $segmentPath = $isSeat ? 'data.seatLayout.Trips' : 'data.ssrData.Trips';
+        $segment = data_get(
+            $ancillaries,
+            $segmentPath . '.' . $selection['trip_index']
+                . '.Journey.' . $selection['journey_index']
+                . '.Segments.' . $selection['segment_index'],
+        );
+
+        if (!is_array($segment)) {
+            throw ValidationException::withMessages([
+                'selections' => 'One selected ancillary no longer belongs to this flight segment.',
+            ]);
+        }
+
+        $options = $isSeat ? ($segment['Seats'] ?? []) : ($segment['SSR'] ?? []);
+        $option = collect($options)->first(function (array $option) use ($selection, $isSeat) {
+            $optionId = $isSeat ? ($option['SSID'] ?? null) : ($option['ID'] ?? null);
+
+            if ((int) $optionId !== (int) $selection['ssid']) {
+                return false;
+            }
+
+            if ($isSeat) {
+                return ($option['AvailStatus'] ?? false) && ($option['SeatStatus'] ?? null) === 'Open';
+            }
+
+            return match ($selection['type']) {
+                'baggage' => ($option['Type'] ?? null) === '2',
+                'meal' => ($option['Type'] ?? null) === '1',
+                default => false,
+            };
+        });
+
+        if (!$option) {
+            throw ValidationException::withMessages([
+                'selections' => 'One selected ancillary is unavailable or its price has changed. Please choose again.',
+            ]);
+        }
+
+        $fuid = $segment['FUID'] ?? data_get(
+            $ancillaries,
+            'data.ssrData.Trips.' . $selection['trip_index']
+                . '.Journey.' . $selection['journey_index']
+                . '.Segments.' . $selection['segment_index'] . '.FUID',
+        );
+
+        if (!$fuid) {
+            throw ValidationException::withMessages([
+                'selections' => 'The provider reference for one selected ancillary is missing. Please refresh the options.',
+            ]);
+        }
+
+        return [
+            'type' => $selection['type'],
+            'trip_index' => $selection['trip_index'],
+            'journey_index' => $selection['journey_index'],
+            'segment_index' => $selection['segment_index'],
+            'passenger_id' => $selection['passenger_id'],
+            'fuid' => (string) $fuid,
+            'ssid' => (int) $selection['ssid'],
+            'title' => $option['Description'] ?? $option['SeatNumber'] ?? $selection['type'],
+            'provider_references' => [
+                'fuid' => (string) $fuid,
+                'pax_id' => $selection['passenger_id'],
+                'ssid' => (int) $selection['ssid'],
+            ],
+            'provider_money' => $option['provider_money'],
+            'base_money' => $option['base_money'],
+            'display_money' => $option['display_money'],
+            'provider_item_data' => $option,
         ];
     }
     // public function index(Request $request)
@@ -727,8 +1099,8 @@ class FlightController extends Controller
     public function show(Request $request, $id, $supplier, $isSooperFlight)
     {
         Log::info($isSooperFlight);
-        // Generate the cache key prefix based on user or session
-        $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
+        // Use the same authenticated-user cache key used during the search.
+        $cacheKeyPrefix = $this->flightCacheKey($request);
 
         // Retrieve Sabre flights and Sooper flights from the cache
         $sabreFlights = Cache::get($cacheKeyPrefix . '_flights');
@@ -802,7 +1174,7 @@ class FlightController extends Controller
         //         }
         //     }
         // }
-        $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
+        $cacheKeyPrefix = $this->flightCacheKey($request);
         Cache::forget($cacheKeyPrefix . '_available_airlines');
 
         // Collect airlines from Sooper flights

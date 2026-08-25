@@ -7,7 +7,10 @@ use App\Mail\DepositRequestReceivedMail;
 use App\Mail\DepositApprovedMail;
 use App\Mail\DepositStatusMail;
 use App\Http\Controllers\Controller;
+use App\Models\Bank;
 use App\Models\User;
+use App\Services\CurrencyConversionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\DepositData;
 use Log;
@@ -17,19 +20,38 @@ use Validator;
 
 class DepositDataController extends Controller
 {
-    // Display a listing of the deposit data// Store a new deposit
+    /** Store a deposit with its source money and immutable AED accounting value. */
     public function store(Request $request)
     {
-        Log::info($request);
-
-        $request->validate([
+        $validated = $request->validate([
             'date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
             'receipt_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Validates uploaded image
             'payment_type' => 'required|string',
             'additional_details' => 'nullable|string',
-            'agent_id' => 'required|integer|exists:users,id', // Assuming agents are in the users table
+            'agent_id' => 'nullable|integer|exists:users,id',
+            'bank_id' => 'nullable|integer|exists:banks,id',
+            'currency' => 'required|string|size:3',
         ]);
+
+        $actor = $request->user();
+        $agentId = $actor->role === 'admin'
+            ? ($validated['agent_id'] ?? null)
+            : $actor->id;
+
+        if (!$agentId) {
+            return response()->json(['message' => 'An agent is required for this deposit.'], 422);
+        }
+
+        $bank = empty($validated['bank_id'])
+            ? null
+            : Bank::query()
+                ->whereKey($validated['bank_id'])
+                ->where('is_active', true)
+                ->firstOrFail();
+        $currencyCode = strtoupper(trim($bank?->currency ?: $validated['currency']));
+        $conversion = app(CurrencyConversionService::class);
+        $baseMoney = $conversion->toBaseMoney($validated['amount'], $currencyCode);
 
         // Handle receipt image upload
         $receiptImagePath = null;
@@ -47,17 +69,20 @@ class DepositDataController extends Controller
             'receipt_image' => $receiptUrl,
             'payment_type' => $request->payment_type,
             'additional_details' => $request->additional_details,
-            'agent_id' => $request->agent_id,
-            'currency' => $request->currency,
+            'agent_id' => $agentId,
+            'bank_id' => $bank?->id,
+            'currency' => $currencyCode,
+            'rate_to_aed' => $conversion->rateToBase($currencyCode),
+            'aed_amount' => $baseMoney['amount'],
         ]);
 
-        $deposit = DepositData::with('agent.agentData')->find($deposit->id);
+        $deposit = DepositData::with(['agent.agentData', 'bank'])->find($deposit->id);
         $this->sendDepositRequestMail($deposit);
         $this->sendDepositRequestReceivedMail($deposit);
 
         return response()->json([
             'message' => 'Deposit created successfully',
-            'deposit' => $deposit,
+            'deposit' => $this->presentDeposit($deposit, $request->currency_code),
         ], 201);
     }
 
@@ -89,15 +114,17 @@ class DepositDataController extends Controller
 
     // }
 
+    /** Return deposits and AED-based totals in the requested display currency. */
     public function getAgentDeposits(Request $request)
     {
 
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            $deposits = DepositData::with('agent.agentData')
+            $deposits = DepositData::with(['agent.agentData', 'bank'])
                 ->orderBy('date', 'desc')
-                ->get();
+                ->get()
+                ->map(fn (DepositData $deposit) => $this->presentDeposit($deposit, $request->currency_code));
 
             return response()->json([
                 'message' => 'All deposits retrieved successfully',
@@ -117,33 +144,42 @@ class DepositDataController extends Controller
             }
 
             $deposits = DepositData::where('agent_id', $agentId)
-                ->with('agent.agentData') // Include agent and agentData relationship
+                ->with(['agent.agentData', 'bank']) // Include agent and agentData relationship
                 ->orderBy('date', 'desc')
                 ->get();
 
             $totalApprovedDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'approved') // Filter deposits by approved status
-                ->sum('amount');
+                ->sum('aed_amount');
             $totalPendingDeposits = DepositData::where('agent_id', $agentId)
                 ->where('deposit_status', 'pending') // Filter deposits by approved status
-                ->sum('amount');
+                ->sum('aed_amount');
 
             return response()->json([
                 'message' => 'Agent deposits retrieved successfully',
-                'deposits' => $deposits,
+                'deposits' => $deposits->map(fn (DepositData $deposit) => $this->presentDeposit($deposit, $request->currency_code)),
                 'agent' => $agent,
-                'totalApprovedDeposits' => $totalApprovedDeposits,
-                'totalPendingDeposits' => $totalPendingDeposits, // Include the agent's details
+                'totalApprovedDeposits' => $this->displayMoney($totalApprovedDeposits, $request->currency_code),
+                'totalPendingDeposits' => $this->displayMoney($totalPendingDeposits, $request->currency_code),
+                'legacy_unconverted_count' => DepositData::where('agent_id', $agentId)
+                    ->whereNull('aed_amount')
+                    ->count(),
             ]);
         }
     }
 
-    public function getAllDepositsWithAgentData()
+    /** Return all deposits for admin review with their original and display money. */
+    public function getAllDepositsWithAgentData(Request $request)
     {
         // Fetch all deposits, include agent and their agentData
-        $deposits = DepositData::with(['agent.agentData'])
+        if ($request->user()->role !== 'admin') {
+            abort(403, 'Only an admin can view all deposits.');
+        }
+
+        $deposits = DepositData::with(['agent.agentData', 'bank'])
             ->orderBy('date', 'desc')
-            ->get();
+            ->get()
+            ->map(fn (DepositData $deposit) => $this->presentDeposit($deposit, 'AED'));
 
         // If no deposits found
         if ($deposits->isEmpty()) {
@@ -159,11 +195,14 @@ class DepositDataController extends Controller
         ]);
     }
 
+    /** Return one deposit without converting its locked AED amount again. */
     public function getDepositDetails(Request $request)
     {
         //Log::info($request);
         // Fetch the deposit with agent and agent data
-        $deposit = DepositData::with(['agent.agentData','agent.customer'])->find($request->DepositId);
+        $deposit = DepositData::with(['agent.agentData', 'agent.customer', 'bank', 'approver'])
+            ->when($request->user()->role !== 'admin', fn ($query) => $query->where('agent_id', $request->user()->id))
+            ->find($request->DepositId);
 
         // Check if the deposit exists
         if (!$deposit) {
@@ -175,7 +214,7 @@ class DepositDataController extends Controller
         // Return the deposit details
         return response()->json([
             'message' => 'Deposit details retrieved successfully',
-            'deposit' => $deposit,
+            'deposit' => $this->presentDeposit($deposit, $request->currency_code),
         ]);
     }
 
@@ -211,6 +250,7 @@ class DepositDataController extends Controller
     //     ]);
     // }
 
+    /** Approve or reject a deposit without changing its locked conversion values. */
     public function updateDepositStatus(Request $request)
     {
         // Validate the request
@@ -220,6 +260,10 @@ class DepositDataController extends Controller
             'rejectionReason' => 'nullable|string|max:255',
         ]);
 
+        if ($request->user()->role !== 'admin') {
+            abort(403, 'Only an admin can update deposit status.');
+        }
+
         // Find the deposit record
         $deposit = DepositData::find($request->depositId);
 
@@ -227,18 +271,24 @@ class DepositDataController extends Controller
         if ($request->status == 0) {
             $deposit->deposit_status = 'pending'; // Set to 'pending' if status is 0
             $deposit->rejection_reason = null;   // Clear any rejection reason
+            $deposit->approved_by = null;
+            $deposit->approved_at = null;
         } elseif ($request->status == 1) {
             $deposit->deposit_status = 'approved'; // Set to 'approved' if status is 1
             $deposit->rejection_reason = null;    // Clear any rejection reason
+            $deposit->approved_by = $request->user()->id;
+            $deposit->approved_at = Carbon::now();
         } elseif ($request->status == 2) {
             $deposit->deposit_status = 'rejected'; // Set to 'rejected' if status is 2
             $deposit->rejection_reason = $request->rejectionReason; // Set rejection reason if provided
+            $deposit->approved_by = null;
+            $deposit->approved_at = null;
         }
 
         // Save the updated deposit record
         $deposit->save();
 
-        $deposit = DepositData::with('agent.agentData')->find($deposit->id);
+        $deposit = DepositData::with(['agent.agentData', 'bank', 'approver'])->find($deposit->id);
         if ($deposit->deposit_status === 'approved') {
             $this->sendDepositApprovedMail($deposit);
         } elseif ($deposit->deposit_status === 'rejected') {
@@ -254,8 +304,36 @@ class DepositDataController extends Controller
 
         return response()->json([
             'message' => 'Deposit status updated successfully',
-            'deposit' => $deposit,
+            'deposit' => $this->presentDeposit($deposit, 'AED'),
         ]);
+    }
+
+    /** Attach original, locked AED, and selected-currency money to a deposit response. */
+    private function presentDeposit(DepositData $deposit, ?string $displayCurrency): DepositData
+    {
+        $deposit->setAttribute('source_money', app(CurrencyConversionService::class)->makeMoney(
+            $deposit->amount,
+            $deposit->currency ?: 'AED',
+        ));
+        $deposit->setAttribute('base_money', $deposit->aed_amount === null
+            ? null
+            : app(CurrencyConversionService::class)->makeMoney($deposit->aed_amount, 'AED'));
+        $deposit->setAttribute('display_money', $deposit->aed_amount === null
+            ? null
+            : $this->displayMoney($deposit->aed_amount, $displayCurrency));
+        $deposit->setAttribute('legacy_unconverted', $deposit->aed_amount === null);
+
+        return $deposit;
+    }
+
+    /** Convert a trusted AED amount only for display. */
+    private function displayMoney(mixed $aedAmount, ?string $displayCurrency): array
+    {
+        return app(CurrencyConversionService::class)->convertMoney(
+            $aedAmount ?? 0,
+            'AED',
+            $displayCurrency ?: 'AED',
+        );
     }
 
     private function sendDepositRequestMail($deposit): void

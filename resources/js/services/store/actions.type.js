@@ -173,7 +173,6 @@ export const UPDATE_AGENT_CHARGE_STATUS = "updateAgentChargeStatus";
 
 export const FETCH_CURRENCIES = "fetchCurrencies";
 export const SAVE_CURRENCY = "saveCurrency";
-export const DELETE_CURRENCY = "deleteCurrency";
 export const UPDATE_CURRENCY = "updateCurrency";
 
 

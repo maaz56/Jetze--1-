@@ -23,10 +23,10 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { calculateLayover, formatDateTime } from "@/lib/utils";
+import { calculateLayover, formatDateTime, getSelectedCurrencyCode } from "@/lib/utils";
 
 import { useStore } from "vuex";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { formatAmount } from "@/lib/utils";
 
 import { useAuthStore } from "@/services/stores/auth";
@@ -198,6 +198,7 @@ function fetchAgentLedger() {
                 userId: user_id.value,
                 startDate: startDate.value,
                 endDate: endDate.value,
+                currency_code: getSelectedCurrencyCode(),
             });
             loading.value = false;
         } catch (err) {
@@ -290,13 +291,17 @@ watch(user_id, (newUserId) => {
 const printLedger = () => {
   window.print();
 }
+const refreshForCurrencyChange = () => fetchAgentLedger();
 onMounted(() => {
   
     if (user.value?.id) {
         fetchAgent();
         fetchAgentLedger();
     }
+    window.addEventListener("currency-changed", refreshForCurrencyChange);
 });
+
+onBeforeUnmount(() => window.removeEventListener("currency-changed", refreshForCurrencyChange));
 </script>
 
 <template>
@@ -438,21 +443,21 @@ onMounted(() => {
                   <td class="px-6 py-4 text-sm text-red-600">
                     <!-- Display Debit value, if 0 show '-' -->
                     {{
-                      transaction.debit !== "0"
-                        ? formatAmount(transaction.debit)
+                      Number(transaction.debit) !== 0
+                        ? formatAmount(transaction.debit_money?.amount, transaction.debit_money?.currency)
                         : "-"
                     }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">
                     <!-- Display Credit value, if 0 show '-' -->
                     {{
-                      transaction?.credit !== "0"
-                        ? formatAmount(transaction?.credit)
+                      Number(transaction?.credit) !== 0
+                        ? formatAmount(transaction.credit_money?.amount, transaction.credit_money?.currency)
                         : "-"
                     }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
-                    {{ formatAmount(transaction.balance) }}
+                    {{ formatAmount(transaction.balance_money?.amount, transaction.balance_money?.currency) }}
                   </td>
                 </tr>
               </tbody>
@@ -512,7 +517,7 @@ onMounted(() => {
                 </div>
                 <div>
                   <p class="font-medium text-gray-500">Amount</p>
-                  <p class="font-bold text-gray-900">{{ formatAmount(selectedDeposit?.amount || 0) }}</p>
+                  <p class="font-bold text-gray-900">{{ formatAmount(selectedDeposit?.display_money?.amount, selectedDeposit?.display_money?.currency) }}</p>
                 </div>
                 <div>
                   <p class="font-medium text-gray-500">Payment Type</p>

@@ -29,7 +29,13 @@ import {
 } from '@/components/ui/breadcrumb'
 import Input from "@/components/ui/input/Input.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calculateLayover, calculateTypeMargin, formatAmount, formatDate } from "@/lib/utils";
+import {
+    calculateLayover,
+    calculateTypeMargin,
+    formatAmount,
+    formatDate,
+    getSelectedCurrencyCode,
+} from "@/lib/utils";
 import { calculateFinalPrice } from "@/lib/utils.js";
 import {
     FETCH_AGENT_DATA,
@@ -330,8 +336,7 @@ function fetchProviders() {
         stops: selectedStops.value,
         timestamp: Date.now(),
         flightType: flightType.value,
-        // currencyCode: localStorage.getItem("currencyCode") || "SAR",
-        currencyCode: "AED",
+        currencyCode: getSelectedCurrencyCode(),
     };
 
     if (flightType.value === "multi-city") {
@@ -499,8 +504,7 @@ const fetchFlights = () => {
         stops: selectedStops.value,
         timestamp: Date.now(),
         flightType: flightType.value,
-        // currencyCode: localStorage.getItem("currencyCode") || "SAR",
-        currencyCode: "AED",
+        currencyCode: getSelectedCurrencyCode(),
     };
 
     if (flightType.value === "multi-city") {

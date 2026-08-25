@@ -72,6 +72,26 @@
       />
       <!-- Main Container -->
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Quote expiry status -->
+        <div
+          :class="[
+            'lg:col-span-3 flex items-center gap-3 rounded-lg border p-4',
+            isBookingExpired ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50',
+          ]"
+        >
+          <ClockIcon :class="['h-6 w-6 flex-shrink-0', isBookingExpired ? 'text-red-600' : 'text-amber-600']" />
+          <div class="min-w-0">
+            <p :class="['text-sm font-semibold', isBookingExpired ? 'text-red-800' : 'text-amber-800']">
+              {{ isBookingExpired ? 'This booking has expired' : 'Complete payment before the price expires' }}
+            </p>
+            <p :class="['text-2xl font-bold tabular-nums', isBookingExpired ? 'text-red-900' : 'text-amber-900']">
+              {{ getRemainingTime(bookingExpiryTime) }}
+            </p>
+            <p v-if="isBookingExpired" class="mt-1 text-sm font-medium text-red-700">
+              Return to search and choose a fresh flight price before paying.
+            </p>
+          </div>
+        </div>
         <!-- Payment Methods Section -->
         <div class="lg:col-span-2 space-y-4">
           <div class="bg-white rounded shadow-sm p-4">
@@ -88,11 +108,12 @@
 
 
                 <!-- Abhipay -->
-                <div @click="paymentMethod = 'abhipay-bank'" :class="[
+                <div @click="selectPaymentMethod('abhipay-bank')" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay-bank'
                     ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
+                    : 'border-primary bg-white hover:bg-primary/10',
+                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
                 ]">
                   <div :class="[
                     'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
@@ -109,11 +130,12 @@
                     </h3>
                   </div>
                 </div>
-                <div @click="paymentMethod = 'abhipay'" :class="[
+                <div @click="selectPaymentMethod('abhipay')" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay'
                     ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
+                    : 'border-primary bg-white hover:bg-primary/10',
+                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
                 ]">
                   <div :class="[
                     'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
@@ -132,11 +154,12 @@
                 </div>
 
                 <!-- Wallet Balance -->
-                <div @click="paymentMethod = 'wallet'" :class="[
+                <div @click="selectPaymentMethod('wallet')" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'wallet'
                     ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
+                    : 'border-primary bg-white hover:bg-primary/10',
+                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
                 ]">
                   <div :class="[
                     'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
@@ -246,9 +269,9 @@
                       </button>
 
                       <!-- Generate / Regenerate Button -->
-                      <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing" :class="[
+                      <button @click="handlePaymentMethod('abhipay-bank')" :disabled="isProcessing || isBookingExpired" :class="[
                         'flex-1 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                        !isProcessing
+                        !isProcessing && !isBookingExpired
                           ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
                           : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                       ]">
@@ -322,13 +345,13 @@
                         </p>
                       </div>
                     </div>
-                    <button @click="handlePaymentMethod('abhipay')" :disabled="!paymentMethod || isProcessing" :class="[
+                    <button @click="handlePaymentMethod('abhipay')" :disabled="!paymentMethod || isProcessing || isBookingExpired" :class="[
                       'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                      paymentMethod && !isProcessing
+                      paymentMethod && !isProcessing && !isBookingExpired
                         ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
                         : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                     ]">
-                      <span>Proceed to Pay {{ formatAmount(amount) }}</span>
+                      <span>Proceed to Pay {{ formatPaymentAmount() }}</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -341,7 +364,7 @@
                       <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
                       <div>
                         <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay directly from your Jetze wallet balance. Your current wallet balance is PKR 150,000.
+                          Pay directly from your Jetze wallet balance.
                           This is the fastest payment method with instant confirmation.
                         </p>
                       </div>
@@ -356,13 +379,13 @@
                       </div>
                     </div>
                   </div>
-                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
+                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing || isBookingExpired" :class="[
                     'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                    paymentMethod && !isProcessing
+                    paymentMethod && !isProcessing && !isBookingExpired
                       ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
                       : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                   ]">
-                    <span>Proceed to Pay {{ formatAmount(amount) }}</span>
+                    <span>Proceed to Pay {{ formatPaymentAmount() }}</span>
                     <span>→</span>
                   </button>
                 </div>
@@ -429,7 +452,7 @@
                 <span class="text-2xl">📞</span>
                 <h4 class="font-bold text-slate-900">Contact Us :</h4>
               </div>
-              <p class="text-sm text-slate-600">+92 00000000</p>
+              <p class="text-sm text-slate-600">UAN (+92) 300 7690691</p>
             </div>
             <div class="bg-white rounded p-6 shadow-sm">
               <div class="flex items-center gap-3 mb-3">
@@ -470,6 +493,25 @@
                     <span class="text-xs uppercase tracking-wide text-slate-500">
                       {{ passenger.type || 'PAX' }}
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Contact details saved during checkout -->
+              <div class="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
+                <h3 class="mb-3 text-sm font-semibold text-slate-900">Contact Information</h3>
+                <div class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <p class="text-xs text-slate-500">Email</p>
+                    <p class="break-all font-medium text-slate-900">{{ bookingContact.email || '-' }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-500">Phone</p>
+                    <p class="font-medium text-slate-900">{{ bookingContact.phone || '-' }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-500">Country</p>
+                    <p class="font-medium text-slate-900">{{ bookingContact.country || '-' }}</p>
                   </div>
                 </div>
               </div>
@@ -554,115 +596,26 @@
                   <div class="flex p-4 items-center justify-between">
                     <h3 class="text-lg sm:text-xl font-semibold text-gray-900">Price Details</h3>
                   </div>
-                  <div class="">
+                  <div class="space-y-3">
                     <div v-for="(flight, flightIndex) in flightData?.leg?.flights" :key="flightIndex">
-                      <div
-                        class="text-xs sm:text-sm font-semibold text-gray-900 my-1 sm:my-2 flex items-center gap-1 sm:gap-2 px-2">
-                        <div class="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-primary rounded-full"></div>
-                        {{ flight.from.iata }} → {{ flight.to.iata }}
-                      </div>
                       <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
-                        <div v-if="selectedFares?.includes(fare.ref_id)" class="">
-                          <Accordion class="" type="multiple" collapsible>
-                            <template v-for="(passengerFare, index) in fare.passenger_fares" :key="index">
-                              <AccordionItem :value="`fare-${flightIndex}-${fareIndex}-${index}`"
-                                class="overflow-hidden">
-                                <AccordionTrigger
-                                  class="px-2 py-2 border-b grid grid-cols-[1fr_auto_auto] items-center hover:no-underline gap-1">
-                                  <div class="flex items-center gap-2">
-                                    <span class="text-xs sm:text-sm font-bold text-gray-600">
-                                      {{ passengerFare.traveler_type }} X {{ passengerFare.total_passenger }}
-                                    </span>
-                                  </div>
-                                  <span
-                                    class="text-sm sm:text-base font-bold text-primary text-right whitespace-nowrap">
-                                    {{ formatAmount(parseFloat(passengerFare.base_price || 0) +
-                                      parseFloat(passengerFare.surchage || 0) +
-                                      parseFloat(passengerFare.taxes || 0) +
-                                      parseFloat(passengerFare.fees || 0) +
-                                      parseFloat(passengerFare.service_charges || 0) +
-                                      parseFloat(passengerFare.ancillaries_charges || 0) +
-                                      ((calculateFareMargin(
-                                        parseFloat(passengerFare.base_price) || 0,
-                                        fare.margin_amount,
-                                        fare.margin_type,
-                                        fare.amount_type,
-                                      ) +
-                                        calculateCustomerMargin(
-                                          parseFloat(passengerFare.base_price) || 0,
-                                        )) * passengerFare?.total_passenger))
-                                    }}
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent class="px-3 sm:px-4 sm:pr-7 pb-3 space-y-2">
-                                  <div class="flex justify-between items-center">
-                                    <span class="text-xs sm:text-sm text-gray-600">Base Fare</span>
-                                    <span class="text-xs sm:text-sm font-medium">
-                                      {{ formatAmount(
-                                        ((calculateFareMargin(
-                                          parseFloat(passengerFare?.base_price) || 0,
-                                          fare?.margin_amount,
-                                          fare?.margin_type,
-                                          fare?.amount_type,
-                                        ) +
-                                          parseFloat(CustomerMargin?.other_charges || 0) +
-                                          parseFloat(calculateCustomerMargin(
-                                            passengerFare?.base_price,
-                                            CustomerMargin?.value?.discount || 0,
-                                            CustomerMargin?.value?.margin_amount || 0,
-                                          ))) *
-                                          passengerCount) +
-                                        parseFloat(passengerFare?.base_price || 0)
-                                      ) }}
-                                    </span>
-                                  </div>
-                                  <div class="flex justify-between items-center">
-                                    <span class="text-xs sm:text-sm text-gray-600">Taxes</span>
-                                    <span class="text-xs sm:text-sm font-medium">{{ formatAmount(passengerFare?.taxes)
-                                      }}</span>
-                                  </div>
-                                  <div class="flex justify-between items-center">
-                                    <span class="text-xs sm:text-sm text-gray-600">Fees</span>
-                                    <span class="text-xs sm:text-sm font-medium">{{ formatAmount(passengerFare?.fees)
-                                      }}</span>
-                                  </div>
-                                  <div class="flex justify-between items-center">
-                                    <span class="text-xs sm:text-sm text-gray-600">Service Charges</span>
-                                    <span class="text-xs sm:text-sm font-medium">{{
-                                      formatAmount(passengerFare.service_charges) }}</span>
-                                  </div>
-                                  <hr class="border-dashed border-gray-300" />
-                                  <div class="flex justify-between items-center rounded">
-                                    <span class="text-xs sm:text-sm font-medium text-gray-700">Amount</span>
-                                    <span class="text-sm sm:text-base font-bold text-primary">
-                                      {{ formatAmount(
-                                        parseFloat(passengerFare.base_price || 0) +
-                                        parseFloat(passengerFare.surchage || 0) +
-                                        parseFloat(passengerFare.taxes || 0) +
-                                        parseFloat(passengerFare.fees || 0) +
-                                        parseFloat(passengerFare.service_charges || 0) +
-                                        parseFloat(passengerFare.ancillaries_charges || 0) +
-                                        ((calculateFareMargin(
-                                          parseFloat(passengerFare.base_price) || 0,
-                                          fare.margin_amount,
-                                          fare.margin_type,
-                                          fare.amount_type,
-                                        ) +
-                                          calculateCustomerMargin(
-                                            parseFloat(passengerFare.base_price) || 0,
-                                          )) * passengerFare?.total_passenger))
-                                      }}
-                                    </span>
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </template>
-                          </Accordion>
-                          <div class="flex justify-between items-center bg-gray-50 p-2 sm:px-4 rounded">
-                            <span class="text-xs sm:text-sm font-bold text-gray-700">Amount</span>
-                            <span class="text-sm sm:text-base font-bold text-primary">
-                              {{ formatAmount(calculateTotalFare(fare) + marginPerFlight) }}
-                            </span>
+                        <div v-if="selectedFares?.includes(fare.ref_id)" class="bg-gray-50 p-3 space-y-2">
+                          <p class="text-xs font-semibold text-gray-700">
+                            {{ flight.from?.iata }} → {{ flight.to?.iata }}
+                          </p>
+                          <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">Base Fare</span>
+                            <span class="text-xs font-medium">{{ formatSelectedFareMoney(fare) }}</span>
+                          </div>
+                          <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">Taxes & Fees</span>
+                            <span class="text-xs font-medium">{{ formatAmount(calculateTaxes(fare)) }}</span>
+                          </div>
+                          <div class="border-t border-gray-200 pt-2">
+                            <div class="flex justify-between items-center">
+                              <span class="text-sm font-medium text-gray-900">Subtotal</span>
+                              <span class="text-sm font-semibold text-primary">{{ formatSelectedFareMoney(fare) }}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -675,21 +628,11 @@
                   </div>
                   <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
                     <span class="text-base sm:text-sm font-semibold text-gray-900">Total Amount</span>
-                    <span class="text-sm sm:text-lg font-bold text-primary">{{ formatAmount(amount) }}</span>
+                    <span class="text-sm sm:text-lg font-bold text-primary">{{ formatPaymentAmount() }}</span>
                   </div>
                 </div>
               </div>
             </div>
-  <div class="bg-amber-50 border border-amber-200 rounded p-4">
-              <div class="flex items-center gap-3">
-                <ClockIcon class="h-5 w-5 text-amber-600" />
-                <div>
-                  <p class="text-sm font-medium text-amber-800">Booking expires in</p>
-                  <p class="text-lg font-bold text-amber-900">{{getRemainingTime( bookingDetails?.[0]?.expiry_time) }}</p>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
@@ -726,7 +669,7 @@
             }
 
           })"
-            class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+            class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/40">
             Go To Desposit
           </button>
         </div>
@@ -739,9 +682,9 @@
         <div v-if="paymentError" class="text-red-500 text-sm mb-3">{{ paymentError }}</div>
         <div class="flex justify-end gap-3">
           <Button @click="closePaymentDialog">Cancel</Button>
-          <Button @click="handlePayment" :disabled="processing" class="bg-primary text-white">
+          <Button @click="handlePayment" :disabled="processing || isBookingExpired" class="bg-primary text-white">
             <span v-if="processing" class="at-inline-spinner"></span>
-            Pay {{ formatAmount(amount) }}
+            Pay {{ formatPaymentAmount() }}
           </Button>
         </div>
       </div>
@@ -749,12 +692,12 @@
     <!-- Confirm Dialog -->
     <div v-if="isConfirmDialogOpen"
                         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-                        @click.self="isConfirmDialogOpen = false">
+                        @click.self="!actionLoading && (isConfirmDialogOpen = false)">
                         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
                             <div class="flex items-start justify-between mb-4">
                                 <h3 class="text-lg font-medium text-gray-900">Confirm Booking</h3>
-                                <button @click="isConfirmDialogOpen = false"
-                                    class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                                <button @click="isConfirmDialogOpen = false" :disabled="actionLoading"
+                                    class="text-gray-400 hover:text-gray-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">
                                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M6 18L18 6M6 6l12 12" />
@@ -773,13 +716,14 @@
                             </div>
 
                             <div class="mt-6 flex justify-end space-x-3">
-                                <button @click="isConfirmDialogOpen = false"
-                                    class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                <button @click="isConfirmDialogOpen = false" :disabled="actionLoading"
+                                    class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50">
                                     Cancel
                                 </button>
-                                <button @click="confirmBooking"
-                                    class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                    Confirm Booking
+                                <button @click="confirmBooking" :disabled="actionLoading || isBookingExpired"
+                                    class="inline-flex items-center gap-2 px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-slate-300">
+                                    <span v-if="actionLoading" class="at-inline-spinner"></span>
+                                    {{ actionLoading ? 'Confirming...' : 'Confirm Booking' }}
                                 </button>
                             </div>
                         </div>
@@ -799,7 +743,7 @@
 
           <div class="bg-slate-50 rounded p-4 mb-6 text-center">
             <p class="text-sm text-slate-600 mb-1">Amount to Pay</p>
-            <p class="text-3xl font-bold text-primary">{{ currency }} {{ formatAmount(amount) }}</p>
+            <p class="text-3xl font-bold text-primary">{{ formatPaymentAmount() }}</p>
           </div>
 
           <div class="space-y-3 mb-6">
@@ -815,7 +759,7 @@
               class="flex-1 px-4 py-3 border border-slate-300 rounded font-semibold text-slate-900 hover:bg-slate-50 transition-colors">
               Cancel
             </button>
-            <button @click="completePayment" :disabled="isProcessing"
+            <button @click="completePayment" :disabled="isProcessing || isBookingExpired"
               class="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 disabled:bg-slate-300 text-white rounded font-semibold transition-colors">
               <span v-if="isProcessing" class="at-inline-spinner"></span>
               {{ isProcessing ? 'Processing...' : 'Confirm Payment' }}
@@ -846,7 +790,7 @@ import Button from "@/components/ui/button/Button.vue";
 import { Plane, Users, Briefcase, ClockIcon, PrinterIcon, X, RefreshCcw, Landmark, CreditCard, Wallet, ExternalLink } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
-import { computed, onMounted, ref, nextTick, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, nextTick, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2pdf from "html2pdf.js";
 import moment from "moment";
@@ -869,8 +813,7 @@ import {
   INITIALIZE_ABHI_PAY,
   CHECK_PAYMENT_STATUS,
 } from "@/services/store/actions.type";
-import { cn, formatAmount, calculateFinalPrice, calculateTypeMargin } from "@/lib/utils";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { cn, formatAmount, formatAmountWithCurrency, calculateFinalPrice, calculateTypeMargin } from "@/lib/utils";
 
 import { toast } from "vue3-toastify";
 import { reactive } from "vue";
@@ -939,6 +882,64 @@ const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const airportMargins = computed(() => store.getters["airport/airportMargin"] || {});
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const paymentStatus = computed(() => store.getters["payment/paymentStatus"]);
+const bookingExpiryTime = computed(() => bookingDetails.value?.[0]?.expiry_time || null);
+const isBookingExpired = computed(() => {
+  if (!bookingExpiryTime.value) return false;
+
+  return new Date(bookingExpiryTime.value.replace(' ', 'T')).getTime() <= now.value;
+});
+const bookingContact = computed(() => {
+  const booking = bookingDetails.value?.[0] || {};
+
+  return {
+    email: booking.main_email,
+    phone: booking.main_phone,
+    country: booking.main_country,
+  };
+});
+
+/**
+ * Read the permanent amount created from the checkout quote for this booking.
+ */
+const paymentMoney = computed(() => {
+  const booking = bookingDetails.value?.[0];
+  const snapshot = booking?.price_snapshot;
+  const amount = snapshot?.selling_amount ?? booking?.selling_amount;
+  const currencyCode = snapshot?.selling_currency ?? booking?.selling_currency;
+
+  if (amount === null || amount === undefined || !currencyCode) {
+    return null;
+  }
+
+  return {
+    amount: Number(amount),
+    currency: String(currencyCode).toUpperCase(),
+  };
+});
+
+/**
+ * Format the locked quote amount with its own saved currency.
+ */
+function formatPaymentAmount() {
+  if (!paymentMoney.value || Number.isNaN(paymentMoney.value.amount)) {
+    return 'Price unavailable';
+  }
+
+  return formatAmountWithCurrency(paymentMoney.value.amount, paymentMoney.value.currency);
+}
+
+/**
+ * Format one selected flight fare using the converted value stored with the booking data.
+ */
+function formatSelectedFareMoney(fare) {
+  const money = fare?.display_money;
+
+  if (money?.currency && Number.isFinite(Number(money.amount))) {
+    return formatAmountWithCurrency(money.amount, money.currency);
+  }
+
+  return formatAmount(calculateTotalFare(fare));
+}
 
 // Extra Services Dialog State - FIXED
 const isExtraServicesOpen = ref(false);
@@ -1012,11 +1013,17 @@ const savedMarginTotal = computed(() => {
   return (agentAmount.value + margin.value + airportMargin.value - agentDiscount.value) || 0;
 });
 
+let expiryInterval = null;
+
 onMounted(() => {
-  setInterval(() => {
+  expiryInterval = setInterval(() => {
     now.value = Date.now()
   }, 1000)
 })
+
+onBeforeUnmount(() => {
+  if (expiryInterval) clearInterval(expiryInterval);
+});
 
 const getRemainingTime = (expiry) => {
   if (!expiry) return 'N/A'
@@ -1466,6 +1473,11 @@ watch(paymentMethod, () => {
 
 // Payment Methods Handler
 function handlePaymentMethod(type) {
+  if (isBookingExpired.value) {
+    toast.error('This booking has expired. Please search again before paying.');
+    return;
+  }
+
   paymentMethod.value = type;
   // Ensure `amount` is up-to-date before any payment initialization call.
   calculateGrandTotal();
@@ -1482,7 +1494,16 @@ function handlePaymentMethod(type) {
   }
 
 }
+
+/** Select a payment method only while the booking price remains valid. */
+function selectPaymentMethod(type) {
+  if (isBookingExpired.value) return;
+
+  paymentMethod.value = type;
+}
 async function initializeAbhiPay() {
+  if (isBookingExpired.value) return;
+
   store.dispatch('payment/' + INITIALIZE_ABHI_PAY, {
     amount: amount.value,
     currency: 'PKR',
@@ -1509,6 +1530,10 @@ const copyBillId = () => {
 };
 // Wallet Confirmation
 function handleConfirmDialogOpen() {
+  if (isBookingExpired.value) {
+    toast.error('This booking has expired. Please search again before paying.');
+    return;
+  }
 
 
   if (agentLedger.value?.balance < amount?.value) {
@@ -1526,6 +1551,15 @@ watch(paymentStatus, () => {
 
 
 async function confirmBooking() {
+    if (actionLoading.value) {
+        return;
+    }
+
+    if (isBookingExpired.value) {
+        toast.error('This booking has expired. Please search again before paying.');
+        return;
+    }
+
     error.value = '';
     actionLoading.value = true;
     if (!pnr) {
@@ -1630,6 +1664,8 @@ function checkPaymentStatus(type) {
 }
 // Stripe Payment
 const openPaymentDialog = async () => {
+  if (isBookingExpired.value) return;
+
   showPaymentDialog.value = true;
   await nextTick();
   await initializeStripe();
@@ -1674,6 +1710,11 @@ const initializeStripe = async () => {
 };
 
 const handlePayment = async () => {
+  if (isBookingExpired.value) {
+    toast.error('This booking has expired. Please search again before paying.');
+    return;
+  }
+
   if (!stripe.value || !cardElement.value) {
     toast.error("Payment form not ready.");
     return;
@@ -1819,6 +1860,15 @@ function calculateTotalFare(fare) {
 }
 
 function calculateGrandTotal() {
+  // A payment must always use the amount permanently locked from its checkout quote.
+  if (paymentMoney.value) {
+    baseAmount.value = paymentMoney.value.amount;
+    amount.value = paymentMoney.value.amount;
+    currency.value = paymentMoney.value.currency;
+
+    return amount.value;
+  }
+
   let total = 0;
 
   flightData.value?.leg?.flights?.forEach((flightItem, flightIndex) => {

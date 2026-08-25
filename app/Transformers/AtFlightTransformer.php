@@ -3,6 +3,7 @@ namespace App\Transformers;
 
 use App\Models\Airline;
 use App\Models\Airport;
+use App\Services\CurrencyConversionService;
 use DateTime;
 use GuzzleHttp\Psr7\Request;
 use Illuminate\Support\Facades\Cache;
@@ -11,6 +12,13 @@ use Str;
 
 class AtFlightTransformer
 {
+    private readonly CurrencyConversionService $currencyConversionService;
+
+    public function __construct(?CurrencyConversionService $currencyConversionService = null)
+    {
+        $this->currencyConversionService = $currencyConversionService
+            ?? app(CurrencyConversionService::class);
+    }
 
     public function fromAT($flightData, $params)
     {
@@ -29,7 +37,8 @@ class AtFlightTransformer
         ];
 
         foreach ($processed['flights'] ?? [] as $item) {
-            $currency = $processed['meta']['CurrencyCode'] ?? 'PKR';
+            $currency = strtoupper($processed['meta']['CurrencyCode'] ?? 'AED');
+            $displayCurrency = strtoupper($params['currency_code'] ?? $params['currencyCode'] ?? 'AED');
             
             // Handle different journey types
             if ($item['type'] === 'return') {
@@ -134,6 +143,19 @@ class AtFlightTransformer
                 // Process fares
                 $fares = [];
                 foreach ($legData['fares'] as $fare) {
+                    $providerBookingMoney = $this->currencyConversionService->makeMoney(
+                        $fare['NetFare'] ?? 0,
+                        $currency,
+                    );
+                    $passengerTotalMoney = $this->currencyConversionService->makeMoney(
+                        $fare['GrossFare'] ?? 0,
+                        $currency,
+                    );
+                    $passengerTaxMoney = $this->currencyConversionService->makeMoney(
+                        bcsub($passengerTotalMoney['amount'], $providerBookingMoney['amount'], 8),
+                        $currency,
+                    );
+
                     $baggagePolicies = [];
                     $baggageText = $fare['Inclusions']['Baggage'] ?? null;
                     $pieceDescription = strtolower($fare['Inclusions']['PieceDescription'] ?? '');
@@ -194,6 +216,21 @@ class AtFlightTransformer
                         "margin_type" => "markup",
                         "margin_amount" => 0,
                         "billable_price" => $fare['NetFare'] ?? 0,
+                        "provider_booking_money" => $providerBookingMoney,
+                        "source_money" => [
+                            "base_price" => $providerBookingMoney,
+                            "taxes" => $this->currencyConversionService->makeMoney(0, $currency),
+                            "total_price" => $providerBookingMoney,
+                        ],
+                        "base_money" => $this->currencyConversionService->toBaseMoney(
+                            $providerBookingMoney['amount'],
+                            $currency,
+                        ),
+                        "display_money" => $this->currencyConversionService->convertMoney(
+                            $providerBookingMoney['amount'],
+                            $currency,
+                            $displayCurrency,
+                        ),
                         "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
                         "fare_policies" => [],
                         "passenger_fares" => [
@@ -201,9 +238,33 @@ class AtFlightTransformer
                                 "type" => "ADT",
                                 "count" => 1,
                                 "base_price" => $fare['NetFare'] ?? 0,
-                                "taxes" => ($fare['GrossFare'] ?? 0) - ($fare['NetFare'] ?? 0),
+                                "taxes" => 0,
                                 "total_price" => $fare['GrossFare'] ?? 0,
-                                "currency" => "PKR",
+                                "currency" => $currency,
+                                "source_money" => [
+                                    "base_price" => $this->currencyConversionService->makeMoney($fare['NetFare'] ?? 0, $currency),
+                                    "taxes" => $passengerTaxMoney,
+                                    "fees" => $this->currencyConversionService->makeMoney(0, $currency),
+                                    "service_charges" => $this->currencyConversionService->makeMoney(0, $currency),
+                                    "surchage" => $this->currencyConversionService->makeMoney(0, $currency),
+                                    "total_price" => $passengerTotalMoney,
+                                ],
+                                "base_money" => [
+                                    "base_price" => $this->currencyConversionService->toBaseMoney($fare['NetFare'] ?? 0, $currency),
+                                    "taxes" => $this->currencyConversionService->toBaseMoney(0, $currency),
+                                    "fees" => $this->currencyConversionService->toBaseMoney(0, $currency),
+                                    "service_charges" => $this->currencyConversionService->toBaseMoney(0, $currency),
+                                    "surchage" => $this->currencyConversionService->toBaseMoney(0, $currency),
+                                    "total_price" => $this->currencyConversionService->toBaseMoney($fare['NetFare'] ?? 0, $currency),
+                                ],
+                                "display_money" => [
+                                    "base_price" => $this->currencyConversionService->convertMoney($fare['NetFare'] ?? 0, $currency, $displayCurrency),
+                                    "taxes" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
+                                    "fees" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
+                                    "service_charges" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
+                                    "surchage" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
+                                    "total_price" => $this->currencyConversionService->convertMoney($fare['NetFare'] ?? 0, $currency, $displayCurrency),
+                                ],
                                 "total_base_fare" => $fare['NetFare'] ?? 0,
                                 "fees" => 0,
                             ]
@@ -251,6 +312,7 @@ class AtFlightTransformer
                     'travel_date' => $transformedLegs[0]['departure_at'] ?? null,
                 ]),
                 "currencyCode" => $currency,
+                "displayCurrencyCode" => $displayCurrency,
                 "leg" => [
                     "ref_id" => (string) \Str::uuid(),
                     "flights" => $transformedLegs,

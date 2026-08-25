@@ -22,57 +22,56 @@
         side="bottom"
         :side-offset="8"
         :avoid-collisions="false"
-        class="header-calendar-container w-auto max-w-none border-0 bg-white p-4 shadow-md"
+        class="header-calendar-container w-auto max-w-none border-0 bg-white p-2 shadow-md"
       >
         <!-- Month + Year selects -->
-        <!-- Month + Year selects -->
-<div class="mb-4 flex items-center justify-between">
-  <div class="flex gap-2 items-center">
-    <Select v-model="selectedMonth" @update:modelValue="onMonthYearChange">
-      <SelectTrigger class="w-[140px] border-gray-200">
-        <span>
-          {{ monthLabel || "Month" }}
-        </span>
-      </SelectTrigger>
-      <SelectContent class="!max-h-[200px]  overflow-auto">
-        <SelectItem
-          v-for="m in availableMonths"
-          :key="m.month"
-          :value="m.month"
-        >
-          {{ m.label }}
-        </SelectItem>
-      </SelectContent>
-    </Select>
+        <div class="mb-2 flex items-center justify-between">
+          <div class="flex gap-1.5 items-center">
+            <Select v-model="selectedMonth" @update:modelValue="onMonthYearChange">
+              <SelectTrigger class="h-8 w-[105px] border-gray-200 text-xs">
+                <span>
+                  {{ monthLabel || "Month" }}
+                </span>
+              </SelectTrigger>
+              <SelectContent class="!max-h-[200px] overflow-auto">
+                <SelectItem
+                  v-for="m in availableMonths"
+                  :key="m.month"
+                  :value="m.month"
+                >
+                  {{ m.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
-    <Select v-model="selectedYear" @update:modelValue="onMonthYearChange">
-      <SelectTrigger class="w-[140px] border-gray-200">
-        <span>{{ selectedYear || "Year" }}</span>
-      </SelectTrigger>
-      <SelectContent class="!max-h-[200px] overflow-auto">
-        <SelectItem v-for="y in availableYears" :key="y" :value="String(y)">
-          {{ y }}
-        </SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+            <Select v-model="selectedYear" @update:modelValue="onMonthYearChange">
+              <SelectTrigger class="h-8 w-[78px] border-gray-200 text-xs">
+                <span>{{ selectedYear || "Year" }}</span>
+              </SelectTrigger>
+              <SelectContent class="!max-h-[200px] overflow-auto">
+                <SelectItem v-for="y in availableYears" :key="y" :value="String(y)">
+                  {{ y }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-  <!-- Navigation arrows (optional) -->
-  <div class="flex gap-2 hidden sm:block">
-    <Button variant="outline" size="icon" @click="navigateMonths(-1)" :disabled="isPrevDisabled">
-      <
-    </Button>
-    <Button variant="outline" size="icon" @click="navigateMonths(1)" :disabled="isNextDisabled">
-      >
-    </Button>
-  </div>
-</div>
+          <!-- Navigation arrows -->
+          <div class="flex gap-1 hidden sm:block">
+            <Button class="h-8 w-8" variant="outline" size="icon" @click="navigateMonths(-1)" :disabled="isPrevDisabled">
+              <
+            </Button>
+            <Button class="h-8 w-8" variant="outline" size="icon" @click="navigateMonths(1)" :disabled="isNextDisabled">
+              >
+            </Button>
+          </div>
+        </div>
 
-        <!-- Dual-month calendar view -->
-        <div class="flex gap-6">
+        <!-- Calendar view -->
+        <div class="flex">
           <!-- Left month (current) -->
           <div>
-            <div class="mb-2 text-center font-medium">
+            <div class="mb-1.5 text-center text-xs font-medium">
               {{ formatMonthYear(displayedDateLeft) }}
             </div>
             <CalendarGrid
@@ -84,27 +83,7 @@
               :max-value="maxCalendarDate"
             />
           </div>
-
-          <!-- Right month (next) -->
-          <div class="hidden sm:block">
-            <div class="mb-2 text-center font-medium">
-              {{ formatMonthYear(displayedDateRight) }}
-            </div>
-            <CalendarGrid
-              :date="displayedDateRight"
-              :prices="prices"
-              :selected="selectedDate"
-              @date-selected="handleDateSelect"
-              :min-value="minCalendarDate"
-              :max-value="maxCalendarDate"
-            />
-          </div>
         </div>
-
-        <!-- Optional: note about prices -->
-        <p class="mt-4 text-xs text-gray-500">
-          Prices are estimated for one adult and may change.
-        </p>
       </PopoverContent>
     </Popover>
   </div>
@@ -112,7 +91,7 @@
 
 <style scoped>
 .header-calendar-container {
-  --calendar-cell-size: 2.5rem;
+  --calendar-cell-size: 1.85rem;
 }
 </style>
 
@@ -157,9 +136,6 @@ const now = new Date();
 const displayedDateLeft = ref(
   new CalendarDate(now.getFullYear(), now.getMonth() + 1, 1)
 );
-const displayedDateRight = computed(
-  () => displayedDateLeft.value.add({ months: 1 }),
-);
 
 // Navigation
 function navigateMonths(delta) {
@@ -185,7 +161,7 @@ const isPrevDisabled = computed(() => {
 
 const isNextDisabled = computed(() => {
   if (!maxCalendarDate.value) return false;
-  const next = displayedDateRight.value.add({ months: 1 });
+  const next = displayedDateLeft.value.add({ months: 1 });
   return compareMonthOnly(next, maxCalendarDate.value) > 0;
 });
 

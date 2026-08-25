@@ -89,7 +89,10 @@ const handleScroll = () => {
 function fetchAgentLedger() {
     if (user_id.value) {
         try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, { userId: user_id.value });
+            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
+                userId: user_id.value,
+                currency_code: selectedCurrencyCode.value,
+            });
             loading.value = false;
         } catch (err) {
             error.value = "Failed to load user data. Please try again.";
@@ -137,7 +140,7 @@ const navLinks = [
     { routeName: "Home", text: "Flights", subText: "Book Cheapest", icon: "/plane.png" },
     { href: "/about/us", text: "About Us", subText: "Who we are", icon: "/info.png" },
     { href: "/blogs", text: "Blogs", subText: "Travel Stories", icon: "/blog.png" },
-    { href: "/contact/us", text: "Contact Us", subText: "Get in touch", icon: "/info.png" },
+    { href: "/contact/us", text: "Contact Us", subText: "UAN (+92) 300 7690691", icon: "/info.png" },
 ];
 
 const getLinkProps = (link) => link.routeName
@@ -151,8 +154,14 @@ const isLinkActive = (link) => {
 };
 
 watch(user, (newUser) => {
-    if (newUser) fetchAgentLedger();
-});
+    if (!newUser) return;
+
+    if (newUser.role === 'admin' || newUser.role === 'super_admin') {
+        selectedCurrencyCode.value = setSelectedCurrencyCode('AED');
+    }
+
+    fetchAgentLedger();
+}, { immediate: true });
 
 watch(
     currencies,
@@ -171,7 +180,14 @@ watch(
 );
 
 watch(selectedCurrencyCode, (value) => {
-    setSelectedCurrencyCode(value);
+    const domainCurrency = setSelectedCurrencyCode(value);
+
+    if (domainCurrency !== value) {
+        selectedCurrencyCode.value = domainCurrency;
+        return;
+    }
+
+    fetchAgentLedger();
 });
 
 onMounted(() => {
@@ -248,7 +264,7 @@ onUnmounted(() => {
                                 <Wallet class="h-3 w-3 mr-1" />
                                 <span class="text-sm">{{ selectedCurrencySymbol }}</span>
                                 <span class="mx-1 text-slate-300">|</span>
-                                <span class="text-sm">{{ formatBalanceAmount(agentLedger?.balance) }}</span>
+                                <span class="text-sm">{{ formatBalanceAmount(agentLedger?.balance_money?.amount) }}</span>
                             </div>
                         </div>
                         <div class="flex flex-col">

@@ -36,7 +36,7 @@ import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
-import { cn, formatAmount, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
+import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
 
 import {
     FETCH_BOOKING_DATA,
@@ -88,6 +88,57 @@ const agentData = computed(() => store.getters["user/agentData"]);
 const bookingDetails = computed(() => store.getters["flight/customerBooking"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
 const pnrDetails = computed(() => store.getters["flight/pnrData"]);
+
+/**
+ * Read the permanent display amount created from this booking's checkout quote.
+ */
+const lockedBookingMoney = computed(() => {
+    const booking = bookingDetails.value?.[0];
+    const snapshot = booking?.price_snapshot;
+    const amount = snapshot?.selling_amount ?? booking?.selling_amount;
+    const currency = snapshot?.selling_currency ?? booking?.selling_currency;
+
+    if (amount === null || amount === undefined || !currency) {
+        return null;
+    }
+
+    return {
+        amount: Number(amount),
+        currency: String(currency).toUpperCase(),
+    };
+});
+
+/** Format the booking's locked checkout total in its saved currency. */
+function formatLockedBookingAmount() {
+    if (!lockedBookingMoney.value || Number.isNaN(lockedBookingMoney.value.amount)) {
+        return 'Price unavailable';
+    }
+
+    return formatAmountWithCurrency(
+        lockedBookingMoney.value.amount,
+        lockedBookingMoney.value.currency,
+    );
+}
+
+/** Format an individual selected fare with the converted data saved on the booking. */
+function formatSelectedFareMoney(fare) {
+    const money = fare?.display_money;
+
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return formatAmountWithCurrency(money.amount, money.currency);
+    }
+
+    return formatLockedBookingAmount();
+}
+
+/** Format a zero add-on amount in the same locked booking currency. */
+function formatBookingAddOnsAmount(amount) {
+    if (Number(amount || 0) === 0 && lockedBookingMoney.value) {
+        return formatAmountWithCurrency(0, lockedBookingMoney.value.currency);
+    }
+
+    return formatAmount(amount || 0);
+}
 
 const booking_id = route.query.booking_id;
 const pnr = route.query.pnr;
@@ -1544,18 +1595,13 @@ onMounted(() => {
                                                             }}
                                                         </td>
                                                         <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                            {{ formatAmount(calculateFinalPrice(fare?.base_price,
-                                                                fare?.margin_amount,
-                                                                fare?.margin_type, fare?.amount_type) +
-                                                                marginPerFlight) }}
+                                                            {{ formatSelectedFareMoney(fare) }}
                                                         </td>
                                                         <td class="py-1.5 px-2 uppercase print:text-gray-800">
                                                             {{ formatAmount(calculateTaxes(fare)) }}
                                                         </td>
                                                         <td class="py-1.5 px-2 uppercase font-bold print:text-gray-900">
-                                                            {{
-                                                                formatAmount(calculateTotalFare(fare))
-                                                            }}
+                                                            {{ formatSelectedFareMoney(fare) }}
                                                         </td>
                                                     </tr>
                                                 </template>
@@ -1566,7 +1612,7 @@ onMounted(() => {
                             Add-ons
                         </td>
                         <td class="py-3 px-2 font-bold text-primary text-sm">
-                            {{ formatAmount(parseFloat(bookingDetails?.[0]?.add_ones_amount || 0)) }}
+                            {{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}
                         </td>
                     </tr>
                     <tr>
@@ -1574,7 +1620,7 @@ onMounted(() => {
                             Total Amount
                         </td>
                         <td class="py-3 px-2 font-bold text-primary text-sm">
-                            {{ formatAmount(calculateGrandTotal()) }}
+                            {{ formatLockedBookingAmount() }}
                         </td>
                     </tr>
                 </tfoot>

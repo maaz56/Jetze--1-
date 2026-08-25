@@ -18,7 +18,6 @@ import {
     FETCH_SAFE_PAY_URL,
     SEND_PAYMENT_REQUEST,
     CONFIRM_BOOKING,
-    SEND_PRICE_REQUEST,
     FETCH_ANCILLARIES,
     PATCH_ANCILLARIES,
     FETCH_AGENT_LEDGER,
@@ -61,7 +60,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import moment from "moment";
-import { computed, onMounted, ref, watch, reactive, nextTick } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch, reactive, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import { useStore } from "vuex";
 import { useAuthStore } from "@/services/stores/auth";
@@ -70,6 +69,7 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import {
     cn,
     formatAmount,
+    formatAmountWithCurrency,
     calculateLayoverDetails,
     adjustDateTime,
     getAdjustedDateTime,
@@ -81,6 +81,7 @@ import {
 import { Check, ChevronsUpDown } from "lucide-vue-next";
 import { calculateLayover, formatDuration } from "@/lib/utils";
 import { calculateFinalPrice } from "@/lib/utils.js";
+import apiService from "@/config/axios";
 
 import { useRouter } from "vue-router";
 import TopBar from "@/components/shared/TopBar.vue";
@@ -104,10 +105,18 @@ const router = useRouter();
 const termsAccepted = ref(false);
 const validationErrors = ref([]);
 const amount = ref(0);
+const lockedPriceQuote = ref(null);
+const isLockedPriceQuoteLoading = ref(true);
+const lockedPriceQuoteError = ref(null);
+const isAncillaryPricingUpdating = ref(false);
+const isAncillaryOptionsLoading = ref(false);
+const lastAncillaryFetchKey = ref(null);
 const passengerCount = ref(0);
 const currentSlide = ref(0);
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
-const quote = computed(() => store.getters["flight/priceRes"]);
+const providerPricing = computed(
+    () => lockedPriceQuote.value?.provider_pricing ?? null,
+);
 const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const qouteError = computed(() => store.getters["flight/qouteError"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
@@ -147,6 +156,7 @@ const isAlreadyBookedDialogOpen = ref(false);
 const countdown = ref(null);
 const showDialog = ref(false);
 const timerInterval = ref();
+const isQuoteExpired = ref(false);
 const customerMarginAmt = ref(0);
 const todayDate = new Date();
 const showAncillariesTab = ref(false);
@@ -200,7 +210,17 @@ const formatDateTime = (date) => moment.parseZone(date).format('DD MMM YYYY, HH:
 const extraServicesTotal = computed(() => {
     return getExtrasTotal();
 });
-const addOnsAmount = computed(() => getExtrasTotal());
+const addOnsAmount = computed(() => Number(
+    lockedPriceQuote.value?.ancillary_money?.provider_money?.amount ?? 0,
+));
+const isLockedCheckoutTotalReady = computed(() => (
+    !isLockedPriceQuoteLoading.value
+    && !lockedPriceQuoteError.value
+    && !isQuoteExpired.value
+    && !isAncillaryPricingUpdating.value
+    && Boolean(lockedPriceQuote.value?.display_money?.currency)
+    && Number.isFinite(Number(lockedPriceQuote.value?.display_money?.amount))
+));
 const processedSeatMapData = computed(() => {
     if (!ancillaries.value?.seatMap) return []
 
@@ -391,7 +411,7 @@ function clearSegmentGroup(segIdx, pIdx, groupCode) {
     }
 }
 
-function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
+async function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
     const extra = selectedExtras[tripIdx]?.[type]?.[journeyIdx]?.[segmentIdx]?.[passengerIdx];
     if (!extra) return;
 
@@ -400,7 +420,9 @@ function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
     if (!extraCharges[tripIdx][type][journeyIdx]) extraCharges[tripIdx][type][journeyIdx] = {};
     if (!extraCharges[tripIdx][type][journeyIdx][segmentIdx]) extraCharges[tripIdx][type][journeyIdx][segmentIdx] = {};
 
-    extraCharges[tripIdx][type][journeyIdx][segmentIdx][passengerIdx] = extra.Charge || extra.Fare || extra.SSRNetAmount || 0;
+    extraCharges[tripIdx][type][journeyIdx][segmentIdx][passengerIdx] = ancillaryProviderAmount(extra);
+
+    await syncAncillaryQuote();
 }
 
 function handleSSRSelection(tripIdx, journeyIdx, segmentIdx, travellerIdx, ssr, type) {
@@ -443,6 +465,8 @@ function removeSelection(tripIdx, type, journeyIdx, segmentIdx, travellerIdx) {
     if (type === 'seat') {
         delete selectedSeat[tripIdx]?.[journeyIdx]?.[segmentIdx]?.[travellerIdx];
     }
+
+    syncAncillaryQuote();
 }
 
 function getFUID(tripIdx, journeyIdx, segmentIdx) {
@@ -476,6 +500,14 @@ function getSeatsByRowAndColumn(seats, row, columnIndex) {
 }
 
 function getExtrasTotal(tripIdx = null) {
+    if (String(route?.query?.flight_provider).toLowerCase() === 'at') {
+        const money = tripIdx === null
+            ? lockedPriceQuote.value?.ancillary_money?.provider_money
+            : lockedPriceQuote.value?.ancillary_totals_by_trip?.[tripIdx]?.provider_money;
+
+        return Number(money?.amount ?? 0);
+    }
+
     let total = 0;
     const flights = tripIdx === null
         ? Object.values(selectedExtras)
@@ -486,7 +518,7 @@ function getExtrasTotal(tripIdx = null) {
             Object.values(group || {}).forEach(journey => {
                 Object.values(journey || {}).forEach(segment => {
                     Object.values(segment || {}).forEach(item => {
-                        total += Number(item?.Charge ?? item?.Fare ?? item?.SSRNetAmount ?? 0);
+                        total += ancillaryProviderAmount(item);
                     });
                 });
             });
@@ -511,8 +543,7 @@ const selectedExtrasPreview = computed(() => {
                             passengerIdx,
                             type,
                             title: item?.Description || item?.SeatNumber || item?.Name || type,
-                            amount: Number(item?.Charge ?? item?.Fare ?? item?.SSRNetAmount ?? 0),
-                            currency: ssrData.value?.CurrencyCode || seatLayout.value?.CurrencyCode || 'PKR',
+                            money: item?.display_money,
                         });
                     });
                 });
@@ -522,6 +553,95 @@ const selectedExtrasPreview = computed(() => {
 
     return rows;
 });
+
+/** Return only provider item references; amounts never go back to the quote endpoint. */
+function selectedAncillaryReferences() {
+    const selections = [];
+
+    Object.entries(selectedExtras).forEach(([tripIdx, flightExtras]) => {
+        Object.entries(flightExtras || {}).forEach(([type, journeys]) => {
+            Object.entries(journeys || {}).forEach(([journeyIdx, segments]) => {
+                Object.entries(segments || {}).forEach(([segmentIdx, passengers]) => {
+                    Object.entries(passengers || {}).forEach(([passengerIdx, item]) => {
+                        if (!item?.SSID) return;
+
+                        selections.push({
+                            type,
+                            trip_index: Number(tripIdx),
+                            journey_index: Number(journeyIdx),
+                            segment_index: Number(segmentIdx),
+                            passenger_id: Number(passengerIdx) + 1,
+                            ssid: Number(item.SSID),
+                        });
+                    });
+                });
+            });
+        });
+    });
+
+    return selections;
+}
+
+/** Restore server-saved quote selections after a checkout reload or failed update. */
+function hydrateQuoteAncillarySelections(items = []) {
+    Object.keys(selectedExtras).forEach(key => delete selectedExtras[key]);
+    Object.keys(extraCharges).forEach(key => delete extraCharges[key]);
+
+    items.forEach(item => {
+        const tripIdx = Number(item.trip_index);
+        const journeyIdx = Number(item.journey_index);
+        const segmentIdx = Number(item.segment_index);
+        const travellerIdx = Number(item.passenger_id) - 1;
+        const source = item.type === 'seat'
+            ? seatLayout.value?.Trips?.[tripIdx]?.Journey?.[journeyIdx]?.Segments?.[segmentIdx]?.Seats
+            : ssrData.value?.Trips?.[tripIdx]?.Journey?.[journeyIdx]?.Segments?.[segmentIdx]?.SSR;
+        const option = source?.find(candidate => Number(
+            item.type === 'seat' ? candidate?.SSID : candidate?.ID,
+        ) === Number(item.provider_references?.ssid));
+
+        if (!option) return;
+
+        if (!selectedExtras[tripIdx]) selectedExtras[tripIdx] = {};
+        if (!selectedExtras[tripIdx][item.type]) selectedExtras[tripIdx][item.type] = {};
+        if (!selectedExtras[tripIdx][item.type][journeyIdx]) selectedExtras[tripIdx][item.type][journeyIdx] = {};
+        if (!selectedExtras[tripIdx][item.type][journeyIdx][segmentIdx]) selectedExtras[tripIdx][item.type][journeyIdx][segmentIdx] = {};
+
+        selectedExtras[tripIdx][item.type][journeyIdx][segmentIdx][travellerIdx] = {
+            ...option,
+            FUID: item.provider_references?.fuid,
+            PaxID: item.provider_references?.pax_id,
+            SSID: item.provider_references?.ssid,
+        };
+
+        if (!extraCharges[tripIdx]) extraCharges[tripIdx] = {};
+        if (!extraCharges[tripIdx][item.type]) extraCharges[tripIdx][item.type] = {};
+        if (!extraCharges[tripIdx][item.type][journeyIdx]) extraCharges[tripIdx][item.type][journeyIdx] = {};
+        if (!extraCharges[tripIdx][item.type][journeyIdx][segmentIdx]) extraCharges[tripIdx][item.type][journeyIdx][segmentIdx] = {};
+        extraCharges[tripIdx][item.type][journeyIdx][segmentIdx][travellerIdx] = ancillaryProviderAmount(option);
+    });
+}
+
+/** Validate and lock the current selections on the active quote before checkout can continue. */
+async function syncAncillaryQuote() {
+    const quoteId = route.query.quote_id;
+
+    if (!quoteId || String(route.query.flight_provider).toLowerCase() !== 'at') return;
+
+    isAncillaryPricingUpdating.value = true;
+
+    try {
+        const response = await apiService.put(`/flight-quotes/${quoteId}/ancillaries`, {
+            selections: selectedAncillaryReferences(),
+        });
+        lockedPriceQuote.value = response.data.quote;
+    } catch (error) {
+        toast.error(error?.response?.data?.message || 'Unable to update ancillary price.');
+        await fetchAncillaries({ force: true });
+        return false;
+    } finally {
+        isAncillaryPricingUpdating.value = false;
+    }
+}
 
 const confirmSeatSelection = () => {
     const seatData = {
@@ -543,6 +663,10 @@ const confirmSeatSelection = () => {
     closeSeatMap()
 }
 function patchAncillaryCharges() {
+    if (String(route?.query?.flight_provider).toLowerCase() === 'at') {
+        return syncAncillaryQuote();
+    }
+
     store.dispatch("flight/" + PATCH_ANCILLARIES, {
         flight_provider: route?.query?.flight_provider,
         pnr: pnrData.value,
@@ -566,7 +690,7 @@ function proceedToPayment() {
 
 }
 function updateBookingAmount() {
-    const totalAmount = calculateGrandTotal();
+    const totalAmount = Number(lockedPriceQuote.value?.display_money?.amount ?? 0);
     amount.value = totalAmount;
 
     store.dispatch("flight/" + UPDATE_BOOKING_AMOUNT, {
@@ -1020,10 +1144,25 @@ function fetchBookingStatus() {
     store.dispatch("settings/" + FETCH_BOOKING_STATS_SETINGS);
 }
 
-function fetchAncillaries() {
+/** Load AT ancillary options once for each locked quote and provider TUI. */
+async function fetchAncillaries({ force = false } = {}) {
+    const quoteId = route?.query?.quote_id;
+    const providerTui = providerPricing.value?.tui;
+    const fetchKey = quoteId && providerTui ? `${quoteId}:${providerTui}` : null;
+
+    if (!fetchKey || isAncillaryOptionsLoading.value) {
+        return;
+    }
+
+    if (!force && lastAncillaryFetchKey.value === fetchKey) {
+        return;
+    }
+
+    isAncillaryOptionsLoading.value = true;
     const body = {
-        ref_id: quote?.value?.TUI,
-        fareType: quote?.value?.FareType || flight?.value?.provider?.fare_type,
+        ref_id: providerTui,
+        fareType: providerPricing.value?.fare_type || flight?.value?.provider?.fare_type,
+        currency_code: lockedPriceQuote.value?.display_money?.currency,
         legs: flight?.value?.leg?.flights
             .map(flightItem => {
                 // Match fare from selectedFares.value
@@ -1041,18 +1180,31 @@ function fetchAncillaries() {
             })
             .filter(item => item !== null)
     };
-    store.dispatch("flight/" + FETCH_ANCILLARIES, {
-        flight_provider: route?.query.flight_provider,
-        body: body,
-    })
-}
-watch(quote, () => {
-    if (!quote.value) {
-        // router.back();
-        return;
+    try {
+        const response = await store.dispatch("flight/" + FETCH_ANCILLARIES, {
+            flight_provider: route?.query.flight_provider,
+            quote_id: quoteId,
+            body: body,
+        });
+
+        if (response?.quote) {
+            lastAncillaryFetchKey.value = fetchKey;
+            lockedPriceQuote.value = response.quote;
+            hydrateQuoteAncillarySelections(response.quote.ancillary_items);
+        }
+    } finally {
+        isAncillaryOptionsLoading.value = false;
     }
-    fetchAncillaries();
-})
+}
+watch(
+    () => providerPricing.value?.tui,
+    (providerTui) => {
+        if (providerTui) {
+            fetchAncillaries();
+        }
+    },
+    { immediate: true },
+);
 
 watch(ancillaries, () => {
     showAncillariesTab.value = true;
@@ -1095,36 +1247,107 @@ function fetchFlight() {
 
 
 
-function sendSooperQoute() {
-    // Save selected flight in localStorage
-    localStorage.setItem("selectedFlight", JSON.stringify(flight.value));
+/** Load the trusted quote created from the selected search fare. */
+async function fetchLockedPriceQuote() {
+    const quoteId = route.query.quote_id;
 
-     const body = {
-        ref_id: flight?.value?.provider?.TUI,
-        flight_provider: "AT",
-        provider: "AT",
-        fareType:flight?.value?.provider?.fare_type,
-        legs: flight?.value?.leg?.flights
-            .map(flightItem => {
-                // Match fare from selectedFares.value
-                const selectedFare = flightItem.fares.find(fare =>
-                    selectedFares.value.includes(fare.ref_id)
-                );
+    if (!quoteId) {
+        lockedPriceQuoteError.value = "A valid flight quote is required.";
+        isLockedPriceQuoteLoading.value = false;
+        return;
+    }
 
-                if (selectedFare) {
-                    return {
-                        Index: flightItem?.flight_index,
-                        selectedFare:selectedFare
-                    };
-                }
-                return null;
-            })
-            .filter(item => item !== null)
-    };
+    isLockedPriceQuoteLoading.value = true;
+    lockedPriceQuoteError.value = null;
+    const requestStartedAt = Date.now();
 
-    store.dispatch("flight/" + SEND_PRICE_REQUEST, body);
+    try {
+        const response = await apiService.get("/flight-quotes/" + quoteId);
+        lockedPriceQuote.value = response.data;
+
+        if (
+            !response.data?.display_money?.currency
+            || !Number.isFinite(Number(response.data?.display_money?.amount))
+        ) {
+            lockedPriceQuoteError.value = "The latest flight price is unavailable.";
+        } else {
+            startCountdown(
+                response.data.expires_at,
+                response.data.server_now,
+                requestStartedAt,
+            );
+        }
+    } catch (error) {
+        if (error.response?.status === 422) {
+            expireQuote();
+            return;
+        }
+
+        lockedPriceQuoteError.value =
+            error.response?.data?.message || "Unable to load the latest flight price.";
+        console.error("Unable to load the locked flight quote.", error);
+    } finally {
+        isLockedPriceQuoteLoading.value = false;
+    }
 }
 
+/** Format a converted money object, with legacy raw-price fallback. */
+function formatConvertedMoney(money, fallbackAmount = 0) {
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return formatAmountWithCurrency(money.amount, money.currency);
+    }
+
+    return formatAmount(fallbackAmount);
+}
+
+/** Format a selected fare using the converted amount returned by the transformer. */
+function formatSelectedFareMoney(fare) {
+    return formatConvertedMoney(fare?.display_money, calculateTotalFare(fare));
+}
+
+/** Return the provider amount used only for the later AT booking request. */
+function ancillaryProviderAmount(item) {
+    return Number(item?.provider_money?.amount ?? 0);
+}
+
+/** Format an ancillary using the converted checkout amount. */
+function formatAncillaryMoney(item) {
+    return formatConvertedMoney(item?.display_money);
+}
+
+/** Sum selected extras in the checkout display currency for UI-only price details. */
+function formatExtrasDisplayMoney(tripIdx = null) {
+    const money = tripIdx === null
+        ? lockedPriceQuote.value?.ancillary_money?.display_money
+        : lockedPriceQuote.value?.ancillary_totals_by_trip?.[tripIdx]?.display_money;
+
+    return formatConvertedMoney(money);
+}
+
+/** Return the checkout total only when a converted, locked quote is available. */
+function formatLockedCheckoutTotal() {
+    if (isQuoteExpired.value) {
+        return "Search expired";
+    }
+
+    if (isLockedPriceQuoteLoading.value) {
+        return "Loading price...";
+    }
+
+    if (lockedPriceQuoteError.value) {
+        return "Price unavailable";
+    }
+
+    if (isAncillaryPricingUpdating.value) {
+        return "Updating price...";
+    }
+
+    if (!lockedPriceQuote.value?.display_money) {
+        return "Price unavailable";
+    }
+
+    return formatConvertedMoney(lockedPriceQuote.value?.display_money);
+}
 
 function parsePnrResponse() {
     try {
@@ -1146,7 +1369,7 @@ function parsePnrResponse() {
 }
 
 const openPaymentDialog = async () => {
-    amount.value = calculateGrandTotal();
+    amount.value = Number(lockedPriceQuote.value?.display_money?.amount ?? 0);
     showPaymentDialog.value = true;
     await nextTick(); // Wait for DOM to update
 
@@ -1178,7 +1401,7 @@ const handlePayment = async () => {
         return;
     }
 
-    amount.value = calculateGrandTotal();
+    amount.value = Number(lockedPriceQuote.value?.display_money?.amount ?? 0);
     processing.value = true;
 
     try {
@@ -1241,6 +1464,11 @@ const confirmCardPayment = async () => {
 };
 function handlePaymentMethod(type) {
     if (isSubmitting.value) return;
+
+    if (!isLockedCheckoutTotalReady.value) {
+        toast.error(formatLockedCheckoutTotal());
+        return;
+    }
 
     if (!validateForm()) {
         globalError.value =
@@ -1326,6 +1554,11 @@ function confirmBooking() {
 
 async function saveBooking(type) {
     try {
+        if (!isLockedCheckoutTotalReady.value) {
+            globalError.value = formatLockedCheckoutTotal();
+            return;
+        }
+
         if (!validateForm()) {
             globalError.value = "Please fix the errors in the form before submitting";
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1347,8 +1580,7 @@ async function saveBooking(type) {
         globalError.value = "";
 
         const savedMarginBreakdown = getSavedMarginBreakdown();
-        const totalAmount = calculateGrandTotal();
-        amount.value = totalAmount;
+        amount.value = Number(lockedPriceQuote.value?.display_money?.amount ?? 0);
 
         await store.dispatch("flight/" + SAVE_BOOKING, {
             main_contact: mainContact.value,
@@ -1357,12 +1589,6 @@ async function saveBooking(type) {
             agent_id: user_id?.value || null,
             agency_mobile: user.value?.phone || "00000",
             agency_email: user?.value?.email || "support@Jetze.pk",
-            amount: totalAmount,
-            add_ones_amount: addOnsAmount.value,
-            flight: flight.value,
-            TUI:quote.value?.TUI,
-            NetAmount: quote.value?.NetAmount,
-            fareType: quote.value?.FareType || flight.value?.provider?.fare_type,
             agent_markup: savedMarginBreakdown.customerMarkupTotal,
             agent_discount: savedMarginBreakdown.customerDiscountTotal,
             agent_margin: savedMarginBreakdown.otherChargesTotal,
@@ -1372,8 +1598,7 @@ async function saveBooking(type) {
             flight_source: route?.query.flight_source,
             flight_mode: "B2C",
             flight_provider: route?.query.flight_provider,
-            fare_reference: selectedFares.value,
-            selectedExtras,
+            quote_id: route?.query.quote_id,
             type: paymentMethod.value || type,
             paymentMethod: paymentMethod.value || type,
             booking_status:
@@ -1544,7 +1769,7 @@ function calculateBaseFare(fare) {
         perPassenger * passengerCount.value +
         typeMargin.value * passengerCount.value;
 
-    return total;
+    return basePrice;
 }
 
 
@@ -1969,19 +2194,63 @@ const formatTime = (milliseconds) => {
     const seconds = totalSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
-const startCountdown = (remainingTime) => {
-    if (timerInterval.value) clearInterval(timerInterval.value);
-    countdown.value = formatTime(remainingTime);
-    timerInterval.value = setInterval(() => {
-        remainingTime -= 1000;
+/** Start a countdown from the quote's backend expiry time without resetting on refresh. */
+const startCountdown = (expiresAt, serverNow, requestStartedAt) => {
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+    }
+
+    const expiresAtMs = Date.parse(expiresAt);
+    const serverNowMs = Date.parse(serverNow);
+
+    if (!Number.isFinite(expiresAtMs) || !Number.isFinite(serverNowMs)) {
+        lockedPriceQuoteError.value = "The quote expiry time is unavailable.";
+        return;
+    }
+
+    const quoteDurationRemaining = expiresAtMs - serverNowMs;
+    const browserReceivedAt = Date.now();
+    const requestDuration = browserReceivedAt - requestStartedAt;
+
+    const updateCountdown = () => {
+        const elapsedSinceResponse = Date.now() - browserReceivedAt;
+        const remainingTime = quoteDurationRemaining - requestDuration - elapsedSinceResponse;
+
         if (remainingTime <= 0) {
-            clearInterval(timerInterval.value);
-            localStorage.removeItem("previous_search");
-            showDialog.value = true;
-        } else {
-            countdown.value = formatTime(remainingTime);
+            expireQuote();
+            return;
         }
-    }, 1000);
+
+        countdown.value = formatTime(remainingTime);
+    };
+
+    isQuoteExpired.value = false;
+    updateCountdown();
+    timerInterval.value = setInterval(updateCountdown, 1000);
+};
+
+/** Stop checkout when the server quote is no longer valid. */
+function expireQuote() {
+    if (isQuoteExpired.value) {
+        return;
+    }
+
+    isQuoteExpired.value = true;
+    countdown.value = null;
+
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+        timerInterval.value = null;
+    }
+
+    showDialog.value = true;
+}
+
+/** Return to a new flight search after the user acknowledges quote expiry. */
+function returnToFlightSearch() {
+    localStorage.removeItem("selectedFlight");
+    showDialog.value = false;
+    router.replace({ name: "FlightSearch" });
 };
 onMounted(() => {
     authStore.fetchUser();
@@ -1989,8 +2258,6 @@ onMounted(() => {
     isDomestic.value = localStorage.getItem("isDomestic") === "true";
     passengerCount.value = route.query.passenger_count ? parseInt(route.query.passenger_count) : 1
     window.scrollTo({ top: 0, behavior: "smooth" });
-    startCountdown(13 * 60 * 1000); // 13 minutes countdown
-
     initializeStripe();
     fetchMargins();
     fetchBookingStatus();
@@ -1998,11 +2265,17 @@ onMounted(() => {
     fetchCustomerMarginValues();
     fetchCustomerSettings();
     fetchAgentLedger();
+    fetchLockedPriceQuote();
+});
+
+onBeforeUnmount(() => {
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+    }
 });
 
 watch(flight, () => {
     initializeTravellers();
-    sendSooperQoute();
     if (travellers.value.length > 0) {
         travellers.value[0].isOpen = true;
     }
@@ -2609,7 +2882,7 @@ watch(flight, () => {
                                                                                                 Extra baggage: {{ selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.Description }}
                                                                                             </p>
                                                                                             <p class="text-xs text-gray-600">
-                                                                                                {{ ssrData?.CurrencyCode || 'PKR' }} {{ selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.Charge }}
+                                                                                                {{ formatAncillaryMoney(selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]) }}
                                                                                             </p>
                                                                                         </div>
                                                                                     </div>
@@ -2666,7 +2939,7 @@ watch(flight, () => {
                                                                                                     {{ ssr.PieceDescription }}
                                                                                                 </div>
                                                                                                 <div class="text-lg font-bold text-primary">
-                                                                                                    {{ ssrData?.CurrencyCode || 'PKR' }} {{ ssr.Charge }}
+                                                                                                    {{ formatAncillaryMoney(ssr) }}
                                                                                                 </div>
                                                                                             </label>
                                                                                         </div>
@@ -2729,7 +3002,7 @@ watch(flight, () => {
                                                                                     </button>
                                                                                 </div>
                                                                                 <p class="text-xs text-gray-600">
-                                                                                    Price: {{ seatLayout?.CurrencyCode || 'PKR' }} {{ selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.Fare || 0 }}
+                                                                                    Price: {{ formatAncillaryMoney(selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]) }}
                                                                                 </p>
                                                                             </div>
 
@@ -2778,7 +3051,7 @@ watch(flight, () => {
                                                                                                                 <template v-for="seat in getSeatsByRowAndColumn(segment.Seats, row, col)"
                                                                                                                     :key="seat?.SSID">
                                                                                                                     <div v-if="seat" class="flex flex-col items-center">
-                                                                                                                        <div v-if="seat.AvailStatus && seat.SeatStatus === 'Open' && seat.Fare !== 0">
+                                                                                                                        <div v-if="seat.AvailStatus && seat.SeatStatus === 'Open' && ancillaryProviderAmount(seat) !== 0">
                                                                                                                             <label class="w-16 h-16 border-2 p-1 rounded-lg cursor-pointer flex items-center justify-center text-sm font-semibold transition-all hover:scale-105 bg-white"
                                                                                                                                 :class="{ 
                                                                                                                                     'border-green-500 bg-green-50 text-green-800': selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SSID !== seat.SSID, 
@@ -2792,7 +3065,7 @@ watch(flight, () => {
                                                                                                                                 {{ seat.SeatNumber.slice(-1) }}
                                                                                                                             </label>
                                                                                                                             <span class="text-xs text-gray-500 leading-none mt-1 font-medium">
-                                                                                                                                {{ seat.Fare > 0 ? `${seatLayout?.CurrencyCode || 'PKR'} ${seat.Fare}` : 'Free' }}
+                                                                                                                                {{ ancillaryProviderAmount(seat) > 0 ? formatAncillaryMoney(seat) : 'Free' }}
                                                                                                                             </span>
                                                                                                                         </div>
                                                                                                                         <div v-else
@@ -2892,7 +3165,7 @@ watch(flight, () => {
                                                                                                 Meal: {{ selectedExtras[tripIdx]?.meal?.[journeyIdx]?.[segmentIdx]?.[index]?.Description }}
                                                                                             </p>
                                                                                             <p class="text-xs text-gray-600">
-                                                                                                {{ ssrData?.CurrencyCode || 'PKR' }} {{ selectedExtras[tripIdx]?.meal?.[journeyIdx]?.[segmentIdx]?.[index]?.Charge || 0 }}
+                                                                                                {{ formatAncillaryMoney(selectedExtras[tripIdx]?.meal?.[journeyIdx]?.[segmentIdx]?.[index]) }}
                                                                                             </p>
                                                                                         </div>
                                                                                     </div>
@@ -2924,7 +3197,7 @@ watch(flight, () => {
                                                                                         </div>
                                                                                     </div>
                                                                                     <div class="text-sm font-semibold text-primary whitespace-nowrap">
-                                                                                        {{ ssrData?.CurrencyCode || 'PKR' }} {{ ssr.Charge || 0 }}
+                                                                                        {{ formatAncillaryMoney(ssr) }}
                                                                                     </div>
                                                                                 </label>
                                                                                 <button
@@ -3167,197 +3440,46 @@ watch(flight, () => {
                                 </div>
                                 <div class="">
                                     <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
-                                        <div
-                                            class="text-xs sm:text-sm font-semibold text-gray-900 my-1 sm:my-2 flex items-center gap-1 sm:gap-2 px-2">
-                                            <div class="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-primary rounded-full"></div>
-                                            {{
-                                                flight.from
-                                                    .iata
-                                            }}
-                                            →
-                                            {{
-                                                flight.to.iata
-                                            }}
+                                            <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
+                                                <div v-if="selectedFares?.includes(fare.ref_id)"
+                                                    class="bg-gray-50 p-3 space-y-2">
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-xs text-gray-500">Base Fare</span>
+                                                         <span class="text-xs font-medium">
+                                                            {{ formatSelectedFareMoney(fare) }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-xs text-gray-500">Taxes & Fees</span>
+                                                        <span class="text-xs font-medium">{{
+                                                            formatAmount(calculateTaxes(fare)) }}</span>
+                                                    </div>
 
-                                        </div>
-                                        <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
-                                            <div v-if="selectedFares?.includes(fare.ref_id)" class="">
-                                                <Accordion class="" type="multiple" collapsible>
-                                                    <template v-for="(passengerFare, index) in fare.passenger_fares"
-                                                        :key="index">
-                                                        <AccordionItem
-                                                            :value="`fare-${flightIndex}-${fareIndex}-${index}`"
-                                                            class="  overflow-hidden">
-                                                            <!-- HEADER -->
-                                                            <AccordionTrigger
-                                                                class="px-2 py-2 border-b grid grid-cols-[1fr_auto_auto] items-center  hover:no-underline gap-1">
-
-                                                                <!-- LEFT -->
-                                                                <div class="flex items-center gap-2">
-                                                                    <span
-                                                                        class="text-xs sm:text-sm font-bold text-gray-600">
-                                                                        {{ passengerFare.traveler_type }}
-                                                                        X {{ passengerFare.total_passenger }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <!-- AMOUNT (perfectly right-aligned before icon) -->
-                                                                <span
-                                                                    class="text-sm sm:text-base font-bold text-primary text-right whitespace-nowrap">
-                                                                    {{
-                                                                        formatAmount(parseFloat(passengerFare.base_price ||
-                                                                            0) +
-                                                                            parseFloat(passengerFare.surchage || 0) +
-                                                                            parseFloat(passengerFare.taxes || 0) +
-                                                                            parseFloat(passengerFare.fees || 0) +
-                                                                            parseFloat(passengerFare.service_charges || 0) +
-                                                                            parseFloat(passengerFare.ancillaries_charges || 0) +
-                                                                            ((calculateFareMargin(
-                                                                                parseFloat(passengerFare.base_price) || 0,
-                                                                                fare.margin_amount,
-                                                                                fare.margin_type,
-                                                                                fare.amount_type,
-                                                                            ) +
-                                                                                calculateCustomerMargin(
-                                                                                    parseFloat(passengerFare.base_price) || 0,
-                                                                                )) * passengerFare?.total_passenger))
-                                                                    }}
-                                                                </span>
-                                                            </AccordionTrigger>
+                                                    <div class="border-t border-gray-200 pt-2">
+                                                        <div class="flex justify-between items-center">
+                                                            <span
+                                                                class="text-sm font-medium text-gray-900">Subtotal</span>
+                                                            <span class="text-sm font-semibold text-primary">
+                                                                {{ formatSelectedFareMoney(fare) }}
+                                                            </span>
 
 
-                                                            <!-- CONTENT -->
-                                                            <AccordionContent
-                                                                class="px-3 sm:px-4 sm:pr-7 pb-3 space-y-2">
-                                                                <div class="flex justify-between items-center">
-                                                                    <span class="text-xs sm:text-sm text-gray-600">Base
-                                                                        Fare</span>
-                                                                    <span class="text-xs sm:text-sm font-medium">
-                                                                        {{
-                                                                            formatAmount(
-                                                                                ((calculateFareMargin(
-                                                                                    parseFloat(
-                                                                                        passengerFare?.base_price,
-                                                                                    ) || 0,
-                                                                                    fare?.margin_amount,
-                                                                                    fare?.margin_type,
-                                                                                    fare?.amount_type,
-                                                                                ) +
-                                                                                    parseFloat(
-                                                                                        CustomerMargin?.other_charges || 0,
-                                                                                    ) +
-                                                                                    parseFloat(
-                                                                                        calculateCustomerMargin(
-                                                                                            passengerFare?.base_price,
-                                                                                            CustomerMargin?.value?.discount || 0,
-                                                                                            CustomerMargin?.value?.margin_amount || 0,
-                                                                                        ),
-                                                                                    )) *
-                                                                                    passengerCount) +
-                                                                                parseFloat(passengerFare?.base_price || 0)
-                                                                            )
-                                                                        }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div class="flex justify-between items-center">
-                                                                    <span
-                                                                        class="text-xs sm:text-sm text-gray-600">Taxes</span>
-                                                                    <span class="text-xs sm:text-sm font-medium">
-                                                                        {{ formatAmount(passengerFare?.taxes) }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div class="flex justify-between items-center">
-                                                                    <span
-                                                                        class="text-xs sm:text-sm text-gray-600">Fees</span>
-                                                                    <span class="text-xs sm:text-sm font-medium">
-                                                                        {{ formatAmount(passengerFare?.fees) }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div class="flex justify-between items-center">
-                                                                    <span class="text-xs sm:text-sm text-gray-600">
-                                                                        Service Charges
-                                                                    </span>
-                                                                    <span class="text-xs sm:text-sm font-medium">
-                                                                        {{ formatAmount(passengerFare.service_charges)
-                                                                        }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div v-if="ancillaries"
-                                                                    class="flex justify-between items-center">
-                                                                    <span
-                                                                        class="text-xs sm:text-sm text-gray-600">Add-ons</span>
-                                                                    <span class="text-xs sm:text-sm font-medium">
-                                                                        {{
-                                                                            formatAmount(getExtrasTotal(flightIndex))
-                                                                        }}
-                                                                    </span>
-                                                                </div>
-
-                                                                <hr class="border-dashed border-gray-300" />
-
-                                                                <div
-                                                                    class="flex justify-between items-center   rounded">
-                                                                    <span
-                                                                        class="text-xs sm:text-sm font-medium text-gray-700">
-                                                                        Amount
-                                                                    </span>
-                                                                    <span
-                                                                        class="text-sm sm:text-base font-bold text-primary">
-                                                                        {{
-                                                                            formatAmount(
-                                                                                parseFloat(passengerFare.base_price || 0) +
-                                                                                parseFloat(passengerFare.surchage || 0) +
-                                                                                parseFloat(passengerFare.taxes || 0) +
-                                                                                parseFloat(passengerFare.fees || 0) +
-                                                                                parseFloat(passengerFare.service_charges || 0) +
-                                                                                parseFloat(passengerFare.ancillaries_charges ||
-                                                                                    0) +
-                                                                                ((calculateFareMargin(
-                                                                                    parseFloat(passengerFare.base_price) || 0,
-                                                                                    fare.margin_amount,
-                                                                                    fare.margin_type,
-                                                                                    fare.amount_type,
-                                                                                ) +
-                                                                                    calculateCustomerMargin(
-                                                                                        parseFloat(passengerFare.base_price) || 0,
-                                                                                    )) * passengerFare?.total_passenger))
-                                                                        }}
-                                                                    </span>
-                                                                </div>
-                                                            </AccordionContent>
-                                                        </AccordionItem>
-                                                    </template>
-                                                </Accordion>
-                                                <div
-                                                    class="flex justify-between items-center bg-gray-50 p-2 sm:px-4 rounded">
-                                                    <span
-                                                        class="text-xs sm:text-sm font-bold text-gray-700">Amount</span>
-                                                    <span class="text-sm sm:text-base font-bold text-primary">
-                                                        {{formatAmount(
-                                                            calculateTotalFare(fare) +
-                                                            getExtrasTotal(flightIndex)
-                                                        )}}
-
-                                                    </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
                                 </div>
                                 <div class="flex justify-between mt-3 items-center bg-gray-50 p-3 rounded">
                                     <span class="text-base sm:text-sm font-semibold text-gray-900">Add-ons Amount</span>
                                     <span class="text-sm sm:text-lg font-bold text-primary">
-                                        {{ formatAmount(addOnsAmount) }}
+                                        {{ formatExtrasDisplayMoney() }}
                                     </span>
                                 </div>
                                 <div class="flex justify-between mt-3 sm:mt-4 items-center bg-gray-50 p-3  rounded">
                                     <span class="text-base sm:text-sm font-semibold text-gray-900">Total Amount</span>
                                     <span class="text-sm sm:text-lg font-bold text-primary">
-                                        {{ formatAmount(amount = calculateGrandTotal()) }}
+                                        {{ formatLockedCheckoutTotal() }}
                                     </span>
                                 </div>
 
@@ -3793,7 +3915,7 @@ watch(flight, () => {
                                         {{ item.type }}: {{ item.title }} for traveller {{ Number(item.passengerIdx) + 1 }}
                                     </span>
                                     <span class="font-semibold text-gray-900">
-                                        {{ item.currency }} {{ item.amount }}
+                                        {{ formatConvertedMoney(item.money) }}
                                     </span>
                                 </div>
                             </div>
@@ -3889,174 +4011,30 @@ watch(flight, () => {
                                 </DialogContent>
                             </Dialog>
                         </div>
-                        <div class="">
+                        <div class="space-y-3">
                             <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
-                                <div
-                                    class="text-xs sm:text-sm font-semibold text-gray-900 my-1 sm:my-2 flex items-center gap-1 sm:gap-2 px-2">
-                                    <div class="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-primary rounded-full"></div>
-                                    {{
-                                        flight.from
-                                            .iata
-                                    }}
-                                    →
-                                    {{
-                                        flight.to.iata
-                                    }}
-
-                                </div>
                                 <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
-                                    <div v-if="selectedFares?.includes(fare.ref_id)" class="">
-                                        <Accordion class="" type="multiple" collapsible>
-                                            <template v-for="(passengerFare, index) in fare.passenger_fares"
-                                                :key="index">
-                                                <AccordionItem :value="`fare-${flightIndex}-${fareIndex}-${index}`"
-                                                    class="  overflow-hidden">
-                                                    <!-- HEADER -->
-                                                    <AccordionTrigger
-                                                        class="px-2 py-2 border-b grid grid-cols-[1fr_auto_auto] items-center  hover:no-underline gap-1">
-
-                                                        <!-- LEFT -->
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="text-xs sm:text-sm font-bold text-gray-600">
-                                                                {{ passengerFare.traveler_type }}
-                                                                X {{ passengerFare.total_passenger }}
-                                                            </span>
-                                                        </div>
-
-                                                        <!-- AMOUNT (perfectly right-aligned before icon) -->
-                                                        <span
-                                                            class="text-sm sm:text-base font-bold text-primary text-right whitespace-nowrap">
-                                                            {{
-                                                                formatAmount(parseFloat(passengerFare.base_price ||
-                                                                    0) +
-                                                                    parseFloat(passengerFare.surchage || 0) +
-                                                                    parseFloat(passengerFare.taxes || 0) +
-                                                                    parseFloat(passengerFare.fees || 0) +
-                                                                    parseFloat(passengerFare.service_charges || 0) +
-                                                                    parseFloat(passengerFare.ancillaries_charges || 0) +
-                                                                    ((calculateFareMargin(
-                                                                        parseFloat(passengerFare.base_price) || 0,
-                                                                        fare.margin_amount,
-                                                                        fare.margin_type,
-                                                                        fare.amount_type,
-                                                                    ) +
-                                                                        calculateCustomerMargin(
-                                                                            parseFloat(passengerFare.base_price) || 0,
-                                                                        )) * passengerFare?.total_passenger))
-                                                            }}
-                                                        </span>
-                                                    </AccordionTrigger>
-
-
-                                                    <!-- CONTENT -->
-                                                    <AccordionContent class="px-3 sm:px-4 sm:pr-7 pb-3 space-y-2">
-                                                        <div class="flex justify-between items-center">
-                                                            <span class="text-xs sm:text-sm text-gray-600">Base
-                                                                Fare</span>
-                                                            <span class="text-xs sm:text-sm font-medium">
-                                                                {{
-                                                                    formatAmount(
-                                                                        ((calculateFareMargin(
-                                                                            parseFloat(
-                                                                                passengerFare?.base_price,
-                                                                            ) || 0,
-                                                                            fare?.margin_amount,
-                                                                            fare?.margin_type,
-                                                                            fare?.amount_type,
-                                                                        ) +
-                                                                            parseFloat(
-                                                                                CustomerMargin?.other_charges || 0,
-                                                                            ) +
-                                                                            parseFloat(
-                                                                                calculateCustomerMargin(
-                                                                                    passengerFare?.base_price,
-                                                                                    CustomerMargin?.value?.discount || 0,
-                                                                                    CustomerMargin?.value?.margin_amount || 0,
-                                                                                ),
-                                                                            )) *
-                                                                            passengerCount) +
-                                                                        parseFloat(passengerFare?.base_price || 0)
-                                                                    )
-                                                                }}
-                                                            </span>
-                                                        </div>
-
-                                                        <div class="flex justify-between items-center">
-                                                            <span class="text-xs sm:text-sm text-gray-600">Taxes</span>
-                                                            <span class="text-xs sm:text-sm font-medium">
-                                                                {{ formatAmount(passengerFare?.taxes) }}
-                                                            </span>
-                                                        </div>
-
-                                                        <div class="flex justify-between items-center">
-                                                            <span class="text-xs sm:text-sm text-gray-600">Fees</span>
-                                                            <span class="text-xs sm:text-sm font-medium">
-                                                                {{ formatAmount(passengerFare?.fees) }}
-                                                            </span>
-                                                        </div>
-
-                                                        <div class="flex justify-between items-center">
-                                                            <span class="text-xs sm:text-sm text-gray-600">
-                                                                Service Charges
-                                                            </span>
-                                                            <span class="text-xs sm:text-sm font-medium">
-                                                                {{ formatAmount(passengerFare.service_charges)
-                                                                }}
-                                                            </span>
-                                                        </div>
-
-                                                        <div v-if="ancillaries"
-                                                            class="flex justify-between items-center">
-                                                            <span
-                                                                class="text-xs sm:text-sm text-gray-600">Add-ons</span>
-                                                            <span class="text-xs sm:text-sm font-medium">
-                                                                {{
-                                                                    formatAmount(getExtrasTotal(flightIndex))
-                                                                }}
-                                                            </span>
-                                                        </div>
-
-                                                        <hr class="border-dashed border-gray-300" />
-
-                                                        <div class="flex justify-between items-center   rounded">
-                                                            <span class="text-xs sm:text-sm font-medium text-gray-700">
-                                                                Amount
-                                                            </span>
-                                                            <span class="text-sm sm:text-base font-bold text-primary">
-                                                                {{
-                                                                    formatAmount(
-                                                                        parseFloat(passengerFare.base_price || 0) +
-                                                                        parseFloat(passengerFare.surchage || 0) +
-                                                                        parseFloat(passengerFare.taxes || 0) +
-                                                                        parseFloat(passengerFare.fees || 0) +
-                                                                        parseFloat(passengerFare.service_charges || 0) +
-                                                                        parseFloat(passengerFare.ancillaries_charges ||
-                                                                            0) +
-                                                                        ((calculateFareMargin(
-                                                                            parseFloat(passengerFare.base_price) || 0,
-                                                                            fare.margin_amount,
-                                                                            fare.margin_type,
-                                                                            fare.amount_type,
-                                                                        ) +
-                                                                            calculateCustomerMargin(
-                                                                                parseFloat(passengerFare.base_price) || 0,
-                                                                            )) * passengerFare?.total_passenger))
-                                                                }}
-                                                            </span>
-                                                        </div>
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            </template>
-                                        </Accordion>
-                                        <div class="flex justify-between items-center bg-gray-50 p-2 sm:px-4 rounded">
-                                            <span class="text-xs sm:text-sm font-bold text-gray-700">Amount</span>
-                                            <span class="text-sm sm:text-base font-bold text-primary">
-                                                {{formatAmount(
-                                                    calculateTotalFare(fare) +
-                                                    getExtrasTotal(flightIndex)
-                                                )}}
-
-                                            </span>
+                                    <div v-if="selectedFares?.includes(fare.ref_id)" class="bg-gray-50 p-3 space-y-2">
+                                        <p class="text-xs font-semibold text-gray-700">
+                                            {{ flight.from?.iata }} → {{ flight.to?.iata }}
+                                        </p>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xs text-gray-500">Base Fare</span>
+                                            <span class="text-xs font-medium">{{ formatSelectedFareMoney(fare) }}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xs text-gray-500">Taxes & Fees</span>
+                                            <span class="text-xs font-medium">{{ formatAmount(calculateTaxes(fare)) }}</span>
+                                        </div>
+                                        <div v-if="ancillaries" class="flex justify-between items-center">
+                                            <span class="text-xs text-gray-500">Add-ons</span>
+                                            <span class="text-xs font-medium">{{ formatExtrasDisplayMoney(flightIndex) }}</span>
+                                        </div>
+                                        <div class="border-t border-gray-200 pt-2">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-sm font-medium text-gray-900">Subtotal</span>
+                                                <span class="text-sm font-semibold text-primary">{{ formatSelectedFareMoney(fare) }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4065,16 +4043,16 @@ watch(flight, () => {
                         <div class="flex justify-between mt-3 items-center bg-gray-50 p-3 rounded">
                             <span class="text-base sm:text-sm font-semibold text-gray-900">Add-ons Amount</span>
                             <span class="text-sm sm:text-lg font-bold text-primary">
-                                {{ formatAmount(addOnsAmount) }}
+                                {{ formatExtrasDisplayMoney() }}
                             </span>
                         </div>
                         <div class="flex justify-between mt-3 sm:mt-4 items-center bg-gray-50 p-3  rounded">
                             <span class="text-base sm:text-sm font-semibold text-gray-900">Total Amount</span>
                             <span class="text-sm sm:text-lg font-bold text-primary">
-                                {{ formatAmount(amount = calculateGrandTotal()) }}
+                                {{ formatLockedCheckoutTotal() }}
                             </span>
                         </div>
-                        <Button @click="handlePaymentMethod('hold')" :disabled="isPaymentMethodsVisible || isSubmitting"
+                        <Button @click="handlePaymentMethod('hold')" :disabled="isPaymentMethodsVisible || isSubmitting || !isLockedCheckoutTotalReady"
                             class="w-full bg-primary hover:bg-primary/50 text-white py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm disabled:opacity-50">
                             <span v-if="isSubmitting" class="at-inline-spinner"></span>
                             {{ isSubmitting ? "Saving..." : "Next Step" }}
@@ -4251,9 +4229,22 @@ watch(flight, () => {
                 <Button @click="closePaymentDialog" class="bg-gray-200 text-gray-700">
                     Cancel
                 </Button>
-                <Button @click="handlePayment" :disabled="processing" class="bg-primary hover:bg-primary/90 text-white">
+                <Button @click="handlePayment" :disabled="processing || !isLockedCheckoutTotalReady" class="bg-primary hover:bg-primary/90 text-white">
                     <span v-if="processing" class="at-inline-spinner"></span>
-                    Pay {{ formatAmount(amount) }}
+                    Pay {{ formatLockedCheckoutTotal() }}
+                </Button>
+            </div>
+        </div>
+    </div>
+    <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 class="text-lg font-semibold text-gray-900">Search expired</h3>
+            <p class="mt-2 text-sm text-gray-600">
+                This flight price is no longer valid. Please search again for the latest fare.
+            </p>
+            <div class="mt-6 flex justify-end">
+                <Button @click="returnToFlightSearch" class="bg-primary text-white">
+                    Search flights
                 </Button>
             </div>
         </div>
