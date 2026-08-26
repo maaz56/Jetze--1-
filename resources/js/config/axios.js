@@ -12,18 +12,20 @@ const apiService = axios.create({
     withCredentials: true,
 });
 
-// Function to set CSRF token before each API call
-const setCsrfToken = async () => {
-    try {
-        await apiService.get("/sanctum/csrf-cookie");
-        // console.log("CSRF token set");
-    } catch (error) {
-        console.error("Failed to get CSRF token:", error);
-    }
-};
+let csrfCookieRequest;
 
-// Call setCsrfToken once when the app loads
-//setCsrfToken();
+// Establish one fresh, same-origin Sanctum session per page load before an
+// authentication mutation. Axios then mirrors XSRF-TOKEN into X-XSRF-TOKEN.
+export const ensureCsrfCookie = () => {
+    if (!csrfCookieRequest) {
+        csrfCookieRequest = apiService.get("/sanctum/csrf-cookie").catch((error) => {
+            csrfCookieRequest = undefined;
+            throw error;
+        });
+    }
+
+    return csrfCookieRequest;
+};
 
 // Request interceptor (optional extra CSRF check)
 apiService.interceptors.request.use((config) => {

@@ -1,4 +1,4 @@
-import apiService from "@/config/axios";
+import apiService, { ensureCsrfCookie } from "@/config/axios";
 import router from "@/config/router";
 import { getUserHomeRoute } from "@/services/routes/authorizedRoute";
 import {
@@ -99,6 +99,7 @@ export const useAuthStore = defineStore("auth", {
         async requestLoginOtp(params) {
             this.isLoading = true;
             try {
+                await ensureCsrfCookie();
                 const browserId = getBrowserId();
                 const response = await apiService.post(
                     "/login/request-otp",
@@ -172,6 +173,7 @@ export const useAuthStore = defineStore("auth", {
         async verifyLoginOtp(params) {
             this.isLoading = true;
             try {
+                await ensureCsrfCookie();
                 const response = await apiService.post(
                     "/login/verify-otp",
                     params,
@@ -196,6 +198,7 @@ export const useAuthStore = defineStore("auth", {
             this.generalError = null;
             this.validationMessages = null;
             try {
+                await ensureCsrfCookie();
                 const response = await apiService.post("/register", params);
                 console.log(response);
                 // handleResponse(response);
@@ -337,13 +340,14 @@ export const useAuthStore = defineStore("auth", {
         async logout() {
             this.isLoading = true;
             try {
+                await ensureCsrfCookie();
                 await apiService.post("logout");
                 this.success = true;
             } catch (error) {
                 // A 419 here means the server session or CSRF cookie has
                 // already expired. The user still needs to leave the signed-in
                 // UI, so finish the client-side logout below.
-                if (error.response?.status !== 419) {
+                if (![401, 419].includes(error.response?.status)) {
                     handleError(error);
                     this.success = false;
                 } else {
