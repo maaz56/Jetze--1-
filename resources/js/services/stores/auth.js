@@ -337,21 +337,26 @@ export const useAuthStore = defineStore("auth", {
         async logout() {
             this.isLoading = true;
             try {
-                const response = await apiService.post("logout");
-                
-                localStorage.removeItem("access_token");
-                this.user = null;
+                await apiService.post("logout");
                 this.success = true;
-                this.isLoggedIn = false;
-                // Redirect user to home page after successfully logged out
-                if (this.success) {
-                    router.push({ name: "Home" });
-                    //window.location.href = "/";
-                }
             } catch (error) {
-                handleError(error);
-                this.success = false;
+                // A 419 here means the server session or CSRF cookie has
+                // already expired. The user still needs to leave the signed-in
+                // UI, so finish the client-side logout below.
+                if (error.response?.status !== 419) {
+                    handleError(error);
+                    this.success = false;
+                } else {
+                    this.success = true;
+                }
             } finally {
+                if (this.success) {
+                    localStorage.removeItem("access_token");
+                    this.user = null;
+                    this.isLoggedIn = false;
+                    // Redirect after a successful server logout or an expired session.
+                    router.push({ name: "Home" });
+                }
                 this.isLoading = false;
             }
         },

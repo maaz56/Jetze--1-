@@ -23,13 +23,22 @@ export const resolveApiBaseUrl = () => {
 
     try {
         const url = new URL(configuredUrl, window.location.origin);
-        const currentHostname = window.location.hostname.replace(/^www\./, "");
-        const apiHostname = url.hostname.replace(/^www\./, "");
+        const currentHostname = window.location.hostname.toLowerCase();
+        const apiHostname = url.hostname.toLowerCase();
+        const isJetzeHost = /^(?:www\.)?jetze\.(?:ae|pk)$/.test(currentHostname);
+
+        // Both public domains serve this Laravel application. Keeping its API
+        // same-origin is essential: Laravel's session and XSRF cookies are
+        // deliberately host-only, so a shared build must not send a jetze.pk
+        // user to www.jetze.ae (or vice versa).
+        if (isJetzeHost) {
+            return new URL(`${url.pathname}${url.search}${url.hash}`, window.location.origin).toString();
+        }
 
         if (
             window.location.protocol === "https:" &&
             url.protocol === "http:" &&
-            apiHostname === currentHostname
+            apiHostname.replace(/^www\./, "") === currentHostname.replace(/^www\./, "")
         ) {
             url.protocol = "https:";
         }

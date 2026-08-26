@@ -1,11 +1,9 @@
 import axios from "axios";
 import { useRoute } from "vue-router";
+import { resolveApiBaseUrl } from "./apiBaseUrl";
 
 const apiService = axios.create({
-    baseURL:
-        import.meta.env.VITE_MODE === "production"
-            ? import.meta.env.VITE_API_ROOT
-            : import.meta.env.VITE_API_ROOT_LOCAL,
+    baseURL: resolveApiBaseUrl(),
     timeout: 300000,
     headers: {
         Accept: "application/json",
