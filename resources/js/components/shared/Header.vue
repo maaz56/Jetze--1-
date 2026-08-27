@@ -98,8 +98,8 @@ import { useAuthStore } from "@/services/stores/auth";
 import Accordion from "@/components/ui/accordion/Accordion.vue";
 import { calculateFinalPrice } from "@/lib/utils.js";
 import { useStore } from "vuex";
+import apiService from "@/config/axios";
 import {
-    FETCH_AIRPORTS,
     FETCH_AGENT_DATA,
     FETCH_PROMO_IMAGES,
     FETCH_AIRLINES,
@@ -152,7 +152,7 @@ const agentData = computed(() => store.getters["user/agentData"]);
 const promoImages = computed(() => store.getters["promoImage/promoImageData"]);
 const isLoading = computed(() => flightStore.isLoading);
 const availableAirlines = computed(() => flightStore.availableAirlines);
-const airports = computed(() => store.getters["airport/airports"]);
+const airportSearchResults = ref([]);
 const headerDefaultAirportCodes = ["PEW","LHE","SKT","ISB","KHI","MUX","GWD"];
 const airlines = computed(() => store.getters["airline/airlines"]);
 const previousSearch = JSON.parse(localStorage.getItem("previous_search"));
@@ -193,6 +193,50 @@ const timerInterval = ref(null);
 const selectedStop = ref(null);
 const showDialog = ref(false);
 const pnr = ref(null);
+const originAutocomplete = ref(null);
+const destinationAutocomplete = ref(null);
+const departureCalendar = ref(null);
+let airportSearchRequestId = 0;
+
+const focusDestination = () => {
+    nextTick(() => destinationAutocomplete.value?.focus());
+};
+
+const openDepartureCalendar = () => {
+    nextTick(() => departureCalendar.value?.open());
+};
+
+const clearAirportSearchResults = () => {
+    airportSearchRequestId += 1;
+    airportSearchResults.value = [];
+};
+
+const fetchMatchingAirports = async (query) => {
+    const searchQuery = String(query || "").trim();
+    const requestId = ++airportSearchRequestId;
+
+    if (searchQuery.length < 2) {
+        airportSearchResults.value = [];
+        return;
+    }
+
+    try {
+        const response = await apiService.get("/airports", {
+            params: {
+                search_query: searchQuery,
+                with_pagination: true,
+            },
+        });
+
+        if (requestId === airportSearchRequestId) {
+            airportSearchResults.value = response.data?.data || [];
+        }
+    } catch {
+        if (requestId === airportSearchRequestId) {
+            airportSearchResults.value = [];
+        }
+    }
+};
 
 function fetchPromoImages() {
     store.dispatch("promoImage/" + FETCH_PROMO_IMAGES);
@@ -919,27 +963,6 @@ function applyChanges() {
     isPopoverOpen.value = false;
 }
 
-function applyDefaultAirportSelection() {
-    if (!Array.isArray(airports.value) || airports.value.length === 0) return;
-    const firstAirport = airports.value[0]?.iata_code || null;
-    const secondAirport = airports.value[1]?.iata_code || firstAirport;
-
-    if (!origin.value) {
-        origin.value = firstAirport;
-    }
-    if (!destination.value) {
-        destination.value = secondAirport;
-    }
-}
-
-watch(
-    airports,
-    () => {
-        applyDefaultAirportSelection();
-    },
-    { immediate: true },
-);
-
 watch(
     flightType,
     (newType) => {
@@ -967,7 +990,6 @@ onMounted(() => {
         fetchAgent();
     }
     fetchAirlines();
-    store.dispatch("airport/" + FETCH_AIRPORTS);
     if (
         (flightType.value === "multi-city" &&
             multiCityTrips.value.some(
@@ -979,7 +1001,6 @@ onMounted(() => {
     }
     initializeSearchParams();
     recentSearches.value = readRecentSearches();
-    applyDefaultAirportSelection();
     if (!dateRange.value.start) {
         dateRange.value.start = todayDate.value;
     }
@@ -1133,7 +1154,11 @@ onMounted(() => {
                                 >{{ $t("FROM") }}</label
                             >
                             <Autocomplete
+                                ref="originAutocomplete"
                                 v-model="origin"
+                                @selected="focusDestination"
+                                @search="fetchMatchingAirports"
+                                @query-changed="clearAirportSearchResults"
                                 :default-value="
                                     route.query?.origin
                                         ? route.query?.origin
@@ -1142,7 +1167,8 @@ onMounted(() => {
                                           : ''
                                 "
                                 :placeholder="$t('origin')"
-                                :source="airports"
+                                :source="airportSearchResults"
+                                :remote-search="true"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                             />
@@ -1174,7 +1200,11 @@ onMounted(() => {
                                 >{{ $t("TO") }}</label
                             >
                             <Autocomplete
+                                ref="destinationAutocomplete"
                                 v-model="destination"
+                                @selected="openDepartureCalendar"
+                                @search="fetchMatchingAirports"
+                                @query-changed="clearAirportSearchResults"
                                 :icon="'PlaneLanding'"
                                 :default-value="
                                     route.query?.destination
@@ -1184,7 +1214,8 @@ onMounted(() => {
                                           : ''
                                 "
                                 :placeholder="$t('destination')"
-                                :source="airports"
+                                :source="airportSearchResults"
+                                :remote-search="true"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                             />
@@ -1200,6 +1231,7 @@ onMounted(() => {
                                 >
                             </div>
                             <Calender
+                                ref="departureCalendar"
                                 v-model="dateRange.start"
                                 :minValue="new Date().toLocaleDateString('en-CA')"
                                 class="w-full h-10 sm:h-auto"
@@ -1402,15 +1434,21 @@ onMounted(() => {
                             <div
                                 v-for="(trip, index) in multiCityTrips"
                                 :key="index"
+                                class="mb-4 last:mb-0"
                             >
-                                <!-- Origin -->
-                                <div class="font-normal text-start text-gray-700">
+                                <div class="mb-1.5 font-normal text-start text-gray-700">
                                     Trip {{ index + 1 }}
                                 </div>
                                 <div
-                                    class="grid grid-cols-1 sm:grid-cols-4 gap-2 border-gray-200 items-center"
+                                    :class="[
+                                        'grid grid-cols-1 items-stretch overflow-hidden rounded-md border border-gray-200 bg-white',
+                                        index === 0
+                                            ? 'sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.28fr]'
+                                            : 'sm:grid-cols-[1.35fr_1.35fr_1.02fr]',
+                                    ]"
                                 >
-                               
+                                    <div class="booking-cell text-start relative w-full">
+                                        <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("FROM") }}</label>
                                     <Autocomplete
                                         v-model="trip.origin"
                                         :default-value="
@@ -1421,14 +1459,19 @@ onMounted(() => {
                                                   : ''
                                         "
                                         :placeholder="$t('origin')"
-                                        :source="airports"
+                                        :source="airportSearchResults"
+                                        :remote-search="true"
+                                        @search="fetchMatchingAirports"
+                                        @query-changed="clearAirportSearchResults"
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
                                         class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
                                     />
+                                    </div>
 
-                                    <!-- Destination -->
+                                    <div class="booking-cell text-start relative w-full">
+                                        <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("TO") }}</label>
                                     <Autocomplete
                                         v-model="trip.destination"
                                         :icon="'PlaneLanding'"
@@ -1440,21 +1483,19 @@ onMounted(() => {
                                                   : ''
                                         "
                                         :placeholder="$t('destination')"
-                                        :source="airports"
+                                        :source="airportSearchResults"
+                                        :remote-search="true"
+                                        @search="fetchMatchingAirports"
+                                        @query-changed="clearAirportSearchResults"
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
                                         class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
                                     />
+                                    </div>
 
-                                    <!-- Date -->
-                                    <!-- <input
-                                    type="date"
-                                    v-model="trip.date"
-                                    :min="index === 0 ? todayDate : multiCityTrips[index - 1]?.date || todayDate"
-                                    class="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 text-lg"
-                                /> -->
-                                    <div class="w-full mx-1 border-gray-300 rounded-md text-lg">
+                                    <div class="booking-cell w-full text-start">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Departure</label>
                                         <Calender
                                             v-model="trip.date"
                                             :minValue="
@@ -1467,12 +1508,13 @@ onMounted(() => {
                                         />
                                     </div>
                                     <div v-if="index === 0" class="w-full text-start">
-                                        
+                                        <div class="booking-cell w-full text-start">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Travellers &amp; Class</label>
                                         <Popover v-model:open="isPopoverOpen">
                                             <PopoverTrigger as-child>
                                                 <button
                                                     type="button"
-                                                    class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded bg-white border border-gray-200 text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                                    class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded border-0 bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                                 >
                                                     <div class="text-left">
                                                         <p class="font-bold text-lg">
@@ -1576,6 +1618,7 @@ onMounted(() => {
                                                 </div>
                                             </PopoverContent>
                                         </Popover>
+                                        </div>
                                     </div>
                                     <!-- Remove Button -->
                                     <Button

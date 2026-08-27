@@ -23,6 +23,7 @@ use App\Services\OneApiService;
 use App\Services\PIAApiService;
 use App\Services\SabreApiService;
 use App\Services\AtApiService;
+use App\Services\AgentWalletBalanceService;
 use App\Services\BookingPricingService;
 use App\Services\BookingVoidSettlementService;
 use App\Services\PriceQuoteService;
@@ -58,6 +59,7 @@ class BookingController extends Controller
     protected $travelportApiService;
     protected $utilityService;
     protected $priceQuoteService;
+    protected $agentWalletBalanceService;
     protected $bookingPricingService;
     protected $bookingVoidSettlementService;
     protected $providerBookingEventService;
@@ -72,6 +74,7 @@ class BookingController extends Controller
         OneApiService $oneApiService,
         UtilityService $utilityService,
         PriceQuoteService $priceQuoteService,
+        AgentWalletBalanceService $agentWalletBalanceService,
         BookingPricingService $bookingPricingService,
         BookingVoidSettlementService $bookingVoidSettlementService,
         ProviderBookingEventService $providerBookingEventService,
@@ -86,6 +89,7 @@ class BookingController extends Controller
         $this->oneApiService = $oneApiService;
         $this->utilityService = $utilityService;
         $this->priceQuoteService = $priceQuoteService;
+        $this->agentWalletBalanceService = $agentWalletBalanceService;
         $this->bookingPricingService = $bookingPricingService;
         $this->bookingVoidSettlementService = $bookingVoidSettlementService;
         $this->providerBookingEventService = $providerBookingEventService;
@@ -1000,6 +1004,25 @@ class BookingController extends Controller
     public function confirmPnr(Request $request)
     {
         Log::info($request);
+
+        if ($request->flight_provider === 'at') {
+            $booking = FlightBookings::with('priceSnapshot')->find($request->bookingId);
+
+            if (!$booking) {
+                return response()->json(['message' => 'Booking not found.'], 404);
+            }
+
+            if ($request->user()?->role !== 'admin' && (int) $booking->agent_id !== (int) $request->user()?->id) {
+                return response()->json(['message' => 'You cannot confirm this booking.'], 403);
+            }
+
+            if (!$this->agentWalletBalanceService->canPayForBooking($booking)) {
+                return response()->json([
+                    'message' => 'Your wallet balance is insufficient to confirm this booking.',
+                ], 422);
+            }
+        }
+
         $res = null;
         if ($request->flight_provider == 'sooper') {
             $res = '[]';

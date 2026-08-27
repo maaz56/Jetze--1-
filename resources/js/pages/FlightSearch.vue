@@ -281,6 +281,7 @@ const formatTime = (milliseconds) => {
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 async function openSooperFlightDetails(flight) {
+    initializeSelectedFares(flight);
     selectedFlight.value = flight;
     // store.dispatch("flight/" + FETCH_FLIGHT, {
     //     flight_id: flightId,
@@ -791,6 +792,22 @@ const formatLayoverDuration = (minutes) => {
     return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
+const getFlightLayovers = (flight) => {
+    const segments = flight?.segments || [];
+
+    return segments.slice(0, -1).map((segment, index) => ({
+        airport:
+            segment?.to?.city?.name ||
+            segment?.to?.name ||
+            segment?.to?.iata ||
+            "Connecting airport",
+        code: segment?.to?.city?.code || segment?.to?.iata || "",
+        duration: formatLayoverDuration(
+            getSegmentLayoverMinutes(segment, segments[index + 1]),
+        ),
+    }));
+};
+
 const formatDurationFilterLabel = (minutes) => {
     const total = Math.max(0, Math.round(Number(minutes) || 0));
     const hours = Math.floor(total / 60);
@@ -1190,6 +1207,32 @@ function calculateFare(fare) {
 }
 
 /** Format one fare using the converted backend amount when it is available. */
+function fareSortAmount(fare) {
+    const totalPrice = Number(fare?.total_price);
+    if (Number.isFinite(totalPrice)) return totalPrice;
+
+    const displayAmount = Number(fare?.display_money?.amount);
+    if (Number.isFinite(displayAmount)) return displayAmount;
+
+    return calculateFare(fare);
+}
+
+function sortedFlightFares(flight) {
+    return [...(flight?.fares || [])].sort(
+        (firstFare, secondFare) =>
+            fareSortAmount(firstFare) - fareSortAmount(secondFare),
+    );
+}
+
+function initializeSelectedFares(flight) {
+    selectedFares.splice(0, selectedFares.length);
+
+    flight?.leg?.flights?.forEach((leg, index) => {
+        const lowestFare = sortedFlightFares(leg)[0];
+        if (lowestFare) selectedFares[index] = lowestFare.ref_id;
+    });
+}
+
 function formatFareDisplayMoney(fare) {
     const money = fare?.display_money;
 
@@ -1590,11 +1633,7 @@ watch(
     () => {
         //console.log("Selected flight changed:", selectedFlight.value);
         //console.log("Selected fares:", selectedFares.value);
-        selectedFlight.value?.leg?.flights?.forEach((flight, index) => {
-            if (flight?.fares?.length > 0) {
-                selectedFares[index] = flight.fares[0].ref_id;
-            }
-        });
+        initializeSelectedFares(selectedFlight.value);
         loadingDetails.value = false;
     },
     { immediate: true, deep: true },
@@ -2639,7 +2678,7 @@ watch(isLoggedIn, (newVal) => {
                                         </div>
 
                                         <div
-                                            class="flex-1 flex flex-col items-center px-2"
+                                            class="relative flex-1 flex flex-col items-center px-2"
                                         >
                                             <span
                                                 class="text-xs font-medium text-gray-500"
@@ -2676,27 +2715,47 @@ watch(isLoggedIn, (newVal) => {
                                                     class="absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"
                                                 ></div>
                                             </div>
-                                            <span
-                                                class="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-semibold text-gray-600"
-                                            >
-                                                <GitCommitHorizontal
-                                                    v-if="
-                                                        item?.leg?.flights[0]
-                                                            ?.has_layovers
-                                                    "
-                                                    class="h-3 w-3 text-amber-500"
-                                                />
-                                                <PlaneTakeoff
-                                                    v-else
-                                                    class="h-3 w-3 text-emerald-500"
-                                                />
-                                                {{
-                                                    item?.leg?.flights[0]
-                                                        ?.has_layovers
-                                                        ? `${item?.leg?.flights[0]?.layovers_count} Stop`
-                                                        : "Non stop"
-                                                }}
-                                            </span>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <span
+                                                            class="absolute inset-0 z-10 cursor-help"
+                                                            aria-label="Show layover time"
+                                                        ></span>
+                                                    </TooltipTrigger>
+                                                    <span
+                                                        class="pointer-events-none mt-1 inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                                                        >
+                                                            <GitCommitHorizontal
+                                                                v-if="item?.leg?.flights[0]?.has_layovers"
+                                                                class="h-3 w-3 text-amber-500"
+                                                            />
+                                                            <PlaneTakeoff
+                                                                v-else
+                                                                class="h-3 w-3 text-emerald-500"
+                                                            />
+                                                            {{
+                                                                item?.leg?.flights[0]?.has_layovers
+                                                                    ? `${item?.leg?.flights[0]?.layovers_count} Stop`
+                                                                : "Non stop"
+                                                            }}
+                                                        </span>
+                                                    <TooltipContent
+                                                        v-if="item?.leg?.flights[0]?.has_layovers"
+                                                        side="top"
+                                                        class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                                    >
+                                                        <p class="mb-1 font-semibold">Layover time</p>
+                                                        <div
+                                                            v-for="(layover, layoverIndex) in getFlightLayovers(item?.leg?.flights[0])"
+                                                            :key="`${layover.airport}-${layoverIndex}`"
+                                                        >
+                                                            {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
+                                                            {{ layover.duration }}
+                                                        </div>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         </div>
 
                                         <div class="text-right">
@@ -2876,7 +2935,7 @@ watch(isLoggedIn, (newVal) => {
                                                 </p>
                                             </div>
                                             <div
-                                                class="flex-1 flex flex-col items-center px-1"
+                                                class="relative flex-1 flex flex-col items-center px-1"
                                             >
                                                 <p
                                                     class="text-[10px] font-bold text-gray-400"
@@ -2910,23 +2969,47 @@ watch(isLoggedIn, (newVal) => {
                                                         class="absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-400"
                                                     ></div>
                                                 </div>
-                                                <p
-                                                    class="mt-1 inline-flex items-center justify-center gap-1 rounded-full bg-white px-1.5 py-0.5 text-center text-[9px] font-bold text-gray-500"
-                                                >
-                                                    <GitCommitHorizontal
-                                                        v-if="leg?.has_layovers"
-                                                        class="h-2.5 w-2.5 text-amber-500"
-                                                    />
-                                                    <PlaneTakeoff
-                                                        v-else
-                                                        class="h-2.5 w-2.5 text-emerald-500"
-                                                    />
-                                                    {{
-                                                        leg?.has_layovers
-                                                            ? `${leg?.layovers_count} stop`
-                                                            : "Non stop"
-                                                    }}
-                                                </p>
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger as-child>
+                                                            <p
+                                                                class="absolute inset-0 z-10 cursor-help"
+                                                                aria-label="Show layover time"
+                                                            ></p>
+                                                        </TooltipTrigger>
+                                                        <p
+                                                            class="pointer-events-none mt-1 inline-flex items-center justify-center gap-1 rounded-full bg-white px-1.5 py-0.5 text-center text-[9px] font-bold text-gray-500"
+                                                            >
+                                                                <GitCommitHorizontal
+                                                                    v-if="leg?.has_layovers"
+                                                                    class="h-2.5 w-2.5 text-amber-500"
+                                                                />
+                                                                <PlaneTakeoff
+                                                                    v-else
+                                                                    class="h-2.5 w-2.5 text-emerald-500"
+                                                                />
+                                                                {{
+                                                                    leg?.has_layovers
+                                                                        ? `${leg?.layovers_count} stop`
+                                                                    : "Non stop"
+                                                                }}
+                                                            </p>
+                                                        <TooltipContent
+                                                            v-if="leg?.has_layovers"
+                                                            side="top"
+                                                            class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                                        >
+                                                            <p class="mb-1 font-semibold">Layover time</p>
+                                                            <div
+                                                                v-for="(layover, layoverIndex) in getFlightLayovers(leg)"
+                                                                :key="`${layover.airport}-${layoverIndex}`"
+                                                            >
+                                                                {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
+                                                                {{ layover.duration }}
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
                                             </div>
                                             <div class="text-right">
                                                 <p
@@ -3976,8 +4059,8 @@ watch(isLoggedIn, (newVal) => {
                                                     <div
                                                         v-for="(
                                                             fare, fareIndex
-                                                        ) in flight?.fares"
-                                                        :key="fareIndex"
+                                                        ) in sortedFlightFares(flight)"
+                                                        :key="fare.ref_id || fareIndex"
                                                         @click="
                                                             selectFares(
                                                                 flightIndex,

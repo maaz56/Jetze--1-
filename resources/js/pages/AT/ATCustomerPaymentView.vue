@@ -104,11 +104,8 @@
               <div class="lg:col-span-1 space-y-3">
 
 
-                <!-- Bank Transfer (Abhi Pay) -->
-
-
-                <!-- Abhipay -->
-                <div @click="selectPaymentMethod('abhipay-bank')" :class="[
+                <!-- AbhiPay is temporarily disabled. Keep the markup for an easy re-enable. -->
+                <div v-if="false" @click="selectPaymentMethod('abhipay-bank')" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay-bank'
                     ? 'bg-primary border-primary shadow-lg'
@@ -130,7 +127,7 @@
                     </h3>
                   </div>
                 </div>
-                <div @click="selectPaymentMethod('abhipay')" :class="[
+                <div v-if="false" @click="selectPaymentMethod('abhipay')" :class="[
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'abhipay'
                     ? 'bg-primary border-primary shadow-lg'
@@ -158,8 +155,7 @@
                   'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
                   paymentMethod === 'wallet'
                     ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10',
-                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
+                    : 'border-primary bg-white hover:bg-primary/10'
                 ]">
                   <div :class="[
                     'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
@@ -208,8 +204,8 @@
                   </div>
                 </div>
 
-                <!-- Bank Transfer (Abhi Pay) Info -->
-                <div v-else-if="paymentMethod === 'abhipay-bank'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                <!-- AbhiPay is temporarily disabled. Keep the markup for an easy re-enable. -->
+                <div v-else-if="false && paymentMethod === 'abhipay-bank'" class="bg-blue-50 rounded p-6 border border-blue-100">
                   <div class="space-y-4">
 
                     <div class="flex gap-3">
@@ -324,8 +320,8 @@
                   </div>
                 </div>
 
-                <!-- Abhipay Info -->
-                <div v-else-if="paymentMethod === 'abhipay'" class="bg-blue-50 rounded p-6 border border-blue-100">
+                <!-- AbhiPay is temporarily disabled. Keep the markup for an easy re-enable. -->
+                <div v-else-if="false && paymentMethod === 'abhipay'" class="bg-blue-50 rounded p-6 border border-blue-100">
                   <div class="space-y-4">
                     <div class="flex gap-3">
                       <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
@@ -379,9 +375,9 @@
                       </div>
                     </div>
                   </div>
-                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing || isBookingExpired" :class="[
+                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
                     'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                    paymentMethod && !isProcessing && !isBookingExpired
+                    paymentMethod && !isProcessing
                       ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
                       : 'bg-slate-300 text-slate-600 cursor-not-allowed'
                   ]">
@@ -643,7 +639,7 @@
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
         <div class="flex items-start justify-between mb-4">
           <h3 class="text-lg font-medium text-gray-900">Low Balance Warning</h3>
-          <button @click="isConfirmDialogOpen = false" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+          <button @click="isLowBalanceDialogOpen = false" class="text-gray-400 hover:text-gray-500 focus:outline-none">
             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -652,8 +648,7 @@
 
         <div class="mt-2">
           <p class="text-sm text-gray-500">
-            You balance is insufitient to confirm this booking. Please add funds to your
-            account.
+            Your wallet balance is insufficient to confirm this booking. Please add funds to your account.
           </p>
         </div>
 
@@ -662,15 +657,9 @@
             class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
             Cancel
           </button>
-          <button @click="$router.push({
-            name: 'CustomerProfile',
-            query: {
-              tab: 'deposits'
-            }
-
-          })"
+          <button @click="goToWalletDeposit"
             class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/40">
-            Go To Desposit
+            Go To Deposit
           </button>
         </div>
       </div>
@@ -720,7 +709,7 @@
                                     class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50">
                                     Cancel
                                 </button>
-                                <button @click="confirmBooking" :disabled="actionLoading || isBookingExpired"
+                                <button @click="confirmBooking" :disabled="actionLoading"
                                     class="inline-flex items-center gap-2 px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-slate-300">
                                     <span v-if="actionLoading" class="at-inline-spinner"></span>
                                     {{ actionLoading ? 'Confirming...' : 'Confirm Booking' }}
@@ -915,6 +904,25 @@ const paymentMoney = computed(() => {
     amount: Number(amount),
     currency: String(currencyCode).toUpperCase(),
   };
+});
+
+/** Read the immutable AED value used for wallet eligibility checks. */
+const walletRequiredAed = computed(() => {
+  const booking = bookingDetails.value?.[0];
+  const snapshot = booking?.price_snapshot;
+  const amount = snapshot?.aed_amount ?? booking?.aed_amount;
+
+  return Number(amount);
+});
+
+/** The ledger balance is always AED, even when the UI currency is switched. */
+const walletBalanceAed = computed(() => Number(agentLedger.value?.balance));
+
+/** Check wallet eligibility only with locked AED booking and AED ledger values. */
+const hasSufficientWalletBalance = computed(() => {
+  return Number.isFinite(walletRequiredAed.value)
+    && Number.isFinite(walletBalanceAed.value)
+    && walletBalanceAed.value >= walletRequiredAed.value;
 });
 
 /**
@@ -1461,7 +1469,8 @@ watch(passengers, (newPassengers) => {
 
 watch(payment, () => {
   console.log("Payment query param changed:", payment.value);
-  if (payment.value == true) {
+  // AbhiPay callback-status handling is temporarily disabled.
+  if (false && payment.value == true) {
     checkPaymentStatus();
   }
 })
@@ -1473,7 +1482,7 @@ watch(paymentMethod, () => {
 
 // Payment Methods Handler
 function handlePaymentMethod(type) {
-  if (isBookingExpired.value) {
+  if (isBookingExpired.value && type !== "wallet") {
     toast.error('This booking has expired. Please search again before paying.');
     return;
   }
@@ -1489,15 +1498,15 @@ function handlePaymentMethod(type) {
     openPaymentDialog();
   } else if (type === "alrajhi") {
     payNow();
-  } else if (type === "abhipay" || type === "abhipay-bank") {
+  } else if (false && (type === "abhipay" || type === "abhipay-bank")) {
+    // AbhiPay is temporarily disabled.
     initializeAbhiPay();
   }
 
 }
 
-/** Select a payment method only while the booking price remains valid. */
 function selectPaymentMethod(type) {
-  if (isBookingExpired.value) return;
+  if (isBookingExpired.value && type !== "wallet") return;
 
   paymentMethod.value = type;
 }
@@ -1529,18 +1538,24 @@ const copyBillId = () => {
   navigator.clipboard.writeText(billId.value);
 };
 // Wallet Confirmation
-function handleConfirmDialogOpen() {
-  if (isBookingExpired.value) {
-    toast.error('This booking has expired. Please search again before paying.');
-    return;
-  }
+async function handleConfirmDialogOpen() {
+  // Refresh first so the check uses the latest AED wallet balance.
+  await fetchAgentLedger();
 
-
-  if (agentLedger.value?.balance < amount?.value) {
+  if (!hasSufficientWalletBalance.value) {
     isLowBalanceDialogOpen.value = true;
   } else {
     isConfirmDialogOpen.value = true;
   }
+}
+
+/** Close the warning and open the wallet deposit page. */
+function goToWalletDeposit() {
+    isLowBalanceDialogOpen.value = false;
+  router.push({
+    name: 'CustomerProfile',
+    query: { tab: 'deposits' },
+  });
 }
 
 watch(paymentStatus, () => {
@@ -1555,8 +1570,11 @@ async function confirmBooking() {
         return;
     }
 
-    if (isBookingExpired.value) {
-        toast.error('This booking has expired. Please search again before paying.');
+    // Recheck immediately before confirmation in case another wallet action changed the balance.
+    await fetchAgentLedger();
+    if (!hasSufficientWalletBalance.value) {
+        isConfirmDialogOpen.value = false;
+        isLowBalanceDialogOpen.value = true;
         return;
     }
 
@@ -1648,12 +1666,13 @@ watch(bookingDetails, () => {
     flightData.value = parseFlightData(bookingDetails.value[0]?.flight_data);
     calculateGrandTotal();
   }
-  if (payment.value == 'true') {
+  // AbhiPay callback-status handling is temporarily disabled.
+  if (false && payment.value == 'true') {
     checkPaymentStatus('abhipay');
   }
-  // if (billId.value ) {
-  //   checkPaymentStatus('abhipay-bank');
-  // }
+  if (false && billId.value) {
+    checkPaymentStatus('abhipay-bank');
+  }
 }, { immediate: true })
 
 function checkPaymentStatus(type) {

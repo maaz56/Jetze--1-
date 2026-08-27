@@ -141,8 +141,8 @@
             </div>
         </div>
         
-        <!-- One Bill Charges Section -->
-        <div>
+        <!-- AbhiPay / One Bill settings are temporarily disabled. Keep the section for an easy re-enable. -->
+        <div v-if="false">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold text-gray-800">Abhi Pay Charges</h2>
                 <Dialog v-model:open="isOneBillDialogOpen">

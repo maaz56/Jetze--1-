@@ -96,6 +96,34 @@ const lockedAdminBookingMoney = computed(() => {
     };
 });
 
+/** Read the locked customer-selected/display amount saved with the booking. */
+const lockedCustomerBookingMoney = computed(() => {
+    const booking = bookingDetails.value?.[0];
+    const snapshot = booking?.price_snapshot;
+    const amount = snapshot?.selling_amount ?? booking?.selling_amount;
+    const currency = snapshot?.selling_currency ?? booking?.selling_currency;
+
+    if (amount === null || amount === undefined || !currency) {
+        return null;
+    }
+
+    return {
+        amount: Number(amount),
+        currency: String(currency).toUpperCase(),
+    };
+});
+
+/** Format the currency amount selected by the customer at booking time. */
+function formatCustomerSelectedBookingAmount() {
+    const money = lockedCustomerBookingMoney.value;
+
+    if (!money || Number.isNaN(money.amount)) {
+        return 'Price unavailable';
+    }
+
+    return formatAmountWithCurrency(money.amount, money.currency);
+}
+
 /** Format the booking's locked total in AED for admin pages. */
 function formatLockedBookingAmount() {
     if (!lockedAdminBookingMoney.value || Number.isNaN(lockedAdminBookingMoney.value.amount)) {
@@ -1408,7 +1436,7 @@ onMounted(() => {
                             </table>
                         </div>
                     </div>
-                    <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
+                    <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid bg-white"
                         v-if="isDetailsInfoVisible">
                         <h2 class="mb-6 text-base font-extrabold text-slate-950 print:text-gray-900">
                             FARE BREAKDOWN
@@ -1510,11 +1538,20 @@ onMounted(() => {
                                         </tr>
                                         <tr>
                                             <td colspan="3"
+                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
+                                                Total Amount (AED)
+                                            </td>
+                                            <td class="pb-2 px-2 text-[11px] font-bold text-primary">
+                                                {{ formatLockedBookingAmount() }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3"
                                                 class="pb-6 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                Total Amount
+                                                Customer Selected Total
                                             </td>
                                             <td class="pb-6 px-2 text-[11px] font-bold text-primary">
-                                                {{ formatLockedBookingAmount() }}
+                                                {{ formatCustomerSelectedBookingAmount() }}
                                             </td>
                                         </tr>
                                     </tfoot>

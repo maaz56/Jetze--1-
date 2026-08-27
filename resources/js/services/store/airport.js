@@ -74,8 +74,11 @@ const actions = {
         commit(IS_LOADING);
         try {
             const response = await apiService.getAirports(params);
-            commit(SET_AIRPORTS, response.data);
-            return response.data;
+            const airports = Array.isArray(response.data)
+                ? response.data
+                : (response.data?.data || []);
+            commit(SET_AIRPORTS, airports);
+            return airports;
         } catch (error) {
             toast("Failed to fetch airports", { type: "error" });
             commit(SET_API_ERROR, error);

@@ -300,14 +300,14 @@ onMounted(() => {
 
               <div>
                 <h3 class="text-lg font-bold text-gray-900 mb-2">Help</h3>
-                <ul class="space-y-1">
+                <!-- <ul class="space-y-1">
                   <li>
                     <a href="/how-to-use-abhi-pay-bank-transfer"
                       class="text-gray-600 hover:text-primary hover:font-medium transition-all duration-200 inline-block">
                       How To Use AbhiPay&nbsp;Bank Transfer
                     </a>
                   </li>
-                </ul>
+                </ul> -->
 
                 <h3 class="text-lg font-bold text-gray-900 mb-2 mt-8">Legal</h3>
                 <ul class="space-y-1">

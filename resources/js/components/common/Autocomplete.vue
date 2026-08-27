@@ -51,7 +51,7 @@
                     <li v-for="(item, index) in searchResults" :key="item.id || index"
                         @click.stop="setSelected(item)" :class="[
                             'flex cursor-pointer items-center justify-between border-b border-gray-50 px-4 py-3 transition-colors',
-                            index === focusedIndex ? 'bg-blue-50' : 'hover:bg-gray-50',
+                            index === focusedIndex ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
                         ]">
                         <div class="flex items-center gap-4">
                             <div class="rounded-lg bg-gray-100 p-2">
@@ -133,6 +133,10 @@ const props = defineProps({
         type: Function,
         default: null,
     },
+    remoteSearch: {
+        type: Boolean,
+        default: false,
+    },
     text_color: {
         type: String,
         default: "white"
@@ -143,7 +147,12 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits([
+    "update:modelValue",
+    "selected",
+    "search",
+    "query-changed",
+]);
 
 const isSearching = computed(() => {
     return (isLoading.value || isLoadingAirport.value) && searchResults.value.length === 0;
@@ -264,10 +273,17 @@ const setDefaultSuggestions = () => {
     }
 
     searchResults.value = suggestions.slice(0, limit);
+    focusedIndex.value = searchResults.value.length ? 0 : -1;
     isLoading.value = false;
 };
 
 const updateSearchResults = debounce(() => {
+    if (props.remoteSearch) {
+        emit("search", String(search.value || "").trim());
+        isLoading.value = false;
+        return;
+    }
+
     if (!search.value || search.value === "") {
         setDefaultSuggestions();
     } else {
@@ -290,6 +306,7 @@ const updateSearchResults = debounce(() => {
             const selectedCode = (selectedItem.value.iata_code || "").toLowerCase();
             if (selectedCode && selectedCode === query) {
                 searchResults.value = [selectedItem.value];
+                focusedIndex.value = 0;
                 isLoading.value = false;
                 return;
             }
@@ -319,14 +336,16 @@ const updateSearchResults = debounce(() => {
         } else {
             searchResults.value = filteredResults;
         }
+        focusedIndex.value = searchResults.value.length ? 0 : -1;
         isLoading.value = false;
     }
-}, 600);
+}, props.remoteSearch ? 350 : 600);
 
 const clearSelectedValue = () => {
     search.value = "";
     selectedItem.value = null;
     emit("update:modelValue", "");
+    emit("query-changed", "");
 };
 
 watch(search, () => {
@@ -338,6 +357,11 @@ function handleInput(event) {
     // clear any previous selection when user types manually
     selectedItem.value = null;
 
+    if (props.remoteSearch) {
+        searchResults.value = [];
+        focusedIndex.value = -1;
+    }
+
     isOpen.value = true;
     eventBus.value = {
         ...eventBus.value,
@@ -345,6 +369,7 @@ function handleInput(event) {
         dropdownId: uniqueId.value,
     };
     search.value = event.target.value;
+    emit("query-changed", event.target.value);
     nextTick(() => {
         updatePosition(); // Update dropdown position when opening
     });
@@ -402,27 +427,34 @@ function setSelected(item) {
     const formatted = formatSelection(item);
     search.value = formatted;
     emit("update:modelValue", item.iata_code); // store only the IATA code externally
+    emit("selected", item);
 }
 
 function clearSearch() {
     search.value = "";
     selectedItem.value = null;
     emit("update:modelValue", "");
+    emit("query-changed", "");
     isOpen.value = true;
     setDefaultSuggestions();
 }
 
 const handleKeydown = (e) => {
-    if (!searchResults.value.length) return;
+    if (isLoading.value) updateSearchResults.flush();
 
     if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!searchResults.value.length) return;
         focusedIndex.value =
             (focusedIndex.value + 1) % searchResults.value.length;
     } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!searchResults.value.length) return;
         focusedIndex.value =
             (focusedIndex.value - 1 + searchResults.value.length) %
             searchResults.value.length;
     } else if (e.key === "Enter") {
+        e.preventDefault();
         if (
             focusedIndex.value >= 0 &&
             focusedIndex.value < searchResults.value.length
@@ -431,6 +463,12 @@ const handleKeydown = (e) => {
         }
     }
 };
+
+const focus = () => {
+    inputEl.value?.focus();
+};
+
+defineExpose({ focus });
 
 // Close the dropdown when clicking outside
 const handleClickOutside = (event) => {
@@ -486,7 +524,12 @@ watch(() => props.modelValue, (newValue) => {
 
 watch(() => props.source, () => {
     if (search.value) {
-        updateSearchResults(); // Filter again using the current search term
+        if (props.remoteSearch) {
+            searchResults.value = props.source.slice(0, props.defaultSuggestionsLimit);
+            focusedIndex.value = searchResults.value.length ? 0 : -1;
+        } else {
+            updateSearchResults(); // Filter again using the current search term
+        }
     } else if (isOpen.value) {
         setDefaultSuggestions();
     }

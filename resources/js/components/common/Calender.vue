@@ -126,10 +126,16 @@ const props = defineProps({
   prices: { type: Object, default: () => ({}) },
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "selected"]);
 
 const selectedDate = ref(null);
 const isOpenPopover = ref(false);
+
+const open = () => {
+  isOpenPopover.value = true;
+};
+
+defineExpose({ open });
 
 // Display controls
 const now = new Date();
@@ -259,6 +265,7 @@ function formatMonthYear(date) {
 
 function handleDateSelect(date) {
   selectedDate.value = date;
+  emit("selected", formatDateValueToYYYYmmdd(date));
 }
 
 function formatDateValueToYYYYmmdd(dateVal) {
