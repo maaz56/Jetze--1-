@@ -17,6 +17,7 @@ class PriceQuote extends Model
         return [
             'provider_amount' => 'decimal:8',
             'provider_rate_to_aed' => 'decimal:8',
+            'provider_aed_amount' => 'decimal:8',
             'display_amount' => 'decimal:8',
             'display_rate_to_aed' => 'decimal:8',
             'aed_amount' => 'decimal:8',
@@ -56,5 +57,11 @@ class PriceQuote extends Model
     public function items()
     {
         return $this->hasMany(PriceQuoteItem::class);
+    }
+
+    /** Return the commercial adjustments locked with this quote. */
+    public function adjustments()
+    {
+        return $this->hasMany(PriceQuoteAdjustment::class);
     }
 }

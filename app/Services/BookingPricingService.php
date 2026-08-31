@@ -17,6 +17,8 @@ class BookingPricingService
     public function createSnapshot(FlightBookings $booking, PriceQuote $quote): BookingPriceSnapshot
     {
         return DB::transaction(function () use ($booking, $quote) {
+            $quote->loadMissing('adjustments');
+
             $snapshot = BookingPriceSnapshot::firstOrCreate(
                 ['booking_id' => $booking->id],
                 [
@@ -26,10 +28,26 @@ class BookingPricingService
                     'provider_amount' => $quote->provider_amount,
                     'provider_currency' => $quote->provider_currency,
                     'provider_rate_to_aed' => $quote->provider_rate_to_aed,
+                    'provider_aed_amount' => $quote->provider_aed_amount,
                     'selling_amount' => $quote->display_amount,
                     'selling_currency' => $quote->display_currency,
                     'selling_rate_to_aed' => $quote->display_rate_to_aed,
                     'aed_amount' => $quote->aed_amount,
+                    'adjustments_snapshot' => $quote->adjustments
+                        ->map(fn ($adjustment) => [
+                            'type' => $adjustment->type,
+                            'rule_id' => $adjustment->rule_id,
+                            'title' => $adjustment->title,
+                            'direction' => $adjustment->direction,
+                            'calculation_type' => $adjustment->calculation_type,
+                            'configured_value' => $adjustment->configured_value,
+                            'passenger_count' => $adjustment->passenger_count,
+                            'segment_count' => $adjustment->segment_count,
+                            'aed_amount' => $adjustment->aed_amount,
+                            'rule_snapshot' => $adjustment->rule_snapshot,
+                        ])
+                        ->values()
+                        ->all(),
                 ],
             );
 

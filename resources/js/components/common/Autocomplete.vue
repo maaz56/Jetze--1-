@@ -137,6 +137,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    searchDebounce: {
+        type: Number,
+        default: 600,
+    },
     text_color: {
         type: String,
         default: "white"
@@ -339,7 +343,7 @@ const updateSearchResults = debounce(() => {
         focusedIndex.value = searchResults.value.length ? 0 : -1;
         isLoading.value = false;
     }
-}, props.remoteSearch ? 350 : 600);
+}, props.remoteSearch ? 350 : props.searchDebounce);
 
 const clearSelectedValue = () => {
     search.value = "";

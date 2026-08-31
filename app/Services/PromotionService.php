@@ -9,6 +9,34 @@ use Log;
 
 class PromotionService
 {
+    /** Resolve the matching AT promotion rule without changing provider fare amounts. */
+    public function commercialRuleForFare(array $provider, array $flight): ?array
+    {
+        $promotion = $this->resolveBestPromotion(
+            Promotion::query()->get(),
+            $this->buildFlightContext(
+                $flight,
+                Airline::query()->pluck('iata_code', 'id')->map(fn ($iata) => strtoupper((string) $iata))->toArray(),
+                $this->buildProviderChannels($provider),
+            ),
+        );
+
+        if (!$promotion) {
+            return null;
+        }
+
+        return [
+            'rule_id' => $promotion->id,
+            'title' => $promotion->title,
+            'direction' => strtolower((string) ($promotion->price_option ?? 'markup')) === 'discount' ? 'discount' : 'markup',
+            'calculation_type' => strtolower((string) $promotion->commission_type) === 'percentage' ? 'percentage' : 'amount',
+            'configured_value' => (string) $promotion->commission_value,
+            'passenger_count' => $this->getPassengerCount($flight),
+            'segment_count' => 1,
+            'snapshot' => $promotion->only(['id', 'title', 'sale_channel', 'reservation_type', 'price_option', 'commission_type', 'commission_value', 'airline_id', 'airline_ids', 'disabled_airline_ids', 'travel_start_date', 'travel_end_date', 'ticketing_start_date', 'ticketing_end_date']),
+        ];
+    }
+
     public function applyPromotions(array $transformedFlights, array $context = []): array
     {
 
@@ -28,6 +56,9 @@ class PromotionService
 
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
+            if (strtolower((string) data_get($provider, 'name')) === 'at') {
+                continue;
+            }
             $channels = $this->buildProviderChannels($provider);
             $flights = data_get($itinerary, 'leg.flights', []);
 
@@ -106,6 +137,19 @@ class PromotionService
             $channels[] = $contentSource;
         }
 
+        // AT shares Travelport's promotion configuration. Add the complete
+        // Travelport channel set for AT results, allowing existing generic,
+        // GDS, and NDC promotions to match without creating duplicate rules.
+        if (in_array('AT', [$identifier, $name, $contentSource], true)) {
+            $channels = array_merge($channels, [
+                'TRAVELPORT',
+                'TRAVELPORT-GDS',
+                'TRAVELPORT-NDC',
+                'GDS',
+                'NDC',
+            ]);
+        }
+
         return array_values(array_unique(array_filter($channels)));
     }
 
@@ -116,8 +160,17 @@ class PromotionService
             return 1;
         }
 
+        $passengerCounts = $fares[0]['passenger_counts'] ?? null;
+        if (is_array($passengerCounts)) {
+            return max(array_sum(array_map('intval', $passengerCounts)), 1);
+        }
+
         $passengerFares = $fares[0]['passenger_fares'] ?? [];
-        $count = is_array($passengerFares) ? count($passengerFares) : 0;
+        $count = 0;
+
+        foreach (is_array($passengerFares) ? $passengerFares : [] as $passengerFare) {
+            $count += max((int) ($passengerFare['count'] ?? $passengerFare['total_passenger'] ?? 1), 1);
+        }
 
         return max($count, 1);
     }

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { ChevronDownIcon, Search, ArrowLeftRight, ArrowRight, Calendar } from "lucide-vue-next";
 import { FETCH_AIRPORTS, FETCH_PNR_DATA } from "@/services/store/actions.type";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
 import Calender from "./Calender.vue";
 import { CircleArrowDown, Plane } from "lucide-vue-next";
@@ -117,6 +117,18 @@ const localValue = ref(normalizeModelValue(props.modelValue));
 const syncingFromParent = ref(false);
 const isSubmit = ref(false);
 const maxMultiCityTrips = 3;
+const originAutocomplete = ref(null);
+const destinationAutocomplete = ref(null);
+const departureCalendar = ref(null);
+
+const focusDestination = () => {
+    nextTick(() => destinationAutocomplete.value?.focus());
+};
+
+const openDepartureCalendar = () => {
+    nextTick(() => departureCalendar.value?.open());
+};
+
 function validate() {
     errors.value = {};
     const { flightType, origin, destination, dateRange, multiCityTrips } =
@@ -613,9 +625,12 @@ const startCountdown = (remainingTime) => {
                                     FROM
                                 </label>
                                 <Autocomplete
+                                    ref="originAutocomplete"
                                     v-model="localValue.origin"
+                                    @selected="focusDestination"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :icon="'PlaneTakeoff'"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
@@ -643,9 +658,12 @@ const startCountdown = (remainingTime) => {
                                     TO
                                 </label>
                                 <Autocomplete
+                                    ref="destinationAutocomplete"
                                     v-model="localValue.destination"
+                                    @selected="openDepartureCalendar"
                                     placeholder="Destination"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :icon="'PlaneLanding'"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
@@ -665,6 +683,7 @@ const startCountdown = (remainingTime) => {
                                     Departure
                                 </label>
                                 <Calender
+                                    ref="departureCalendar"
                                     v-model="localValue.dateRange.start"
                                     :minValue="new Date().toLocaleDateString('en-CA')"
                                     class="w-full h-10 sm:h-auto"
@@ -909,6 +928,7 @@ const startCountdown = (remainingTime) => {
                                     v-model="localValue.multiCityTrips[0].origin"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :icon="'PlaneTakeoff'"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
@@ -927,6 +947,7 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Destination"
                                     :icon="'PlaneLanding'"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
@@ -1044,6 +1065,7 @@ const startCountdown = (remainingTime) => {
                                     v-model="trip.origin"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :icon="'PlaneTakeoff'"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
@@ -1062,6 +1084,7 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Destination"
                                     :icon="'PlaneLanding'"
                                     :source="airports"
+                                    :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />

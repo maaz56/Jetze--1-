@@ -113,6 +113,21 @@ const lockedCustomerBookingMoney = computed(() => {
     };
 });
 
+/** Read commercial adjustments from the permanent booking snapshot for admin audit only. */
+const lockedCommercialAdjustments = computed(() => {
+    const adjustments = bookingDetails.value?.[0]?.price_snapshot?.adjustments_snapshot;
+
+    return Array.isArray(adjustments) ? adjustments : [];
+});
+
+/** Format one locked AED commercial adjustment with its original sign. */
+function formatLockedCommercialAdjustment(adjustment) {
+    const amount = Number(adjustment?.aed_amount);
+    const sign = amount < 0 ? '-' : '+';
+
+    return `${sign}${formatAmountWithCurrency(Math.abs(amount || 0), 'AED')}`;
+}
+
 /** Format the currency amount selected by the customer at booking time. */
 function formatCustomerSelectedBookingAmount() {
     const money = lockedCustomerBookingMoney.value;
@@ -1534,6 +1549,16 @@ onMounted(() => {
                                             </td>
                                             <td class="py-4 px-2 text-[11px] font-bold text-primary">
                                                 {{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}
+                                            </td>
+                                        </tr>
+                                        <tr v-for="adjustment in lockedCommercialAdjustments" :key="`${adjustment.type}-${adjustment.rule_id}-${adjustment.rule_snapshot?.fare_ref_id}`">
+                                            <td colspan="3"
+                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
+                                                {{ adjustment.type === 'segment_margin' ? 'Segment Margin' : 'Promotion' }}
+                                                <span v-if="adjustment.title" class="font-normal text-slate-500">— {{ adjustment.title }}</span>
+                                            </td>
+                                            <td class="pb-2 px-2 text-[11px] font-bold text-primary">
+                                                {{ formatLockedCommercialAdjustment(adjustment) }}
                                             </td>
                                         </tr>
                                         <tr>

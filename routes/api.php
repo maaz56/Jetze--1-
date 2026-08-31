@@ -84,6 +84,8 @@ Route::prefix('admin')->group(function () {
     Route::delete('hot-deals/{hotDeal}', [HotDealController::class, 'destroy']);
 });
 
+// Fare details are available during public flight search; provider credentials stay server-side.
+Route::post('at/fare-breakdown', [FlightController::class, 'fetchAtFareBreakdown']);
 
 
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {

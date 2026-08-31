@@ -9,6 +9,7 @@ use App\Services\FlightAggregationService;
 use App\Services\PriceQuoteService;
 use App\Services\SooperApiService;
 use App\Transformers\AtAncillaryTransformer;
+use App\Transformers\AtFareBreakdownTransformer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class FlightController extends Controller
     protected $priceQuoteService;
     protected $ancillaryPricingService;
     protected $atAncillaryTransformer;
+    protected $atFareBreakdownTransformer;
 
     public function __construct(
         FlightAggregationService $flightAggregationService,
@@ -33,6 +35,7 @@ class FlightController extends Controller
         PriceQuoteService $priceQuoteService,
         AncillaryPricingService $ancillaryPricingService,
         AtAncillaryTransformer $atAncillaryTransformer,
+        AtFareBreakdownTransformer $atFareBreakdownTransformer,
     )
     {
         $this->flightAggregator = $flightAggregationService;
@@ -41,6 +44,7 @@ class FlightController extends Controller
         $this->priceQuoteService = $priceQuoteService;
         $this->ancillaryPricingService = $ancillaryPricingService;
         $this->atAncillaryTransformer = $atAncillaryTransformer;
+        $this->atFareBreakdownTransformer = $atFareBreakdownTransformer;
     }
     public function fetchProviders()
     {
@@ -348,25 +352,81 @@ class FlightController extends Controller
             ], 422);
         }
 
-        $quote = $this->priceQuoteService->create(
-            $request->user(),
-            $flight,
-            $validated['fare_references'],
-            $this->currencyCodeForRequest($request, $validated['currency_code']),
-        );
+        $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code']);
 
-        if (strtoupper($quote->provider) === 'AT') {
+        if (strtoupper((string) data_get($flight, 'provider.identifier')) === 'AT') {
             $providerPricing = $this->atApiService->priceQuote(
                 $flight,
                 $validated['fare_references'],
             );
-            $quote = $this->priceQuoteService->refreshProviderPricing(
-                $quote,
+            $quote = $this->priceQuoteService->createAt(
+                $request->user(),
+                $flight,
+                $validated['fare_references'],
+                $displayCurrency,
                 $providerPricing,
+            );
+        } else {
+            $quote = $this->priceQuoteService->create(
+                $request->user(),
+                $flight,
+                $validated['fare_references'],
+                $displayCurrency,
             );
         }
 
         return response()->json($this->quoteResponse($quote), 201);
+    }
+
+    /**
+     * Request raw AT FlightInfo for the fares selected in the active server-cached search.
+     */
+    public function fetchAtFareBreakdown(Request $request)
+    {
+        $validated = $request->validate([
+            'flight_ref_id' => ['required', 'string'],
+            'fare_references' => ['required', 'array', 'min:1'],
+            'fare_references.*' => ['required', 'string'],
+            'search_token' => ['required', 'uuid'],
+        ]);
+
+        $flight = Cache::get($this->quoteFlightCacheKey(
+            $validated['search_token'],
+            $validated['flight_ref_id'],
+        ));
+
+        if (!is_array($flight)) {
+            return response()->json([
+                'message' => 'Your search has expired. Please search again before viewing fare details.',
+            ], 422);
+        }
+
+        if (strtolower((string) data_get($flight, 'provider.name')) !== 'at') {
+            return response()->json(['message' => 'FlightInfo is only available for AT flights.'], 422);
+        }
+
+        $trips = $this->atFlightInfoTrips($flight, $validated['fare_references']);
+        if (count($trips) !== count($validated['fare_references'])) {
+            return response()->json([
+                'message' => 'One or more selected fares are no longer available in this search.',
+            ], 422);
+        }
+
+        $tripType = strtoupper((string) data_get($flight, 'provider.fare_type', 'ON'));
+        $response = $this->atApiService->fetchFlightInfo($trips, $tripType);
+
+        if ($response === null) {
+            return response()->json(['message' => 'Unable to retrieve AT fare details.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'AT fare details fetched successfully.',
+            'fare_breakdown' => $this->atFareBreakdownTransformer->transform(
+                $response,
+                $flight,
+                $validated['fare_references'],
+            ),
+        ]);
     }
 
     /**
@@ -458,6 +518,38 @@ class FlightController extends Controller
     private function quoteFlightCacheKey(string $searchToken, string $flightReference): string
     {
         return 'flight_quote_' . $searchToken . '_' . $flightReference;
+    }
+
+    /** Build AT FlightInfo trips from trusted cached fares, never browser prices or TUI values. */
+    private function atFlightInfoTrips(array $flight, array $fareReferences): array
+    {
+        $selectedFareReferences = array_flip($fareReferences);
+        $tuis = data_get($flight, 'provider.TUI');
+        $trips = [];
+
+        foreach (data_get($flight, 'leg.flights', []) as $flightIndex => $leg) {
+            foreach ($leg['fares'] ?? [] as $fare) {
+                if (!isset($selectedFareReferences[$fare['ref_id'] ?? ''])) {
+                    continue;
+                }
+
+                $tui = is_array($tuis) ? ($tuis[$flightIndex] ?? $tuis[0] ?? null) : $tuis;
+                $amount = data_get($fare, 'provider_booking_money.amount') ?? $fare['billable_price'] ?? null;
+
+                if (!$tui || $amount === null || !isset($fare['index'])) {
+                    continue;
+                }
+
+                $trips[] = [
+                    'TUI' => $tui,
+                    'Amount' => (string) $amount,
+                    'OrderID' => $flightIndex + 1,
+                    'Index' => (string) $fare['index'],
+                ];
+            }
+        }
+
+        return $trips;
     }
 
     /**

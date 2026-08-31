@@ -26,6 +26,7 @@ class AtFlightTransformer
         $processed = $this->atFlightProcessor($flightData, $params);
         $results = [];
         $fareType = $this->resolveFareType($flightData, $params);
+        $passengerCounts = $this->passengerCounts($params);
 
         $provider = [
             "name" => "at",
@@ -83,7 +84,7 @@ class AtFlightTransformer
                             "operating_carrier" => [
                                 "iata" => $fields[0] ?? $flight['VAC'] ?? null,
                                 "name" => $airline['name'] ?? $flight['VAC'] ?? null,
-                                "logo" => isset($fields[0]) ? "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/{$fields[0]}.svg" : null,
+                                "logo" => $airline?->logo_url ?: $this->duffelLogoUrl($fields[0] ?? null),
                             ],
                         ];
 
@@ -112,6 +113,7 @@ class AtFlightTransformer
                             "operating_carrier" => [
                                 "iata" => $seg['VAC'],
                                 "name" => $airline['name'] ?? $seg['VAC'],
+                                "logo" => $airline?->logo_url ?: $this->duffelLogoUrl($seg['VAC'] ?? null),
                             ],
                         ];
                         $deptAirport = $seg['Airport'];
@@ -133,6 +135,7 @@ class AtFlightTransformer
                         "operating_carrier" => [
                             "iata" => $flight['VAC'],
                             "name" => $airline['name'] ?? $flight['VAC'],
+                            "logo" => $airline?->logo_url ?: $this->duffelLogoUrl($flight['VAC'] ?? null),
                         ],
                     ];
                 }
@@ -216,6 +219,8 @@ class AtFlightTransformer
                         "margin_type" => "markup",
                         "margin_amount" => 0,
                         "billable_price" => $fare['NetFare'] ?? 0,
+                        "passenger_counts" => $passengerCounts,
+                        "passenger_count" => array_sum($passengerCounts),
                         "provider_booking_money" => $providerBookingMoney,
                         "source_money" => [
                             "base_price" => $providerBookingMoney,
@@ -236,7 +241,7 @@ class AtFlightTransformer
                         "passenger_fares" => [
                             [
                                 "type" => "ADT",
-                                "count" => 1,
+                                "count" => $passengerCounts['ADT'],
                                 "base_price" => $fare['NetFare'] ?? 0,
                                 "taxes" => 0,
                                 "total_price" => $fare['GrossFare'] ?? 0,
@@ -322,6 +327,23 @@ class AtFlightTransformer
         }
         
         return $results;
+    }
+
+    /** Return the passenger quantities used in the AT search request. */
+    private function passengerCounts(array $params): array
+    {
+        return [
+            'ADT' => max((int) ($params['adults'] ?? 1), 1),
+            'CHD' => max((int) ($params['children'] ?? 0), 0),
+            'INF' => max((int) ($params['infants'] ?? 0), 0),
+        ];
+    }
+
+    private function duffelLogoUrl(?string $iataCode): ?string
+    {
+        return $iataCode
+            ? "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/{$iataCode}.svg"
+            : null;
     }
 
     private function resolveFareType(array $flightData, array $params): ?string

@@ -81,6 +81,7 @@ const error = ref(null);
 const isLoginMode = ref(true)
 const emit = defineEmits(['login-click', 'search-click'])
 const isScrolled = ref(false);
+const isFlightSearch = computed(() => route.name === "FlightSearch");
 
 const handleScroll = () => {
     isScrolled.value = window.scrollY > 20;
@@ -207,7 +208,9 @@ onUnmounted(() => {
     <div>
         <nav
         :class="[
-            'fixed top-0 inset-x-0 z-40 text-slate-900 transition-all duration-300',
+            isFlightSearch
+                ? 'relative z-40 text-slate-900 transition-all duration-300'
+                : 'fixed top-0 inset-x-0 z-40 text-slate-900 transition-all duration-300',
             isScrolled
                 ? 'bg-white/95 backdrop-blur-md shadow-2xl border-b border-slate-200'
                 : 'bg-white/92 backdrop-blur-md border-b border-slate-200',

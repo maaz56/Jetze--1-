@@ -16,9 +16,11 @@ class BookingPriceSnapshot extends Model
         return [
             'provider_amount' => 'decimal:8',
             'provider_rate_to_aed' => 'decimal:8',
+            'provider_aed_amount' => 'decimal:8',
             'selling_amount' => 'decimal:8',
             'selling_rate_to_aed' => 'decimal:8',
             'aed_amount' => 'decimal:8',
+            'adjustments_snapshot' => 'array',
         ];
     }
 

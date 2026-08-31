@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\PriceQuote;
+use App\Models\PriceQuoteAdjustment;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -13,7 +15,10 @@ class PriceQuoteService
 
     private const QUOTE_RETENTION_DAYS = 30;
 
-    public function __construct(private readonly CurrencyConversionService $currencyConversionService)
+    public function __construct(
+        private readonly CurrencyConversionService $currencyConversionService,
+        private readonly CommercialPricingService $commercialPricingService,
+    )
     {
     }
 
@@ -52,6 +57,64 @@ class PriceQuoteService
             'expires_at' => now()->addMinutes(self::QUOTE_TTL_MINUTES),
             'retain_until' => now()->addDays(self::QUOTE_RETENTION_DAYS),
         ]);
+    }
+
+    /** Create an AT quote only after fresh provider pricing and AED commercial pricing are locked. */
+    public function createAt(
+        User $user,
+        array $flight,
+        array $fareReferences,
+        string $displayCurrency,
+        array $providerPricing,
+    ): PriceQuote {
+        $providerCurrency = strtoupper((string) $providerPricing['currency']);
+        $providerAmount = (string) $providerPricing['net_amount'];
+        $commercial = $this->commercialPricingService->quoteTotals(
+            $flight,
+            $fareReferences,
+            $providerAmount,
+            $providerCurrency,
+            $displayCurrency,
+        );
+
+        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $providerCurrency, $providerAmount, $commercial) {
+            $quote = PriceQuote::create([
+                'uuid' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'provider' => data_get($flight, 'provider.identifier') ?? data_get($flight, 'provider.name') ?? 'AT',
+                'provider_amount' => $providerAmount,
+                'provider_currency' => $providerCurrency,
+                'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
+                'provider_aed_amount' => $commercial['provider_cost_base_money']['amount'],
+                'display_amount' => $commercial['selling_display_money']['amount'],
+                'display_currency' => $commercial['selling_display_money']['currency'],
+                'display_rate_to_aed' => $this->currencyConversionService->rateToBase($commercial['selling_display_money']['currency']),
+                'aed_amount' => $commercial['selling_base_money']['amount'],
+                'flight_data' => $flight,
+                'selected_fare_references' => array_values($fareReferences),
+                'provider_pricing_data' => $providerPricing,
+                'expires_at' => now()->addMinutes(self::QUOTE_TTL_MINUTES),
+                'retain_until' => now()->addDays(self::QUOTE_RETENTION_DAYS),
+            ]);
+
+            foreach ($commercial['adjustments'] as $adjustment) {
+                PriceQuoteAdjustment::create([
+                    'price_quote_id' => $quote->id,
+                    'type' => $adjustment['type'],
+                    'rule_id' => $adjustment['rule_id'],
+                    'title' => $adjustment['title'],
+                    'direction' => $adjustment['direction'],
+                    'calculation_type' => $adjustment['calculation_type'],
+                    'configured_value' => $adjustment['configured_value'],
+                    'passenger_count' => $adjustment['passenger_count'],
+                    'segment_count' => $adjustment['segment_count'],
+                    'aed_amount' => $adjustment['signed_aed_amount'],
+                    'rule_snapshot' => $adjustment['snapshot'],
+                ]);
+            }
+
+            return $quote;
+        });
     }
 
     /**

@@ -16,6 +16,34 @@ use Log;
  */
 class SegmentMarginService
 {
+    /** Resolve the matching AT margin rule without changing provider fare amounts. */
+    public function commercialRuleForFare(array $provider, array $flight): ?array
+    {
+        $margin = $this->resolveBestMargin(
+            SegmentMargin::query()->get(),
+            $this->buildFlightContext(
+                $flight,
+                Airline::query()->pluck('iata_code', 'id')->map(fn ($iata) => strtoupper((string) $iata))->toArray(),
+                $this->buildProviderChannels($provider),
+            ),
+        );
+
+        if (!$margin) {
+            return null;
+        }
+
+        return [
+            'rule_id' => $margin->id,
+            'title' => $margin->title,
+            'direction' => strtolower((string) $margin->margin_type) === 'discount' ? 'discount' : 'markup',
+            'calculation_type' => 'amount',
+            'configured_value' => (string) $margin->margin_value,
+            'passenger_count' => $this->getPassengerCount($flight),
+            'segment_count' => max(count($flight['segments'] ?? []), 1),
+            'snapshot' => $margin->only(['id', 'title', 'sale_channel', 'margin_type', 'margin_value', 'airline_id', 'airline_ids', 'disabled_airline_ids']),
+        ];
+    }
+
     /**
      * Applies segment margins to an array of transformed flight itineraries.
      *
@@ -52,6 +80,9 @@ class SegmentMarginService
         // 4. Iterate through each itinerary in the search results
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
+            if (strtolower((string) data_get($provider, 'name')) === 'at') {
+                continue;
+            }
             
             // Resolve the standard channels for this provider (e.g., SABRE, FLYDUBAI-NDC, GDS, NDC)
             $channels = $this->buildProviderChannels($provider);
@@ -147,6 +178,20 @@ class SegmentMarginService
             $channels[] = $contentSource;
         }
 
+        // AT is priced through the same commercial margin configuration as
+        // Travelport. Keep AT's own channel above, while also exposing every
+        // channel a Travelport GDS/NDC result would expose so existing rules
+        // continue to work without being duplicated for AT.
+        if (in_array('AT', [$identifier, $name, $contentSource], true)) {
+            $channels = array_merge($channels, [
+                'TRAVELPORT',
+                'TRAVELPORT-GDS',
+                'TRAVELPORT-NDC',
+                'GDS',
+                'NDC',
+            ]);
+        }
+
         // Filter out empty strings, retrieve unique values, and reset array index keys
         return array_values(array_unique(array_filter($channels)));
     }
@@ -165,6 +210,11 @@ class SegmentMarginService
         $fares = $flight['fares'] ?? [];
         if (empty($fares) || !is_array($fares)) {
             return 1; // Default fallback to 1 passenger
+        }
+
+        $passengerCounts = $fares[0]['passenger_counts'] ?? null;
+        if (is_array($passengerCounts)) {
+            return max(array_sum(array_map('intval', $passengerCounts)), 1);
         }
 
         $passengerFares = $fares[0]['passenger_fares'] ?? [];
