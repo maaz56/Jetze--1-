@@ -383,7 +383,7 @@ class AtApiService
     }
 
 
-   public function getSearchFlightsRes($tui)
+public function getSearchFlightsRes($tui)
 {
     // ✅ MOCK MODE
     if ($this->useMockApi) {
@@ -418,97 +418,18 @@ class AtApiService
         $body = json_decode($response->getBody(), true);
         $isComplete = strtolower($body['Completed'] ?? 'false');
 
-        // If already complete, return immediately
-        if ($isComplete === 'true') {
-            Log::info('GetExpSearch completed immediately.');
-            return $body;
-        }
-
-        // Store initial response as base
-        $mergedResponse = $body;
-
-        // 🔁 Retry until completed
+        // 🔁 Retry until completed — only the final completed response is returned
         while ($isComplete !== 'true') {
             Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
-            Log::info(json_encode($body));
             sleep(2);
 
             $response = $this->client->send($request);
-            $newBody = json_decode($response->getBody(), true);
-            Log::info("NEW BODY =----------------------------------->");
-            Log::info(json_encode($newBody));
-            $isComplete = strtolower($newBody['Completed'] ?? 'false');
-
-            // If new response is complete and has no trips, it might be a completion response
-            if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
-                Log::info('Search completed. Final response received with no trips.');
-                $mergedResponse['Completed'] = 'true';
-                break;
-            }
-
-            // Merge trips from new response into merged response
-            if (isset($newBody['Trips']) && $newBody['Trips'] !== null) {
-                // Ensure merged response has Trips structure
-                if (!isset($mergedResponse['Trips']) || $mergedResponse['Trips'] === null) {
-                    $mergedResponse['Trips'] = [];
-                }
-
-                // Handle if Trips is an object with 'Trip' key or direct array
-                $newTrips = $this->extractTrips($newBody['Trips']);
-                $mergedTrips = $this->extractTrips($mergedResponse['Trips']);
-
-                // Merge each trip at the same index
-                foreach ($newTrips as $index => $newTripData) {
-                    if (isset($mergedTrips[$index])) {
-                        // Merge Journey/Segments
-                        if (isset($newTripData['Journey']) && isset($mergedTrips[$index]['Journey'])) {
-                            $existingJourney = is_array($mergedTrips[$index]['Journey']) ? $mergedTrips[$index]['Journey'] : [];
-                            $newJourney = is_array($newTripData['Journey']) ? $newTripData['Journey'] : [];
-                            
-                            // Ensure both are arrays of journeys
-                            if (!isset($existingJourney[0])) {
-                                $existingJourney = [$existingJourney];
-                            }
-                            if (!isset($newJourney[0])) {
-                                $newJourney = [$newJourney];
-                            }
-
-                            $mergedTrips[$index]['Journey'] = array_merge($existingJourney, $newJourney);
-                        }
-
-                        // Merge other fields if needed
-                        foreach ($newTripData as $key => $value) {
-                            if ($key !== 'Journey' && !isset($mergedTrips[$index][$key])) {
-                                $mergedTrips[$index][$key] = $value;
-                            }
-                        }
-                    } else {
-                        // Add new trip if doesn't exist
-                        $mergedTrips[$index] = $newTripData;
-                    }
-                }
-
-                // Update merged response trips
-                $mergedResponse['Trips'] = $mergedTrips;
-            }
-
-            // Update completion status
-            $mergedResponse['Completed'] = $isComplete;
-            
-            // If complete response has Code and Msg, merge them
-            if (isset($newBody['Code'])) {
-                $mergedResponse['Code'] = $newBody['Code'];
-            }
-            if (isset($newBody['Msg'])) {
-                $mergedResponse['Msg'] = $newBody['Msg'];
-            }
-
-            // Update body for next iteration
-            $body = $newBody;
+            $body = json_decode($response->getBody(), true);
+            $isComplete = strtolower($body['Completed'] ?? 'false');
         }
 
-        Log::info('GetExpSearch completed successfully. Merged response: ', $mergedResponse);
-        return $mergedResponse;
+        Log::info('GetExpSearch completed. Returning final response.');
+        return $body;
 
     } catch (RequestException $e) {
         Log::error('Error getting search flights result: ' . $e->getMessage());
