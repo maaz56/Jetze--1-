@@ -430,11 +430,13 @@ class AtApiService
         // 🔁 Retry until completed
         while ($isComplete !== 'true') {
             Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
-
+            Log::info(json_encode($body));
             sleep(2);
 
             $response = $this->client->send($request);
             $newBody = json_decode($response->getBody(), true);
+            Log::info("NEW BODY =----------------------------------->");
+            Log::info(json_encode($newBody));
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
 
             // If new response is complete and has no trips, it might be a completion response
@@ -647,6 +649,63 @@ private function extractTrips($tripsData): array
             if ($e->hasResponse()) {
                 Log::error('Response: ' . $e->getResponse()->getBody());
             }
+
+            return null;
+        }
+    }
+
+    /**
+     * Fetch AT FlightInfo for selected fares while keeping signature credentials server-side.
+     */
+    public function fetchFlightInfo(array $trips, string $tripType): ?array
+    {
+        $accessToken = $this->getAccessToken();
+        $token = $accessToken['Token'] ?? null;
+        $clientId = $accessToken['ClientID'] ?? $this->clientId;
+
+        if (!$token || !$clientId) {
+            Log::error('AT FlightInfo could not start because signature credentials are unavailable.');
+            return null;
+        }
+
+        $payload = [
+            'ClientID' => $clientId,
+            'Trips' => $trips,
+            'TripType' => $tripType,
+        ];
+        $url = "{$this->flightBaseUrl}/Flights/FlightInfo";
+
+        Log::info('AT FlightInfo request', [
+            'url' => $url,
+            'payload' => $payload,
+        ]);
+
+        try {
+            $response = $this->client->post($url, [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Authorization' => $token,
+                ],
+                'json' => $payload,
+            ]);
+            $rawBody = (string) $response->getBody();
+            $body = json_decode($rawBody, true);
+
+            Log::info('AT FlightInfo response', [
+                'status' => $response->getStatusCode(),
+                'body' => $body,
+            ]);
+            Log::info('AT FlightInfo raw response: ' . $rawBody);
+
+            return is_array($body) ? $body : ['raw' => $rawBody];
+        } catch (RequestException $exception) {
+            Log::error('AT FlightInfo request failed', [
+                'message' => $exception->getMessage(),
+                'status' => $exception->hasResponse() ? $exception->getResponse()->getStatusCode() : null,
+                'body' => $exception->hasResponse()
+                    ? (string) $exception->getResponse()->getBody()
+                    : null,
+            ]);
 
             return null;
         }
