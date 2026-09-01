@@ -17,9 +17,28 @@ class AirportController extends Controller
     public function index(Request $request)
     {
         $searchQuery = $request->input('search_query');
+        $codesInput = $request->input('codes', []);
         $withPagination = filter_var($request->input('with_pagination', false), FILTER_VALIDATE_BOOLEAN);
         
         $query = Airport::query();
+
+        if ($codesInput) {
+            $codes = collect((array) $codesInput)
+                ->flatMap(fn ($code) => is_string($code) ? explode(',', $code) : [$code])
+                ->map(fn ($code) => strtoupper(trim((string) $code)))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            $airports = Airport::query()
+                ->whereIn('iata_code', $codes)
+                ->get()
+                ->sortBy(fn ($airport) => array_search(strtoupper((string) $airport->iata_code), $codes))
+                ->values();
+
+            return response()->json($airports);
+        }
 
         if ($searchQuery) {
             $query->where(function($q) use ($searchQuery) {
@@ -186,9 +205,11 @@ class AirportController extends Controller
         $nearestAirports = Airport::query()
             ->select('*')
             ->selectRaw(
-                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) as distance_km',
+                '(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))) as distance_km',
                 [$latitude, $longitude, $latitude]
             )
+            ->whereNotNull('iata_code')
+            ->where('iata_code', '!=', '')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->orderBy('distance_km')

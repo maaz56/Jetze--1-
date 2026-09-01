@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\FlightController;
 use App\Http\Controllers\Api\FlyDubaiController;
 use App\Http\Controllers\Api\GroupTicketController;
+use App\Http\Controllers\Api\HotelController;
 use App\Http\Controllers\Api\ModifyRequestController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
@@ -58,6 +59,11 @@ Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::post('/login/request-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'requestLoginOtp']);
 Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'verifyLoginOtp']);
+
+Route::prefix('hotels')->group(function () {
+    Route::get('suggestions', [HotelController::class, 'suggestions']);
+    Route::post('search', [HotelController::class, 'search']);
+});
 
 
 // full CRUD

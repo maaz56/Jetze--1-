@@ -633,6 +633,9 @@ const startCountdown = (remainingTime) => {
                                     :search-debounce="350"
                                     :icon="'PlaneTakeoff'"
                                     :default-suggestions="headerDefaultAirportCodes"
+                                    :auto-fill-defaults="true"
+                                    auto-fill-role="origin"
+                                    :auto-fill-suggestion-index="0"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
                                 <button
@@ -666,6 +669,9 @@ const startCountdown = (remainingTime) => {
                                     :search-debounce="350"
                                     :icon="'PlaneLanding'"
                                     :default-suggestions="headerDefaultAirportCodes"
+                                    :auto-fill-defaults="true"
+                                    auto-fill-role="destination"
+                                    :auto-fill-suggestion-index="1"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
                                 <div
@@ -931,6 +937,9 @@ const startCountdown = (remainingTime) => {
                                     :search-debounce="350"
                                     :icon="'PlaneTakeoff'"
                                     :default-suggestions="headerDefaultAirportCodes"
+                                    :auto-fill-defaults="true"
+                                    auto-fill-role="origin"
+                                    :auto-fill-suggestion-index="0"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
                                 <div v-if="errors.multiCityTrips?.[0]?.origin" class="text-destructive mt-1 text-xs">
@@ -949,6 +958,9 @@ const startCountdown = (remainingTime) => {
                                     :source="airports"
                                     :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
+                                    :auto-fill-defaults="true"
+                                    auto-fill-role="destination"
+                                    :auto-fill-suggestion-index="1"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
                                 <div v-if="errors.multiCityTrips?.[0]?.destination" class="text-destructive mt-1 text-xs">

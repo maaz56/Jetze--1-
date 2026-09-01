@@ -84,6 +84,7 @@ import {
 } from "@/components/ui/tooltip";
 import Spinner from "@/components/common/Spinner.vue";
 import Input from "@/components/ui/input/Input.vue";
+import HotelSearch from "@/pages/HotelSearch.vue";
 import moment from "moment";
 import { ClockIcon } from "lucide-vue-next";
 import {
@@ -1170,6 +1171,9 @@ onMounted(() => {
                                 :source="airportSearchResults"
                                 :remote-search="true"
                                 :default-suggestions="headerDefaultAirportCodes"
+                                :auto-fill-defaults="true"
+                                auto-fill-role="origin"
+                                :auto-fill-suggestion-index="0"
                                 class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                             />
                             <button
@@ -1217,6 +1221,9 @@ onMounted(() => {
                                 :source="airportSearchResults"
                                 :remote-search="true"
                                 :default-suggestions="headerDefaultAirportCodes"
+                                :auto-fill-defaults="true"
+                                auto-fill-role="destination"
+                                :auto-fill-suggestion-index="1"
                                 class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                             />
                         </div>
@@ -1466,6 +1473,9 @@ onMounted(() => {
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
+                                        :auto-fill-defaults="index === 0"
+                                        auto-fill-role="origin"
+                                        :auto-fill-suggestion-index="0"
                                         class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
                                     />
                                     </div>
@@ -1490,6 +1500,9 @@ onMounted(() => {
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
+                                        :auto-fill-defaults="index === 0"
+                                        auto-fill-role="destination"
+                                        :auto-fill-suggestion-index="1"
                                         class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
                                     />
                                     </div>
@@ -1742,6 +1755,10 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn">
+                <!-- <HotelSearch embedded /> -->
             </div>
 
             <!-- Other Tabs (Coming Soon) -->

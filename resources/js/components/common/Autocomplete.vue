@@ -92,6 +92,7 @@ import { PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
 import { Plane } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
+import apiService from "@/config/axios";
 import Spinner from "../common/Spinner.vue";
 import { Badge } from "../ui/badge";
 
@@ -131,6 +132,18 @@ const props = defineProps({
     },
     defaultSuggestionsResolver: {
         type: Function,
+        default: null,
+    },
+    autoFillDefaults: {
+        type: Boolean,
+        default: false,
+    },
+    autoFillRole: {
+        type: String,
+        default: "",
+    },
+    autoFillSuggestionIndex: {
+        type: Number,
         default: null,
     },
     remoteSearch: {
@@ -174,6 +187,14 @@ const searchResults = ref([]);
 const isLoading = ref(false);
 const isLoadingAirport = computed(() => store.getters["airport/isLoading"]);
 const isFocused = ref(false);
+const geolocationDefaultSuggestions = ref([]);
+const recentAirportSuggestions = ref([]);
+const hasLoadedDefaultSuggestions = ref(false);
+const hasLoadedRecentSuggestions = ref(false);
+const defaultSuggestionsAreFromGeolocation = ref(false);
+const defaultSuggestionsRequestId = ref(0);
+const recentSuggestionsRequestId = ref(0);
+const RECENT_SEARCHES_KEY = "recent_search_history";
 
 const inputEl = ref(null);
 const uniqueId = ref(`autocomplete-${Math.random().toString(36).substring(2, 9)}`);
@@ -222,6 +243,304 @@ const formatSelection = (item) => {
     return item.iata_code || "";
 };
 
+const normalizeAirportResponse = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+};
+
+const airportKey = (airport) =>
+    String(airport?.iata_code || airport?.id || "").trim().toLowerCase();
+
+const uniqueAirports = (groups) => {
+    const seen = new Set();
+    const airports = [];
+
+    groups.flat().forEach((airport) => {
+        const key = airportKey(airport);
+        if (!airport || !key || seen.has(key)) return;
+
+        seen.add(key);
+        airports.push(airport);
+    });
+
+    return airports;
+};
+
+const extractAirportCodesFromSearch = (searchItem) => {
+    const codes = [];
+
+    if (!searchItem || typeof searchItem !== "object") return codes;
+
+    if (Array.isArray(searchItem.trips)) {
+        searchItem.trips.forEach((trip) => {
+            codes.push(trip?.origin, trip?.destination);
+        });
+    } else {
+        codes.push(searchItem.origin, searchItem.destination);
+    }
+
+    return codes;
+};
+
+const readRecentSearchItems = () => {
+    if (typeof localStorage === "undefined") return [];
+
+    const searchItems = [];
+
+    try {
+        const previousSearch = JSON.parse(localStorage.getItem("previous_search"));
+        if (previousSearch && typeof previousSearch === "object") {
+            searchItems.push(previousSearch);
+        }
+    } catch {}
+
+    try {
+        const recentSearches = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY));
+        if (Array.isArray(recentSearches)) {
+            searchItems.push(...recentSearches);
+        }
+    } catch {}
+
+    return searchItems;
+};
+
+const readRecentAirportCodes = () => {
+    return [...new Set(
+        readRecentSearchItems()
+            .flatMap(extractAirportCodesFromSearch)
+            .map((code) => String(code || "").trim().toUpperCase())
+            .filter((code) => code.length >= 3),
+    )];
+};
+
+const resolvedAutoFillRole = () => {
+    if (props.autoFillRole) return props.autoFillRole;
+
+    const hint = `${props.placeholder || ""} ${props.icon || ""}`.toLowerCase();
+    return hint.includes("destination") || hint.includes("to") || hint.includes("landing")
+        ? "destination"
+        : "origin";
+};
+
+const getRecentCodeForRole = (role) => {
+    for (const searchItem of readRecentSearchItems()) {
+        if (Array.isArray(searchItem?.trips)) {
+            const firstTrip = searchItem.trips.find(
+                (trip) => trip?.origin || trip?.destination,
+            );
+            const code = role === "destination"
+                ? firstTrip?.destination
+                : firstTrip?.origin;
+
+            if (code) return String(code).trim().toUpperCase();
+        }
+
+        const code = role === "destination"
+            ? searchItem?.destination
+            : searchItem?.origin;
+
+        if (code) return String(code).trim().toUpperCase();
+    }
+
+    return "";
+};
+
+const getGeolocationSuggestionIndex = (role) => {
+    if (Number.isInteger(props.autoFillSuggestionIndex)) {
+        return Math.max(0, props.autoFillSuggestionIndex);
+    }
+
+    return role === "destination" ? 1 : 0;
+};
+
+const findAirportByCode = (code, groups) => {
+    const normalizedCode = String(code || "").trim().toLowerCase();
+    if (!normalizedCode) return null;
+
+    return groups
+        .flat()
+        .find((airport) => airportKey(airport) === normalizedCode) || null;
+};
+
+const applyAutoFilledAirport = (airport) => {
+    if (!airport?.iata_code) return false;
+
+    selectedItem.value = airport;
+    search.value = formatSelection(airport);
+    emit("update:modelValue", airport.iata_code);
+    return true;
+};
+
+const maybeAutoFillDefaultAirport = () => {
+    if (
+        !props.autoFillDefaults ||
+        isFocused.value ||
+        selectedItem.value ||
+        String(props.modelValue || "").trim()
+    ) {
+        return;
+    }
+
+    const role = resolvedAutoFillRole();
+    const recentCode = getRecentCodeForRole(role);
+
+    if (recentCode) {
+        const recentAirport = findAirportByCode(recentCode, [
+            recentAirportSuggestions.value,
+            props.source,
+            geolocationDefaultSuggestions.value,
+        ]);
+
+        if (recentAirport) {
+            applyAutoFilledAirport(recentAirport);
+        }
+
+        return;
+    }
+
+    if (
+        !hasLoadedRecentSuggestions.value ||
+        readRecentAirportCodes().length > 0 ||
+        !defaultSuggestionsAreFromGeolocation.value
+    ) {
+        return;
+    }
+
+    applyAutoFilledAirport(
+        geolocationDefaultSuggestions.value[getGeolocationSuggestionIndex(role)],
+    );
+};
+
+const applyFetchedRecentSuggestions = (requestId, suggestions) => {
+    if (requestId !== recentSuggestionsRequestId.value) return;
+
+    recentAirportSuggestions.value = suggestions;
+    hasLoadedRecentSuggestions.value = true;
+
+    if (isOpen.value && !String(search.value || "").trim()) {
+        setDefaultSuggestions();
+    }
+
+    maybeAutoFillDefaultAirport();
+};
+
+const fetchRecentAirportSuggestions = async ({ force = false } = {}) => {
+    if (hasLoadedRecentSuggestions.value && !force) return;
+
+    const requestId = ++recentSuggestionsRequestId.value;
+    const codes = readRecentAirportCodes();
+
+    if (!codes.length) {
+        applyFetchedRecentSuggestions(requestId, []);
+        return;
+    }
+
+    try {
+        const response = await apiService.get("/airports", {
+            params: { codes },
+        });
+
+        applyFetchedRecentSuggestions(
+            requestId,
+            normalizeAirportResponse(response.data),
+        );
+    } catch {
+        applyFetchedRecentSuggestions(requestId, []);
+    }
+};
+
+const getStoredGeolocation = () => {
+    if (typeof localStorage === "undefined") return null;
+
+    const latitude = Number(localStorage.getItem("latitude"));
+    const longitude = Number(localStorage.getItem("longitude"));
+
+    if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+    ) {
+        return null;
+    }
+
+    return { latitude, longitude };
+};
+
+const applyFetchedDefaultSuggestions = (requestId, suggestions, fromGeolocation = false) => {
+    if (requestId !== defaultSuggestionsRequestId.value) return;
+
+    geolocationDefaultSuggestions.value = suggestions;
+    hasLoadedDefaultSuggestions.value = true;
+    defaultSuggestionsAreFromGeolocation.value = fromGeolocation;
+
+    if (isOpen.value && !String(search.value || "").trim()) {
+        setDefaultSuggestions();
+    }
+
+    maybeAutoFillDefaultAirport();
+};
+
+const fetchDefaultAirportSuggestions = async ({ force = false } = {}) => {
+    if (hasLoadedDefaultSuggestions.value && !force) return;
+
+    const requestId = ++defaultSuggestionsRequestId.value;
+    const limit = Math.max(1, props.defaultSuggestionsLimit || 8);
+    const geolocation = getStoredGeolocation();
+
+    try {
+        const response = await apiService.get(
+            geolocation ? "/nearest-airports" : "/airport-default-suggestions",
+            {
+                params: {
+                    limit,
+                    ...(geolocation || {}),
+                },
+            },
+        );
+
+        applyFetchedDefaultSuggestions(
+            requestId,
+            normalizeAirportResponse(response.data),
+            Boolean(geolocation),
+        );
+    } catch {
+        if (!geolocation) {
+            applyFetchedDefaultSuggestions(requestId, [], false);
+            return;
+        }
+
+        try {
+            const fallbackResponse = await apiService.get(
+                "/airport-default-suggestions",
+                { params: { limit } },
+            );
+
+            applyFetchedDefaultSuggestions(
+                requestId,
+                normalizeAirportResponse(fallbackResponse.data),
+                false,
+            );
+        } catch {
+            applyFetchedDefaultSuggestions(requestId, [], false);
+        }
+    }
+};
+
+const refreshDefaultAirportSuggestions = () => {
+    hasLoadedDefaultSuggestions.value = false;
+    defaultSuggestionsAreFromGeolocation.value = false;
+    fetchDefaultAirportSuggestions({ force: true });
+};
+
+const refreshRecentAirportSuggestions = () => {
+    hasLoadedRecentSuggestions.value = false;
+    fetchRecentAirportSuggestions({ force: true });
+};
+
 const displayValue = computed(() => {
     if (!selectedItem.value) return null;
     return {
@@ -252,11 +571,11 @@ const syncSelectionFromModelValue = (value) => {
 
 const setDefaultSuggestions = () => {
     const limit = Math.max(0, props.defaultSuggestionsLimit);
-    let suggestions = [];
+    let configuredSuggestions = [];
 
     if (typeof props.defaultSuggestionsResolver === "function") {
         const resolved = props.defaultSuggestionsResolver(props.source);
-        suggestions = Array.isArray(resolved) ? resolved : [];
+        configuredSuggestions = Array.isArray(resolved) ? resolved : [];
     } else if (props.defaultSuggestions.length > 0) {
         const hasStringValues = props.defaultSuggestions.every(
             (item) => typeof item === "string",
@@ -266,15 +585,21 @@ const setDefaultSuggestions = () => {
             const codes = props.defaultSuggestions.map((item) =>
                 item.toLowerCase(),
             );
-            suggestions = props.source.filter((item) =>
+            configuredSuggestions = props.source.filter((item) =>
                 codes.includes((item.iata_code || "").toLowerCase()),
             );
         } else {
-            suggestions = props.defaultSuggestions;
+            configuredSuggestions = props.defaultSuggestions;
         }
     } else {
-        suggestions = props.source;
+        configuredSuggestions = props.source;
     }
+
+    const suggestions = uniqueAirports([
+        recentAirportSuggestions.value,
+        geolocationDefaultSuggestions.value,
+        configuredSuggestions,
+    ]);
 
     searchResults.value = suggestions.slice(0, limit);
     focusedIndex.value = searchResults.value.length ? 0 : -1;
@@ -283,7 +608,17 @@ const setDefaultSuggestions = () => {
 
 const updateSearchResults = debounce(() => {
     if (props.remoteSearch) {
-        emit("search", String(search.value || "").trim());
+        const searchQuery = String(search.value || "").trim();
+
+        if (!searchQuery) {
+            setDefaultSuggestions();
+            fetchRecentAirportSuggestions();
+            fetchDefaultAirportSuggestions();
+            isLoading.value = false;
+            return;
+        }
+
+        emit("search", searchQuery);
         isLoading.value = false;
         return;
     }
@@ -391,7 +726,9 @@ function handleFocus() {
         dropdownOpen: true,
         dropdownId: uniqueId.value,
     };
-    updateSearchResults();
+    setDefaultSuggestions();
+    fetchRecentAirportSuggestions({ force: true });
+    fetchDefaultAirportSuggestions();
     nextTick(() => {
         updatePosition();
     });
@@ -410,6 +747,8 @@ function handleInputClick() {
         dropdownId: uniqueId.value,
     };
     setDefaultSuggestions();
+    fetchRecentAirportSuggestions({ force: true });
+    fetchDefaultAirportSuggestions();
     nextTick(() => {
         updatePosition();
     });
@@ -441,6 +780,8 @@ function clearSearch() {
     emit("query-changed", "");
     isOpen.value = true;
     setDefaultSuggestions();
+    fetchRecentAirportSuggestions({ force: true });
+    fetchDefaultAirportSuggestions();
 }
 
 const handleKeydown = (e) => {
@@ -501,9 +842,13 @@ onMounted(() => {
     document.addEventListener("click", handleClickOutside);
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
+    window.addEventListener("user-geolocation-updated", refreshDefaultAirportSuggestions);
+    window.addEventListener("storage", refreshRecentAirportSuggestions);
 
     // Initialize with default value if provided
     syncSelectionFromModelValue(props.modelValue);
+    fetchRecentAirportSuggestions();
+    fetchDefaultAirportSuggestions();
 
     // Update position after component is mounted
     nextTick(() => {
@@ -515,6 +860,8 @@ onBeforeUnmount(() => {
     document.removeEventListener("click", handleClickOutside);
     window.removeEventListener('scroll', updatePosition, true);
     window.removeEventListener('resize', updatePosition);
+    window.removeEventListener("user-geolocation-updated", refreshDefaultAirportSuggestions);
+    window.removeEventListener("storage", refreshRecentAirportSuggestions);
 });
 
 // Watch for changes to modelValue
@@ -543,6 +890,8 @@ watch(() => props.source, () => {
     if (props.modelValue && !selectedItem.value) {
         syncSelectionFromModelValue(props.modelValue);
     }
+
+    maybeAutoFillDefaultAirport();
 });
 </script>
 

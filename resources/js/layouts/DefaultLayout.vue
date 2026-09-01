@@ -40,13 +40,13 @@ function testGeolocation() {
       );
 
      
-    },
+    },                  
     (error) => {
       console.error("Geolocation error:", error.message, error);
     },
     {
        enableHighAccuracy: false, // ✅ faster
-      timeout: 20000,            // ✅ increase time
+      timeout: 20000,                                                                                                                       // ✅ increase time
       maximumAge: 60000, 
     }
   );
