@@ -1,55 +1,98 @@
 <script setup>
-import { computed, defineEmits, ref } from 'vue';
+import { computed, defineEmits, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 
-import { email, required, useValidation } from '@/components/composables/useFormValidation';
+import { custom, email, minLength, required, useValidation } from '@/components/composables/useFormValidation';
+import apiService, { ensureCsrfCookie } from '@/config/axios';
 import { useAuthStore } from '@/services/stores/auth';
 const authStore = useAuthStore()
 const validationMessages = computed(() => authStore.validationMessages)
-const emit = defineEmits(['openOtpCard'])
+const emit = defineEmits(['openOtpCard', 'createPassword', 'backToOtp'])
+const props = defineProps({
+  initialEmail: {
+    type: String,
+    default: '',
+  },
+  mode: {
+    type: String,
+    default: 'email',
+  },
+})
 
 const loginDetail = ref({
   email: '',
-  password: ''
+  password: '',
 });
 const validator = {
     email: useValidation([required('Please enter email address'), email('Please enter valid email address')]),
     password: useValidation([
-        required('Password is required'),
+      required('Password is required'),
+      minLength(8, 'Password must be at least 8 characters.'),
+      custom((value) => /[A-Za-z]/.test(value), 'Password must contain a letter.'),
+      custom((value) => /\d/.test(value), 'Password must contain a number.'),
+      custom((value) => /[^A-Za-z0-9]/.test(value), 'Password must contain a symbol.'),
     ]),
 };
 const isSubmitForm = ref(false)
 const getValidation = computed(() => {
     const shouldValidate = isSubmitForm.value;
-    const {  email, password } = loginDetail.value;
+    const { email, password } = loginDetail.value;
 
     return {
         
         email: shouldValidate  && !!validator.email.validate(email),
-        password: shouldValidate && !!validator.password.validate(password),
-       
+        password: shouldValidate && props.mode !== 'email' && !!validator.password.validate(password),
     };
 });
 const isLoading = ref(false);
 const showPassword = ref(false);
-// Functions (keeping original functionality)
+watch(
+  () => props.initialEmail,
+  (email) => {
+    if (email) loginDetail.value.email = email
+  },
+  { immediate: true },
+)
+
 async function handleLogin() {
   isSubmitForm.value=true;
-  if(getValidation.value.email||getValidation.value.password) {
+  if(getValidation.value.email || getValidation.value.password) {
     return;
   }
   isLoading.value = true;
-  // First step: Send credentials and get OTP
   try {
-    const response = await authStore.requestLoginOtp(loginDetail.value);
-    if (response.status == 200) {
+    if (props.mode === 'password-login') {
+      const response = await authStore.requestLoginOtp({
+        email: loginDetail.value.email,
+        password: loginDetail.value.password,
+        mode: 'password',
+      });
       if (response?.data?.skip_otp) {
         toast.success(response?.data?.message?.description || 'Logged in successfully.');
-      } else {
-        emit('openOtpCard',loginDetail.value)
-        toast.success(response?.data?.message?.description || 'OTP has been sent to your email');
       }
+      return;
     }
+
+    if (props.mode === 'email') {
+      const checkResponse = await authStore.requestLoginOtp({
+        email: loginDetail.value.email,
+        mode: 'check',
+      });
+
+      if (checkResponse?.data?.requires_password) {
+        emit('createPassword', { email: loginDetail.value.email });
+        return;
+      }
+
+      openOtpAndSendInBackground({ email: loginDetail.value.email }, true);
+      return;
+    }
+
+    openOtpAndSendInBackground({
+      email: loginDetail.value.email,
+      password: loginDetail.value.password,
+      mode: 'register',
+    }, false);
   } catch (error) {
     console.error('Error requesting OTP:', error.response);
     const errorMessage = error.response?.data?.message?.description || 'Failed to send OTP. Please try again.';
@@ -59,6 +102,27 @@ async function handleLogin() {
 
     isLoading.value = false;
   }
+}
+
+function openOtpAndSendInBackground(payload, accountExists) {
+  // Render the OTP screen before any SMTP-related request is started.
+  emit('openOtpCard', {
+    email: loginDetail.value.email,
+    accountExists,
+    registrationPending: props.mode === 'create-password',
+  });
+
+  // Do not use the shared auth store here: its global loading flag can keep
+  // other auth screens in a processing state while SMTP is connecting.
+  void ensureCsrfCookie()
+    .then(() => apiService.post('/login/request-otp', payload))
+    .then((response) => {
+      toast.success(response?.data?.message?.description || 'OTP has been sent to your email');
+    })
+    .catch((error) => {
+      const message = error.response?.data?.message?.description || 'Unable to send the OTP. Please try again.';
+      toast.error(message);
+    });
 }
 
 async function handleGoogleLogin() {
@@ -81,7 +145,16 @@ async function handleGoogleLogin() {
 <template>
   <div class="">
     <form @submit.prevent="handleLogin()" class="space-y-6">
-      <!-- Email/Username Field -->
+      <div v-if="mode !== 'email'">
+        <h2 class="text-xl font-bold text-gray-900">
+          {{ mode === 'create-password' ? 'Create an Account' : 'Enter Your Password' }}
+        </h2>
+        <p class="mt-2 text-sm text-gray-600">
+          {{ mode === 'create-password' ? 'Set a password for your new account.' : 'Enter the password for your account.' }}
+        </p>
+      </div>
+
+      <!-- Email-first sign in -->
       <div>
         <div class="relative">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -93,7 +166,7 @@ async function handleGoogleLogin() {
           <input 
             type="email" 
             v-model="loginDetail.email"
-            placeholder="Enter Email or Username"
+            placeholder="Enter email address"
             class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
@@ -106,50 +179,34 @@ async function handleGoogleLogin() {
         </p>
       </div>
 
-      <!-- Password Field -->
-      <div>
+      <div v-if="mode !== 'email'">
         <div class="relative">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <input 
-            :type="showPassword ? 'text' : 'password'" 
-            v-model="loginDetail.password" 
-            placeholder="Enter Password"
-            class="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          <input
+            :type="showPassword ? 'text' : 'password'"
+            v-model="loginDetail.password"
+            placeholder="Password"
+            class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
-          <button 
-            type="button" 
+          <button
+            type="button"
             @click="showPassword = !showPassword"
-            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+            class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
           >
             <svg v-if="showPassword" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L3 3m6.878 6.878L21 21" />
             </svg>
             <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
         </div>
-        
         <p v-if="getValidation.password" class="text-red-500 text-xs mt-1">
           {{ validator.password.validate(loginDetail.password) }}
         </p>
-        <p v-else-if="validationMessages?.password" class="text-red-500 text-xs mt-1">
-          {{ validationMessages.password }}
+        <p v-else-if="mode === 'create-password'" class="text-xs text-gray-600 mt-1">
+          Password needs at least 8 characters, including letters, numbers, and symbols.
         </p>
-      </div>
-
-      <!-- Forgot Password Link -->
-      <div class="text-right">
-        <router-link :to="{ name: 'ForgotPassword' }" class="text-sm font-medium text-primary hover:text-primary/80">
-          Forgot Password?
-        </router-link>
       </div>
 
       <!-- Submit Button -->
@@ -158,12 +215,24 @@ async function handleGoogleLogin() {
         :disabled="isLoading"
         class="w-full bg-primary text-white font-semibold py-3.5 px-4 rounded-md transition-all duration-200 flex items-center justify-center shadow-lg hover:shadow-xl disabled:opacity-50"
       >
-        <span v-if="!isLoading">GET OTP & SIGN IN</span>
+        <span v-if="!isLoading">
+          {{ mode === 'create-password' ? 'REGISTER AND CONTINUE' : mode === 'password-login' ? 'SIGN IN' : 'CONTINUE WITH EMAIL' }}
+        </span>
         <span v-else>Processing...</span>
         <svg v-if="!isLoading" class="ml-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
+
+      <div v-if="mode === 'password-login'" class="text-center">
+        <button
+          type="button"
+          @click="emit('backToOtp')"
+          class="text-sm font-medium text-primary hover:text-primary/80"
+        >
+          Sign in with verification code
+        </button>
+      </div>
 
       <!-- Divider -->
       <div class="relative my-6">
@@ -190,13 +259,6 @@ async function handleGoogleLogin() {
         <span>Continue with Google</span>
       </button>
 
-      <!-- Optional: Create Account Link (uncomment if needed) -->
-      <!-- <p class="text-center text-sm text-gray-600 mt-6">
-        Don't have an account? 
-        <button type="button" class="font-medium text-primary hover:text-primary/80" @click="formType = 'register'">
-          Create Account
-        </button>
-      </p> -->
     </form>
   </div>
 </template>

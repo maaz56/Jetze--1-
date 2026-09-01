@@ -30,38 +30,28 @@
             </div>
           </div>
 
-          <!-- Back Button (OTP) -->
-          <div v-if="showOtp" class="flex items-center mb-6 -ml-1 cursor-pointer select-none" @click="backToLogin">
+          <!-- Back Button -->
+          <div v-if="showOtp || loginMode !== 'email'" class="flex items-center mb-6 -ml-1 cursor-pointer select-none" @click="backToLogin">
             <ArrowLeft :size="18" class="mr-1 text-gray-600" />
             <span class="text-sm font-medium text-gray-600 hover:text-primary">
               Back to login
             </span>
           </div>
 
-          <!-- Tabs -->
-          <div v-if="!showOtp" class="flex my-7 bg-gray-100 rounded-md shadow-inner">
-            <button type="button" @click="formType = 'login'"
-              class="flex-1 py-3 px-6  font-bold rounded-md text-sm transition-all duration-200" :class="formType === 'login'
-                ? 'bg-primary text-white shadow-md'
-                : 'text-gray-600'">
-              Login
-            </button>
-
-            <button type="button" @click="formType = 'register'"
-              class="flex-1 py-3 px-6 rounded-md font-bold text-sm transition-all duration-200" :class="formType === 'register'
-                ? 'bg-primary text-white shadow-md'
-                : 'text-gray-600'">
-              Register
-            </button>
-          </div>
-
           <!-- FORMS -->
-          <Login v-if="formType === 'login' && !showOtp" @open-otp-card="openOtpScreen" />
+          <Login
+            v-if="!showOtp"
+            :initial-email="loginEmail"
+            :mode="loginMode"
+            @open-otp-card="openOtpScreen"
+            @create-password="openCreatePassword"
+            @back-to-otp="returnToOtp"
+          />
 
           <OTPValidation v-else-if="showOtp" :show-otp-input="true" :user-details="userDetail"
-            :key="'otp-' + userDetail.phone" />
-
-          <Register v-else />
+            :key="'otp-' + userDetail.email"
+            :account-exists="accountExists"
+            @sign-in-with-password="openPasswordLogin" />
         </div>
 
         <!-- FOOTER -->
@@ -97,16 +87,17 @@ defineProps({
 const emit = defineEmits(['close'])
 
 const Login = defineAsyncComponent(() => import('@/components/agent/auth/Login.vue'))
-const Register = defineAsyncComponent(() => import('@/components/agent/auth/Register.vue'))
 const OTPValidation = defineAsyncComponent(() => import('@/components/agent/auth/OTPValidation.vue'))
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const user = computed(() => authStore.user);
-const formType = ref('login')
 const showOtp = ref(false)
 const userDetail = ref({})
+const loginEmail = ref('')
+const loginMode = ref('email')
+const accountExists = ref(false)
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
@@ -121,12 +112,30 @@ function handleCloseDialog() {
 
 function openOtpScreen(userData) {
   userDetail.value = userData
+  loginEmail.value = userData.email
+  accountExists.value = Boolean(userData.accountExists)
+  loginMode.value = 'email'
+  showOtp.value = true
+}
+
+function openCreatePassword(userData) {
+  loginEmail.value = userData.email
+  loginMode.value = 'create-password'
+}
+
+function openPasswordLogin() {
+  showOtp.value = false
+  loginMode.value = 'password-login'
+}
+
+function returnToOtp() {
+  loginMode.value = 'email'
   showOtp.value = true
 }
 
 function backToLogin() {
   showOtp.value = false
-  userDetail.value = {}
+  loginMode.value = 'email'
 }
 
 function handleUserDashboard() {

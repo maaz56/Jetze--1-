@@ -13,6 +13,7 @@ return [
     |
     */
     'otp_enabled' => env('OTP_ENABLED', true),
+    'vite_mode' => env('VITE_MODE', ''),
 
     'zoho' => [
         'redirect_uri' => env('ZOHO_REDIRECT_URI'),

@@ -37,7 +37,7 @@ const userDetail = ref({
 });
 const phoneValid = ref(false);
 const phoneInputOption = {
-    placeholder: "Enter Phone Number",
+    placeholder: "Phone Number (Optional)",
     maxlength: 15,
 };
 const dropdown = {
@@ -73,7 +73,7 @@ const validator = {
         if (!cpwd) return false; // pass validation until user types confirm
         return cpwd === pwd;
     }, 'Confirm password must match the password.')]),
-    phone: useValidation([custom(() => phoneValid.value, 'Please enter a valid phone number.')]),
+    phone: useValidation([custom(() => !userDetail.value.phone || phoneValid.value, 'Please enter a valid phone number.')]),
 }
 const currentStep = ref(1)
 
@@ -275,8 +275,8 @@ const handleUploadFile = (event, key) => {
                 <VueTelInput v-model="userDetail.phone" :inputOptions="phoneInputOption" :dropdownOptions="dropdown"
                     @validate="({ valid }) => phoneValid = valid" mode="international" :validCharactersOnly="true">
                 </VueTelInput>
-                <p v-if="(!phoneValid) && isSubmitForm" class="text-red-500 text-xs mt-1">
-                    Please enter valid phone number
+                <p v-if="userDetail.phone && !phoneValid && isSubmitForm" class="text-red-500 text-xs mt-1">
+                    Please enter a valid phone number
                 </p>
                 <p v-else-if="validationMessages?.phone" class="text-red-500 text-xs mt-1">
                     {{ validationMessages.phone }}
@@ -336,7 +336,7 @@ const handleUploadFile = (event, key) => {
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <LucideHome class="w-5 h-5 text-gray-400" />
                     </div>
-                    <input type="text" v-model="userDetail.address" placeholder="Your address"
+                    <input type="text" v-model="userDetail.address" placeholder="Your address (Optional)"
                         class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" />
                 </div>
                 <p v-if="validationMessages?.address" class="text-red-500 text-xs mt-1">

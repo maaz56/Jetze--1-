@@ -3,7 +3,6 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
@@ -11,7 +10,7 @@ class OTPMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $user;
+    public $email;
     public $otp;
     public $name;
 
@@ -20,15 +19,11 @@ class OTPMail extends Mailable
     /**
      * Create a new message instance.
      */
-    public function __construct($user, $otp, $name)
+    public function __construct(string $email, string $otp, ?string $name = null)
     {
-        $this->user = $user;
+        $this->email = $email;
         $this->otp = $otp;
         $this->name = $name;
-
-
-
-        
     }
 
     /**
@@ -43,7 +38,7 @@ class OTPMail extends Mailable
                     ->view('emails.otp_mail')
                     ->with([
                         'otp' => $this->otp,
-                        'email' => $this->user->email,
+                        'email' => $this->email,
                         'name' => $this->name,
                     ]);
     }

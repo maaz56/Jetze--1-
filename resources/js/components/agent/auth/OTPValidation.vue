@@ -5,9 +5,15 @@ import { useAuthStore } from '@/services/stores/auth';
 import { toast } from 'vue3-toastify';
 
 const authStore = useAuthStore();
-const props = defineProps({ showOtpInput: Boolean, userDetails: Object });
+const props = defineProps({
+    showOtpInput: Boolean,
+    userDetails: Object,
+    accountExists: Boolean,
+});
+const emit = defineEmits(['signInWithPassword']);
 const otp = ref('');
-const isLoading = computed(() => authStore.isLoading);
+const isVerifying = ref(false);
+const isResending = ref(false);
 const validationMessages = computed(() => authStore.validationMessages);
 const resendCooldownSeconds = ref(0);
 let resendTimer = null;
@@ -31,7 +37,7 @@ const startResendCooldown = (seconds = 60) => {
     }, 1000);
 };
 
-const isResendDisabled = computed(() => isLoading.value || resendCooldownSeconds.value > 0);
+const isResendDisabled = computed(() => isResending.value || resendCooldownSeconds.value > 0);
 
 const resendCountdownLabel = computed(() => {
     const minutes = Math.floor(resendCooldownSeconds.value / 60);
@@ -40,6 +46,7 @@ const resendCountdownLabel = computed(() => {
 });
 
 async function verifyOtp() {
+    isVerifying.value = true;
     try {
         const response = await authStore.verifyLoginOtp({
             email: props.userDetails.email,
@@ -52,22 +59,30 @@ async function verifyOtp() {
         console.error('Error verifying OTP:', error);
         const errorMessage = error.response?.data?.message?.description || 'Invalid OTP. Please try again.';
         toast.error(errorMessage);
+    } finally {
+        isVerifying.value = false;
     }
 }
 
 async function resendOtp() {
     if (isResendDisabled.value) return;
 
+    isResending.value = true;
     try {
-        const response = await authStore.requestLoginOtp(props.userDetails);
-        if (response.success) {
-            toast.success(response.message?.description || 'OTP has been resent to your email');
+        const response = await authStore.requestLoginOtp({
+            email: props.userDetails.email,
+            resume_registration: Boolean(props.userDetails.registrationPending),
+        });
+        if (response?.data?.success) {
+            toast.success(response.data?.message?.description || 'OTP has been resent to your email');
             startResendCooldown(60);
         }
     } catch (error) {
         console.error('Error resending OTP:', error);
         const errorMessage = error.response?.data?.message?.description || 'Failed to resend OTP. Please try again.';
         toast.error(errorMessage);
+    } finally {
+        isResending.value = false;
     }
 }
 
@@ -112,13 +127,13 @@ onUnmounted(() => {
                 {{ validationMessages.otp }}
             </p>
             <div class="mt-4">
-                <button type="submit" :disabled="isLoading"
+                <button type="submit" :disabled="isVerifying"
                     class="w-full bg-primary hover:primary/50 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center disabled:opacity-50 shadow-lg">
-                    <span v-if="!isLoading">
+                    <span v-if="!isVerifying">
                         VERIFY OTP
                     </span>
                     <span v-else>Processing...</span>
-                    <svg v-if="!isLoading" class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg v-if="!isVerifying" class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
                 </button>
@@ -130,6 +145,14 @@ onUnmounted(() => {
                     {{ resendCooldownSeconds > 0 ? `Resend OTP in ${resendCountdownLabel}` : 'Resend OTP' }}
                 </button>
             </p>
+            <button
+                v-if="props.accountExists"
+                type="button"
+                @click="emit('signInWithPassword')"
+                class="mt-3 text-sm font-medium text-primary hover:text-primary/80"
+            >
+                Sign in with password
+            </button>
         </form>
     </div>
 </template>
