@@ -36,7 +36,7 @@ class AtApiService
     protected $agentCode;
     protected $browserKey;
     protected $atFlightTransformer;
-    private bool $useMockApi = true;
+    private bool $useMockApi = false;
 
 
     public function __construct()
