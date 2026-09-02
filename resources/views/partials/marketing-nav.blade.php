@@ -13,22 +13,25 @@
             <img src="{{ asset('assets/logo.png') }}" alt="Jetze" class="h-10 w-auto lg:h-12">
         </a>
 
-        <div class="hidden items-center xl:flex">
+        <div class="hidden items-center gap-1 rounded-2xl bg-slate-50/80 p-1 shadow-sm xl:flex">
             @foreach($navItems as $item)
                 <a href="{{ $item['url'] }}"
                    @class([
-                       'group flex items-center border-r border-slate-200 px-5 py-2 transition-all last:border-r-0',
+                       'group relative flex items-center rounded-lg px-4 py-2.5 transition-all duration-200',
                        'text-primary' => $item['active'],
-                       'text-slate-700 hover:bg-slate-100' => !$item['active'],
+                       'text-slate-700 hover:bg-sky-50 hover:text-primary' => !$item['active'],
                    ])
                    @if($item['active']) aria-current="page" @endif>
-                    <span class="mr-3 rounded-full bg-slate-100 p-2 transition-colors group-hover:bg-primary/15">
-                        <img src="{{ $item['icon'] }}" alt="" @class(['h-5 w-5 object-contain transition-all duration-300', 'scale-110' => $item['active'], 'grayscale opacity-60' => !$item['active']])>
+                    <span @class(['mr-3 rounded-xl p-2 transition-all duration-200', 'bg-primary/10' => $item['active'], 'bg-sky-100 group-hover:bg-primary/15' => !$item['active']])>
+                        <img src="{{ $item['icon'] }}" alt="" @class(['h-5 w-5 object-contain transition-all duration-300', 'scale-110' => $item['active']])>
                     </span>
                     <span class="flex flex-col">
                         <span class="text-[13px] font-bold leading-tight">{{ $item['label'] }}</span>
-                        <span @class(['text-[10px]', 'text-primary/80' => $item['active'], 'text-slate-500 group-hover:text-slate-700' => !$item['active']])>{{ $item['subtitle'] }}</span>
+                        <span @class(['text-[10px]', 'text-primary/75' => $item['active'], 'text-slate-500 group-hover:text-primary/75' => !$item['active']])>{{ $item['subtitle'] }}</span>
                     </span>
+                    @if($item['active'])
+                        <span aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
+                    @endif
                 </a>
             @endforeach
         </div>
@@ -51,9 +54,12 @@
                 </summary>
                 <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-2xl">
                     @foreach($navItems as $item)
-                        <a href="{{ $item['url'] }}" @class(['flex items-center rounded-lg p-3 transition hover:bg-slate-100', 'bg-primary/5 text-primary' => $item['active'], 'text-slate-700' => !$item['active']])>
-                            <img src="{{ $item['icon'] }}" alt="" class="mr-3 h-5 w-5 object-contain">
-                            <span><span class="block text-sm font-bold">{{ $item['label'] }}</span><span class="block text-[10px] opacity-60">{{ $item['subtitle'] }}</span></span>
+                        <a href="{{ $item['url'] }}" @class(['relative flex items-center rounded-xl p-3 transition hover:bg-sky-50', 'text-primary' => $item['active'], 'text-slate-700' => !$item['active']]) @if($item['active']) aria-current="page" @endif>
+                            <span @class(['mr-3 rounded-lg p-2', 'bg-primary/10' => $item['active'], 'bg-sky-100' => !$item['active']])><img src="{{ $item['icon'] }}" alt="" class="h-5 w-5 object-contain"></span>
+                            <span><span class="block text-sm font-bold">{{ $item['label'] }}</span><span @class(['block text-[10px]', 'text-primary/75' => $item['active'], 'text-slate-500' => !$item['active']])>{{ $item['subtitle'] }}</span></span>
+                            @if($item['active'])
+                                <span aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
+                            @endif
                         </a>
                     @endforeach
                 </div>

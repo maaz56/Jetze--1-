@@ -149,7 +149,10 @@ const getLinkProps = (link) => link.routeName
     : { href: link.href };
 
 const isLinkActive = (link) => {
-    if (link.routeName) return route.name === link.routeName;
+    if (link.routeName) {
+        return route.name === link.routeName
+            || (link.routeName === "Home" && route.name === "FlightSearch");
+    }
 
     return window.location.pathname.replace(/\/$/, "") === link.href.replace(/\/$/, "");
 };
@@ -225,24 +228,34 @@ onUnmounted(() => {
 
                 <div class="flex items-center">
                     
-                    <div class="hidden xl:flex items-center">
+                    <div class="hidden xl:flex items-center gap-1 rounded-2xl bg-slate-50/80 p-1 shadow-sm">
                         <component
                             :is="link.routeName ? RouterLink : 'a'"
                             v-for="(link, index) in navLinks" 
                             :key="index" 
                             v-bind="getLinkProps(link)"
+                            :aria-current="isLinkActive(link) ? 'page' : undefined"
                             :class="[
-                                'group flex items-center px-5 py-2 border-r border-slate-200 last:border-r-0 transition-all',
-                                isLinkActive(link) ? 'text-primary' : 'hover:bg-slate-100 text-slate-700',
+                                'group relative flex items-center rounded-lg px-4 py-2.5 transition-all duration-200',
+                                isLinkActive(link)
+                                    ? 'text-primary'
+                                    : 'text-slate-700 hover:bg-sky-50 hover:text-primary',
                             ]"
                         >
-                            <div class="p-2 bg-slate-100 rounded-full mr-3 group-hover:bg-primary/15 transition-transform">
+                            <div
+                                :class="[
+                                    'mr-3 rounded-xl p-2 transition-all duration-200',
+                                    isLinkActive(link)
+                                        ? 'bg-primary/10'
+                                        : 'bg-sky-100 group-hover:bg-primary/15',
+                                ]"
+                            >
                                 <img
                                     :src="link.icon"
                                     :alt="link.text"
                                     :class="[
                                         'w-5 h-5 object-contain transition-all duration-300',
-                                        isLinkActive(link) ? 'scale-110' : 'grayscale opacity-60',
+                                        isLinkActive(link) ? 'scale-110' : 'opacity-100',
                                     ]"
                                 />
                             </div>
@@ -251,12 +264,13 @@ onUnmounted(() => {
                                 <span
                                     :class="[
                                         'text-[10px] transition-colors',
-                                        isLinkActive(link) ? 'text-primary/80' : 'text-slate-500 group-hover:text-slate-700',
+                                        isLinkActive(link) ? 'text-primary/75' : 'text-slate-500 group-hover:text-primary/75',
                                     ]"
                                 >
                                     {{ link.subText }}
                                 </span>
                             </div>
+                            <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
                         </component>
                     </div>
 
@@ -344,12 +358,19 @@ onUnmounted(() => {
                                     <nav class="space-y-4">
                                         <component :is="link.routeName ? RouterLink : 'a'" v-for="link in navLinks"
                                             :key="link.routeName || link.href" v-bind="getLinkProps(link)"
-                                            class="flex items-center p-3 rounded-lg hover:bg-white/5">
-                                            <img :src="link.icon" :alt="link.text" class="w-5 h-5 mr-3 object-contain" />
+                                            :aria-current="isLinkActive(link) ? 'page' : undefined"
+                                            :class="[
+                                                'relative flex items-center rounded-xl p-3 transition-colors',
+                                                isLinkActive(link) ? 'text-sky-300' : 'hover:bg-white/10',
+                                            ]">
+                                            <div :class="['mr-3 rounded-lg p-2', isLinkActive(link) ? 'bg-sky-400/20' : 'bg-sky-400/15']">
+                                                <img :src="link.icon" :alt="link.text" class="w-5 h-5 object-contain" />
+                                            </div>
                                             <div>
                                                 <p class="font-bold text-sm">{{ link.text }}</p>
-                                                <p class="text-[10px] opacity-60">{{ link.subText }}</p>
+                                                <p :class="['text-[10px]', isLinkActive(link) ? 'text-sky-300/75' : 'text-slate-400']">{{ link.subText }}</p>
                                             </div>
+                                            <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
                                         </component>
                                     </nav>
                                     <div class="mt-8 pt-8 border-t border-white/10">
@@ -378,7 +399,4 @@ onUnmounted(() => {
     border-radius: 1rem;
 }
 
-.group:hover {
-    box-shadow: inset 0 -2px 0 0 #008cff;
-}
 </style>

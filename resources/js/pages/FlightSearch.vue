@@ -95,6 +95,10 @@ import {
     ListRestart,
     CircleEllipsis,
     Ellipsis,
+    Moon,
+    Sun,
+    Sunrise,
+    Sunset,
 } from "lucide-vue-next";
 import moment from "moment";
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
@@ -118,8 +122,28 @@ const tabs = [
     // { id: "group-tickets", name: "Group Tickets", icon: Users2 }, // Changed to Users2 for a modern group icon
 ];
 
+const timeFilterOptions = [
+    { value: "morning", label: "12am - 6am", icon: Moon },
+    { value: "morningLate", label: "6am - 12pm", icon: Sunrise },
+    { value: "afternoon", label: "12pm - 6pm", icon: Sun },
+    { value: "night", label: "6pm - 12am", icon: Sunset },
+];
+
 const setActiveTab = (tabId) => {
     activeTab.value = tabId;
+};
+
+const syncFilterScrollWithPage = (event) => {
+    const navScrollDistance = 80;
+    const delta = event.deltaY;
+
+    if (!delta) return;
+
+    const pageDelta = delta > 0
+        ? Math.min(delta, Math.max(0, navScrollDistance - window.scrollY))
+        : Math.max(delta, -window.scrollY);
+
+    if (pageDelta) window.scrollBy({ top: pageDelta, behavior: "auto" });
 };
 
 const formatFlightNumber = (flightNumber) => {
@@ -1809,7 +1833,7 @@ watch(isLoggedIn, (newVal) => {
 
 <template>
     <!-- Container -->
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen bg-slate-100">
         <!-- Main Content -->
         <!-- BACKDROP + MODAL -->
         <LoginMini
@@ -1819,7 +1843,7 @@ watch(isLoggedIn, (newVal) => {
                 if (!user?.id) toCheckoutClicked = false;
             "
         />
-        <div class="bg-white shadow-sm overflow-visible">
+        <div class="bg-slate-100 overflow-visible">
             <!-- Tab Content -->
             <div class="">
                 <div
@@ -1831,7 +1855,7 @@ watch(isLoggedIn, (newVal) => {
                             :countdown="countdown"
                             v-model="modelValue"
                             @search="setupFlightsParams"
-                            class="w-full"
+                            class="w-full shadow-md"
                         />
                     </div>
                 </div>
@@ -1971,16 +1995,23 @@ watch(isLoggedIn, (newVal) => {
                     v-if="hasFlightResults"
                     class="flight-results-sidebar lg:z-20 lg:w-80 lg:self-start"
                 >
-                    <div class="space-y-6 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
+                    <div @wheel.passive="syncFilterScrollWithPage" class="filter-panel lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:overscroll-contain">
+                    <div class="filter-panel-heading">
+                        <div class="flex items-center gap-2">
+                            <SlidersHorizontal class="h-5 w-5 text-primary" />
+                            <h2>Filters</h2>
+                        </div>
+                        <button @click="resetAllFilters" class="filter-reset-button">
+                            Reset
+                        </button>
+                    </div>
                     <!-- Price Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
+                    <div class="filter-section">
                         <h3
                             class="font-semibold text-gray-800 mb-3 flex items-center gap-2"
                         >
                             <BadgeDollarSign class="w-5 h-5 text-primary" />
-                            Price
+                            Price range
                         </h3>
                         <div class="flex justify-between mb-2 text-sm">
                             <span class="text-gray-600">{{
@@ -2001,77 +2032,67 @@ watch(isLoggedIn, (newVal) => {
                     </div>
 
                     <!-- Stops Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
+                    <div class="filter-section">
                         <h3
                             class="font-semibold text-gray-800 mb-3 flex items-center gap-2"
                         >
                             <GitCommitHorizontal class="w-5 h-5 text-primary" />
                             Stops
                         </h3>
-                        <div class="space-y-2">
+                        <div class="filter-chip-grid">
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-choice-chip', { 'is-selected': selectedStops === 'all' }]"
                             >
                                 <input
                                     type="radio"
                                     value="all"
                                     v-model="selectedStops"
                                     @change="filterByStops"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700">All</span>
+                                <span>All stops</span>
                             </label>
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-choice-chip', { 'is-selected': selectedStops === '0' }]"
                             >
                                 <input
                                     type="radio"
                                     value="0"
                                     v-model="selectedStops"
                                     @change="filterByStops"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >Non-Stop</span
-                                >
+                                <span>Non-stop</span>
                             </label>
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-choice-chip', { 'is-selected': selectedStops === '1' }]"
                             >
                                 <input
                                     type="radio"
                                     value="1"
                                     v-model="selectedStops"
                                     @change="filterByStops"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >1 Stop</span
-                                >
+                                <span>1 stop</span>
                             </label>
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-choice-chip', { 'is-selected': selectedStops === '2' }]"
                             >
                                 <input
                                     type="radio"
                                     value="2"
                                     v-model="selectedStops"
                                     @change="filterByStops"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >2+ Stops</span
-                                >
+                                <span>2+ stops</span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Airlines Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
+                    <div class="filter-section">
                         <h3
                             class="font-semibold text-gray-800 mb-3 flex items-center gap-2"
                         >
@@ -2083,7 +2104,7 @@ watch(isLoggedIn, (newVal) => {
                                 >{{ selectedAirline.length }}</span
                             >
                         </h3>
-                        <div class="space-y-2 max-h-60 overflow-y-auto">
+                        <div class="max-h-60 overflow-y-auto">
                             <div class="flex justify-between items-center mb-2">
                                 <button
                                     @click="
@@ -2098,26 +2119,34 @@ watch(isLoggedIn, (newVal) => {
                             <label
                                 v-for="airline in availableAirlines"
                                 :key="airline.id"
-                                class="flex items-center gap-2 cursor-pointer py-1"
+                                class="filter-airline-option"
                             >
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <img
+                                        v-if="airline.logo_url"
+                                        :src="airline.logo_url"
+                                        :alt="airline.name"
+                                        class="h-4 w-4 object-contain"
+                                    />
+                                    <Plane v-else class="h-4 w-4 text-primary" />
+                                    <span class="truncate">{{ airline.name }}</span>
+                                </span>
                                 <input
                                     type="checkbox"
                                     v-model="selectedAirline"
                                     :value="airline.id"
                                     @change="filterByAirline"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700 truncate">{{
-                                    airline.name
-                                }}</span>
+                                <span :class="['filter-checkbox', { 'is-selected': selectedAirline.includes(airline.id) }]">
+                                    <Check v-if="selectedAirline.includes(airline.id)" class="h-3 w-3" />
+                                </span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Duration Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
+                    <div class="filter-section">
                         <h3
                             class="font-semibold text-gray-800 mb-3 flex items-center gap-2"
                         >
@@ -2152,197 +2181,108 @@ watch(isLoggedIn, (newVal) => {
                     </div>
 
                     <!-- Refundable Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
+                    <div class="filter-section">
                         <h3
                             class="font-semibold text-gray-800 mb-3 flex items-center gap-2"
                         >
                             <SquareCheckBig class="w-5 h-5 text-primary" />
-                            Refundable
+                            Fare type
                         </h3>
-                        <div class="space-y-2">
+                        <div class="filter-fare-options">
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-fare-option', { 'is-selected': refundableFilter === 'all' }]"
                             >
                                 <input
                                     type="radio"
                                     value="all"
                                     v-model="refundableFilter"
                                     @change="filterByRefundable"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >All Flights</span
-                                >
+                                <span>All flights</span>
+                                <span class="filter-radio-mark"></span>
                             </label>
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-fare-option', { 'is-selected': refundableFilter === 'refundable' }]"
                             >
                                 <input
                                     type="radio"
                                     value="refundable"
                                     v-model="refundableFilter"
                                     @change="filterByRefundable"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >Refundable Only</span
-                                >
+                                <span>Refundable</span>
+                                <span class="filter-radio-mark"></span>
                             </label>
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                :class="['filter-fare-option', { 'is-selected': refundableFilter === 'non-refundable' }]"
                             >
                                 <input
                                     type="radio"
                                     value="non-refundable"
                                     v-model="refundableFilter"
                                     @change="filterByRefundable"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >Non-Refundable Only</span
-                                >
+                                <span>Non-refundable</span>
+                                <span class="filter-radio-mark"></span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Departure Time Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
-                        <h3 class="font-semibold text-gray-800 mb-3">
+                    <div class="filter-section">
+                        <h3 class="mb-3 flex items-center gap-2 font-semibold text-gray-800">
+                            <PlaneTakeoff class="h-4 w-4 text-primary" />
                             Departure Time
                         </h3>
-                        <div class="space-y-2">
+                        <div class="filter-time-grid">
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                v-for="option in timeFilterOptions"
+                                :key="option.value"
+                                :class="['filter-time-chip', { 'is-selected': departureTimes.includes(option.value) }]"
                             >
                                 <input
                                     type="checkbox"
                                     v-model="departureTimes"
-                                    value="morning"
+                                    :value="option.value"
                                     @change="filterByDepartureTime"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >12:00 AM - 06:00 AM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="departureTimes"
-                                    value="morningLate"
-                                    @change="filterByDepartureTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >06:00 AM - 12:00 PM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="departureTimes"
-                                    value="afternoon"
-                                    @change="filterByDepartureTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >12:00 PM - 06:00 PM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="departureTimes"
-                                    value="night"
-                                    @change="filterByDepartureTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >06:00 PM - 12:00 AM</span
-                                >
+                                <component :is="option.icon" class="h-4 w-4" />
+                                <span>{{ option.label }}</span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Arrival Time Filter -->
-                    <div
-                        class="bg-white border border-gray-200 rounded p-4 shadow-sm"
-                    >
-                        <h3 class="font-semibold text-gray-800 mb-3">
+                    <div class="filter-section">
+                        <h3 class="mb-3 flex items-center gap-2 font-semibold text-gray-800">
+                            <PlaneLanding class="h-4 w-4 text-primary" />
                             Arrival Time
                         </h3>
-                        <div class="space-y-2">
+                        <div class="filter-time-grid">
                             <label
-                                class="flex items-center gap-2 cursor-pointer"
+                                v-for="option in timeFilterOptions"
+                                :key="option.value"
+                                :class="['filter-time-chip', { 'is-selected': arrivalTimes.includes(option.value) }]"
                             >
                                 <input
                                     type="checkbox"
                                     v-model="arrivalTimes"
-                                    value="morning"
+                                    :value="option.value"
                                     @change="filterByArrivalTime"
-                                    class="accent-primary"
+                                    class="sr-only"
                                 />
-                                <span class="text-sm text-gray-700"
-                                    >12:00 AM - 06:00 AM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="arrivalTimes"
-                                    value="morningLate"
-                                    @change="filterByArrivalTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >06:00 AM - 12:00 PM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="arrivalTimes"
-                                    value="afternoon"
-                                    @change="filterByArrivalTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >12:00 PM - 06:00 PM</span
-                                >
-                            </label>
-                            <label
-                                class="flex items-center gap-2 cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    v-model="arrivalTimes"
-                                    value="night"
-                                    @change="filterByArrivalTime"
-                                    class="accent-primary"
-                                />
-                                <span class="text-sm text-gray-700"
-                                    >06:00 PM - 12:00 AM</span
-                                >
+                                <component :is="option.icon" class="h-4 w-4" />
+                                <span>{{ option.label }}</span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="flex gap-3">
+                    <div class="filter-actions">
                         <button
                             @click="resetAllFilters"
                             class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
@@ -2378,7 +2318,7 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Results Header with Cheapest | Fastest | Best Value -->
                     <div
                         v-if="hasFlightResults"
-                        class="bg-white border border-gray-200 rounded p-4 mb-4 shadow-sm"
+                        class="bg-white border border-gray-200 rounded p-4 mb-4 shadow-md shadow-slate-200/80"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -2725,7 +2665,7 @@ watch(isLoggedIn, (newVal) => {
     <div
         v-for="item in filteredFlights"
         :key="item?.leg?.ref_id"
-        class="relative bg-white border border-gray-200 rounded shadow-sm overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5"
+        class="relative bg-white border border-gray-200 rounded shadow-md shadow-slate-200/80 overflow-hidden transition-all hover:shadow-xl hover:-translate-y-0.5"
     >
 
 
@@ -2735,10 +2675,10 @@ watch(isLoggedIn, (newVal) => {
                 <!-- Airline -->
                 <div class="flex items-center gap-3.5 lg:w-52 lg:h-full lg:self-center shrink-0">
                     <div
-                        class="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
+                        class="mr-2 h-[4.2rem] w-[4.2rem] rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
                     >
                         <img
-                            class="w-9 h-9 object-contain"
+                            class="h-[2.7rem] w-[2.7rem] object-contain"
                             :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
                             :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
                         />
@@ -2773,7 +2713,7 @@ watch(isLoggedIn, (newVal) => {
                     </div>
 
                     <div class="relative w-64 sm:w-80 shrink-0 flex flex-col items-center px-2">
-                        <span class="text-sm font-medium text-gray-500 mb-1.5">
+                        <span class="text-sm font-medium text-gray-500 mb-5">
                             {{
                                 Math.floor(
                                     moment.duration(item?.leg?.flights[0]?.travel_time, "m").asHours(),
@@ -2787,7 +2727,7 @@ watch(isLoggedIn, (newVal) => {
                             <div class="absolute left-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
                             <div class="absolute right-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
                             <svg
-                                class="absolute w-6 h-6 text-blue-600 rotate-45"
+                                class="absolute h-[29px] w-[29px] text-blue-600 rotate-45"
                                 viewBox="0 0 24 24"
                                 fill="currentColor"
                             >
@@ -2806,7 +2746,7 @@ watch(isLoggedIn, (newVal) => {
                                     ></span>
                                 </TooltipTrigger>
                                 <span
-                                    class="pointer-events-none mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+                                        class="pointer-events-none mt-5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
                                     :class="
                                         item?.leg?.flights[0]?.has_layovers
                                             ? 'bg-amber-50 text-amber-600'
@@ -2883,10 +2823,10 @@ watch(isLoggedIn, (newVal) => {
             <div class="flex items-start justify-between mb-4">
                 <div class="flex items-center gap-3.5">
                     <div
-                        class="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
+                        class="mr-2 h-[4.2rem] w-[4.2rem] rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
                     >
                         <img
-                            class="w-9 h-9 object-contain"
+                            class="h-[2.7rem] w-[2.7rem] object-contain"
                             :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
                             :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
                         />
@@ -3624,7 +3564,7 @@ watch(isLoggedIn, (newVal) => {
                                 <div
                                     v-for="(summaryFlight, summaryIndex) in selectedFlight.leg.flights"
                                     :key="summaryFlight?.ref_id || summaryIndex"
-                                    class="overflow-hidden rounded border border-gray-200 bg-white"
+                                    class="overflow-hidden rounded border border-gray-200 bg-white shadow-md shadow-slate-200/80"
                                 >
                                     <div
                                         class="flex flex-col gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -3686,12 +3626,8 @@ watch(isLoggedIn, (newVal) => {
                                         :key="summarySegment?.ref_id || summarySegmentIndex"
                                     >
                                         <!-- OUTER ROW: airline | timing | refundable badge -->
-                                        <!-- FIX: flex instead of a 3-column grid. Airline and the badge each take only the
-                                            width they need (shrink-0, fixed-ish), and the route/timing block gets ALL the
-                                            leftover space via flex-1 + justify-center, so it's centered in the row instead
-                                            of hugging the badge on the right. -->
                                         <div
-                                            class="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_minmax(0,12rem)_minmax(0,10rem)] md:items-center md:gap-6"
+                                            class="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-[minmax(0,12rem)_minmax(0,26rem)_auto] md:items-center md:justify-center md:gap-6"
                                         >
 
                                             <!-- Airline (fixed width so it doesn't dictate how much room the route gets) -->
@@ -3794,8 +3730,8 @@ watch(isLoggedIn, (newVal) => {
                                                 </div>
                                             </div>
 
-                                            <!-- Refundable badge (fixed width, pinned to the far side) -->
-                                            <div class="flex shrink-0 justify-end md:justify-self-end">
+                                            <!-- Refundable badge -->
+                                            <div class="flex shrink-0 justify-end md:justify-self-start">
                                                 <div
                                                     class="inline-flex w-fit items-center gap-1 self-start rounded-full border px-3 py-1 text-xs font-bold md:self-center"
                                                     :class="
@@ -3923,7 +3859,7 @@ watch(isLoggedIn, (newVal) => {
                                             >
                                                 <!-- Flight Header - Mobile Compact -->
                                                 <div
-                                                    class="bg-primary/5 rounded p-3 sm:p-4 border border-primary/20"
+                                                    class="bg-primary/5 rounded border border-primary/20 p-3 shadow-md shadow-slate-200/80 sm:p-4"
                                                 >
                                                     <div
                                                         class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3"
@@ -4051,7 +3987,7 @@ watch(isLoggedIn, (newVal) => {
                                                                 fare.ref_id,
                                                             )
                                                         "
-                                                        class="rounded-md border border-gray-200 bg-white px-5 py-4 transition-all duration-200 cursor-pointer hover:border-[#155dfc] sm:px-6 sm:py-5"
+                                                        class="cursor-pointer rounded-md border border-gray-200 bg-white px-5 py-4 shadow-md shadow-slate-200/80 transition-all duration-200 hover:border-[#155dfc] sm:px-6 sm:py-5"
                                                         :class="
                                                             selectedFares[
                                                                 flightIndex
@@ -4179,7 +4115,7 @@ watch(isLoggedIn, (newVal) => {
                                                 flight, flightIndex
                                             ) in selectedFlight?.leg?.flights"
                                             :key="flightIndex"
-                                            class="border border-gray-200 rounded overflow-hidden mb-4 sm:mb-6 last:mb-0"
+                                            class="mb-4 overflow-hidden rounded border border-gray-200 shadow-md shadow-slate-200/80 sm:mb-6 last:mb-0"
                                         >
                                             <!-- Flight Header - Mobile Compact -->
                                             <div
@@ -4583,7 +4519,7 @@ watch(isLoggedIn, (newVal) => {
                                                 flight, flightIndex
                                             ) in selectedFlight?.leg?.flights"
                                             :key="flightIndex"
-                                            class="border border-gray-200 rounded overflow-hidden mb-4 sm:mb-6 last:mb-0"
+                                            class="mb-4 overflow-hidden rounded border border-gray-200 shadow-md shadow-slate-200/80 sm:mb-6 last:mb-0"
                                         >
                                             <!-- Flight Header -->
                                             <div
@@ -5114,6 +5050,154 @@ watch(isLoggedIn, (newVal) => {
 </template>
 
 <style scoped>
+.filter-panel {
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.filter-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+}
+
+.filter-panel-heading h2 {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.filter-reset-button {
+    color: hsl(var(--primary));
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.filter-reset-button:hover {
+    text-decoration: underline;
+}
+
+.filter-section {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.filter-section h3 {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.filter-chip-grid,
+.filter-time-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.filter-choice-chip,
+.filter-time-chip {
+    display: flex;
+    min-width: 0;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.4rem;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1rem;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.filter-choice-chip {
+    min-height: 2.25rem;
+    padding: 0.45rem;
+}
+
+.filter-time-chip {
+    min-height: 2.1rem;
+    padding: 0.4rem 0.3rem;
+    white-space: nowrap;
+}
+
+.filter-choice-chip:hover,
+.filter-time-chip:hover,
+.filter-choice-chip.is-selected,
+.filter-time-chip.is-selected {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.07);
+    color: hsl(var(--primary));
+}
+
+.filter-fare-options {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.filter-fare-option,
+.filter-airline-option {
+    display: flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.filter-fare-option {
+    min-height: 2rem;
+    padding: 0.25rem 0;
+}
+
+.filter-fare-option.is-selected {
+    color: hsl(var(--primary));
+}
+
+.filter-radio-mark,
+.filter-checkbox {
+    display: inline-flex;
+    height: 0.9rem;
+    width: 0.9rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #94a3b8;
+    border-radius: 0.25rem;
+    color: #ffffff;
+}
+
+.filter-fare-option.is-selected .filter-radio-mark,
+.filter-checkbox.is-selected {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    box-shadow: inset 0 0 0 2px #ffffff;
+}
+
+.filter-airline-option {
+    min-height: 1.8rem;
+    padding: 0.15rem 0;
+}
+
+.filter-airline-option:hover {
+    color: hsl(var(--primary));
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+}
+
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
@@ -5133,6 +5217,12 @@ watch(isLoggedIn, (newVal) => {
         position: sticky;
         top: 9rem;
         align-self: start;
+    }
+
+    .filter-panel {
+        max-height: calc(100vh - 10rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 }
 

@@ -6,7 +6,7 @@
         <Button
           class="h-[110px] w-full justify-start rounded  bg-white px-4 shadow-none hover:bg-gray-50 sm:h-[110px]"
         >
-          <CalendarIcon class="mr-2 h-4 w-4 text-gray-600" />
+          <CalendarIcon :class="largeIcon ? 'mr-3 h-7 w-7 text-gray-600' : 'mr-2 h-4 w-4 text-gray-600'" />
           <div class="text-left">
             <p class="text-left text-lg font-bold leading-tight text-gray-900 sm:text-2xl">
               {{ displayText || "Select Date" }}
@@ -124,6 +124,7 @@ const props = defineProps({
   minValue: { type: String, default: "" },
   maxValue: { type: String, default: "" },
   prices: { type: Object, default: () => ({}) },
+  largeIcon: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["update:modelValue", "selected"]);

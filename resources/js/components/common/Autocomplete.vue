@@ -1,11 +1,11 @@
 <template>
-    <div class="relative dropdown group">
+    <div class="relative min-w-0 dropdown group">
         <label v-if="label" class="mb-1 flex items-start justify-start text-sm font-semibold" :style="{ color: text_color }">
             {{ label }}
         </label>
-        <div class="relative">
+        <div class="relative min-w-0">
             <div :class="[
-                'relative min-h-[110px] w-full cursor-pointer overflow-hidden rounded border-none bg-white p-4 shadow-none transition-all duration-200',
+                'relative min-h-[110px] w-full min-w-0 cursor-pointer overflow-hidden rounded border-none bg-white p-4 shadow-none transition-all duration-200',
                 isFocused ? 'ring-0' : 'hover:bg-gray-50',
             ]">
                 <span class="mb-1 block text-sm font-medium uppercase tracking-wide text-gray-500">
@@ -16,24 +16,39 @@
                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                     :name="`${uniqueId}-search`" data-lpignore="true"
                     :class="[
-                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent px-4 pr-12 pt-8 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
+                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent pt-8 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
+                        showIcon ? 'pl-12 pr-4' : 'px-4',
                         !isFocused ? 'text-transparent caret-transparent' : '',
                     ]"
                     @input="handleInput" @keydown="handleKeydown" @focus="handleFocus" @click="handleInputClick"
                     @blur="handleBlur" ref="inputEl" />
 
-                <div v-if="!isFocused" class="relative pointer-events-none">
+                <div v-if="!isFocused" :class="[
+                    'relative min-w-0 pointer-events-none',
+                    showIcon && (compactIcon ? 'pl-8' : 'pl-12'),
+                ]">
                     <template v-if="displayValue">
-                        <h2 class="max-w-full truncate text-2xl font-black leading-tight text-gray-900 sm:text-3xl">{{ displayValue.city }}</h2>
-                        <p class="mt-1 truncate text-sm font-medium text-gray-600">
+                        <h2 class="max-w-full truncate pr-8 text-2xl font-black leading-tight text-gray-900 sm:text-3xl">{{ displayValue.city }}</h2>
+                        <p class="mt-1 max-w-full truncate pr-8 text-sm font-medium text-gray-600">
                             {{ displayValue.iata }}, {{ selectedItem.name }}{{ displayValue.country ? ' ' + displayValue.country : '' }}
                         </p>
                     </template>
                     <template v-else>
-                        <h2 class="truncate text-2xl font-black leading-tight text-gray-400 sm:text-3xl">Select City</h2>
-                        <p class="mt-1 text-sm text-gray-400">Airport Name, Country</p>
+                        <h2 class="max-w-full truncate pr-8 text-2xl font-black leading-tight text-gray-400 sm:text-3xl">Select City</h2>
+                        <p class="mt-1 max-w-full truncate pr-8 text-sm text-gray-400">Airport Name, Country</p>
                     </template>
                 </div>
+
+                <component
+                    v-if="showIcon && icons[icon]"
+                    :is="icons[icon]"
+                    :class="[
+                        'pointer-events-none absolute z-20 -translate-y-1/2 text-slate-400',
+                        compactIcon ? 'left-1 top-4 h-6 w-6' : 'left-3 top-6 h-8 w-8',
+                    ]"
+                    :stroke-width="2.25"
+                    aria-hidden="true"
+                />
 
                 <button v-if="search && isFocused" @click.stop="clearSearch" type="button"
                     class="absolute right-4 top-4 z-30 rounded-full p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600">
@@ -88,7 +103,7 @@
 import eventBus from "@/services/eventBus";
 import CountryList from "@/components/common/CountryList.json";
 import { debounce } from "lodash";
-import { PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
+import { MapPin, PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
 import { Plane } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
@@ -121,6 +136,14 @@ const props = defineProps({
     icon: {
         type: String,
         default: "PlaneTakeoff"
+    },
+    showIcon: {
+        type: Boolean,
+        default: false,
+    },
+    compactIcon: {
+        type: Boolean,
+        default: false,
     },
     defaultSuggestionsLimit: {
         type: Number,
@@ -176,6 +199,7 @@ const isSearching = computed(() => {
 });
 
 const icons = {
+    MapPin,
     PlaneTakeoff,
     PlaneLanding
 }

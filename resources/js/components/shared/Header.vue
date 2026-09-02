@@ -1146,7 +1146,7 @@ onMounted(() => {
                             class="overflow-hidden rounded-md border border-gray-200 bg-white"
                         >
                             <div
-                                class="grid grid-cols-1 sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.02fr_1.28fr] items-stretch"
+                                class="grid grid-cols-1 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)] items-stretch"
                             >
                         <!-- From -->
                         <div class="booking-cell text-start relative w-full">
@@ -1160,6 +1160,8 @@ onMounted(() => {
                                 @selected="focusDestination"
                                 @search="fetchMatchingAirports"
                                 @query-changed="clearAirportSearchResults"
+                                :icon="'MapPin'"
+                                show-icon
                                 :default-value="
                                     route.query?.origin
                                         ? route.query?.origin
@@ -1209,7 +1211,8 @@ onMounted(() => {
                                 @selected="openDepartureCalendar"
                                 @search="fetchMatchingAirports"
                                 @query-changed="clearAirportSearchResults"
-                                :icon="'PlaneLanding'"
+                                :icon="'MapPin'"
+                                show-icon
                                 :default-value="
                                     route.query?.destination
                                         ? route.query?.destination
@@ -1241,6 +1244,7 @@ onMounted(() => {
                                 ref="departureCalendar"
                                 v-model="dateRange.start"
                                 :minValue="new Date().toLocaleDateString('en-CA')"
+                                large-icon
                                 class="w-full h-10 sm:h-auto"
                             />
                         </div>
@@ -1259,13 +1263,14 @@ onMounted(() => {
                                     :minValue="
                                         dateRange.start || new Date().toLocaleDateString('en-CA')
                                     "
+                                    large-icon
                                     class="w-full h-10 sm:h-auto"
                                 />
                             </template>
                             <button
                                 v-else
                                 type="button"
-                                class="min-h-[60px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
+                                class="min-h-[50px] w-full pt-2 text-left text-xs font-semibold leading-4 text-gray-500"
                             >
                                 Tap to add a return date for bigger discounts
                             </button>
@@ -1450,8 +1455,8 @@ onMounted(() => {
                                     :class="[
                                         'grid grid-cols-1 items-stretch overflow-hidden rounded-md border border-gray-200 bg-white',
                                         index === 0
-                                            ? 'sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.28fr]'
-                                            : 'sm:grid-cols-[1.35fr_1.35fr_1.02fr]',
+                                            ? 'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]'
+                                            : 'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)]',
                                     ]"
                                 >
                                     <div class="booking-cell text-start relative w-full">
@@ -1470,6 +1475,8 @@ onMounted(() => {
                                         :remote-search="true"
                                         @search="fetchMatchingAirports"
                                         @query-changed="clearAirportSearchResults"
+                                        :icon="'MapPin'"
+                                        show-icon
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
@@ -1484,7 +1491,8 @@ onMounted(() => {
                                         <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("TO") }}</label>
                                     <Autocomplete
                                         v-model="trip.destination"
-                                        :icon="'PlaneLanding'"
+                                        :icon="'MapPin'"
+                                        show-icon
                                         :default-value="
                                             route.query?.destination
                                                 ? route.query?.destination
@@ -1517,6 +1525,7 @@ onMounted(() => {
                                                     : multiCityTrips[index - 1]
                                                           ?.date || todayDate
                                             "
+                                            large-icon
                                             class="w-full border-none"
                                         />
                                     </div>
@@ -1806,7 +1815,7 @@ onMounted(() => {
 }
 
 .booking-cell {
-    @apply relative min-h-[92px] border-b border-gray-200 px-4 py-3 sm:border-b-0 sm:border-r;
+    @apply relative min-w-0 min-h-[92px] border-b border-gray-200 px-4 py-3 sm:border-b-0 sm:border-r;
 }
 
 .booking-cell:last-child {
@@ -1825,10 +1834,19 @@ onMounted(() => {
     padding-right: 0 !important;
 }
 
+.booking-cell :deep(button.h-\[110px\]) {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+}
+
 .booking-cell :deep(input) {
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-top: 1.85rem !important;
+}
+
+.booking-cell :deep(.dropdown input) {
+    padding-left: 3rem !important;
 }
 
 .booking-cell :deep(.dropdown span.mb-1) {

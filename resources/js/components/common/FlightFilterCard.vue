@@ -593,7 +593,7 @@ const startCountdown = (remainingTime) => {
                                         <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">
                                             Trip
                                         </span>
-                                        <span class="flex items-center justify-between gap-3 text-sm font-bold text-slate-950">
+                                        <span class="flight-type-value flex items-center justify-between gap-3 font-bold text-slate-950">
                                             {{ selectedFlightType.label }}
                                             <ChevronDownIcon class="h-4 w-4 text-slate-500" />
                                         </span>
@@ -615,7 +615,7 @@ const startCountdown = (remainingTime) => {
                         <div
                             :class="[
                                 'flight-fields-grid grid grid-cols-1 items-stretch',
-                                'sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.02fr_1.28fr]',
+                                'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]',
                             ]"
                         >
                             <div class="filter-booking-cell text-start relative w-full">
@@ -631,7 +631,9 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Origin"
                                     :source="airports"
                                     :search-debounce="350"
-                                    :icon="'PlaneTakeoff'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :default-suggestions="headerDefaultAirportCodes"
                                     :auto-fill-defaults="true"
                                     auto-fill-role="origin"
@@ -667,7 +669,9 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Destination"
                                     :source="airports"
                                     :search-debounce="350"
-                                    :icon="'PlaneLanding'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :default-suggestions="headerDefaultAirportCodes"
                                     :auto-fill-defaults="true"
                                     auto-fill-role="destination"
@@ -724,7 +728,7 @@ const startCountdown = (remainingTime) => {
                                 <button
                                     v-else
                                     type="button"
-                                    class="min-h-[60px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
+                                    class="min-h-[50px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
                                 >
                                     Tap to add a return date for bigger discounts
                                 </button>
@@ -905,7 +909,7 @@ const startCountdown = (remainingTime) => {
                                         <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">
                                             Trip
                                         </span>
-                                        <span class="flex items-center justify-between gap-3 text-sm font-bold text-slate-950">
+                                        <span class="flight-type-value flex items-center justify-between gap-3 font-bold text-slate-950">
                                             {{ selectedFlightType.label }}
                                             <ChevronDownIcon class="h-4 w-4 text-slate-500" />
                                         </span>
@@ -925,7 +929,7 @@ const startCountdown = (remainingTime) => {
                             </Popover>
                         </div>
 
-                        <div class="flight-fields-grid multicity-fields-grid grid grid-cols-1 items-stretch sm:grid-cols-[1.35fr_1.35fr_1.02fr_1.28fr]">
+                        <div class="flight-fields-grid multicity-fields-grid grid grid-cols-1 items-stretch sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]">
                             <div class="filter-booking-cell text-start relative w-full">
                                 <label class="block text-sm font-semibold text-gray-700 sm:mb-1">
                                     TRIP 1 FROM
@@ -935,7 +939,9 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Origin"
                                     :source="airports"
                                     :search-debounce="350"
-                                    :icon="'PlaneTakeoff'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :default-suggestions="headerDefaultAirportCodes"
                                     :auto-fill-defaults="true"
                                     auto-fill-role="origin"
@@ -954,7 +960,9 @@ const startCountdown = (remainingTime) => {
                                 <Autocomplete
                                     v-model="localValue.multiCityTrips[0].destination"
                                     placeholder="Destination"
-                                    :icon="'PlaneLanding'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :source="airports"
                                     :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
@@ -1078,7 +1086,9 @@ const startCountdown = (remainingTime) => {
                                     placeholder="Origin"
                                     :source="airports"
                                     :search-debounce="350"
-                                    :icon="'PlaneTakeoff'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
@@ -1094,7 +1104,9 @@ const startCountdown = (remainingTime) => {
                                 <Autocomplete
                                     v-model="trip.destination"
                                     placeholder="Destination"
-                                    :icon="'PlaneLanding'"
+                                    :icon="'MapPin'"
+                                    show-icon
+                                    compact-icon
                                     :source="airports"
                                     :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
@@ -1220,6 +1232,11 @@ const startCountdown = (remainingTime) => {
     background: #f1f5f9;
 }
 
+.flight-type-value {
+    font-size: 1.05rem;
+    line-height: 1.35rem;
+}
+
 .flight-fields-grid {
     min-width: 0;
     background: #ffffff;
@@ -1308,7 +1325,7 @@ const startCountdown = (remainingTime) => {
 }
 
 .filter-booking-cell {
-    @apply relative min-h-[76px] border-b border-gray-200 px-3 py-2 sm:border-b-0 sm:border-r;
+    @apply relative min-w-0 min-h-[76px] border-b border-gray-200 px-3 py-2 sm:border-b-0 sm:border-r;
 }
 
 .filter-booking-cell:last-child {
@@ -1333,6 +1350,10 @@ const startCountdown = (remainingTime) => {
     padding-top: 1.35rem !important;
     font-size: 1.05rem !important;
     line-height: 1.35rem !important;
+}
+
+.filter-booking-cell :deep(.dropdown input) {
+    padding-left: 2rem !important;
 }
 
 .filter-booking-cell :deep(.dropdown span.mb-1) {
