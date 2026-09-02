@@ -2889,10 +2889,10 @@ watch(isLoggedIn, (newVal) => {
                     </p>
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-xl font-extrabold text-gray-900 tracking-tight">
+                            <p class="text-3xl font-extrabold text-gray-900 tracking-tight">
                                 {{ moment.parseZone(leg?.departure_at).format("HH:mm") }}
                             </p>
-                            <p class="text-sm font-semibold text-gray-700">
+                            <p class="text-base font-semibold text-gray-700">
                                 {{ leg?.from?.city?.name }}
                             </p>
                             <p class="text-sm font-semibold text-gray-400">
@@ -2900,13 +2900,22 @@ watch(isLoggedIn, (newVal) => {
                             </p>
                         </div>
                         <div class="relative flex-1 flex flex-col items-center px-1">
-                            <p class="text-[10px] font-semibold text-gray-400 mb-1">
+                            <p class="mb-3 text-sm font-medium text-gray-500">
                                 {{ Math.floor(moment.duration(leg?.travel_time, "m").asHours()) }}h
                                 {{ moment.duration(leg?.travel_time, "m").minutes() }}m
                             </p>
                             <div class="relative w-full flex items-center">
-                                <div class="h-[1.5px] w-full bg-gray-200 rounded-full"></div>
-                                <div class="absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                                <div class="h-[2px] w-full bg-gray-200 rounded-full"></div>
+                                <div class="absolute left-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
+                                <div class="absolute right-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
+                                <svg
+                                    class="absolute left-1/2 h-[29px] w-[29px] -translate-x-1/2 rotate-45 text-blue-600"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2.5 1.8V22l4-1 4 1v-1.2L13 19v-5.5l8 2.5z" />
+                                </svg>
                             </div>
                             <TooltipProvider>
                                 <Tooltip>
@@ -2917,7 +2926,7 @@ watch(isLoggedIn, (newVal) => {
                                         ></p>
                                     </TooltipTrigger>
                                     <p
-                                        class="pointer-events-none mt-1.5 inline-flex items-center justify-center gap-1 rounded-full px-2 py-0.5 text-center text-[9px] font-bold"
+                                        class="pointer-events-none mt-5 inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-center text-xs font-semibold"
                                         :class="
                                             leg?.has_layovers
                                                 ? 'bg-amber-50 text-amber-600'
@@ -2926,9 +2935,9 @@ watch(isLoggedIn, (newVal) => {
                                     >
                                         <GitCommitHorizontal
                                             v-if="leg?.has_layovers"
-                                            class="h-2.5 w-2.5"
+                                            class="h-3 w-3"
                                         />
-                                        <PlaneTakeoff v-else class="h-2.5 w-2.5" />
+                                        <PlaneTakeoff v-else class="h-3 w-3" />
                                         {{ leg?.has_layovers ? `${leg?.layovers_count} stop` : "Non stop" }}
                                     </p>
                                     <TooltipContent
@@ -2949,10 +2958,10 @@ watch(isLoggedIn, (newVal) => {
                             </TooltipProvider>
                         </div>
                         <div class="text-right">
-                            <p class="text-xl font-extrabold text-gray-900 tracking-tight">
+                            <p class="text-3xl font-extrabold text-gray-900 tracking-tight">
                                 {{ moment.parseZone(leg?.arrival_at).format("HH:mm") }}
                             </p>
-                            <p class="text-sm font-semibold text-gray-700">
+                            <p class="text-base font-semibold text-gray-700">
                                 {{ leg?.to?.city?.name }}
                             </p>
                             <p class="text-sm font-semibold text-gray-400">
