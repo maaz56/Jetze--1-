@@ -84,7 +84,7 @@ import {
 } from "@/components/ui/tooltip";
 import Spinner from "@/components/common/Spinner.vue";
 import Input from "@/components/ui/input/Input.vue";
-import HotelSearch from "@/pages/HotelSearch.vue";
+import HotelSearchHeader from "@/components/common/HotelSearchHeader.vue";
 import moment from "moment";
 import { ClockIcon } from "lucide-vue-next";
 import {
@@ -1767,7 +1767,7 @@ onMounted(() => {
             </div>
 
             <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn">
-                <!-- <HotelSearch embedded /> -->
+                <!-- <HotelSearchHeader /> -->
             </div>
 
             <!-- Other Tabs (Coming Soon) -->

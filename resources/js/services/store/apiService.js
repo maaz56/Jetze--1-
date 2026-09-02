@@ -143,6 +143,16 @@ export default {
         });
     },
 
+    getHotelSuggestions(params) {
+        return apiClient.get("/hotels/suggestions", {
+            params: params,
+        });
+    },
+
+    searchHotels(params) {
+        return apiClient.post("/hotels/search", params);
+    },
+
     getUsers(params) {
         return apiClient.get("/users", {
             params: params,

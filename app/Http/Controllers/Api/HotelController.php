@@ -104,9 +104,39 @@ class HotelController extends Controller
         $destination = $validated['destination'];
         $hotelCodes = $this->resolveHotelCodes($destination['type'], $destination['value']);
 
+        if ($hotelCodes->isEmpty() && $destination['type'] === 'city') {
+            try {
+                $this->syncCityHotels($destination['value']);
+                $hotelCodes = $this->resolveHotelCodes($destination['type'], $destination['value']);
+            } catch (RuntimeException $e) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'data' => [
+                        'hotels' => [],
+                        'search_session_id' => null,
+                    ],
+                ], 422);
+            } catch (Throwable $e) {
+                Log::error('Unable to sync city hotels on demand', [
+                    'city_code' => $destination['value'],
+                    'message' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'message' => 'Unable to fetch hotel codes for this city right now. Please try again.',
+                    'data' => [
+                        'hotels' => [],
+                        'search_session_id' => null,
+                    ],
+                ], 502);
+            }
+        }
+
         if ($hotelCodes->isEmpty()) {
             return response()->json([
-                'message' => 'No TBO hotel codes found for the selected destination. Please sync hotel data for this country or city first.',
+                'message' => $destination['type'] === 'country'
+                    ? 'Please select a city or hotel. Searching a whole country needs too many TBO hotel codes.'
+                    : 'No TBO hotel codes found for the selected destination.',
                 'data' => [
                     'hotels' => [],
                     'search_session_id' => null,
@@ -197,6 +227,87 @@ class HotelController extends Controller
         };
     }
 
+    protected function syncCityHotels(string $cityCode): void
+    {
+        $city = TboHotelCity::with('country')->where('city_code', $cityCode)->first();
+
+        if (!$city) {
+            throw new RuntimeException('Selected TBO city was not found locally. Please sync countries and cities first.');
+        }
+
+        $response = $this->tboHotelService->tboHotelCodeList($city->city_code, true);
+        $hotels = $response['Hotels'] ?? [];
+
+        if (!is_array($hotels) || empty($hotels)) {
+            throw new RuntimeException('TBO returned no hotels for this city.');
+        }
+
+        foreach ($hotels as $hotel) {
+            if (is_array($hotel)) {
+                $this->upsertHotel($hotel, $city);
+            }
+        }
+    }
+
+    protected function upsertHotel(array $hotel, TboHotelCity $city): void
+    {
+        $hotelCode = (string) ($hotel['HotelCode'] ?? '');
+
+        if ($hotelCode === '') {
+            return;
+        }
+
+        [$mapLatitude, $mapLongitude] = $this->parseMap($hotel['Map'] ?? null);
+        $latitude = is_numeric($hotel['Latitude'] ?? null) ? (float) $hotel['Latitude'] : $mapLatitude;
+        $longitude = is_numeric($hotel['Longitude'] ?? null) ? (float) $hotel['Longitude'] : $mapLongitude;
+        $hotelName = $hotel['HotelName'] ?? 'Hotel ' . $hotelCode;
+        $countryCode = strtoupper((string) ($hotel['CountryCode'] ?? $city->country_code));
+        $countryName = $hotel['CountryName'] ?? $city->country?->name;
+        $cityName = $hotel['CityName'] ?? $city->name;
+        $map = $hotel['Map'] ?? ($latitude && $longitude ? $latitude . '|' . $longitude : null);
+
+        TboHotel::updateOrCreate(
+            ['hotel_code' => $hotelCode],
+            [
+                'hotel_name' => $hotelName,
+                'hotel_rating' => isset($hotel['HotelRating']) ? (string) $hotel['HotelRating'] : null,
+                'address' => $hotel['Address'] ?? null,
+                'country_code' => $countryCode,
+                'country_name' => $countryName,
+                'city_code' => (string) ($hotel['CityId'] ?? $city->city_code),
+                'city_name' => $cityName,
+                'map' => $map,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'images' => $hotel['Images'] ?? null,
+                'facilities' => $hotel['HotelFacilities'] ?? null,
+                'description' => $hotel['Description'] ?? null,
+                'raw_response' => $hotel,
+                'search_text' => trim(implode(' ', array_filter([
+                    $hotelName,
+                    $cityName,
+                    $countryName,
+                    $hotel['Address'] ?? null,
+                    $hotel['HotelRating'] ?? null,
+                ]))),
+            ]
+        );
+    }
+
+    protected function parseMap(?string $map): array
+    {
+        if (!$map || !str_contains($map, '|')) {
+            return [null, null];
+        }
+
+        [$latitude, $longitude] = explode('|', $map, 2);
+
+        return [
+            is_numeric($latitude) ? (float) $latitude : null,
+            is_numeric($longitude) ? (float) $longitude : null,
+        ];
+    }
+
     protected function normalizeSearchResults(array $tboResponse): Collection
     {
         $results = collect($tboResponse['HotelResult'] ?? []);
@@ -208,7 +319,20 @@ class HotelController extends Controller
             $hotel = $staticHotels->get($hotelCode);
             $rooms = collect($result['Rooms'] ?? [])->map(fn (array $room) => $this->normalizeRoom($room))->values();
             $lowestFare = $rooms->pluck('total_fare')->filter(fn ($fare) => $fare !== null)->min();
-            $images = $hotel?->images ?: [];
+            $lowestRoom = $rooms
+                ->filter(fn (array $room) => $room['total_fare'] !== null)
+                ->sortBy('total_fare')
+                ->first();
+            $promotions = $rooms
+                ->flatMap(fn (array $room) => $room['room_promotion'] ?? [])
+                ->filter()
+                ->unique()
+                ->values();
+            $hasAtPropertySupplements = $rooms->contains(function (array $room) {
+                return collect($room['supplements'] ?? [])
+                    ->flatten(1)
+                    ->contains(fn ($supplement) => is_array($supplement) && ($supplement['Type'] ?? null) === 'AtProperty');
+            });
 
             return [
                 'hotel_code' => $hotelCode,
@@ -218,9 +342,14 @@ class HotelController extends Controller
                 'rating' => $hotel?->hotel_rating,
                 'address' => $hotel?->address,
                 'map' => $hotel?->map,
-                'image' => $images[0] ?? null,
+                'latitude' => $hotel?->latitude,
+                'longitude' => $hotel?->longitude,
                 'currency' => $result['Currency'] ?? null,
                 'lowest_total_fare' => $lowestFare,
+                'lowest_room' => $lowestRoom,
+                'room_count' => $rooms->count(),
+                'promotions' => $promotions,
+                'has_at_property_supplements' => $hasAtPropertySupplements,
                 'rooms' => $rooms,
             ];
         });
@@ -238,6 +367,7 @@ class HotelController extends Controller
             'extra_guest_charges' => isset($room['ExtraGuestCharges']) ? (float) $room['ExtraGuestCharges'] : null,
             'recommended_selling_rate' => $room['RecommendedSellingRate'] ?? null,
             'room_promotion' => $room['RoomPromotion'] ?? [],
+            'bedding_group' => $room['BeddingGroup'] ?? null,
             'meal_type' => $room['MealType'] ?? null,
             'is_refundable' => (bool) ($room['IsRefundable'] ?? false),
             'with_transfers' => (bool) ($room['WithTransfers'] ?? false),

@@ -51,7 +51,7 @@ class TboHotelService
     {
         return $this->request('POST', 'TBOHotelCodeList', [
             'CityCode' => $cityCode,
-            'IsDetailedResponse' => $detailed,
+            'IsDetailedResponse' => $detailed ? 'true' : 'false',
         ]);
     }
 
@@ -127,6 +127,8 @@ class TboHotelService
 
             $response = $this->client->request($method, $url, $options);
             $body = (string) $response->getBody();
+
+            Log::info($response->getBody());
             $decoded = json_decode($body, true);
 
             if (!is_array($decoded)) {
