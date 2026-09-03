@@ -54,6 +54,7 @@ class AtFlightTransformer
             }
 
             $transformedLegs = [];
+            $skipFlight = false;
             foreach ($legs as $legData) {
                 $segments = [];
                 $flight = $legData['flight'];
@@ -146,6 +147,10 @@ class AtFlightTransformer
                 // Process fares
                 $fares = [];
                 foreach ($legData['fares'] as $fare) {
+                    if (!$this->hasPositiveFare($fare['NetFare'] ?? null)) {
+                        continue;
+                    }
+
                     $providerBookingMoney = $this->currencyConversionService->makeMoney(
                         $fare['NetFare'] ?? 0,
                         $currency,
@@ -278,6 +283,11 @@ class AtFlightTransformer
                     ];
                 }
 
+                if (empty($fares)) {
+                    $skipFlight = true;
+                    break;
+                }
+
                 $transformedLegs[] = [
                     "flight_index" => $flight['Index'] ?? null,
                     "ref_id" => (string) \Str::uuid(),
@@ -301,6 +311,10 @@ class AtFlightTransformer
                     "is_refundable" => $fares[0]['is_refundable'],
                     "flight_number" => $segments[0]['flight_number']
                 ];
+            }
+
+            if ($skipFlight || empty($transformedLegs)) {
+                continue;
             }
 
             $sectorParts = [];
@@ -671,6 +685,10 @@ class AtFlightTransformer
                     ($fareJourney['MAC'] ?? '') === ($baseJourney['MAC'] ?? '') &&
                     ($fareJourney['FlightNo'] ?? '') === ($baseJourney['FlightNo'] ?? '')
                 ) {
+                    if (!$this->hasPositiveFare($fareJourney['NetFare'] ?? null)) {
+                        continue;
+                    }
+
                     $fareKey = implode('_', [
                         $fareJourney['FareClass'] ?? '',
                         $fareJourney['RBD'] ?? '',
@@ -686,6 +704,10 @@ class AtFlightTransformer
             }
 
             $processedFlights[$flightKey] = true;
+
+            if (empty($fares)) {
+                continue;
+            }
 
             $final[] = [
                 'type' => 'oneway',
@@ -732,6 +754,11 @@ class AtFlightTransformer
             'IsBusStation' => $journey['IsBusStation'] ?? null,
             'Remarks' => $journey['Remarks'] ?? null,
         ];
+    }
+
+    private function hasPositiveFare($amount): bool
+    {
+        return is_numeric($amount) && bccomp((string) $amount, '0', 8) === 1;
     }
 
     private function addDuration(string $dateTime, string $duration): string
