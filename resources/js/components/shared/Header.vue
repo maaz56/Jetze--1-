@@ -1776,7 +1776,7 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <HotelSearchHeader />
+                <!-- <HotelSearchHeader /> -->
             </div>
 
             <!-- Other Tabs (Coming Soon) -->
