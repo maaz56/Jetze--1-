@@ -205,6 +205,19 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/AdminCustomerBookings.vue"),
             },
             {
+                path: "hotel-bookings",
+                name: "AdminHotelBookings",
+                component: () => import("@/pages/admin/HotelBookings.vue"),
+                meta: { permission: 'view-bookings' },
+            },
+            {
+                path: "hotel-bookings/:bookingId",
+                name: "AdminHotelBookingDetails",
+                component: () => import("@/pages/admin/HotelBookingDetails.vue"),
+                props: true,
+                meta: { permission: 'view-bookings' },
+            },
+            {
                 path: "customer-booking-details",
                 name: "CustomerBookingDetails",
                 component: () => import("@/pages/admin/CustomerBookingDetails.vue"),

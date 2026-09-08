@@ -82,6 +82,19 @@ export const clientRoutes = [
                 component: () => import("@/pages/HotelCheckout.vue"),
             },
             {
+                path: "hotel/booking",
+                name: "HotelBookingDetails",
+                component: () => import("@/pages/HotelBookingDetails.vue"),
+            },
+            {
+                path: "hotel/bookings",
+                name: "HotelBookings",
+                component: () => import("@/pages/HotelBookings.vue"),
+                meta: {
+                    requiresAuth: true,
+                },
+            },
+            {
                 path: "visa",
                 name: "Visa",
                 component: () => import("@/pages/Visas.vue"),

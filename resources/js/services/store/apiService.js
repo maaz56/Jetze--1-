@@ -153,6 +153,50 @@ export default {
         return apiClient.post("/hotels/search", params);
     },
 
+    prebookHotel(params) {
+        return apiClient.post("/hotels/prebook", params);
+    },
+
+    getHotelPrebook(prebookId) {
+        return apiClient.get(`/hotels/prebooks/${prebookId}`);
+    },
+
+    bookHotel(params) {
+        return apiClient.post("/hotels/book", params);
+    },
+
+    getHotelBookings(params) {
+        return apiClient.get("/hotels/bookings", { params });
+    },
+
+    getHotelBooking(bookingId) {
+        return apiClient.get(`/hotels/bookings/${bookingId}`);
+    },
+
+    refreshHotelBookingDetails(bookingId) {
+        return apiClient.post(`/hotels/bookings/${bookingId}/details`);
+    },
+
+    cancelHotelBooking(bookingId) {
+        return apiClient.post(`/hotels/bookings/${bookingId}/cancel`);
+    },
+
+    getAdminHotelBookings(params) {
+        return apiClient.get("/admin/hotels/bookings", { params });
+    },
+
+    getAdminHotelBooking(bookingId) {
+        return apiClient.get(`/admin/hotels/bookings/${bookingId}`);
+    },
+
+    refreshAdminHotelBookingDetails(bookingId) {
+        return apiClient.post(`/admin/hotels/bookings/${bookingId}/details`);
+    },
+
+    cancelAdminHotelBooking(bookingId) {
+        return apiClient.post(`/admin/hotels/bookings/${bookingId}/cancel`);
+    },
+
     getUsers(params) {
         return apiClient.get("/users", {
             params: params,

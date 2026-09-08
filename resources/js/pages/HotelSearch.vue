@@ -13,10 +13,12 @@ import {
   X,
 } from "lucide-vue-next";
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { debounce } from "lodash";
+import { getSelectedCurrencyCode } from "@/lib/utils";
 
 const route = useRoute();
+const router = useRouter();
 const hotelStore = useHotelStore();
 
 const props = defineProps({
@@ -57,6 +59,7 @@ const isSearching = computed(() => hotelStore.getIsSearching);
 const hotelResults = computed(() => hotelStore.getHotels);
 const searchSessionId = computed(() => hotelStore.getSearchSessionId);
 const providerStatus = computed(() => hotelStore.getProviderStatus);
+const isPrebooking = computed(() => hotelStore.getIsPrebooking);
 const errorMessage = computed(() => formErrorMessage.value || hotelStore.getErrorMessage);
 const totalRoomOptions = computed(() => hotelResults.value.reduce((total, hotelItem) => total + Number(hotelItem.room_count || hotelItem.rooms?.length || 0), 0));
 
@@ -170,6 +173,7 @@ const searchHotels = async () => {
         no_of_rooms: 0,
         meal_type: "All",
       },
+      currency_code: getSelectedCurrencyCode(),
     });
   } catch (error) {
     formErrorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Hotel search failed. Please try again.";
@@ -177,28 +181,35 @@ const searchHotels = async () => {
 };
 
 const formatFare = (hotelItem) => {
-  if (!hotelItem.lowest_total_fare) {
-    return "Price unavailable";
-  }
-
-  return `${hotelItem.currency || ""} ${Number(hotelItem.lowest_total_fare).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoney(hotelItem.lowest_display_money || roomMoney(primaryRoom(hotelItem), hotelItem));
 };
 
-const formatMoney = (amount, currency) => {
-  if (amount === null || amount === undefined || amount === "") {
+const formatMoney = (money) => {
+  if (money?.amount === null || money?.amount === undefined || money?.amount === "" || !money?.currency) {
     return "Unavailable";
   }
 
-  return `${currency || ""} ${Number(amount).toLocaleString(undefined, {
+  return `${money.currency} ${Number(money.amount).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
 };
 
 const primaryRoom = (hotelItem) => hotelItem.lowest_room || hotelItem.rooms?.[0] || null;
+
+const roomMoney = (room, hotelItem) => room?.display_money || {
+  amount: room?.total_fare,
+  currency: room?.currency || hotelItem?.currency,
+};
+
+const roomTaxMoney = (room, hotelItem) => room?.display_tax_money || {
+  amount: room?.total_tax,
+  currency: room?.currency || hotelItem?.currency,
+};
+
+const selectedRoom = computed(() => hotelResults.value
+  .flatMap((hotelItem) => hotelItem.rooms || [])
+  .find((room) => room?.booking_code === selectedBookingCode.value) || null);
 
 const additionalRooms = (hotelItem) => {
   const selectedPrimaryRoom = primaryRoom(hotelItem);
@@ -222,6 +233,31 @@ const toggleHotelRooms = (hotelItem) => {
 
 const selectRoom = (room) => {
   selectedBookingCode.value = room?.booking_code || "";
+};
+
+const continueToCheckout = async () => {
+  if (!searchSessionId.value || !selectedRoom.value?.booking_code) {
+    formErrorMessage.value = "Select a room before continuing.";
+    return;
+  }
+
+  formErrorMessage.value = "";
+
+  try {
+    const response = await hotelStore.prebookHotel({
+      search_session_id: searchSessionId.value,
+      booking_code: selectedRoom.value.booking_code,
+      payment_mode: "Limit",
+      currency_code: getSelectedCurrencyCode(),
+    });
+
+    await router.push({
+      name: "HotelCheckout",
+      query: { prebook_id: response.data?.prebook_id },
+    });
+  } catch (error) {
+    formErrorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Unable to confirm this room.";
+  }
 };
 
 const isSelectedRoom = (room) => selectedBookingCode.value && room?.booking_code === selectedBookingCode.value;
@@ -522,6 +558,16 @@ watch(
 
         <div v-if="searchSessionId" class="text-right text-xs text-gray-500">Session: {{ searchSessionId }}</div>
 
+        <div v-if="selectedRoom" class="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-semibold text-emerald-900">Room selected</p>
+            <p class="mt-1 text-xs text-emerald-800">The latest fare and cancellation policy will be confirmed before checkout.</p>
+          </div>
+          <Button class="h-10 rounded bg-primary px-5 text-sm font-bold text-white hover:bg-primary/90" :is-loading="isPrebooking" @click="continueToCheckout">
+            Continue to checkout
+          </Button>
+        </div>
+
         <div class="space-y-4">
           <article
             v-for="hotelItem in hotelResults"
@@ -565,7 +611,7 @@ watch(
                 <p class="text-xs font-bold uppercase text-gray-500">Lowest available room</p>
                 <div class="mt-1 flex items-start justify-between gap-3">
                   <h5 class="line-clamp-2 text-sm font-semibold text-gray-950">{{ formatRoomName(primaryRoom(hotelItem)) }}</h5>
-                  <span class="shrink-0 text-sm font-bold text-gray-950">{{ formatMoney(primaryRoom(hotelItem)?.total_fare, hotelItem.currency) }}</span>
+                  <span class="shrink-0 text-sm font-bold text-gray-950">{{ formatMoney(roomMoney(primaryRoom(hotelItem), hotelItem)) }}</span>
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-2">
@@ -616,7 +662,7 @@ watch(
                         <span :class="room.is_refundable ? 'text-emerald-700' : 'text-red-600'">
                           {{ room.is_refundable ? "Refundable" : "Non-refundable" }}
                         </span>
-                        <span v-if="room.total_tax">Tax {{ formatMoney(room.total_tax, hotelItem.currency) }}</span>
+                        <span v-if="room.total_tax">Tax {{ formatMoney(roomTaxMoney(room, hotelItem)) }}</span>
                         <span v-if="hasAtPropertySupplement(room)" class="text-orange-700">At-property charges</span>
                       </div>
                       <div v-if="inclusions(room).length" class="mt-2 flex flex-wrap gap-1.5">
@@ -625,7 +671,7 @@ watch(
                         </span>
                       </div>
                     </div>
-                    <span class="font-bold text-gray-950 sm:text-right">{{ formatMoney(room.total_fare, hotelItem.currency) }}</span>
+                    <span class="font-bold text-gray-950 sm:text-right">{{ formatMoney(roomMoney(room, hotelItem)) }}</span>
                     <button
                       type="button"
                       class="rounded border border-primary px-4 py-2 text-xs font-bold text-primary hover:bg-primary hover:text-white"
@@ -646,7 +692,7 @@ watch(
                     {{ formatFare(hotelItem) }}
                   </p>
                   <p v-if="primaryRoom(hotelItem)?.total_tax" class="mt-1 text-xs text-gray-500">
-                    Includes {{ formatMoney(primaryRoom(hotelItem).total_tax, hotelItem.currency) }} tax
+                    Includes {{ formatMoney(roomTaxMoney(primaryRoom(hotelItem), hotelItem)) }} tax
                   </p>
                   <p class="mt-2 text-xs text-gray-500">{{ nights }} night{{ nights === 1 ? "" : "s" }} from TBO</p>
                 </div>

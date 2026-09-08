@@ -54,6 +54,13 @@
             :class="{ 'admin-sidebar-icon-active': $route.name === 'AdminCustomerBookings' }" />
           Bookings
         </router-link>
+        <router-link :to="{ name: 'AdminHotelBookings' }"
+          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }"
+          v-if="authStore.hasPermission('view-bookings')">
+          <Notebook class="admin-sidebar-icon"
+            :class="{ 'admin-sidebar-icon-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }" />
+          Hotel Bookings
+        </router-link>
         <router-link :to="{ name: 'VoidBookings' }"
           class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'VoidBookings' }"
           v-if="authStore.hasPermission('manage-bookings')">

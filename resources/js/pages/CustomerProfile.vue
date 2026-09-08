@@ -24,6 +24,7 @@ import {
     UserRound,
     WalletCards,
     ListChecks,
+    Building2,
 } from "lucide-vue-next";
 import { Plus, Receipt, TicketCheck, Ban, CirclePause, CircleX } from "lucide-vue-next";
 import jsPDF from "jspdf";
@@ -61,6 +62,7 @@ import { formatAmount } from "@/lib/utils";
 import moment from "moment";
 import { useAuthStore } from "@/services/stores/auth";
 import { useTransactionStore } from "@/services/stores/transaction";
+import { useHotelStore } from "@/services/stores/hotel";
 
 import {
     FETCH_TRANSACTIONS,
@@ -89,6 +91,7 @@ const bookingsError = ref(null);
 const error = ref(null);
 const authStore = useAuthStore();
 const transactionStore = useTransactionStore();
+const hotelStore = useHotelStore();
 const searchQuery = ref("");
 const dateRange = ref({
     start: null,
@@ -96,6 +99,11 @@ const dateRange = ref({
 });
 const emit = defineEmits(['filter-change']);
 const activeFilter = ref('all');
+const hotelBookingsLoading = ref(false);
+const hotelBookingsError = ref("");
+const hotelBookingsLoaded = ref(false);
+const hotelBookings = computed(() => hotelStore.getBookings);
+const hotelBookingMeta = computed(() => hotelStore.getBookingMeta);
 
 const editDialogOpen = ref(false);
 
@@ -201,6 +209,36 @@ async function fetchBookings() {
         bookingsLoading.value = false;
     }
 }
+
+async function fetchHotelBookings(page = 1) {
+    hotelBookingsLoading.value = true;
+    hotelBookingsError.value = "";
+
+    try {
+        await hotelStore.fetchHotelBookings({ page });
+        hotelBookingsLoaded.value = true;
+    } catch (e) {
+        hotelBookingsError.value = e.response?.data?.message || "Unable to load hotel bookings.";
+    } finally {
+        hotelBookingsLoading.value = false;
+    }
+}
+
+const formatHotelMoney = (booking) => {
+    const money = booking.price_snapshot?.selling_money || {
+        amount: booking.total_fare,
+        currency: booking.currency,
+    };
+
+    if (money?.amount === null || money?.amount === undefined || !money?.currency) {
+        return "Unavailable";
+    }
+
+    return `${money.currency} ${Number(money.amount).toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    })}`;
+};
 
 
 /* ------------------------------------------------------------------ */
@@ -321,6 +359,9 @@ onMounted(() => {
     fetchAgentDeposits();
     fetchAgentLedger();
     fetchBookings();
+    if (activeTab.value === "hotel-bookings") {
+        fetchHotelBookings();
+    }
 });
 
 watch(user_id, (id) => {
@@ -330,6 +371,15 @@ watch(user_id, (id) => {
         fetchAgentDeposits();
         fetchAgentLedger();
         fetchBookings();
+        if (activeTab.value === "hotel-bookings") {
+            fetchHotelBookings();
+        }
+    }
+});
+
+watch(activeTab, (tab) => {
+    if (tab === "hotel-bookings" && !hotelBookingsLoaded.value) {
+        fetchHotelBookings();
     }
 });
 </script>
@@ -356,6 +406,15 @@ watch(user_id, (id) => {
                 ]">
                     <TicketCheck class="h-4 w-4" aria-hidden="true" />
                     Bookings Overview
+                </button>
+                <button @click="activeTab = 'hotel-bookings'" :class="[
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
+                    activeTab === 'hotel-bookings'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                ]">
+                    <Building2 class="h-4 w-4" aria-hidden="true" />
+                    Hotel Bookings
                 </button>
                 <button @click="activeTab = 'deposits'" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
@@ -769,6 +828,66 @@ watch(user_id, (id) => {
 
                             </p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hotel Bookings Tab -->
+            <div v-show="activeTab === 'hotel-bookings'" class="p-6">
+                <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Hotel Bookings</h2>
+                        <p class="mt-1 text-sm text-gray-500">Your confirmed hotel reservations and vouchers.</p>
+                    </div>
+                    <Button class="text-white" @click="router.push({ name: 'HotelSearch' })">
+                        Search Hotels
+                    </Button>
+                </div>
+
+                <div v-if="hotelBookingsLoading" class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-gray-200 px-4 py-12" role="status" aria-live="polite">
+                    <LoaderIcon class="h-10 w-10 animate-spin text-primary" />
+                    <p class="mt-3 text-sm font-medium text-gray-600">Loading hotel bookings…</p>
+                </div>
+
+                <div v-else-if="hotelBookingsError" class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-12 text-center">
+                    <InboxIcon class="h-10 w-10 text-red-400" />
+                    <p class="mt-3 font-medium text-red-600">{{ hotelBookingsError }}</p>
+                    <Button class="mt-4 text-white" @click="fetchHotelBookings()">Try again</Button>
+                </div>
+
+                <div v-else-if="!hotelBookings.length" class="rounded-lg border border-gray-200 px-4 py-12 text-center">
+                    <Building2 class="mx-auto h-10 w-10 text-gray-300" />
+                    <p class="mt-3 font-medium text-gray-700">No hotel bookings found.</p>
+                    <p class="mt-1 text-sm text-gray-500">Your hotel reservations will appear here once booked.</p>
+                </div>
+
+                <div v-else class="space-y-3">
+                    <article v-for="booking in hotelBookings" :key="booking.booking_id" class="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2.5 py-1 text-xs font-bold uppercase" :class="booking.status === 'cancelled' ? 'bg-red-100 text-red-700' : booking.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
+                                    {{ booking.status || 'pending' }}
+                                </span>
+                                <span class="text-xs text-gray-500">Ref: {{ booking.booking_reference_id || '—' }}</span>
+                            </div>
+                            <h3 class="mt-2 truncate text-base font-semibold text-gray-950">{{ booking.hotel?.name || 'Hotel booking' }}</h3>
+                            <p class="mt-1 text-sm text-gray-600">{{ booking.check_in || '—' }} to {{ booking.check_out || '—' }}</p>
+                            <p class="mt-1 text-sm font-semibold text-gray-800">{{ formatHotelMoney(booking) }}</p>
+                        </div>
+                        <Button class="shrink-0 text-white" @click="router.push({ name: 'HotelBookingDetails', query: { booking_id: booking.booking_id } })">
+                            View Voucher
+                            <ChevronRight class="ml-1 h-4 w-4" />
+                        </Button>
+                    </article>
+
+                    <div v-if="hotelBookingMeta?.last_page > 1" class="flex items-center justify-between pt-3 text-sm">
+                        <Button variant="outline" :disabled="hotelBookingMeta.current_page <= 1 || hotelBookingsLoading" @click="fetchHotelBookings(hotelBookingMeta.current_page - 1)">
+                            Previous
+                        </Button>
+                        <span class="text-gray-500">Page {{ hotelBookingMeta.current_page }} of {{ hotelBookingMeta.last_page }}</span>
+                        <Button variant="outline" :disabled="hotelBookingMeta.current_page >= hotelBookingMeta.last_page || hotelBookingsLoading" @click="fetchHotelBookings(hotelBookingMeta.current_page + 1)">
+                            Next
+                        </Button>
                     </div>
                 </div>
             </div>

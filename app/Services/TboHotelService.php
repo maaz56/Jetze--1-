@@ -5,6 +5,7 @@ namespace App\Services;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -119,16 +120,23 @@ class TboHotelService
         }
 
         try {
+            $logPayload = $endpoint === 'Book'
+                ? Arr::except($payload, ['CustomerDetails', 'EmailId', 'PhoneNumber', 'PaymentInfo'])
+                : $payload;
+
             Log::info('TBO Hotel API request', [
                 'method' => $method,
                 'endpoint' => $endpoint,
-                'payload' => $payload,
+                'payload' => $logPayload,
             ]);
 
             $response = $this->client->request($method, $url, $options);
             $body = (string) $response->getBody();
 
-            Log::info($response->getBody());
+            Log::info('TBO Hotel API response received', [
+                'endpoint' => $endpoint,
+                'status' => $response->getStatusCode(),
+            ]);
             $decoded = json_decode($body, true);
 
             if (!is_array($decoded)) {

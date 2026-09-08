@@ -63,6 +63,20 @@ Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSession
 Route::prefix('hotels')->group(function () {
     Route::get('suggestions', [HotelController::class, 'suggestions']);
     Route::post('search', [HotelController::class, 'search']);
+    Route::post('prebook', [HotelController::class, 'prebook']);
+    Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->whereUuid('prebookUuid');
+    Route::post('book', [HotelController::class, 'book']);
+    Route::get('bookings', [HotelController::class, 'bookings'])->middleware('auth:sanctum');
+    Route::get('bookings/{bookingUuid}', [HotelController::class, 'showBooking'])->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/details', [HotelController::class, 'refreshBookingDetails'])->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'cancelBooking'])->whereUuid('bookingUuid');
+});
+
+Route::prefix('admin/hotels')->middleware('auth:sanctum')->group(function () {
+    Route::get('bookings', [HotelController::class, 'adminBookings']);
+    Route::get('bookings/{bookingUuid}', [HotelController::class, 'adminShowBooking'])->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/details', [HotelController::class, 'adminRefreshBookingDetails'])->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'adminCancelBooking'])->whereUuid('bookingUuid');
 });
 
 

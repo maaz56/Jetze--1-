@@ -1050,7 +1050,7 @@ onMounted(() => {
         </div>
     </div>
     <div
-        :class="flightType === 'multi-city' ? 'h-auto min-h-[24rem]' : 'min-h-[24rem]'"
+        :class="activeTab === 'hotels' || flightType === 'multi-city' ? 'h-auto min-h-[24rem]' : 'min-h-[24rem]'"
         class="bg-white shadow-2xl mt-4 rounded-2xl border border-gray-200 overflow-visible max-w-7xl mx-auto"
     >
         <!-- Top Navigation Tabs -->
@@ -1766,8 +1766,17 @@ onMounted(() => {
                 </div>
             </div>
 
-            <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn">
-                <!-- <HotelSearchHeader /> -->
+            <div v-else-if="activeTab === 'hotels'" class="animate-fadeIn w-full">
+                <div class="mb-5">
+                    <h1 class="hidden text-left text-3xl font-semibold tracking-tight text-gray-900 sm:block lg:text-4xl">
+                        Discover Your Ideal Stay
+                    </h1>
+                    <p class="hidden text-left text-sm font-light text-gray-600 sm:mt-1 sm:block lg:text-lg">
+                        Search, compare, and book hotels for your next trip.
+                    </p>
+                </div>
+
+                <HotelSearchHeader />
             </div>
 
             <!-- Other Tabs (Coming Soon) -->
