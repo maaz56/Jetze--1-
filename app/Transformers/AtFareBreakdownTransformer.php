@@ -39,6 +39,11 @@ class AtFareBreakdownTransformer
                     $providerCurrency,
                     $displayCurrency,
                 );
+                $grossFareMoney = $this->money(
+                    data_get($journey, 'GrossFare', data_get($journey, 'NetFare', 0)),
+                    $providerCurrency,
+                    $displayCurrency,
+                );
 
                 $breakdowns[] = [
                     'flight_index' => $flightIndex,
@@ -46,8 +51,11 @@ class AtFareBreakdownTransformer
                         'name_class' => data_get($journey, 'FCType') ?? data_get($selectedFare, 'name_class'),
                         'class' => data_get($journey, 'FareType') ?? data_get($selectedFare, 'class'),
                         'provider_booking_money' => $netFareMoney['provider_money'],
-                        'base_money' => $netFareMoney['base_money'],
-                        'display_money' => $netFareMoney['display_money'],
+                        'provider_gross_money' => $grossFareMoney['provider_money'],
+                        'net_money' => $netFareMoney,
+                        'gross_money' => $grossFareMoney,
+                        'base_money' => $grossFareMoney['base_money'],
+                        'display_money' => $grossFareMoney['display_money'],
                         'passenger_fares' => $this->passengerFares(
                             data_get($fares, 'PTCFare', []),
                             $response,
@@ -62,7 +70,7 @@ class AtFareBreakdownTransformer
                         'service_charges' => $this->money($this->serviceCharges($fares), $providerCurrency, $displayCurrency),
                         'surcharge' => $this->money(0, $providerCurrency, $displayCurrency),
                         'discount' => $this->money(data_get($fares, 'TotalCommission', 0), $providerCurrency, $displayCurrency),
-                        'total_price' => $this->money(data_get($journey, 'NetFare', 0), $providerCurrency, $displayCurrency),
+                        'total_price' => $grossFareMoney,
                     ],
                 ];
 
@@ -94,7 +102,11 @@ class AtFareBreakdownTransformer
                     'service_charges' => $this->displayMoney($this->serviceCharges($passengerFare), $providerCurrency, $displayCurrency),
                     'surchage' => $this->displayMoney(0, $providerCurrency, $displayCurrency),
                     'discount' => $this->displayMoney(data_get($passengerFare, 'Discount', 0), $providerCurrency, $displayCurrency),
-                    'total_price' => $this->displayMoney(data_get($passengerFare, 'NetFare', 0), $providerCurrency, $displayCurrency),
+                    'total_price' => $this->displayMoney(
+                        data_get($passengerFare, 'GrossFare', data_get($passengerFare, 'NetFare', 0)),
+                        $providerCurrency,
+                        $displayCurrency,
+                    ),
                 ],
             ];
         }, $passengerFares);

@@ -10,7 +10,7 @@ export function cn(...inputs) {
 const DEFAULT_CURRENCY_CODE = "AED";
 const selectedCurrencyCodeState = ref(readStoredCurrencyCode());
 
-/** Return the currency permanently assigned to the current public domain. */
+/** Return the default currency assigned to the current public domain. */
 export function getDomainCurrencyCode(hostname) {
     const host = String(
         hostname ??
@@ -32,17 +32,19 @@ export function getDomainCurrencyCode(hostname) {
 }
 
 function readStoredCurrencyCode() {
-    const domainCurrency = getDomainCurrencyCode();
-
-    if (domainCurrency) {
-        return domainCurrency;
-    }
-
     if (typeof localStorage === "undefined") {
-        return DEFAULT_CURRENCY_CODE;
+        return getDomainCurrencyCode() || DEFAULT_CURRENCY_CODE;
     }
 
-    return normalizeCurrencyCode(localStorage.getItem("currencyCode"));
+    const storedCurrency = String(localStorage.getItem("currencyCode") || "")
+        .trim()
+        .toUpperCase();
+
+    if (/^[A-Z]{3}$/.test(storedCurrency)) {
+        return storedCurrency;
+    }
+
+    return getDomainCurrencyCode() || DEFAULT_CURRENCY_CODE;
 }
 
 function normalizeCurrencyCode(currencyCode) {
@@ -56,11 +58,11 @@ function normalizeCurrencyCode(currencyCode) {
 }
 
 export function getSelectedCurrencyCode() {
-    return getDomainCurrencyCode() || selectedCurrencyCodeState.value;
+    return selectedCurrencyCodeState.value;
 }
 
 export function setSelectedCurrencyCode(currencyCode) {
-    const normalizedCode = getDomainCurrencyCode() || normalizeCurrencyCode(currencyCode);
+    const normalizedCode = normalizeCurrencyCode(currencyCode);
     selectedCurrencyCodeState.value = normalizedCode;
 
     if (typeof localStorage !== "undefined") {

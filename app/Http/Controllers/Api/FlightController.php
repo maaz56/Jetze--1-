@@ -565,6 +565,14 @@ class FlightController extends Controller
                 'amount' => $quote->provider_amount,
                 'currency' => $quote->provider_currency,
             ],
+            'provider_gross_money' => [
+                'amount' => $quote->provider_gross_amount,
+                'currency' => $quote->provider_currency,
+            ],
+            'provider_gross_base_money' => [
+                'amount' => $quote->provider_gross_aed_amount,
+                'currency' => 'AED',
+            ],
             'base_money' => [
                 'amount' => $quote->aed_amount,
                 'currency' => 'AED',

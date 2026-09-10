@@ -23,8 +23,12 @@ html{
   --popover: 0 0% 99%;
   --popover-foreground: 44 25% 15%;
 
-  /* Primary — your main brand blue */
-  --primary: 219 95% 49%;
+  /* Slightly brighter, bluer evolution of the hotel-search brand blue. */
+  --primary: 211 65% 50%;
+  --primary-dark: 211 62% 37%;
+  --primary-light: 205 65% 72%;
+  --primary-button-start: 211 72% 58%;
+  --primary-button-end: 211 65% 47%;
   --primary-foreground: 0 0% 100%;
 
   /* Secondary — white */
@@ -49,7 +53,7 @@ html{
   /* Border, input, ring — tuned to primary system */
   --border: 1.1 20% 80%;
   --input: 1.1 20% 80%;
-  --ring: 219 95% 49%;
+  --ring: 211 65% 50%;
 
   --radius: 0.5rem;
     
@@ -79,7 +83,11 @@ html{
         --popover: 44 30% 5%;
         --popover-foreground: 44 20% 90%;
     
-        --primary: 219 95% 49%;
+        --primary: 211 65% 50%;
+        --primary-dark: 211 62% 37%;
+        --primary-light: 205 65% 72%;
+        --primary-button-start: 211 72% 58%;
+        --primary-button-end: 211 65% 47%;
         --primary-foreground: 0 0% 100%;
 
         --secondary: 0 0% 100%;
@@ -96,7 +104,7 @@ html{
     
         --border: 44 20% 25%;
         --input: 44 20% 25%;
-        --ring: 219 95% 49%; --chart-1: 220 70% 50%; --chart-2: 160 60% 45%; --chart-3: 30 80% 55%; --chart-4: 280 65% 60%; --chart-5: 340 75% 55%;
+        --ring: 211 65% 50%; --chart-1: 220 70% 50%; --chart-2: 160 60% 45%; --chart-3: 30 80% 55%; --chart-4: 280 65% 60%; --chart-5: 340 75% 55%;
     }
 }
 

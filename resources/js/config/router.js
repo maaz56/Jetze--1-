@@ -6,6 +6,17 @@ import routes from "../services/routes";
 const router = createRouter({
     history: createWebHistory(),
     routes: routes,
+    scrollBehavior(to, from, savedPosition) {
+        if (savedPosition) {
+            return savedPosition;
+        }
+
+        if (to.hash) {
+            return { el: to.hash, top: 16 };
+        }
+
+        return { top: 0, left: 0 };
+    },
 });
 
 router.beforeEach(async (to, from, next) => {

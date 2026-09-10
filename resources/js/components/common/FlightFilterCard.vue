@@ -69,6 +69,10 @@ const props = defineProps({
         type: String,
         default: "0",
     },
+    variant: {
+        type: String,
+        default: "default",
+    },
 });
 const emit = defineEmits(["update:modelValue", "search"]);
 
@@ -542,7 +546,12 @@ const startCountdown = (remainingTime) => {
 </script>
 
 <template>
-    <div class="flight-filter-shell">
+    <div
+        :class="[
+            'flight-filter-shell',
+            { 'flight-filter-shell--edge-overlap': variant === 'edge-overlap' },
+        ]"
+    >
         <div v-if="activeTab === 'flights'">
             <div v-if="showRoutePreview"
                 class="sm:hidden bg-primary backdrop-blur-md border border-white/20  p-3 flex items-center justify-between gap-2 shadow-md"
@@ -576,7 +585,7 @@ const startCountdown = (remainingTime) => {
 
                 <!-- Flight Search Form -->
                 <div
-                    class="container"
+                    class="container flight-filter-content"
                     v-if="
                         localValue.flightType === 'one-way' ||
                         localValue.flightType === 'return'
@@ -891,16 +900,14 @@ const startCountdown = (remainingTime) => {
                             @click="handleSearch"
                             class="flight-search-button"
                         >
-                            <Search class="w-4 h-4" />
-                            <span class="rtl:text-right ltr:text-left">
-                                {{ $t("search") }}
-                            </span>
+                            <Search class="w-6 h-6" />
+                            <p class="text-2xl">Search</p>
                         </button>
                     </div>
                 </div>
 
                 <!-- Multi-City Form -->
-                <div v-else class="container">
+                <div v-else class="container flight-filter-content">
                     <div class="flight-search-header">
                         <div class="flight-type-cell">
                             <Popover v-model:open="isFlightTypeOpen">
@@ -1190,14 +1197,30 @@ const startCountdown = (remainingTime) => {
 
 <style scoped>
 .flight-filter-shell {
-    background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
+    background: linear-gradient(180deg, #f8fafc 0%, hsl(var(--primary) / 0.08) 100%);
+}
+
+.flight-filter-shell--edge-overlap {
+    background: transparent;
+}
+
+.flight-filter-shell--edge-overlap .flight-filter-panel {
+    padding: 0;
+    background: transparent;
+    border-bottom: 0;
 }
 
 .flight-filter-panel {
     background:
-        radial-gradient(circle at 18% 0%, rgba(0, 142, 255, 0.12), transparent 30%),
-        linear-gradient(180deg, #ffffff 0%, #f3f7fb 100%);
+        radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.12), transparent 30%),
+        linear-gradient(180deg, #ffffff 0%, hsl(var(--primary) / 0.05) 100%);
     border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+/* Keep the complete flight form—including its Search action—20% narrower than
+   its surrounding header on desktop, without compromising the mobile layout. */
+.flight-filter-content {
+    width: 80%;
 }
 
 .flight-search-header {
@@ -1205,7 +1228,6 @@ const startCountdown = (remainingTime) => {
     grid-template-columns: 150px minmax(0, 1fr) 138px;
     align-items: stretch;
     overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 8px;
     background: #ffffff;
     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
@@ -1221,9 +1243,9 @@ const startCountdown = (remainingTime) => {
     min-height: 76px;
     width: 100%;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0.35rem;
-    padding: 0.85rem 1rem;
+    padding: 0.6rem 1rem;
     text-align: left;
     transition: background-color 0.2s ease;
 }
@@ -1249,7 +1271,7 @@ const startCountdown = (remainingTime) => {
     align-items: center;
     justify-content: center;
     gap: 0.55rem;
-    background: linear-gradient(135deg, #0f7df4 0%, #0b55d9 100%);
+    background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
     color: #ffffff;
     font-size: 1rem;
     font-weight: 800;
@@ -1413,6 +1435,10 @@ const startCountdown = (remainingTime) => {
 
 /* Additional responsive utilities if needed */
 @media (max-width: 1024px) {
+    .flight-filter-content {
+        width: 100%;
+    }
+
     .flight-search-header {
         grid-template-columns: 1fr;
     }

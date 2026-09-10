@@ -8,9 +8,26 @@ import LoginMini from "@/pages/LoginMini.vue";
 import { useStore } from "vuex";
 import { computed } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
+import { useRoute } from "vue-router";
 
 const store = useAuthStore();
+const route = useRoute();
 const isDialogOpen = computed(() => store.isDialogOpen);
+// Only pages represented in the shared public navigation may render the
+// application footer. About, Contact, and Blog currently use Blade templates
+// and render their marketing footer there; their names are retained here for
+// when those pages are served by this layout in the future.
+const sharedNavFooterRoutes = new Set([
+  "Home",
+  "FlightSearch",
+  "AboutUs",
+  "ClientContactUs",
+  "ContactUs",
+  "Blogs",
+  "Blog",
+  "BlogBySlug",
+]);
+const showFooter = computed(() => sharedNavFooterRoutes.has(String(route.name)));
 async function fetchCountryCode() {
   try {
     const res = await fetch(import.meta.env.VITE_IPAPI_URL);
@@ -68,7 +85,7 @@ onMounted(() => {
       <!-- extending pages here -->
       <router-view></router-view>
     </main>
-    <Footer />
+    <!-- <Footer v-if="showFooter" /> -->
   </section>
 
   <WhatsappButton />

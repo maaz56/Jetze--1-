@@ -748,8 +748,9 @@ private function extractTrips($tripsData): array
         $pricingResponse = $this->sendPriceRequest($pricingRequest);
         $tui = data_get($pricingResponse, 'TUI');
         $netAmount = data_get($pricingResponse, 'NetAmount');
+        $grossAmount = data_get($pricingResponse, 'GrossAmount');
 
-        if (!is_array($pricingResponse) || empty($tui) || !is_numeric($netAmount)) {
+        if (!is_array($pricingResponse) || empty($tui) || !is_numeric($netAmount) || !is_numeric($grossAmount)) {
             throw ValidationException::withMessages([
                 'flight_ref_id' => 'AT could not confirm the latest fare. Please search again.',
             ]);
@@ -758,6 +759,7 @@ private function extractTrips($tripsData): array
         return [
             'tui' => $tui,
             'net_amount' => (string) $netAmount,
+            'gross_amount' => (string) $grossAmount,
             'currency' => strtoupper((string) (data_get($pricingResponse, 'CurrencyCode') ?? data_get($flight, 'currencyCode'))),
             'fare_type' => data_get($pricingResponse, 'FareType') ?? data_get($flight, 'provider.fare_type'),
             'priced_at' => now()->toIso8601String(),

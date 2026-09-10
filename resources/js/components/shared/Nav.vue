@@ -81,7 +81,9 @@ const error = ref(null);
 const isLoginMode = ref(true)
 const emit = defineEmits(['login-click', 'search-click'])
 const isScrolled = ref(false);
-const isFlightSearch = computed(() => route.name === "FlightSearch");
+const isSearchResultsPage = computed(() =>
+    ["FlightSearch", "HotelSearch"].includes(String(route.name)),
+);
 
 const handleScroll = () => {
     isScrolled.value = window.scrollY > 20;
@@ -211,7 +213,7 @@ onUnmounted(() => {
     <div>
         <nav
         :class="[
-            isFlightSearch
+            isSearchResultsPage
                 ? 'relative z-40 text-slate-900 transition-all duration-300'
                 : 'fixed top-0 inset-x-0 z-40 text-slate-900 transition-all duration-300',
             isScrolled
@@ -219,7 +221,7 @@ onUnmounted(() => {
                 : 'bg-white/92 backdrop-blur-md border-b border-slate-200',
         ]"
     >
-            <div class="container mx-auto px-4">
+            <div class="container shared-nav-content mx-auto px-4">
                 <div class=" flex items-center justify-between h-20 px-4 lg:px-6">
                 
                     <router-link :to="{ name: 'Home' }" class="flex items-center shrink-0">
@@ -274,14 +276,21 @@ onUnmounted(() => {
                         </component>
                     </div>
 
-                    <div v-if="user" class="hidden md:flex items-center px-4 border-l border-slate-200 gap-4 shrink-0 whitespace-nowrap">
-                        <div class="flex flex-col items-end">
+                    <div v-if="user" class="hidden md:flex items-start px-4 border-l border-slate-200 gap-4 shrink-0 whitespace-nowrap">
+                        <div class="flex flex-col items-start">
                             <span class="text-[10px] text-slate-500 uppercase tracking-wider">Balance</span>
-                            <div class="flex items-center font-bold text-green-600">
+                            <div class="flex items-center font-bold text-green-600 mt-1">
                                 <Wallet class="h-3 w-3 mr-1" />
                                 <span class="text-sm">{{ selectedCurrencySymbol }}</span>
                                 <span class="mx-1 text-slate-300">|</span>
                                 <span class="text-sm">{{ formatBalanceAmount(agentLedger?.balance_money?.amount) }}</span>
+                                <button
+                                    @click="goToDashboard('deposits')"
+                                    class="group ml-2 inline-flex items-center gap-1 border-l border-slate-200 pl-2 text-xs font-bold text-primary transition-colors hover:text-primary/75 focus:outline-none focus:ring-2 focus:ring-primary/35 focus:ring-offset-2"
+                                >
+                                    <Coins class="h-3.5 w-3.5 transition-transform group-hover:rotate-12" />
+                                    Top Up
+                                </button>
                             </div>
                         </div>
                         <div class="flex flex-col">
@@ -301,9 +310,7 @@ onUnmounted(() => {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <button @click="goToDashboard('deposits')" class="bg-green-600 hover:bg-green-500 p-1.5 rounded-full transition-colors flex-none">
-                            <Coins class="h-4 w-4" />
-                        </button>
+
                     </div>
 
                     <div class="flex items-center ml-4 space-x-3">
@@ -385,7 +392,7 @@ onUnmounted(() => {
             </div>
             </div>
         </nav>
-        <div aria-hidden="true" class="h-20"></div>
+        <div v-if="!isSearchResultsPage" aria-hidden="true" class="h-20"></div>
     </div>
 </template>
 
@@ -397,6 +404,17 @@ onUnmounted(() => {
     backdrop-filter: blur(14px) saturate(160%);
     -webkit-backdrop-filter: blur(14px) saturate(160%);
     border-radius: 1rem;
+}
+
+/* Align the shared navigation with the reduced desktop search/results width. */
+.shared-nav-content {
+    width: 80%;
+}
+
+@media (max-width: 1024px) {
+    .shared-nav-content {
+        width: 100%;
+    }
 }
 
 </style>

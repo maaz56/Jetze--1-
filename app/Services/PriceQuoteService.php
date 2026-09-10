@@ -69,15 +69,17 @@ class PriceQuoteService
     ): PriceQuote {
         $providerCurrency = strtoupper((string) $providerPricing['currency']);
         $providerAmount = (string) $providerPricing['net_amount'];
+        $providerGrossAmount = (string) $providerPricing['gross_amount'];
         $commercial = $this->commercialPricingService->quoteTotals(
             $flight,
             $fareReferences,
             $providerAmount,
+            $providerGrossAmount,
             $providerCurrency,
             $displayCurrency,
         );
 
-        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $providerCurrency, $providerAmount, $commercial) {
+        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
             $quote = PriceQuote::create([
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $user->id,
@@ -86,6 +88,8 @@ class PriceQuoteService
                 'provider_currency' => $providerCurrency,
                 'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
                 'provider_aed_amount' => $commercial['provider_cost_base_money']['amount'],
+                'provider_gross_amount' => $providerGrossAmount,
+                'provider_gross_aed_amount' => $commercial['provider_gross_base_money']['amount'],
                 'display_amount' => $commercial['selling_display_money']['amount'],
                 'display_currency' => $commercial['selling_display_money']['currency'],
                 'display_rate_to_aed' => $this->currencyConversionService->rateToBase($commercial['selling_display_money']['currency']),

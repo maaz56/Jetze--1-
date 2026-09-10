@@ -1,7 +1,6 @@
 <script setup>
 import Nav from "../components/shared/Nav.vue";
 import Sidebar from "../components/agent/Sidebar.vue";
-import Footer from "../components/common/Footer.vue";
 </script>
 
 <template>
@@ -17,5 +16,4 @@ import Footer from "../components/common/Footer.vue";
             </div>
         </main>
     </section>
-    <Footer />
 </template>

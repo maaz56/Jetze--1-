@@ -78,6 +78,7 @@ import OffersSection from "./Home/OffersSection.vue";
 import InfoCards from "./Home/InfoCards.vue";
 import Collections from "./Home/Collections.vue";
 import TrendingRoutes from "./Home/TrendingRoutes.vue";
+import Footer from "@/components/common/Footer.vue";
 
 const activeTab = ref("flights");
 const tabs = [
@@ -1193,7 +1194,7 @@ onUnmounted(() => {
 
       </div>
     </section>
-
+    <Footer/>
   </div>
 </template>
 

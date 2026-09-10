@@ -63,7 +63,7 @@ const openDatePicker = (input) => {
   input.click();
 };
 const heroBackground = {
-  backgroundImage: "linear-gradient(180deg, rgba(10, 20, 40, 0.35), rgba(10, 20, 40, 0.15) 55%, transparent), linear-gradient(120deg, #173a63 0%, #2f6fb0 55%, #7fb8dd 100%)",
+  backgroundImage: "linear-gradient(180deg, rgba(10, 20, 40, 0.35), rgba(10, 20, 40, 0.15) 55%, transparent), linear-gradient(120deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 55%, hsl(var(--primary-light)) 100%)",
 };
 
 const MAX_ADULTS_PER_ROOM = 10;
@@ -335,10 +335,12 @@ const formatMoney = (money) => {
 
 const primaryRoom = (hotelItem) => hotelItem.lowest_room || hotelItem.rooms?.[0] || null;
 
-const roomMoney = (room, hotelItem) => room?.display_money || {
-  amount: room?.total_fare,
-  currency: room?.currency || hotelItem?.currency,
-};
+function roomMoney(room, hotelItem) {
+  return room?.display_money || {
+    amount: room?.total_fare,
+    currency: room?.currency || hotelItem?.currency,
+  };
+}
 
 const roomTaxMoney = (room, hotelItem) => room?.display_tax_money || {
   amount: room?.total_tax,
@@ -475,26 +477,26 @@ const parseRoomsQuery = (roomsQuery) => {
   }
 };
 
-const loadSearchFromRoute = async () => {
-  const destinationType = route.query.destination_type;
-  const destinationValue = route.query.destination_value;
+const loadSearchFromRoute = async (query = route.query) => {
+  const destinationType = query.destination_type;
+  const destinationValue = query.destination_value;
 
   if (!destinationType || !destinationValue) {
     return;
   }
 
-  const destinationLabel = route.query.destination_label || String(destinationValue);
+  const destinationLabel = query.destination_label || String(destinationValue);
   selectedDestination.value = {
     type: String(destinationType),
     value: String(destinationValue),
     label: String(destinationLabel),
   };
   destinationQuery.value = String(destinationLabel);
-  checkIn.value = route.query.check_in ? String(route.query.check_in) : checkIn.value;
-  checkOut.value = route.query.check_out ? String(route.query.check_out) : checkOut.value;
-  guestNationality.value = route.query.guest_nationality ? String(route.query.guest_nationality).toUpperCase() : guestNationality.value;
+  checkIn.value = query.check_in ? String(query.check_in) : checkIn.value;
+  checkOut.value = query.check_out ? String(query.check_out) : checkOut.value;
+  guestNationality.value = query.guest_nationality ? String(query.guest_nationality).toUpperCase() : guestNationality.value;
 
-  const parsedRooms = parseRoomsQuery(route.query.rooms);
+  const parsedRooms = parseRoomsQuery(query.rooms);
   if (parsedRooms) {
     rooms.value = parsedRooms;
   }
@@ -502,37 +504,34 @@ const loadSearchFromRoute = async () => {
   await searchHotels();
 };
 
-onMounted(() => {
-  loadSearchFromRoute();
-});
-
 watch(
   () => route.fullPath,
-  () => {
-    loadSearchFromRoute();
+  (fullPath, previousFullPath) => {
+    if (fullPath === previousFullPath) {
+      return;
+    }
+
+    loadSearchFromRoute({ ...route.query });
   },
+  { immediate: true },
 );
 </script>
 
 <template>
-  <div :class="props.embedded ? 'bg-transparent' : 'bg-[#f5f8fb]'">
+  <div :class="props.embedded ? 'bg-transparent' : 'bg-primary/[0.04]'">
     <section
       :class="[
         'relative isolate overflow-visible bg-slate-950 bg-cover bg-center',
         props.embedded
           ? 'bg-transparent'
-          : 'min-h-[160px] sm:min-h-[175px]',
+          : 'hotel-results-search sticky top-0 z-30 h-[144px] sm:h-[158px]',
       ]"
       :style="!props.embedded ? heroBackground : undefined"
     >
-      <div :class="props.embedded ? 'relative mx-auto max-w-7xl px-0 py-0' : 'relative mx-auto max-w-7xl px-4 pt-8 sm:pt-10'">
-        <h2 v-if="!props.embedded" class="mb-5 text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          Book Domestic and International Hotels
-        </h2>
-
-        <form :class="props.embedded ? 'bg-white shadow-none' : 'relative z-10 overflow-visible rounded border border-white/30 bg-white/95 shadow-[0_20px_45px_-20px_rgba(15,23,42,0.55)] backdrop-blur-sm lg:translate-y-6'" @submit.prevent="searchHotels">
+      <div :class="props.embedded ? 'relative mx-auto max-w-7xl px-0 py-0' : 'hotel-results-search__content relative mx-auto h-full max-w-7xl px-4 pt-8 sm:pt-10'">
+        <form :class="props.embedded ? 'bg-white shadow-none' : 'hotel-results-search__form z-10 overflow-visible rounded border border-white/30 bg-white/95 shadow-[0_20px_45px_-20px_rgba(15,23,42,0.55)] backdrop-blur-sm'" @submit.prevent="searchHotels">
           <div class="grid grid-cols-1 divide-y divide-slate-200 lg:grid-cols-12 lg:divide-x lg:divide-y-0">
-            <div class="relative p-4 sm:p-5 lg:col-span-3">
+            <div class="relative p-4 sm:p-5 lg:col-span-3 lg:py-4">
               <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
                 <MapPin class="h-3.5 w-3.5" />
                 Destination or property
@@ -584,7 +583,7 @@ watch(
               </div>
             </div>
 
-            <div class="p-4 sm:p-5 lg:col-span-2">
+            <div class="p-4 sm:p-5 lg:col-span-2 lg:py-4">
               <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
                 <CalendarDays class="h-3.5 w-3.5" />
                 Check in
@@ -596,7 +595,7 @@ watch(
               <input ref="checkInInput" v-model="checkIn" type="date" :min="formatDateInput(today)" class="sr-only" aria-label="Check in date" />
             </div>
 
-            <div class="p-4 sm:p-5 lg:col-span-2">
+            <div class="relative p-4 sm:p-5 lg:col-span-2 lg:py-4">
               <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
                 <CalendarDays class="h-3.5 w-3.5" />
                 Check out
@@ -606,10 +605,18 @@ watch(
                 <CalendarDays class="h-4 w-4 text-slate-500" />
               </button>
               <input ref="checkOutInput" v-model="checkOut" type="date" :min="checkIn" class="sr-only" aria-label="Check out date" />
-              <p class="mt-1.5 text-xs font-semibold text-slate-500">{{ nights }} Night{{ nights === 1 ? "" : "s" }}</p>
+              <p class="mt-1.5 text-xs font-semibold text-slate-500 lg:hidden">{{ nights }} Night{{ nights === 1 ? "" : "s" }}</p>
+              <div class="absolute left-0 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 flex-col items-center lg:flex" aria-label="Stay duration">
+                <span class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-bold text-slate-900 shadow-sm">
+                  {{ nights }}
+                </span>
+                <span class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Night{{ nights === 1 ? "" : "s" }}
+                </span>
+              </div>
             </div>
 
-            <div ref="guestsPanelRef" class="relative p-4 sm:p-5 lg:col-span-3">
+            <div ref="guestsPanelRef" class="relative p-4 sm:p-5 lg:col-span-3 lg:py-4">
               <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
                 <Users class="h-3.5 w-3.5" />
                 Rooms &amp; guests
@@ -716,7 +723,7 @@ watch(
             </div>
 
             <div class="flex items-center p-4 sm:p-5 lg:col-span-2 lg:p-3">
-              <Button type="submit" class="h-12 w-full rounded border-0 bg-[linear-gradient(180deg,#1657c4,#0f3f94)] px-6 text-base font-bold text-white shadow-lg shadow-[#0f3f94]/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-70 lg:h-14" :is-loading="isSearching">
+              <Button type="submit" class="h-12 w-full rounded border-0 bg-[linear-gradient(180deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] px-6 text-base font-bold text-white shadow-lg shadow-primary/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-70 lg:h-14" :is-loading="isSearching">
                 <Search class="h-5 w-5" />
                 Search
               </Button>
@@ -726,7 +733,7 @@ watch(
       </div>
     </section>
 
-    <section :class="props.embedded ? 'mx-auto max-w-7xl px-0 pt-5 pb-0' : 'mx-auto max-w-7xl px-4 py-8 lg:pt-24'">
+    <section :class="props.embedded ? 'mx-auto max-w-7xl px-0 pt-5 pb-0' : 'mx-auto max-w-7xl px-4 py-8'">
       <div v-if="errorMessage" class="mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         {{ errorMessage }}
         <span v-if="providerStatus?.Description" class="block text-xs opacity-80">{{ providerStatus.Description }}</span>
@@ -942,3 +949,15 @@ watch(
     </section>
   </div>
 </template>
+
+<style scoped>
+@media (min-width: 1024px) {
+  .hotel-results-search__form {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    left: 1rem;
+    transform: translateY(-50%);
+  }
+}
+</style>

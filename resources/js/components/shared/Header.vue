@@ -1416,7 +1416,7 @@ onMounted(() => {
                             <div class="w-full sm:w-48">
                                 <button
                                     @click="searchFlights"
-                                    class="w-full bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 rounded-full p-3 sm:p-4 text-white font-bold flex items-center justify-center gap-2 text-lg sm:text-2xl"
+                                    class="flight-search-button"
                                 >
                                     <Search class="w-5 h-5 sm:w-6 sm:h-6" />
                                     <span
@@ -1776,7 +1776,7 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <!-- <HotelSearchHeader /> -->
+                <HotelSearchHeader />
             </div>
 
             <!-- Other Tabs (Coming Soon) -->
@@ -1821,6 +1821,32 @@ onMounted(() => {
 <style scoped>
 .animate-fadeIn {
     animation: fadeIn 0.5s ease-in-out;
+}
+
+.flight-search-button {
+
+    display: inline-flex;
+    border-radius: .3rem;
+    min-height: 3.5rem;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 800;
+    transition:
+        filter 0.2s ease,
+        transform 0.2s ease;
+}
+
+.flight-search-button:hover {
+    filter: brightness(1.06);
+}
+
+.flight-search-button:active {
+    transform: translateY(1px);
 }
 
 .booking-cell {

@@ -1,6 +1,7 @@
 <!-- <script setup>
 import Nav from "@/components/agent/Nav.vue";
 import Sidebar from "@/components/agent/Sidebar.vue";
+import Footer from "@/components/common/Footer.vue";
 import ApprovelNotice from "@/components/common/ApprovelNotice.vue";
 import { AlertCircleIcon, MailIcon, PhoneIcon, ClockIcon } from 'lucide-vue-next'
 
@@ -177,9 +178,12 @@ import { AlertCircleIcon, ClockIcon, MailIcon, PhoneIcon } from 'lucide-vue-next
 import { useAuthStore } from "@/services/stores/auth";
 import { useFlightStore } from "@/services/stores/flight";
 import { computed, onMounted, provide, ref } from "vue";
+import { useRoute } from "vue-router";
 const authStore = useAuthStore();
+const route = useRoute();
 const flightStore=useFlightStore()
 const isLoadingFlightStore = computed(() => flightStore.isLoading);
+const showFooter = computed(() => route.name === "Flights");
 const user = computed(() => authStore.user);
 const isLoading = ref(true);
 const isSidebarExpanded = ref(true);
@@ -252,6 +256,7 @@ onMounted(() => {
                     <div>
                         <router-view></router-view>
                     </div>
+                    <Footer v-if="showFooter" class="mt-8" />
                 </template>
 
                 <div v-else>
