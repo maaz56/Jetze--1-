@@ -1270,6 +1270,24 @@ function sortedFlightFares(flight) {
     );
 }
 
+// AT maps its NetFare to billable_price. Preserve zero-price fares in the
+// response, but do not show those fares or their route tab in Fare Options.
+function isZeroPriceFare(fare) {
+    const billablePrice = Number(fare?.billable_price);
+
+    return Number.isFinite(billablePrice) && billablePrice === 0;
+}
+
+function visibleSortedFlightFares(flight) {
+    return sortedFlightFares(flight).filter((fare) => !isZeroPriceFare(fare));
+}
+
+const visibleFareOptionFlights = computed(() =>
+    (selectedFlight.value?.leg?.flights ?? [])
+        .map((flight, flightIndex) => ({ flight, flightIndex }))
+        .filter(({ flight }) => visibleSortedFlightFares(flight).length > 0),
+);
+
 function initializeSelectedFares(flight) {
     selectedFares.splice(0, selectedFares.length);
 
@@ -2687,7 +2705,7 @@ watch(isLoggedIn, (newVal) => {
                         />
                     </div>
                     <div>
-                        <p class="text-lg font-semibold text-gray-900 leading-tight">
+                        <p class="text-lg font-semibold text-gray-900 leading-tight w-20">
                             {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
                         </p>
                         <p class="text-sm text-gray-400 font-medium mt-0.5">
@@ -3422,36 +3440,53 @@ watch(isLoggedIn, (newVal) => {
         <!-- Search Expired Dialog -->
         <div
             v-if="showDialog"
-            class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center z-50 justify-center p-8"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+            role="presentation"
         >
-            <div
-                class="bg-white p-4 sm:p-6 rounded shadow-lg w-full sm:w-1/4 text-center"
+            <section
+                class="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="inactive-search-title"
+                aria-describedby="inactive-search-description"
             >
-                <img
-                    src="/public/assets/clock.svg"
-                    alt="Logo"
-                    class="mx-auto mb-4 w-16 sm:w-32"
-                />
-                <h2 class="text-lg font-bold">Still Around?</h2>
-                <p class="mt-2">
-                    Your search has been inactive for more than 15 minutes.
-                    Please refresh the page to update.
-                </p>
-                <div class="mt-4 flex justify-center gap-2">
+                <div class="h-1 bg-primary"></div>
+                <div class="p-6 sm:p-7">
+                    <div class="flex items-start gap-4">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Clock class="h-6 w-6" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Search session</p>
+                            <h2 id="inactive-search-title" class="mt-1 text-xl font-semibold text-slate-900">Still around?</h2>
+                        </div>
+                    </div>
+
+                    <p id="inactive-search-description" class="mt-5 text-sm leading-6 text-slate-600">
+                        Your search has been inactive for more than 15 minutes. Refresh to continue with the latest flight availability and fares.
+                    </p>
+
+                    <div class="mt-5 flex gap-3 rounded-lg border border-primary/15 bg-primary/5 p-3 text-sm text-slate-700">
+                        <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <p>Refreshing may update prices and seat availability.</p>
+                    </div>
+
+                    <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                     <button
                         @click="$router.push({ name: 'Home' })"
-                        class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+                        class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                     >
                         Start new search
                     </button>
                     <button
                         @click="confirmReload"
-                        class="mt-4 text-base px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+                        class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
                     >
                         Refresh
                     </button>
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
 
         <!-- Flight Details Side Panel - RESPONSIVE -->
@@ -3783,9 +3818,10 @@ watch(isLoggedIn, (newVal) => {
 
                                         <!-- Flight Tabs Navigation - Mobile Scrollable -->
                                         <Tabs
+                                            v-if="visibleFareOptionFlights.length"
                                             :default-value="
-                                                selectedFlight?.leg?.flights[0]
-                                                    ?.ref_id
+                                                visibleFareOptionFlights[0]
+                                                    ?.flight?.ref_id
                                             "
                                             class="w-full mt-4 sm:mt-6"
                                         >
@@ -3799,17 +3835,17 @@ watch(isLoggedIn, (newVal) => {
                                             </div>
                                             <!-- Flight Tabs -->
                                             <div
+                                                v-if="visibleFareOptionFlights.length > 1"
                                                 class="side-sheet-scroll mt-3 w-full overflow-x-auto overflow-y-hidden sm:mt-4"
                                             >
                                                 <TabsList
                                                     class="flex w-max min-w-full justify-start items-end gap-2 bg-transparent p-0"
                                                 >
                                                     <TabsTrigger
-                                                        v-for="(
-                                                            flight, flightIndex
-                                                        ) in selectedFlight?.leg
-                                                            ?.flights"
-                                                        :key="flightIndex"
+                                                        v-for="({
+                                                            flight,
+                                                        }) in visibleFareOptionFlights"
+                                                        :key="flight.ref_id"
                                                         :value="flight.ref_id"
                                                         class="relative group flex-shrink-0 text-sm font-medium px-5 py-2.5 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-primary data-[state=inactive]:text-gray-600 hover:text-primary transition"
                                                     >
@@ -3834,13 +3870,18 @@ watch(isLoggedIn, (newVal) => {
 
                                             <!-- Flight Tab Content -->
                                             <TabsContent
-                                                v-for="(
-                                                    flight, flightIndex
-                                                ) in selectedFlight?.leg
-                                                    ?.flights"
-                                                :key="flightIndex"
+                                                v-for="({
+                                                    flight,
+                                                    flightIndex,
+                                                }) in visibleFareOptionFlights"
+                                                :key="flight.ref_id"
                                                 :value="flight.ref_id"
-                                                class="mt-5 space-y-4 pb-6 sm:mt-7 sm:space-y-5 sm:pb-8"
+                                                :class="[
+                                                    'space-y-4 pb-6 sm:space-y-5 sm:pb-8',
+                                                    visibleFareOptionFlights.length > 1
+                                                        ? 'mt-5 sm:mt-7'
+                                                        : 'mt-3 sm:mt-4',
+                                                ]"
                                             >
                                                 <!-- Flight Header - Mobile Compact -->
                                                 <div
@@ -3962,7 +4003,7 @@ watch(isLoggedIn, (newVal) => {
                                                     <div
                                                         v-for="(
                                                             fare, fareIndex
-                                                        ) in sortedFlightFares(flight)"
+                                                        ) in visibleSortedFlightFares(flight)"
                                                         :key="fare.ref_id || fareIndex"
                                                         @click="
                                                             selectFares(

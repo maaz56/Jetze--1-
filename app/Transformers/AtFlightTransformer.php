@@ -147,7 +147,7 @@ class AtFlightTransformer
                 // Process fares
                 $fares = [];
                 foreach ($legData['fares'] as $fare) {
-                    if (!$this->hasPositiveFare($fare['NetFare'] ?? null)) {
+                    if (!$this->hasValidFare($fare['NetFare'] ?? null)) {
                         continue;
                     }
 
@@ -710,7 +710,7 @@ class AtFlightTransformer
                     ($fareJourney['MAC'] ?? '') === ($baseJourney['MAC'] ?? '') &&
                     ($fareJourney['FlightNo'] ?? '') === ($baseJourney['FlightNo'] ?? '')
                 ) {
-                    if (!$this->hasPositiveFare($fareJourney['NetFare'] ?? null)) {
+                    if (!$this->hasValidFare($fareJourney['NetFare'] ?? null)) {
                         continue;
                     }
 
@@ -781,9 +781,13 @@ class AtFlightTransformer
         ];
     }
 
-    private function hasPositiveFare($amount): bool
+    /**
+     * A zero-value fare is valid and must remain visible to the frontend.
+     * Only missing, non-numeric, and negative fare values are invalid.
+     */
+    private function hasValidFare($amount): bool
     {
-        return is_numeric($amount) && bccomp((string) $amount, '0', 8) === 1;
+        return is_numeric($amount) && bccomp((string) $amount, '0', 8) >= 0;
     }
 
     private function addDuration(string $dateTime, string $duration): string

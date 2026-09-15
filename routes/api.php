@@ -63,6 +63,7 @@ Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSession
 Route::prefix('hotels')->group(function () {
     Route::get('suggestions', [HotelController::class, 'suggestions']);
     Route::post('search', [HotelController::class, 'search']);
+    Route::post('details', [HotelController::class, 'details']);
     Route::post('prebook', [HotelController::class, 'prebook']);
     Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->whereUuid('prebookUuid');
     Route::post('book', [HotelController::class, 'book']);

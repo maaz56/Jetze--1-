@@ -1,68 +1,8 @@
 <template>
 
 
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-    <div class=" mx-auto">
-      <div class=" bg-white border mb-6 border-gray-200 mx-auto  py-6 px-4">
-        <div class="relative  flex items-center justify-between  px-4">
-
-          <!-- Step 1 - Completed -->
-          <div class="flex flex-col items-center relative z-10">
-            <div
-              class="w-8 h-8 rounded-full bg-primary border-primary text-white shadow-sm shadow-primary/30 flex items-center justify-center border-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <span class="mt-3 text-sm font-semibold text-gray-700">Information</span>
-          </div>
-
-          <!-- Line (Filled) -->
-          <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full relative">
-            <div class="absolute left-0 top-0 h-full w-full bg-primary rounded-full"></div>
-          </div>
-
-          <!-- Step 2 - Completed -->
-
-          <div class="flex flex-col items-center relative z-10">
-            <div
-              class="w-8 h-8 rounded-full bg-primary border-primary text-white shadow-sm shadow-primary/30 flex items-center justify-center border-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <span class="mt-3 text-sm font-semibold text-gray-700">Addons</span>
-          </div>
-
-          <!-- Line (Filled) -->
-          <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full relative">
-            <div class="absolute left-0 top-0 h-full w-full bg-primary rounded-full"></div>
-          </div>
-
-
-          <!-- Step 3 - Current (Payment) -->
-          <div class="flex flex-col items-center relative z-10">
-            <div
-              class="w-8 h-8 rounded-full bg-primary border-primary text-white shadow-sm shadow-primary/30 flex items-center justify-center border-2">
-              <span class="text-xs font-bold">3</span>
-            </div>
-            <span class="mt-3 text-sm font-semibold text-gray-700">Payment</span>
-          </div>
-
-          <!-- Line (Empty) -->
-          <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full"></div>
-
-          <!-- Step 4 - Pending -->
-          <div class="flex flex-col items-center relative z-10">
-            <div
-              class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 text-gray-400 flex items-center justify-center">
-              <span class="text-xs font-bold">4</span>
-            </div>
-            <span class="mt-3 text-sm font-semibold text-gray-500">E-Ticket</span>
-          </div>
-
-        </div>
-      </div>
+  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 lg:p-5">
+    <div class="mx-auto max-w-7xl">
       <ATFlowLoader
         v-if="isLoading || isPaymentLoading"
         title="Preparing payment"
@@ -71,136 +11,151 @@
         :steps="['Booking', 'Fare', 'Pay']"
       />
       <!-- Main Container -->
-      <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Quote expiry status -->
-        <div
-          :class="[
-            'lg:col-span-3 flex items-center gap-3 rounded-lg border p-4',
-            isBookingExpired ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50',
-          ]"
-        >
-          <ClockIcon :class="['h-6 w-6 flex-shrink-0', isBookingExpired ? 'text-red-600' : 'text-amber-600']" />
-          <div class="min-w-0">
-            <p :class="['text-sm font-semibold', isBookingExpired ? 'text-red-800' : 'text-amber-800']">
-              {{ isBookingExpired ? 'This booking has expired' : 'Complete payment before the price expires' }}
-            </p>
-            <p :class="['text-2xl font-bold tabular-nums', isBookingExpired ? 'text-red-900' : 'text-amber-900']">
-              {{ getRemainingTime(bookingExpiryTime) }}
-            </p>
-            <p v-if="isBookingExpired" class="mt-1 text-sm font-medium text-red-700">
-              Return to search and choose a fresh flight price before paying.
-            </p>
-          </div>
-        </div>
+      <div v-else class="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
         <!-- Payment Methods Section -->
-        <div class="lg:col-span-2 space-y-4">
-          <div class="bg-white rounded shadow-sm p-4">
-            <!-- Header -->
-            <h1 class="text-3xl font-bold text-slate-900 mb-2">How Would You Like To Pay?</h1>
-
-            <!-- Main Payment Section with Two Column Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <!-- Left: Payment Methods List (Static) -->
-              <div class="lg:col-span-1 space-y-3">
-
-
-                <!-- AbhiPay is temporarily disabled. Keep the markup for an easy re-enable. -->
-                <div v-if="false" @click="selectPaymentMethod('abhipay-bank')" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay-bank'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10',
-                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay-bank'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Landmark />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay-bank' ? 'text-white' : 'text-slate-900']">
-                      Bank Transfer - Abhipay
-                    </h3>
-                  </div>
-                </div>
-                <div v-if="false" @click="selectPaymentMethod('abhipay')" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'abhipay'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10',
-                  isBookingExpired ? 'cursor-not-allowed opacity-50' : ''
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'abhipay'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <CreditCard />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'abhipay' ? 'text-white' : 'text-slate-900']">
-                      Abhipay - Debit/Credit card
-                    </h3>
-                  </div>
-                </div>
-
-                <!-- Wallet Balance -->
-                <div @click="selectPaymentMethod('wallet')" :class="[
-                  'flex items-center gap-4 p-4 rounded border-2 cursor-pointer transition-all duration-300',
-                  paymentMethod === 'wallet'
-                    ? 'bg-primary border-primary shadow-lg'
-                    : 'border-primary bg-white hover:bg-primary/10'
-                ]">
-                  <div :class="[
-                    'w-10 h-10 rounded flex items-center justify-center text-lg flex-shrink-0 font-bold',
-                    paymentMethod === 'wallet'
-                      ? 'bg-white text-primary'
-                      : 'text-primary'
-                  ]">
-                    <Wallet />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3
-                      :class="['font-semibold truncate', paymentMethod === 'wallet' ? 'text-white' : 'text-slate-900']">
-                      Wallet Balance
-                    </h3>
-                  </div>
+        <div class="min-w-0 space-y-4">
+          <div class="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+            <!-- Header and quote expiry live inside the payment shell. -->
+            <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <h1 class="text-xl font-bold text-slate-900">Make Payment</h1>
+              <div :class="['flex items-center gap-2 text-sm sm:text-right', isBookingExpired ? 'text-destructive' : 'text-slate-600']">
+                <ClockIcon class="h-4 w-4 shrink-0" />
+                <div class="flex">
+                  <p class="font-medium">{{ isBookingExpired ? 'Session expires in :' : ' ' }}</p>
+                  <p class="font-bold tabular-nums">{{ getRemainingTime(bookingExpiryTime) }}</p>
                 </div>
               </div>
+            </div>
+
+            <!-- Main Payment Section with Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)]">
+              <!-- Payment methods are intentionally visual only until their payment flows are enabled. -->
+              <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
+                <div class="flex overflow-x-auto lg:block lg:overflow-visible">
+                    <button type="button" @click="activePaymentTab = 'wallet'" :class="[
+                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
+                      activePaymentTab === 'wallet' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                    ]" :aria-current="activePaymentTab === 'wallet' ? 'page' : undefined">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                        <Wallet class="h-5 w-5" />
+                      </span>
+                      <span>Wallet Balance</span>
+                    </button>
+                  <!-- <button type="button" @click="activePaymentTab = 'credit-card'" :class="[
+                    'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
+                    activePaymentTab === 'credit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                  ]" :aria-current="activePaymentTab === 'credit-card' ? 'page' : undefined">
+                    <CreditCard :class="['h-5 w-5 shrink-0', activePaymentTab === 'credit-card' ? 'text-primary' : 'text-slate-500']" />
+                    <span>Credit Card</span>
+                  </button>
+                  <button type="button" @click="activePaymentTab = 'debit-card'" :class="[
+                    'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
+                    activePaymentTab === 'debit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                  ]" :aria-current="activePaymentTab === 'debit-card' ? 'page' : undefined">
+                    <Landmark :class="['h-5 w-5 shrink-0', activePaymentTab === 'debit-card' ? 'text-primary' : 'text-slate-500']" />
+                    <span>Debit Card</span>
+                  </button>
+                  <button type="button" @click="activePaymentTab = 'tabby'" :class="[
+                    'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
+                    activePaymentTab === 'tabby' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                  ]" :aria-current="activePaymentTab === 'tabby' ? 'page' : undefined">
+                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/20 text-xs font-black text-primary">t</span>
+                    <span>Tabby</span>
+                  </button>
+                  <button type="button" @click="activePaymentTab = 'tamara'" :class="[
+                    'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
+                    activePaymentTab === 'tamara' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                  ]" :aria-current="activePaymentTab === 'tamara' ? 'page' : undefined">
+                    <span class="text-lg leading-none text-slate-900">♥</span>
+                    <span>Tamara</span>
+                  </button> -->
+                </div>
+              </aside>
 
               <!-- Right: Dynamic Information Box Based on Selected Method -->
-              <div class="lg:col-span-2">
-                <!-- PayPal / PayPro Info -->
-                <div v-if="paymentMethod === 'paypal'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+              <div class="min-w-0 p-4 sm:p-5">
+                <div v-if="activePaymentTab === 'credit-card' || activePaymentTab === 'debit-card'" class="w-full">
+                  <div class="flex items-center gap-3 text-primary">
+                    <span class="flex h-10 w-10 items-center justify-center rounded border border-primary/20 bg-primary/10">
+                      <CreditCard class="h-5 w-5" />
+                    </span>
+                    <h2 class="text-lg font-semibold">{{ activePaymentTab === 'credit-card' ? 'Card' : 'Debit Card' }}</h2>
+                  </div>
+
+                  <div class="mt-6 border border-slate-200 p-4 sm:p-6">
+                    <button type="button" class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <span class="text-slate-500">⌃</span>
+                      Check out faster with saved details
+                    </button>
+                    <p class="mt-4 text-sm leading-6 text-slate-500">Save or use your details to check out faster wherever Checkout.com is available.</p>
+
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2">
                       <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          We will be redirecting you to PayPro secure Banking Payment gateway to make payment and you
-                          will be redirected back to our site once payment is successful to get the Flight Booking. (No
-                          additional service fee will be charged for bank transfers)
-                        </p>
+                        <label class="block text-sm font-semibold text-slate-900">Email address <span class="font-normal text-slate-500">(optional)</span></label>
+                        <input type="email" :value="bookingContact.email || ''" placeholder="you@example.com" class="mt-2 h-11 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-900">Phone number <span class="font-normal text-slate-500">(optional)</span></label>
+                        <div class="mt-2 flex gap-2">
+                          <div class="flex h-11 items-center rounded border border-slate-300 px-3 text-sm text-slate-700">+971</div>
+                          <input type="tel" :value="bookingContact.phone || ''" placeholder="Phone number" class="h-11 min-w-0 flex-1 rounded border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        </div>
                       </div>
                     </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
+                    <p class="mt-3 text-xs leading-5 text-slate-500">By continuing, you agree to the payment provider terms and acknowledge its privacy notice.</p>
+
+                    <div class="my-6 border-t border-slate-200"></div>
+
+                    <label class="block text-sm font-semibold text-slate-900">Cardholder name</label>
+                    <input type="text" placeholder="Jordan Smith" class="mt-2 h-11 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+
+                    <label class="mt-4 block text-sm font-semibold text-slate-900">Card number</label>
+                    <input type="text" inputmode="numeric" autocomplete="cc-number" placeholder="1234 1234 1234 1234" class="mt-2 h-11 w-full rounded border border-primary/40 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+
+                    <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Please contact our support team at <a href="mailto:support@apniticket.pk"
-                            class="text-primary font-semibold hover:underline">support@apniticket.pk</a> and <a
-                            href="tel:+923421111003"
-                            class="text-primary font-semibold hover:underline">+923421111003</a> for any payment related
-                          issues.
-                        </p>
+                        <label class="block text-sm font-semibold text-slate-900">Expiry date</label>
+                        <input type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" class="mt-2 h-11 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-900">Security code</label>
+                        <input type="text" inputmode="numeric" autocomplete="cc-csc" placeholder="CVV" class="mt-2 h-11 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                     </div>
+
+                    <button type="button" class="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded bg-primary font-semibold text-white transition-colors hover:bg-primary/90">
+                      <span>🔒</span> Pay
+                    </button>
+                  </div>
+                </div>
+
+                <div v-else-if="activePaymentTab === 'tabby' || activePaymentTab === 'tamara'" class="w-full">
+                  <div class="flex items-center gap-3">
+                    <span :class="['flex h-9 items-center justify-center rounded px-2 text-sm font-black', activePaymentTab === 'tabby' ? 'bg-primary/20 text-primary' : 'bg-primary text-white']">
+                      {{ activePaymentTab === 'tabby' ? 'tabby' : 'tamara' }}
+                    </span>
+                    <h2 class="text-lg font-semibold text-slate-900">{{ activePaymentTab === 'tabby' ? 'Pay in 4. No interest, no fees.' : 'Pay in 3. No interest, no fees.' }}</h2>
+                  </div>
+
+                  <div class="mt-7 grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <p class="text-lg font-semibold text-slate-900">Split your purchase</p>
+                      <p class="text-sm text-slate-600">into monthly payments</p>
+                      <button type="button" class="mt-4 rounded bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">View options</button>
+                    </div>
+                    <ul class="space-y-3 text-sm text-slate-700">
+                      <li class="flex items-center gap-3"><span class="text-primary">✦</span>No processing fees</li>
+                      <li class="flex items-center gap-3"><span class="text-primary">▣</span>Use any card</li>
+                      <li class="flex items-center gap-3"><span class="text-primary">♧</span>Buyer protection</li>
+                    </ul>
+                  </div>
+
+                  <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-sm text-slate-500">Total payable amount</p>
+                      <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatPaymentAmount() }}</p>
+                    </div>
+                    <button type="button" class="inline-flex min-h-12 items-center justify-center rounded bg-primary px-7 py-3 font-semibold uppercase tracking-wide text-white hover:bg-primary/90">Make Payment</button>
                   </div>
                 </div>
 
@@ -354,36 +309,39 @@
                 </div>
 
                 <!-- Wallet Info -->
-                <div v-else-if="paymentMethod === 'wallet'" class="bg-blue-50 rounded p-6 border border-blue-100">
-                  <div class="space-y-4">
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Pay directly from your Jetze wallet balance.
-                          This is the fastest payment method with instant confirmation.
-                        </p>
-                      </div>
-                    </div>
-                    <div class="flex gap-3">
-                      <div class="text-green-600 font-bold text-lg flex-shrink-0 mt-0.5">✓</div>
-                      <div>
-                        <p class="text-sm text-slate-700 leading-relaxed">
-                          Your booking will be confirmed immediately. No additional fees apply for wallet payments.
-                          Contact support if you have any questions.
-                        </p>
-                      </div>
+                <div v-else-if="activePaymentTab === 'wallet'" class="w-full">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                      <Wallet class="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h2 class="text-lg font-semibold text-primary">Wallet Balance</h2>
+                      <p class="text-sm text-slate-500">Pay securely from your Jetze wallet.</p>
                     </div>
                   </div>
-                  <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
-                    'w-full mt-4 py-3 px-6 rounded font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2',
-                    paymentMethod && !isProcessing
-                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-xl'
-                      : 'bg-slate-300 text-slate-600 cursor-not-allowed'
-                  ]">
-                    <span>Proceed to Pay {{ formatPaymentAmount() }}</span>
-                    <span>→</span>
-                  </button>
+
+                  <div class="mt-7 space-y-4 text-sm leading-6 text-slate-700">
+                    <p>Pay directly from your Jetze wallet balance for the fastest payment and instant booking confirmation.</p>
+                    <ul class="space-y-2">
+                      <li class="flex gap-3"><span class="font-bold text-primary">✓</span><span>No additional fees apply for wallet payments.</span></li>
+                      <li class="flex gap-3"><span class="font-bold text-primary">✓</span><span>Your booking will be confirmed immediately after payment.</span></li>
+                    </ul>
+                  </div>
+
+                  <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-sm text-slate-500">Total payable amount</p>
+                      <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatPaymentAmount() }}</p>
+                    </div>
+                    <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
+                      'inline-flex min-h-12 items-center justify-center rounded px-7 py-3 font-semibold uppercase tracking-wide transition-colors',
+                      paymentMethod && !isProcessing
+                        ? 'bg-primary text-white hover:bg-primary/90'
+                        : 'cursor-not-allowed bg-slate-200 text-slate-500'
+                    ]">
+                      {{ isProcessing ? 'Processing...' : 'Make Payment' }}
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Default/Placeholder Info -->
@@ -400,84 +358,35 @@
                   </div>
                 </div>
 
-                <!-- Security Badge -->
-                <div class="mt-4 bg-amber-50 border border-amber-300 rounded p-4 flex items-center gap-3">
-                  <span class="text-2xl flex-shrink-0">🔒</span>
-                  <p class="text-sm text-amber-900">
-                    <span class="font-semibold">All Your personal information is secure</span> when you book with
-                    Jetze
-                  </p>
-                </div>
-
-                <!-- Payment Button -->
+                <p class="mt-7 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+                  Your payment and personal information are protected with secure encryption.
+                </p>
 
               </div>
             </div>
           </div>
 
-          <!-- Trust Badges -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">🔐</div>
-              <h4 class="font-bold text-slate-900 mb-2">100% Secure</h4>
-              <p class="text-sm text-slate-600">We use 256-bit SSL encryption</p>
-            </div>
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">✓</div>
-              <h4 class="font-bold text-slate-900 mb-2">Trusted worldwide</h4>
-              <p class="text-sm text-slate-600">We do not store or view your card data</p>
-            </div>
-            <div class="bg-white rounded p-6 text-center shadow-sm">
-              <div class="text-3xl mb-3">💳</div>
-              <h4 class="font-bold text-slate-900 mb-2">Easy Payments</h4>
-              <p class="text-sm text-slate-600">We do not store or view your card data</p>
-            </div>
-          </div>
-
-          <!-- Footer Info -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📍</span>
-                <h4 class="font-bold text-slate-900">Address</h4>
-              </div>
-              <p class="text-sm text-slate-600">Jetze</p>
-            </div>
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📞</span>
-                <h4 class="font-bold text-slate-900">Contact Us :</h4>
-              </div>
-              <p class="text-sm text-slate-600">UAN (+92) 300 7690691</p>
-            </div>
-            <div class="bg-white rounded p-6 shadow-sm">
-              <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">📧</span>
-                <h4 class="font-bold text-slate-900">Email :</h4>
-              </div>
-              <p class="text-sm text-slate-600">support@Jetze.pk</p>
-            </div>
-          </div>
         </div>
 
         <!-- Flight Summary Section -->
         <div class="lg:col-span-1">
           <div class="sticky top-6 space-y-6">
             <!-- Summary Card -->
-            <div class="bg-white rounded shadow-sm p-6">
-              <div class="flex items-center justify-between mb-6">
+            <div class="overflow-hidden border border-gray-200 bg-white shadow-sm">
+              <div class="flex items-center justify-between border-b border-gray-200 p-4">
                 <h2 class="text-xl font-bold text-slate-900">Flight summary</h2>
                 <span class="text-xs font-semibold text-primary bg-amber-100 px-3 py-1 rounded-full">
                   Flight details
                 </span>
               </div>
 
-              <div v-if="passengers.length" class="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
-                <div class="flex items-center justify-between mb-3">
+              <div class="space-y-4 p-4">
+              <details v-if="passengers.length" class="rounded border border-slate-200 bg-slate-50 p-4">
+                <summary class="flex cursor-pointer list-none items-center justify-between">
                   <h3 class="text-sm font-semibold text-slate-900">Passengers</h3>
-                  <span class="text-xs font-medium text-slate-500">{{ passengers.length }} Total</span>
-                </div>
-                <div class="space-y-2">
+                  <span class="flex items-center gap-2 text-xs font-medium text-slate-500">{{ passengers.length }} Total <span class="text-base leading-none">⌄</span></span>
+                </summary>
+                <div class="mt-3 space-y-2">
                   <div
                     v-for="(passenger, passengerIdx) in passengers"
                     :key="passenger.id || passengerIdx"
@@ -491,12 +400,15 @@
                     </span>
                   </div>
                 </div>
-              </div>
+              </details>
 
               <!-- Contact details saved during checkout -->
-              <div class="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
-                <h3 class="mb-3 text-sm font-semibold text-slate-900">Contact Information</h3>
-                <div class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+              <details class="rounded border border-slate-200 bg-slate-50 p-4">
+                <summary class="flex cursor-pointer list-none items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-900">Contact Information</h3>
+                  <span class="text-base leading-none text-slate-500">⌄</span>
+                </summary>
+                <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p class="text-xs text-slate-500">Email</p>
                     <p class="break-all font-medium text-slate-900">{{ bookingContact.email || '-' }}</p>
@@ -505,15 +417,51 @@
                     <p class="text-xs text-slate-500">Phone</p>
                     <p class="font-medium text-slate-900">{{ bookingContact.phone || '-' }}</p>
                   </div>
-                  <div>
+                  <div class="col-span-2">
                     <p class="text-xs text-slate-500">Country</p>
                     <p class="font-medium text-slate-900">{{ bookingContact.country || '-' }}</p>
                   </div>
                 </div>
-              </div>
+              </details>
 
               <!-- Flight Route -->
-              <div class="">
+              <div class="rounded border border-slate-200 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-semibold text-slate-900">Flight itinerary</h3>
+                  <button
+                    type="button"
+                    @click="showFlightSegments = true"
+                    class="rounded border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-white"
+                  >
+                    View segments
+                  </button>
+                </div>
+                <div v-if="flightData?.leg?.flights?.[0]?.segments?.[0]" class="mt-4 flex items-center justify-between gap-3 rounded bg-slate-50 p-3">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-slate-900">
+                      {{ flightData.leg.flights[0].segments[0].from?.iata }} → {{ flightData.leg.flights[0].segments[0].to?.iata }}
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                      {{ formatDateTime(flightData.leg.flights[0].segments[0].departure_at) }}
+                    </p>
+                  </div>
+                  <span class="shrink-0 text-xs font-medium text-primary">{{ formatDuration(flightData.leg.flights[0].travel_time) }}</span>
+                </div>
+              </div>
+
+              <Teleport to="body">
+                <div v-if="showFlightSegments" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showFlightSegments = false">
+                  <div class="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
+                    <div class="flex items-start justify-between border-b border-slate-200 p-5">
+                      <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Flight Segment Details</h2>
+                        <p class="mt-1 text-sm text-slate-500">Detailed information about flight segments and layovers.</p>
+                      </div>
+                      <button type="button" @click="showFlightSegments = false" class="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close flight segment details">
+                        <X class="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div class="max-h-[calc(85vh-88px)] overflow-y-auto p-5">
                 <div v-for="(flight, flightIdx) in flightData?.leg?.flights" :key="flightIdx" class="mb-8 last:mb-0">
                   <!-- Route Header -->
                   <div class="flex items-center justify-between mb-4">
@@ -525,7 +473,7 @@
                         <p class="text-xs text-gray-500">Flight {{ flight.segments?.[0]?.flight_number }}</p>
                       </div>
                     </div>
-                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    <span class="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
                       Cabin Class: {{ flight.segments?.[0]?.cabin_class === 'E' ? 'Economy' :
                         flight.segments?.[0]?.cabin_class ||
                       'Economy' }}
@@ -582,17 +530,22 @@
 
 
                 </div>
-              </div>
+                    </div>
+                  </div>
+                </div>
+              </Teleport>
 
 
 
               <!-- Fare Breakdown -->
               <div class="lg:col-span-1">
                 <div class="bg-white shadow-sm border border-gray-200 p-2 overflow-hidden">
-                  <div class="flex p-4 items-center justify-between">
-                    <h3 class="text-lg sm:text-xl font-semibold text-gray-900">Price Details</h3>
-                  </div>
-                  <div class="space-y-3">
+                  <details>
+                    <summary class="flex cursor-pointer list-none items-center justify-between p-4">
+                      <h3 class="text-base font-semibold text-gray-900">Price Details</h3>
+                      <span class="text-base leading-none text-slate-500">⌄</span>
+                    </summary>
+                    <div class="space-y-3 px-2 pb-2">
                     <div v-for="(flight, flightIndex) in flightData?.leg?.flights" :key="flightIndex">
                       <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
                         <div v-if="selectedFares?.includes(fare.ref_id)" class="bg-gray-50 p-3 space-y-2">
@@ -616,12 +569,13 @@
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div class="flex p-2 justify-between items-center">
-                    <span class="text-xs sm:text-sm text-gray-600">Add-ons</span>
-                    <span class="text-xs sm:text-sm font-medium">{{ formatAmount(bookingDetails?.[0]?.add_ones_amount ||
-                      0) }}</span>
-                  </div>
+                    </div>
+                    <div class="flex p-2 justify-between items-center">
+                      <span class="text-xs sm:text-sm text-gray-600">Add-ons</span>
+                      <span class="text-xs sm:text-sm font-medium">{{ formatAmount(bookingDetails?.[0]?.add_ones_amount ||
+                        0) }}</span>
+                    </div>
+                  </details>
                   <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
                     <span class="text-base sm:text-sm font-semibold text-gray-900">Total Amount</span>
                     <span class="text-sm sm:text-lg font-bold text-primary">{{ formatPaymentAmount() }}</span>
@@ -632,6 +586,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
     <div v-if="isLowBalanceDialogOpen"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
@@ -768,6 +723,8 @@ const showFareDetails = ref(false)
 const showPaymentModal = ref(false)
 const isProcessing = ref(false)
 const paymentMethod = ref('wallet')
+const activePaymentTab = ref('wallet')
+const showFlightSegments = ref(false)
 
 // Fare data
 const currency = ref('PKR')

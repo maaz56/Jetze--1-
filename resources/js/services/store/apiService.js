@@ -153,6 +153,10 @@ export default {
         return apiClient.post("/hotels/search", params);
     },
 
+    getHotelDetails(params) {
+        return apiClient.post("/hotels/details", params);
+    },
+
     prebookHotel(params) {
         return apiClient.post("/hotels/prebook", params);
     },

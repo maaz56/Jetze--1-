@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class TboHotelService
@@ -104,6 +105,7 @@ class TboHotelService
     {
         $this->ensureConfigured();
 
+        $requestId = (string) Str::uuid();
         $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
         $options = [
             'auth' => [$this->username, $this->password],
@@ -124,7 +126,8 @@ class TboHotelService
                 ? Arr::except($payload, ['CustomerDetails', 'EmailId', 'PhoneNumber', 'PaymentInfo'])
                 : $payload;
 
-            Log::info('TBO Hotel API request', [
+            Log::info('TBO Hotel API Request', [
+                'request_id' => $requestId,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'payload' => $logPayload,
@@ -133,7 +136,8 @@ class TboHotelService
             $response = $this->client->request($method, $url, $options);
             $body = (string) $response->getBody();
 
-            Log::info('TBO Hotel API response received', [
+            Log::info('TBO Hotel API Response', [
+                'request_id' => $requestId,
                 'endpoint' => $endpoint,
                 'status' => $response->getStatusCode(),
             ]);
@@ -141,6 +145,7 @@ class TboHotelService
 
             if (!is_array($decoded)) {
                 Log::warning('TBO Hotel API returned non-JSON response', [
+                    'request_id' => $requestId,
                     'endpoint' => $endpoint,
                     'status' => $response->getStatusCode(),
                     'body' => mb_substr($body, 0, 1000),
@@ -154,9 +159,16 @@ class TboHotelService
                 ];
             }
 
+            Log::info('TBO Hotel API Response Body', [
+                'request_id' => $requestId,
+                'endpoint' => $endpoint,
+                'response' => $decoded,
+            ]);
+
             return $decoded;
         } catch (RequestException $e) {
             Log::error('TBO Hotel API request failed', [
+                'request_id' => $requestId,
                 'endpoint' => $endpoint,
                 'message' => $e->getMessage(),
                 'response' => $e->hasResponse()
@@ -167,6 +179,7 @@ class TboHotelService
             throw $e;
         } catch (GuzzleException $e) {
             Log::error('TBO Hotel API guzzle error', [
+                'request_id' => $requestId,
                 'endpoint' => $endpoint,
                 'message' => $e->getMessage(),
             ]);

@@ -5,6 +5,8 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Hotel,
   MapPin,
@@ -17,11 +19,12 @@ import {
   X,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { debounce } from "lodash";
 import { getSelectedCurrencyCode } from "@/lib/utils";
 
 const route = useRoute();
+const router = useRouter();
 const hotelStore = useHotelStore();
 
 const props = defineProps({
@@ -92,6 +95,9 @@ const formErrorMessage = ref("");
 const expandedHotelCodes = ref(new Set());
 const selectedBookingCode = ref("");
 const roomChoices = ref({});
+const hotelImageIndexes = ref({});
+const loadedHotelImageKeys = ref(new Set());
+const failedHotelImageKeys = ref(new Set());
 const hotelPriceLimit = ref(null);
 const selectedRatings = ref([]);
 const selectedMeals = ref([]);
@@ -449,6 +455,65 @@ const hasAtPropertySupplement = (room) => {
 
 const formatLocation = (hotelItem) => {
   return [hotelItem.city, hotelItem.country].filter(Boolean).join(", ") || "Location unavailable";
+};
+
+/** Return the cached property images that are safe to render on one search card. */
+const hotelImages = (hotelItem) => Array.isArray(hotelItem?.images)
+  ? hotelItem.images.filter(Boolean)
+  : [];
+
+/** Return the selected gallery image for one hotel card. */
+const activeHotelImage = (hotelItem) => {
+  const images = hotelImages(hotelItem);
+  const index = Number(hotelImageIndexes.value[String(hotelItem?.hotel_code)] || 0);
+
+  return images[index] || images[0] || null;
+};
+
+/** Create a stable load-state key for a card image. */
+const hotelImageKey = (hotelItem) => `${hotelItem?.hotel_code}:${activeHotelImage(hotelItem) || "none"}`;
+
+/** Move within one card's cached image gallery without another provider request. */
+const moveHotelImage = (hotelItem, direction) => {
+  const images = hotelImages(hotelItem);
+  if (images.length < 2) return;
+
+  const hotelCode = String(hotelItem.hotel_code);
+  const currentIndex = Number(hotelImageIndexes.value[hotelCode] || 0);
+  hotelImageIndexes.value = {
+    ...hotelImageIndexes.value,
+    [hotelCode]: (currentIndex + direction + images.length) % images.length,
+  };
+};
+
+/** Mark one card image after it has rendered so only that image skeleton disappears. */
+const markHotelImageLoaded = (hotelItem) => {
+  const key = hotelImageKey(hotelItem);
+  loadedHotelImageKeys.value = new Set([...loadedHotelImageKeys.value, key]);
+};
+
+/** Stop a broken provider image skeleton and show the hotel placeholder instead. */
+const markHotelImageFailed = (hotelItem) => {
+  const key = hotelImageKey(hotelItem);
+  failedHotelImageKeys.value = new Set([...failedHotelImageKeys.value, key]);
+};
+
+const isHotelImageLoaded = (hotelItem) => loadedHotelImageKeys.value.has(hotelImageKey(hotelItem));
+const isHotelImageFailed = (hotelItem) => failedHotelImageKeys.value.has(hotelImageKey(hotelItem));
+
+/** Open the selected property's static details within this trusted search session. */
+const viewHotelDetails = (hotelItem) => {
+  if (!searchSessionId.value || !hotelItem?.hotel_code) {
+    return;
+  }
+
+  router.push({
+    name: "HotelDetails",
+    query: {
+      search_session_id: searchSessionId.value,
+      hotel_code: hotelItem.hotel_code,
+    },
+  });
 };
 
 const parseRoomsQuery = (roomsQuery) => {
@@ -832,8 +897,42 @@ watch(
             <div class="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
               <div class="min-w-0">
                 <div class="flex gap-4">
-                  <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
-                    <Hotel class="h-7 w-7" />
+                  <div class="relative h-40 w-40 shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-100 sm:w-52">
+                    <template v-if="activeHotelImage(hotelItem) && !isHotelImageFailed(hotelItem)">
+                      <div v-if="!isHotelImageLoaded(hotelItem)" class="absolute inset-0 animate-pulse bg-slate-200" />
+                      <img
+                        :src="activeHotelImage(hotelItem)"
+                        :alt="hotelItem.name"
+                        class="h-full w-full object-cover"
+                        :class="{ 'opacity-0': !isHotelImageLoaded(hotelItem) }"
+                        @load="markHotelImageLoaded(hotelItem)"
+                        @error="markHotelImageFailed(hotelItem)"
+                      >
+                      <template v-if="hotelImages(hotelItem).length > 1">
+                        <button
+                          type="button"
+                          class="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white"
+                          aria-label="Previous hotel image"
+                          @click.stop="moveHotelImage(hotelItem, -1)"
+                        >
+                          <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white"
+                          aria-label="Next hotel image"
+                          @click.stop="moveHotelImage(hotelItem, 1)"
+                        >
+                          <ChevronRight class="h-4 w-4" />
+                        </button>
+                        <span class="absolute bottom-2 right-2 rounded bg-slate-900/75 px-2 py-1 text-xs font-bold text-white">
+                          {{ Number(hotelImageIndexes[String(hotelItem.hotel_code)] || 0) + 1 }}/{{ hotelImages(hotelItem).length }}
+                        </span>
+                      </template>
+                    </template>
+                    <div v-else class="flex h-full w-full items-center justify-center text-primary">
+                      <Hotel class="h-8 w-8" />
+                    </div>
                   </div>
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
@@ -864,13 +963,22 @@ watch(
                   {{ formatMoney(roomMoney(roomChoiceForHotel(hotelItem), hotelItem)) }}
                 </p>
                 <p class="mt-1 text-xs text-gray-600">{{ nights }} night{{ nights === 1 ? "" : "s" }} · {{ guestsSummary }}</p>
-                <Button
-                  class="mt-3 h-12 rounded bg-primary px-8 text-base font-bold text-primary-foreground hover:bg-primary/90"
-                  :class="{ 'bg-gray-100 text-gray-700 hover:bg-gray-100': isSelectedRoom(roomChoiceForHotel(hotelItem)) }"
-                  @click="selectChosenRoom(hotelItem)"
-                >
-                  {{ isSelectedRoom(roomChoiceForHotel(hotelItem)) ? "Selected" : "Select" }}
-                </Button>
+                <div class="mt-3 flex flex-wrap gap-2 lg:justify-end">
+                  <Button
+                    variant="outline"
+                    class="h-11 px-4 text-sm font-bold"
+                    @click="viewHotelDetails(hotelItem)"
+                  >
+                    See more
+                  </Button>
+                  <Button
+                    class="h-11 rounded bg-primary px-6 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+                    :class="{ 'bg-gray-100 text-gray-700 hover:bg-gray-100': isSelectedRoom(roomChoiceForHotel(hotelItem)) }"
+                    @click="selectChosenRoom(hotelItem)"
+                  >
+                    {{ isSelectedRoom(roomChoiceForHotel(hotelItem)) ? "Selected" : "Select" }}
+                  </Button>
+                </div>
               </div>
             </div>
 

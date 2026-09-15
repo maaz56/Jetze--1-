@@ -99,11 +99,11 @@ import { useAuthStore } from "@/services/stores/auth";
 import Accordion from "@/components/ui/accordion/Accordion.vue";
 import { calculateFinalPrice } from "@/lib/utils.js";
 import { useStore } from "vuex";
-import apiService from "@/config/axios";
 import {
     FETCH_AGENT_DATA,
     FETCH_PROMO_IMAGES,
     FETCH_AIRLINES,
+    FETCH_AIRPORTS,
 } from "@/services/store/actions.type";
 import {
     Plane,
@@ -153,7 +153,7 @@ const agentData = computed(() => store.getters["user/agentData"]);
 const promoImages = computed(() => store.getters["promoImage/promoImageData"]);
 const isLoading = computed(() => flightStore.isLoading);
 const availableAirlines = computed(() => flightStore.availableAirlines);
-const airportSearchResults = ref([]);
+const airports = computed(() => store.getters["airport/airports"]);
 const headerDefaultAirportCodes = ["PEW","LHE","SKT","ISB","KHI","MUX","GWD"];
 const airlines = computed(() => store.getters["airline/airlines"]);
 const previousSearch = JSON.parse(localStorage.getItem("previous_search"));
@@ -197,7 +197,6 @@ const pnr = ref(null);
 const originAutocomplete = ref(null);
 const destinationAutocomplete = ref(null);
 const departureCalendar = ref(null);
-let airportSearchRequestId = 0;
 
 const focusDestination = () => {
     nextTick(() => destinationAutocomplete.value?.focus());
@@ -205,38 +204,6 @@ const focusDestination = () => {
 
 const openDepartureCalendar = () => {
     nextTick(() => departureCalendar.value?.open());
-};
-
-const clearAirportSearchResults = () => {
-    airportSearchRequestId += 1;
-    airportSearchResults.value = [];
-};
-
-const fetchMatchingAirports = async (query) => {
-    const searchQuery = String(query || "").trim();
-    const requestId = ++airportSearchRequestId;
-
-    if (searchQuery.length < 2) {
-        airportSearchResults.value = [];
-        return;
-    }
-
-    try {
-        const response = await apiService.get("/airports", {
-            params: {
-                search_query: searchQuery,
-                with_pagination: true,
-            },
-        });
-
-        if (requestId === airportSearchRequestId) {
-            airportSearchResults.value = response.data?.data || [];
-        }
-    } catch {
-        if (requestId === airportSearchRequestId) {
-            airportSearchResults.value = [];
-        }
-    }
 };
 
 function fetchPromoImages() {
@@ -987,6 +954,7 @@ watch(user_id, (newUserId) => {
 });
 
 onMounted(() => {
+    store.dispatch("airport/" + FETCH_AIRPORTS);
     if (user.value?.id) {
         fetchAgent();
     }
@@ -1158,8 +1126,6 @@ onMounted(() => {
                                 ref="originAutocomplete"
                                 v-model="origin"
                                 @selected="focusDestination"
-                                @search="fetchMatchingAirports"
-                                @query-changed="clearAirportSearchResults"
                                 :icon="'MapPin'"
                                 show-icon
                                 :default-value="
@@ -1170,8 +1136,8 @@ onMounted(() => {
                                           : ''
                                 "
                                 :placeholder="$t('origin')"
-                                :source="airportSearchResults"
-                                :remote-search="true"
+                                :source="airports"
+                                :search-debounce="350"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
                                 auto-fill-role="origin"
@@ -1209,8 +1175,6 @@ onMounted(() => {
                                 ref="destinationAutocomplete"
                                 v-model="destination"
                                 @selected="openDepartureCalendar"
-                                @search="fetchMatchingAirports"
-                                @query-changed="clearAirportSearchResults"
                                 :icon="'MapPin'"
                                 show-icon
                                 :default-value="
@@ -1221,8 +1185,8 @@ onMounted(() => {
                                           : ''
                                 "
                                 :placeholder="$t('destination')"
-                                :source="airportSearchResults"
-                                :remote-search="true"
+                                :source="airports"
+                                :search-debounce="350"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
                                 auto-fill-role="destination"
@@ -1471,10 +1435,8 @@ onMounted(() => {
                                                   : ''
                                         "
                                         :placeholder="$t('origin')"
-                                        :source="airportSearchResults"
-                                        :remote-search="true"
-                                        @search="fetchMatchingAirports"
-                                        @query-changed="clearAirportSearchResults"
+                                        :source="airports"
+                                        :search-debounce="350"
                                         :icon="'MapPin'"
                                         show-icon
                                         :default-suggestions="
@@ -1501,10 +1463,8 @@ onMounted(() => {
                                                   : ''
                                         "
                                         :placeholder="$t('destination')"
-                                        :source="airportSearchResults"
-                                        :remote-search="true"
-                                        @search="fetchMatchingAirports"
-                                        @query-changed="clearAirportSearchResults"
+                                        :source="airports"
+                                        :search-debounce="350"
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "
@@ -1776,7 +1736,7 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <HotelSearchHeader />
+                <!-- <HotelSearchHeader /> -->
             </div>
 
             <!-- Other Tabs (Coming Soon) -->

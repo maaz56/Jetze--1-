@@ -407,7 +407,7 @@ watch(activeTab, (tab) => {
                     <TicketCheck class="h-4 w-4" aria-hidden="true" />
                     Bookings Overview
                 </button>
-                <button @click="activeTab = 'hotel-bookings'" :class="[
+                <!-- <button @click="activeTab = 'hotel-bookings'" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'hotel-bookings'
                         ? 'border-primary text-primary'
@@ -415,7 +415,7 @@ watch(activeTab, (tab) => {
                 ]">
                     <Building2 class="h-4 w-4" aria-hidden="true" />
                     Hotel Bookings
-                </button>
+                </button> -->
                 <button @click="activeTab = 'deposits'" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'deposits'
@@ -833,7 +833,7 @@ watch(activeTab, (tab) => {
             </div>
 
             <!-- Hotel Bookings Tab -->
-            <div v-show="activeTab === 'hotel-bookings'" class="p-6">
+            <!-- <div v-show="activeTab === 'hotel-bookings'" class="p-6">
                 <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-800">Hotel Bookings</h2>
@@ -890,7 +890,7 @@ watch(activeTab, (tab) => {
                         </Button>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <!-- Deposits Overview Tab -->
             <div v-show="activeTab === 'deposits'" class="p-6">

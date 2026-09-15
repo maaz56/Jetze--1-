@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Currency;
 use App\Models\CurrencyRateHistory;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class CurrencyRateService
@@ -24,7 +25,7 @@ class CurrencyRateService
      */
     public function recordInitialRate(Currency $currency, User $admin, string $reason): CurrencyRateHistory
     {
-        return CurrencyRateHistory::create([
+        $history = CurrencyRateHistory::create([
             'currency_id' => $currency->id,
             'currency_code' => $currency->code,
             'old_rate' => null,
@@ -32,6 +33,16 @@ class CurrencyRateService
             'reason' => $reason,
             'changed_by' => $admin->id,
         ]);
+
+        Log::info('Currency Rate Audit Recorded', [
+            'currency' => $currency->code,
+            'old_rate_to_aed' => null,
+            'new_rate_to_aed' => $currency->exchange_rate,
+            'reason' => $reason,
+            'changed_by' => $admin->id,
+        ]);
+
+        return $history;
     }
 
     /**
@@ -57,6 +68,14 @@ class CurrencyRateService
             'currency_code' => $currency->code,
             'old_rate' => $oldRate,
             'new_rate' => $currency->exchange_rate,
+            'reason' => $reason,
+            'changed_by' => $admin->id,
+        ]);
+
+        Log::info('Currency Rate Audit Recorded', [
+            'currency' => $currency->code,
+            'old_rate_to_aed' => $oldRate,
+            'new_rate_to_aed' => $currency->exchange_rate,
             'reason' => $reason,
             'changed_by' => $admin->id,
         ]);

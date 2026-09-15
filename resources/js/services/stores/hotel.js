@@ -7,6 +7,7 @@ export const useHotelStore = defineStore("hotel", {
         hotels: [],
         searchSessionId: null,
         providerStatus: null,
+        hotelDetails: null,
         prebook: null,
         booking: null,
         bookings: [],
@@ -25,6 +26,7 @@ export const useHotelStore = defineStore("hotel", {
         getHotels: (state) => state.hotels,
         getSearchSessionId: (state) => state.searchSessionId,
         getProviderStatus: (state) => state.providerStatus,
+        getHotelDetails: (state) => state.hotelDetails,
         getPrebook: (state) => state.prebook,
         getBooking: (state) => state.booking,
         getBookings: (state) => state.bookings,
@@ -92,6 +94,20 @@ export const useHotelStore = defineStore("hotel", {
                 throw error;
             } finally {
                 this.isPrebooking = false;
+            }
+        },
+
+        async fetchHotelDetails(params) {
+            this.errorMessage = "";
+
+            try {
+                const response = await apiService.getHotelDetails(params);
+                this.hotelDetails = response.data.data || null;
+                return response.data;
+            } catch (error) {
+                this.hotelDetails = null;
+                this.errorMessage = error.response?.data?.message || "Unable to load hotel details.";
+                throw error;
             }
         },
 
@@ -175,6 +191,7 @@ export const useHotelStore = defineStore("hotel", {
             this.hotels = [];
             this.searchSessionId = null;
             this.providerStatus = null;
+            this.hotelDetails = null;
             this.prebook = null;
             this.booking = null;
             this.bookings = [];

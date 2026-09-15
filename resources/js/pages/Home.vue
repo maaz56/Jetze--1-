@@ -1136,9 +1136,9 @@ onUnmounted(() => {
   <div class="flex flex-col  bg-gray-100">
 
     <div
-      class="relative w-full min-h-[72vh] h-auto py-12 bg-[url('/public/864.webp')] bg-cover bg-center bg-no-repeat flex items-center justify-center overflow-visible z-30">
+      class="relative w-full min-h-[72vh] h-auto py-12 bg-[url('/public/bg-air.jpg')] bg-cover bg-center bg-no-repeat flex items-center justify-center overflow-visible z-30">
       <!-- Enhanced Overlay with Gradient for better readability and modern feel -->
-      <div class="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/40"></div>
+      <div class="absolute inset-0 bg-gradient-to-b"></div>
 
       <!-- Content Container with improved responsiveness and animations -->
       <div

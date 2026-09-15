@@ -226,6 +226,110 @@ class HotelController extends Controller
         ], $this->httpStatusForProviderStatus($statusCode));
     }
 
+    /** Load static TBO property information for a hotel in one active search session. */
+    public function details(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'search_session_id' => ['required', 'uuid'],
+            'hotel_code' => ['required', 'string', 'max:100'],
+            'language' => ['nullable', 'string', 'size:2'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
+        ]);
+
+        $session = HotelSearchSession::where('uuid', $validated['search_session_id'])->first();
+
+        if (! $session) {
+            return response()->json(['message' => 'Hotel search session was not found. Please search again.'], 404);
+        }
+
+        if ($session->expires_at?->isPast()) {
+            return response()->json(['message' => 'Hotel search session has expired. Please search again.'], 422);
+        }
+
+        if ($session->user_id && $session->user_id !== optional($request->user())->id) {
+            return response()->json(['message' => 'This hotel search session belongs to another user.'], 403);
+        }
+
+        $hotelCode = (string) $validated['hotel_code'];
+        if (! $this->findSearchHotel($session, $hotelCode)) {
+            return response()->json([
+                'message' => 'This hotel is not part of the current search. Please search again.',
+            ], 422);
+        }
+
+        $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code'] ?? null);
+        $searchHotel = $this->normalizeSearchResults($session->tbo_response, $displayCurrency)
+            ->first(fn (array $hotel) => $hotel['hotel_code'] === $hotelCode);
+
+        if (! $searchHotel) {
+            return response()->json([
+                'message' => 'Current room options are unavailable. Please search again.',
+            ], 422);
+        }
+
+        try {
+            $tboResponse = $this->tboHotelService->hotelDetails(
+                $hotelCode,
+                strtoupper((string) ($validated['language'] ?? 'EN')),
+                true,
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        } catch (Throwable $e) {
+            Log::error('Unable to retrieve TBO hotel details', [
+                'search_session_id' => $session->uuid,
+                'hotel_code' => $hotelCode,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Hotel details could not be retrieved right now. Please try again.'], 502);
+        }
+
+        $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
+        if ($statusCode !== 200) {
+            return response()->json([
+                'message' => $this->statusMessage($statusCode, data_get($tboResponse, 'Status.Description')),
+                'provider_status' => data_get($tboResponse, 'Status'),
+            ], $this->httpStatusForProviderStatus($statusCode));
+        }
+
+        $providerHotel = collect($tboResponse['HotelDetails'] ?? [])
+            ->first(fn ($hotel) => is_array($hotel) && (string) ($hotel['HotelCode'] ?? '') === $hotelCode);
+
+        if (! is_array($providerHotel)) {
+            return response()->json([
+                'message' => 'Hotel details were not returned for the selected property.',
+            ], 502);
+        }
+
+        $hotel = $this->storeHotelDetails($providerHotel);
+        $roomDetails = $this->normalizeHotelRoomDetails($providerHotel);
+        $roomDetailsById = collect($roomDetails)->keyBy('room_id');
+        $searchRooms = collect($searchHotel['rooms'])
+            ->map(function (array $room) use ($roomDetailsById): array {
+                $room['room_details'] = $this->matchHotelRoomDetails($room, $roomDetailsById);
+
+                return $room;
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'message' => 'Hotel details fetched successfully.',
+            'provider_status' => data_get($tboResponse, 'Status'),
+            'data' => array_merge($this->normalizeHotelDetails($providerHotel, $hotel), [
+                'stay' => [
+                    'check_in' => $session->check_in?->toDateString(),
+                    'check_out' => $session->check_out?->toDateString(),
+                    'pax_rooms' => $session->pax_rooms ?? [],
+                ],
+                'rooms' => $searchRooms,
+                'room_count' => $searchHotel['room_count'],
+                'room_details' => $roomDetails,
+            ]),
+        ]);
+    }
+
     public function prebook(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -1034,6 +1138,10 @@ class HotelController extends Controller
         return $results->map(function (array $result) use ($staticHotels, $displayCurrency) {
             $hotelCode = (string) ($result['HotelCode'] ?? '');
             $hotel = $staticHotels->get($hotelCode);
+            $hotelImages = collect($hotel?->images ?? [])
+                ->filter(fn ($image) => is_string($image) && $image !== '')
+                ->unique()
+                ->values();
             $providerCurrency = strtoupper((string) ($result['Currency'] ?? ''));
             $rooms = collect($result['Rooms'] ?? [])
                 ->map(fn (array $room) => $this->normalizeRoom($room, $displayCurrency, $providerCurrency))
@@ -1064,6 +1172,11 @@ class HotelController extends Controller
                 'map' => $hotel?->map,
                 'latitude' => $hotel?->latitude,
                 'longitude' => $hotel?->longitude,
+                'primary_image' => $hotelImages->first(),
+                // Keep the complete provider gallery; the UI only previews a few
+                // images and exposes the rest on demand.
+                'images' => $hotelImages->all(),
+                'image_count' => $hotelImages->count(),
                 'currency' => $providerCurrency ?: null,
                 'lowest_total_fare' => $lowestFare,
                 'lowest_display_money' => $lowestRoom['display_money'] ?? null,
@@ -1074,6 +1187,188 @@ class HotelController extends Controller
                 'rooms' => $rooms,
             ];
         });
+    }
+
+    /** Return a trusted hotel result only when it belongs to the saved provider search. */
+    protected function findSearchHotel(HotelSearchSession $session, string $hotelCode): ?array
+    {
+        foreach ($session->tbo_response['HotelResult'] ?? [] as $hotel) {
+            if (is_array($hotel) && (string) ($hotel['HotelCode'] ?? '') === $hotelCode) {
+                return $hotel;
+            }
+        }
+
+        return null;
+    }
+
+    /** Persist static provider property information for later searches and detail views. */
+    protected function storeHotelDetails(array $providerHotel): TboHotel
+    {
+        $hotelCode = (string) ($providerHotel['HotelCode'] ?? '');
+        [$latitude, $longitude] = $this->parseMap($providerHotel['Map'] ?? null);
+        $existingHotel = TboHotel::where('hotel_code', $hotelCode)->first();
+        $hotelName = $providerHotel['HotelName'] ?? $existingHotel?->hotel_name ?? 'Hotel '.$hotelCode;
+        $cityName = $providerHotel['CityName'] ?? $existingHotel?->city_name;
+        $countryName = $providerHotel['CountryName'] ?? $existingHotel?->country_name;
+        $address = $providerHotel['Address'] ?? $existingHotel?->address;
+
+        return TboHotel::updateOrCreate(
+            ['hotel_code' => $hotelCode],
+            [
+                'hotel_name' => $hotelName,
+                'hotel_rating' => isset($providerHotel['HotelRating'])
+                    ? (string) $providerHotel['HotelRating']
+                    : $existingHotel?->hotel_rating,
+                'address' => $address,
+                'country_code' => strtoupper((string) ($providerHotel['CountryCode'] ?? $existingHotel?->country_code)),
+                'country_name' => $countryName,
+                'city_code' => (string) ($providerHotel['CityId'] ?? $existingHotel?->city_code),
+                'city_name' => $cityName,
+                'map' => $providerHotel['Map'] ?? $existingHotel?->map,
+                'latitude' => $latitude ?? $existingHotel?->latitude,
+                'longitude' => $longitude ?? $existingHotel?->longitude,
+                'images' => $providerHotel['Images'] ?? $existingHotel?->images,
+                'facilities' => $providerHotel['HotelFacilities'] ?? $existingHotel?->facilities,
+                'description' => $providerHotel['Description'] ?? $existingHotel?->description,
+                'raw_response' => $providerHotel,
+                'search_text' => trim(implode(' ', array_filter([
+                    $hotelName,
+                    $cityName,
+                    $countryName,
+                    $address,
+                    $providerHotel['HotelRating'] ?? null,
+                ]))),
+            ],
+        );
+    }
+
+    /** Map provider hotel content into the property-details response contract. */
+    protected function normalizeHotelDetails(array $providerHotel, TboHotel $hotel): array
+    {
+        [$latitude, $longitude] = $this->parseMap($providerHotel['Map'] ?? $hotel->map);
+        $images = collect($providerHotel['Images'] ?? $hotel->images ?? [])
+            ->filter(fn ($image) => is_string($image) && $image !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'hotel_code' => $hotel->hotel_code,
+            'name' => $providerHotel['HotelName'] ?? $hotel->hotel_name,
+            'description_html' => $providerHotel['Description'] ?? $hotel->description,
+            'primary_image' => $providerHotel['Image'] ?? $images[0] ?? null,
+            'images' => $images,
+            'facilities' => array_values($providerHotel['HotelFacilities'] ?? $hotel->facilities ?? []),
+            'attractions' => array_values($providerHotel['Attractions'] ?? []),
+            'rating' => $providerHotel['HotelRating'] ?? $hotel->hotel_rating,
+            'address' => $providerHotel['Address'] ?? $hotel->address,
+            'pin_code' => $providerHotel['PinCode'] ?? null,
+            'city' => $providerHotel['CityName'] ?? $hotel->city_name,
+            'country' => $providerHotel['CountryName'] ?? $hotel->country_name,
+            'country_code' => $providerHotel['CountryCode'] ?? $hotel->country_code,
+            'location' => [
+                'map' => $providerHotel['Map'] ?? $hotel->map,
+                'latitude' => $latitude ?? $hotel->latitude,
+                'longitude' => $longitude ?? $hotel->longitude,
+            ],
+            'contact' => [
+                'phone_number' => $providerHotel['PhoneNumber'] ?? null,
+                'email' => $providerHotel['Email'] ?? null,
+                'website_url' => $providerHotel['HotelWebsiteUrl'] ?? null,
+                'fax_number' => $providerHotel['FaxNumber'] ?? null,
+            ],
+            'check_in_time' => $providerHotel['CheckInTime'] ?? null,
+            'check_out_time' => $providerHotel['CheckOutTime'] ?? null,
+            'fees' => [
+                'optional' => data_get($providerHotel, 'HotelFees.Optional', []),
+                'mandatory' => data_get($providerHotel, 'HotelFees.Mandatory', []),
+            ],
+        ];
+    }
+
+    /** Map static TBO room metadata; it is never used as a booking or pricing source. */
+    protected function normalizeHotelRoomDetails(array $providerHotel): array
+    {
+        return collect($providerHotel['RoomDetails'] ?? [])
+            ->filter(fn ($room) => is_array($room)
+                && ! empty($room['RoomId'])
+                && ! empty($room['RoomName']))
+            ->map(function (array $room): array {
+                $images = collect($room['imageURL'] ?? [])
+                    ->filter(fn ($image) => is_string($image) && $image !== '')
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [
+                    'room_id' => (string) $room['RoomId'],
+                    'name' => $room['RoomName'] ?? 'Room details',
+                    'size' => $room['RoomSize'] ?? null,
+                    'description' => $room['RoomDescription'] ?? null,
+                    'primary_image' => $images[0] ?? null,
+                    'images' => $images,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Attach static room content to a live search room without affecting its price or booking code.
+     * TBO does not always return RoomID in Search, so a unique high-confidence name match is allowed.
+     */
+    protected function matchHotelRoomDetails(array $searchRoom, Collection $roomDetailsById): ?array
+    {
+        $roomId = (string) ($searchRoom['room_id'] ?? '');
+        if ($roomId !== '' && $roomDetailsById->has($roomId)) {
+            return $roomDetailsById->get($roomId);
+        }
+
+        $searchTokens = $this->roomNameTokens($searchRoom['name'] ?? null);
+        if (count($searchTokens) < 2) {
+            return null;
+        }
+
+        $matches = $roomDetailsById
+            ->map(function (array $roomDetail) use ($searchTokens): array {
+                $detailTokens = $this->roomNameTokens($roomDetail['name'] ?? null);
+                $sharedTokens = array_intersect($searchTokens, $detailTokens);
+                $score = count($sharedTokens) / max(count($searchTokens), count($detailTokens), 1);
+
+                return [
+                    'room_detail' => $roomDetail,
+                    'score' => $score,
+                    'shared_count' => count($sharedTokens),
+                ];
+            })
+            ->filter(fn (array $match) => $match['shared_count'] >= 2)
+            ->sortByDesc('score')
+            ->values();
+
+        $bestMatch = $matches->first();
+        $secondBestMatch = $matches->get(1);
+
+        if (! $bestMatch || $bestMatch['score'] < 0.75) {
+            return null;
+        }
+
+        if ($secondBestMatch && ($bestMatch['score'] - $secondBestMatch['score']) < 0.12) {
+            return null;
+        }
+
+        return $bestMatch['room_detail'];
+    }
+
+    /** Normalize TBO room names into comparable meaningful words. */
+    protected function roomNameTokens(array|string|null $roomName): array
+    {
+        $name = is_array($roomName) ? implode(' ', $roomName) : (string) $roomName;
+        $normalized = strtolower(preg_replace('/[^a-z]+/i', ' ', $name));
+
+        return array_values(array_unique(array_filter(
+            preg_split('/\s+/', trim($normalized)) ?: [],
+            fn (string $token) => strlen($token) > 1 && ! in_array($token, ['with', 'and', 'the'], true),
+        )));
     }
 
     protected function normalizeRoom(array $room, string $displayCurrency, ?string $fallbackCurrency = null): array

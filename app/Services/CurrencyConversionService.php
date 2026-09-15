@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Currency;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class CurrencyConversionService
@@ -39,7 +40,20 @@ class CurrencyConversionService
         $normalizedAmount = $this->normalizeAmount($amount);
 
         if ($this->currencyCode($source) === $this->currencyCode($target)) {
-            return $this->makeMoney($normalizedAmount, $this->currencyCode($target));
+            $money = $this->makeMoney($normalizedAmount, $this->currencyCode($target));
+
+            // Log::info('Currency Conversion Completed', [
+            //     'source_money' => [
+            //         'amount' => $normalizedAmount,
+            //         'currency' => $this->currencyCode($source),
+            //     ],
+            //     'source_rate_to_aed' => $this->rateToAed($source),
+            //     'target_rate_to_aed' => $this->rateToAed($target),
+            //     'result_money' => $money,
+            //     'conversion_required' => false,
+            // ]);
+
+            return $money;
         }
 
         $targetDecimalPlaces = $this->decimalPlaces($target);
@@ -55,11 +69,25 @@ class CurrencyConversionService
             $calculationScale,
         );
 
-        return [
+        $money = [
             'amount' => $this->round($convertedAmount, $targetDecimalPlaces),
             'currency' => $this->currencyCode($target),
             'decimal_places' => $targetDecimalPlaces,
         ];
+
+        // Log::info('Currency Conversion Completed', [
+        //     'source_money' => [
+        //         'amount' => $normalizedAmount,
+        //         'currency' => $this->currencyCode($source),
+        //     ],
+        //     'source_rate_to_aed' => $this->rateToAed($source),
+        //     'amount_in_aed' => $amountInAed,
+        //     'target_rate_to_aed' => $this->rateToAed($target),
+        //     'result_money' => $money,
+        //     'conversion_required' => true,
+        // ]);
+
+        return $money;
     }
 
     /**
