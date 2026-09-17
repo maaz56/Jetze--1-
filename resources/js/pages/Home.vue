@@ -11,6 +11,8 @@ import {
 import Header from '@/components/shared/Header.vue';
 import QuickServices from './Home/QuickServices.vue';
 import OffersSection from './Home/OffersSection.vue';
+import TrustFeaturesCarousel from './Home/TrustFeaturesCarousel.vue';
+import TopFlightRoutesSection from './Home/TopFlightRoutesSection.vue';
 import WhyChooseUs from './Home/WhyChooseUs.vue';
 import TrendingRoutes from './Home/TrendingRoutes.vue';
 import Collections from './Home/Collections.vue';
@@ -28,14 +30,14 @@ onMounted(() => {
 <template>
     <div class="flex flex-col min-h-screen bg-slate-50/60 font-roboto antialiased selection:bg-primary/20 selection:text-primary">
         
-        <!-- SCENIC HERO BANNER -->
-        <div class="relative w-full h-[300px] sm:h-[340px] lg:h-[370px] bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat overflow-hidden z-10">
-            <!-- Light Daylight Sky Overlay -->
-            <div class="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-900/10 to-transparent pointer-events-none"></div>
+        <!-- SCENIC HERO BANNER (Extends to top-0 underneath fixed transparent header) -->
+        <div class="relative w-full h-[370px] sm:h-[410px] lg:h-[450px] bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat overflow-hidden z-10">
+            <!-- Top Dark Gradient Overlay for optimal header text contrast + soft daylight vignette -->
+            <div class="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/25 to-slate-900/10 pointer-events-none"></div>
         </div>
 
-        <!-- OVERLAPPING SEARCH SECTION (Shifted up to eliminate empty space above text) -->
-        <div class="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-56 sm:-mt-64 lg:-mt-72 animate-fade-in-up">
+        <!-- OVERLAPPING SEARCH SECTION -->
+        <div class="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-64 sm:-mt-72 lg:-mt-80 animate-fade-in-up">
             
             <!-- Headline & Tagline Above Search Header -->
             <div class="mb-3 sm:mb-4 text-white">
@@ -54,10 +56,6 @@ onMounted(() => {
             <!-- Compact Search Card with rounded-lg -->
             <Header />
 
-            
-
-            
-
         </div>
 
         <!-- OFFERS & SEASONAL PROMOTIONS -->
@@ -65,17 +63,15 @@ onMounted(() => {
             <OffersSection />
         </div>
 
-        <!-- WHY CHOOSE JETZE / TRUST FACTORS -->
-        <WhyChooseUs />
+        <!-- TRUST FEATURES AUTO CAROUSEL -->
+        <div class="mt-2 sm:mt-4">
+            <TrustFeaturesCarousel />
+        </div>
 
-        <!-- TRENDING ROUTES & TOP FLIGHTS -->
-        <TrendingRoutes />
-
-        <!-- CURATED TRAVEL COLLECTIONS -->
-        <Collections />
-
-        <!-- NEWSLETTER / TRAVEL CLUB CALLOUT -->
-        <NewsletterSection />
+        <!-- TOP FLIGHT ROUTES & AIRLINES FOOTER DIRECTORY -->
+        <div class="mt-4 sm:mt-6">
+            <TopFlightRoutesSection />
+        </div>
 
         <!-- GLOBAL FOOTER -->
         <Footer />

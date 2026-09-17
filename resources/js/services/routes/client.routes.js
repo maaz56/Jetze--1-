@@ -19,23 +19,31 @@ export const clientRoutes = [
             //     component: () => import("@/pages/Login.vue"),
             // },
            
-            // Rendered by Laravel Blade (resources/views/pages/about-us.blade.php).
-            // {
-            //     path: "about/us",
-            //     name: "AboutUs",
-            //     component: () => import("@/pages/AboutUs.vue"),
-            // },
+            {
+                path: "about/us",
+                name: "AboutUs",
+                component: () => import("@/pages/AboutUs.vue"),
+            },
+            {
+                path: "about-us",
+                name: "AboutUsAlias",
+                component: () => import("@/pages/AboutUs.vue"),
+            },
             {
                 path: "how-to-use-abhi-pay-bank-transfer",
                 name: "HowToPay",
                 component: () => import("@/pages/HowToPay.vue"),
             },
-            // Rendered by Laravel Blade (resources/views/pages/contact-us.blade.php).
-            // {
-            //     path: "contact/us",
-            //     name: "ClientContactUs",
-            //     component: () => import("@/pages/ContactUs.vue"),
-            // },
+            {
+                path: "contact/us",
+                name: "ClientContactUs",
+                component: () => import("@/pages/ContactUs.vue"),
+            },
+            {
+                path: "contact-us",
+                name: "ClientContactUsAlias",
+                component: () => import("@/pages/ContactUs.vue"),
+            },
             {
                 path: "our/services",
                 name: "OurServices",
