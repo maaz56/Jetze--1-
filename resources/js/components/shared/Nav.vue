@@ -138,12 +138,13 @@ function formatBalanceAmount(amount) {
     }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
 
-// Updated navLinks to match the "Title + Subtitle" style of the image
+// Nav links featuring core travel booking services (Flights, Hotels, Holidays, Visas, Umrah)
 const navLinks = [
-    { routeName: "Home", text: "Flights", subText: "Book Cheapest", icon: "/plane.png" },
-    { href: "/about/us", text: "About Us", subText: "Who we are", icon: "/info.png" },
-    { href: "/blogs", text: "Blogs", subText: "Travel Stories", icon: "/blog.png" },
-    { href: "/contact/us", text: "Contact Us", subText: "UAN (+92) 300 7690691", icon: "/info.png" },
+    { routeName: "Home", text: "Flights", subText: "Book Flights", icon: "/plane.png" },
+    { routeName: "HotelSearch", text: "Hotels", subText: "Luxury Stays", icon: "/residential.png" },
+    { routeName: "HolidayPackages", text: "Holidays", subText: "Tour Packages", icon: "/holidays.png" },
+    // { routeName: "Visa", text: "Visas", subText: "Fast Track", icon: "/passport.png" },
+    // { routeName: "UmraPackages", text: "Umrah", subText: "Pilgrimage", icon: "/package.png" },
 ];
 
 const getLinkProps = (link) => link.routeName
@@ -230,7 +231,7 @@ onUnmounted(() => {
 
                 <div class="flex items-center">
                     
-                    <div class="hidden xl:flex items-center gap-1 rounded-2xl bg-slate-50/80 p-1 shadow-sm">
+                    <div class="hidden lg:flex items-center gap-1 rounded  p-1 shadow-xs">
                         <component
                             :is="link.routeName ? RouterLink : 'a'"
                             v-for="(link, index) in navLinks" 
@@ -238,41 +239,49 @@ onUnmounted(() => {
                             v-bind="getLinkProps(link)"
                             :aria-current="isLinkActive(link) ? 'page' : undefined"
                             :class="[
-                                'group relative flex items-center rounded-lg px-4 py-2.5 transition-all duration-200',
+                                'group relative flex items-center rounded px-3.5 py-2 transition-all duration-200',
                                 isLinkActive(link)
-                                    ? 'text-primary'
-                                    : 'text-slate-700 hover:bg-sky-50 hover:text-primary',
+                                    ? 'text-primary  shadow-xs'
+                                    : 'text-slate-700 hover:bg-white/80 hover:text-primary',
                             ]"
                         >
+                            <!-- Badge if present (like Akbar Travels) -->
+                            <span 
+                                v-if="link.badge" 
+                                class="absolute -top-1.5 right-1.5 bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-xs uppercase tracking-tight"
+                            >
+                                {{ link.badge }}
+                            </span>
+
                             <div
                                 :class="[
-                                    'mr-3 rounded-xl p-2 transition-all duration-200',
+                                    'mr-2.5 rounded p-1.5 transition-all duration-200',
                                     isLinkActive(link)
                                         ? 'bg-primary/10'
-                                        : 'bg-sky-100 group-hover:bg-primary/15',
+                                        : 'bg-sky-50 group-hover:bg-primary/10',
                                 ]"
                             >
                                 <img
                                     :src="link.icon"
                                     :alt="link.text"
                                     :class="[
-                                        'w-5 h-5 object-contain transition-all duration-300',
-                                        isLinkActive(link) ? 'scale-110' : 'opacity-100',
+                                        'w-4 h-4 object-contain transition-all duration-300',
+                                        isLinkActive(link) ? 'scale-110' : 'opacity-90',
                                     ]"
                                 />
                             </div>
                             <div class="flex flex-col">
-                                <span class="text-[13px] font-bold leading-tight">{{ link.text }}</span>
+                                <span class="text-xs font-bold leading-tight">{{ link.text }}</span>
                                 <span
                                     :class="[
-                                        'text-[10px] transition-colors',
+                                        'text-[9px] transition-colors',
                                         isLinkActive(link) ? 'text-primary/75' : 'text-slate-500 group-hover:text-primary/75',
                                     ]"
                                 >
                                     {{ link.subText }}
                                 </span>
                             </div>
-                            <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
+                            <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-2 bottom-0 h-[2.5px] rounded bg-primary"></span>
                         </component>
                     </div>
 

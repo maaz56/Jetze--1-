@@ -982,53 +982,15 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="w-full flex justify-center items-center px-2 sm:px-0 sm:mt-12">
-        <div class="w-full sm:max-w-fit border-b border-gray-200 p-1 sm:p-2 bg-white rounded overflow-x-auto scrollbar-hide">
-            <div class="flex flex-row gap-1 sm:gap-4 justify-start min-w-max">
-                <button
-                    v-for="tab in tabs"
-                    :key="tab.id"
-                    @click="setActiveTab(tab.id)"
-                    :class="[
-                        'relative flex flex-col items-center justify-center gap-2 min-w-[80px] sm:min-w-[110px] px-2 py-3 transition-all duration-300',
-                        /* Remove background colors, just manage text color */
-                        activeTab === tab.id ? 'text-primary' : 'text-gray-500 hover:text-gray-700'
-                    ]"
-                >
-                    <img 
-                        :src="tab.icon" 
-                        :alt="tab.name"
-                        :class="[
-                            'w-8 h-8 object-contain transition-all duration-500',
-                            /* Icon is colored when active, grayscale when inactive */
-                            activeTab === tab.id ? 'scale-110' : 'grayscale opacity-60'
-                        ]"
-                    />
-                    
-                    <span class="whitespace-nowrap text-[10px] sm:text-md font-bold uppercase tracking-wider">
-                        {{ $t(tab.name) }}
-                    </span>
-
-                    <div 
-                        v-if="activeTab === tab.id" 
-                        class="absolute -bottom-[2px] left-0 w-full h-1 bg-primary rounded-t-full transition-all duration-300"
-                    ></div>
-                </button>
-            </div>
-        </div>
-    </div>
     <div
-        :class="activeTab === 'hotels' || flightType === 'multi-city' ? 'h-auto min-h-[24rem]' : 'min-h-[24rem]'"
-        class="bg-white shadow-2xl mt-4 rounded-2xl border border-gray-200 overflow-visible max-w-7xl mx-auto"
+        class="h-auto bg-white shadow-xl rounded-lg border border-gray-200 overflow-visible max-w-7xl mx-auto"
     >
-        <!-- Top Navigation Tabs -->
-
         <!-- Content Area -->
-        <div class="py-6 px-8">
+        <div class="py-3.5 px-4 sm:px-6">
             <!-- Loading State -->
             <div
                 v-if="isLoading"
-                class="flex items-center justify-center bg-gradient-to-r from-blue-50 to-purple-50 p-12 sm:p-24 rounded-2xl"
+                class="flex items-center justify-center bg-blue-50/50 p-12 sm:p-24 rounded"
             >
                 <div class="text-center">
                     <Spinner class="mx-auto mb-4 w-6 h-6 sm:w-8 sm:h-8" />
@@ -1043,36 +1005,21 @@ onMounted(() => {
                 v-else-if="activeTab === 'flights'"
                 class="animate-fadeIn w-full flex flex-col gap-2"
             >
-                <!-- Trip Type Selection -->
-                <div>
-                    <h1
-                        class="hidden sm:block sm:text-4xl text-gray-900 text-left font-semibold tracking-tight"
-                    >
-                        Discover Your Ideal Flight Adventure
-                    </h1>
-                    <p
-                        class="hidden sm:block text-left sm:text-sm lg:text-lg text-gray-600 mb-2 font-light"
-                    >
-                        Effortlessly search, compare, and book from thousands of
-                        global airlines for your next journey.
-                    </p>
-                </div>
+                <!-- Trip Type Selection & Title Row -->
                 <div
-                    class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-3"
+                    class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-2"
                 >
                     <!-- Trip Type Buttons -->
                     <div
-                        class="flex w-full sm:w-auto bg-gray-100 rounded-md p-1
-       flex-row sm:flex-row gap-1"
-
+                        class="flex w-full sm:w-auto bg-gray-100 rounded p-1 flex-row gap-1"
                     >
                         <!-- Round Trip -->
                         <button
                             @click="setFlightType('return')"
                             :class="[
-                                'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'return'
-                                    ? 'bg-white text-gray-900 border border-gray-200'
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
                                     : 'text-gray-600 hover:bg-white',
                             ]"
                         >
@@ -1083,9 +1030,9 @@ onMounted(() => {
                         <button
                             @click="setFlightType('one-way')"
                             :class="[
-                                'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'one-way'
-                                    ? 'bg-white text-gray-900 border border-gray-200'
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
                                     : 'text-gray-600 hover:bg-white',
                             ]"
                         >
@@ -1096,17 +1043,22 @@ onMounted(() => {
                         <button
                             @click="setFlightType('multi-city')"
                             :class="[
-                                'w-full sm:w-auto h-11 sm:h-auto px-3 sm:px-4 py-2 rounded-md sm:rounded-[6px] text-sm sm:text-base transition flex items-center justify-center',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'multi-city'
-                                    ? 'bg-white text-gray-900 border border-gray-200'
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
                                     : 'text-gray-600 hover:bg-white',
                             ]"
                         >
                             {{ $t("Multi-City") }}
                         </button>
                     </div>
-                </div>
 
+                    <!-- Right Indicator (Akbar Travels style) -->
+                    <div class="hidden sm:flex items-center gap-2 text-primary font-bold text-sm">
+                        <Plane class="w-4 h-4" />
+                        <span>Book Flight Tickets</span>
+                    </div>
+                </div>
                 <!-- Main Search Form -->
                 <div class="bg-white rounded-xl sm:pr-0 rtl:pr-0">
                     <div v-if="flightType !== 'multi-city'">
@@ -1786,15 +1738,15 @@ onMounted(() => {
 .flight-search-button {
 
     display: inline-flex;
-    border-radius: .3rem;
-    min-height: 3.5rem;
+    border-radius: .25rem;
+    min-height: 2.85rem;
     width: 100%;
     align-items: center;
     justify-content: center;
     gap: 0.55rem;
     background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
     color: #ffffff;
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 800;
     transition:
         filter 0.2s ease,
@@ -1810,7 +1762,7 @@ onMounted(() => {
 }
 
 .booking-cell {
-    @apply relative min-w-0 min-h-[92px] border-b border-gray-200 px-4 py-3 sm:border-b-0 sm:border-r;
+    @apply relative min-w-0 min-h-[76px] border-b border-gray-200 px-3.5 py-2 sm:border-b-0 sm:border-r;
 }
 
 .booking-cell:last-child {
