@@ -228,7 +228,7 @@ onUnmounted(() => {
                     ? 'relative z-40 text-slate-900'
                     : 'fixed top-0 inset-x-0 z-40',
                 isTransparent
-                    ? 'bg-transparent text-white py-1'
+                    ? 'bg-gradient-to-b from-slate-950/30 via-slate-950/10 to-transparent text-white py-1'
                     : 'bg-white shadow-md border-b border-slate-200/80 text-slate-900 py-0 animate-slide-down-nav',
             ]"
         >

@@ -32,8 +32,8 @@ onMounted(() => {
         
         <!-- SCENIC HERO BANNER (Extends to top-0 underneath fixed transparent header) -->
         <div class="relative w-full h-[370px] sm:h-[410px] lg:h-[450px] bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat overflow-hidden z-10">
-            <!-- Top Dark Gradient Overlay for optimal header text contrast + soft daylight vignette -->
-            <div class="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/25 to-slate-900/10 pointer-events-none"></div>
+            <!-- Soft banner overlay for readable content without darkening the image too much -->
+            <div class="absolute inset-0 bg-black/25 pointer-events-none"></div>
         </div>
 
         <!-- OVERLAPPING SEARCH SECTION -->
