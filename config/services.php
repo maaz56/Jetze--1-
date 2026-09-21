@@ -76,6 +76,10 @@ return [
         'timeout' => (int) env('NOMOD_TIMEOUT_SECONDS', 15),
         'webhook_secret' => env('NOMOD_WEBHOOK_SECRET'),
         'webhook_tolerance_seconds' => (int) env('NOMOD_WEBHOOK_TOLERANCE_SECONDS', 300),
+        'allowed_return_hosts' => array_values(array_filter(array_map(
+            static fn (string $host): string => strtolower(trim($host)),
+            explode(',', env('NOMOD_ALLOWED_RETURN_HOSTS', 'jetze.pk,www.jetze.pk,jetze.ae,www.jetze.ae'))
+        ))),
         'redirects' => [
             'success' => env('NOMOD_SUCCESS_URL', rtrim(env('APP_URL', ''), '/').'/payment/nomod/success'),
             'failure' => env('NOMOD_FAILURE_URL', rtrim(env('APP_URL', ''), '/').'/payment/nomod/failure'),

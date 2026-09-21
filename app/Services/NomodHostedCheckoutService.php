@@ -7,6 +7,7 @@ use App\Models\BookingPriceSnapshot;
 use App\Models\FlightBookings;
 use App\Models\PaymentAttempt;
 use Illuminate\Support\Facades\Http;
+
 class NomodHostedCheckoutService
 {
     /**
@@ -22,6 +23,7 @@ class NomodHostedCheckoutService
         PaymentAttempt $attempt,
         FlightBookings $booking,
         BookingPriceSnapshot $snapshot,
+        ?string $returnOrigin = null,
     ): array {
         $apiKey = config('services.nomod.api_key');
         $baseUrl = config('services.nomod.base_url');
@@ -43,7 +45,7 @@ class NomodHostedCheckoutService
             ->withHeaders(['X-API-KEY' => $apiKey])
             ->connectTimeout(5)
             ->timeout((int) config('services.nomod.timeout', 15))
-            ->post($this->checkoutPath($baseUrl), $this->payload($attempt, $booking, $amount, $currency));
+            ->post($this->checkoutPath($baseUrl), $this->payload($attempt, $booking, $amount, $currency, $returnOrigin));
 
         if (! $response->successful()) {
             throw new NomodCheckoutException(sprintf(
@@ -100,8 +102,13 @@ class NomodHostedCheckoutService
         return $response->json();
     }
 
-    private function payload(PaymentAttempt $attempt, FlightBookings $booking, string $amount, string $currency): array
-    {
+    private function payload(
+        PaymentAttempt $attempt,
+        FlightBookings $booking,
+        string $amount,
+        string $currency,
+        ?string $returnOrigin,
+    ): array {
         $passenger = $booking->pessangers()->orderBy('id')->first();
         $firstName = trim((string) ($passenger?->first_name ?: 'Customer'));
         $lastName = trim((string) ($passenger?->last_name ?: ''));
@@ -127,9 +134,9 @@ class NomodHostedCheckoutService
                 'email' => (string) $booking->main_email,
                 'phone_number' => (string) $booking->main_phone,
             ],
-            'success_url' => $this->redirectUrl('success', $attempt),
-            'failure_url' => $this->redirectUrl('failure', $attempt),
-            'cancelled_url' => $this->redirectUrl('cancelled', $attempt),
+            'success_url' => $this->redirectUrl('success', $attempt, $returnOrigin),
+            'failure_url' => $this->redirectUrl('failure', $attempt, $returnOrigin),
+            'cancelled_url' => $this->redirectUrl('cancelled', $attempt, $returnOrigin),
             'metadata' => [
                 'payment_attempt' => $attempt->uuid,
                 'booking_id' => (string) $booking->id,
@@ -137,9 +144,11 @@ class NomodHostedCheckoutService
         ];
     }
 
-    private function redirectUrl(string $type, PaymentAttempt $attempt): string
+    private function redirectUrl(string $type, PaymentAttempt $attempt, ?string $returnOrigin = null): string
     {
-        $url = config("services.nomod.redirects.{$type}");
+        $url = $returnOrigin
+            ? rtrim($returnOrigin, '/')."/payment/nomod/{$type}"
+            : config("services.nomod.redirects.{$type}");
 
         if (! is_string($url) || ! $this->isHttpsUrl($url)) {
             throw new NomodCheckoutException("Nomod {$type} redirect URL is not configured with a valid HTTPS URL.");

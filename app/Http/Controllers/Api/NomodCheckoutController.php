@@ -32,8 +32,9 @@ class NomodCheckoutController extends Controller
         $validated = $request->validate([
             'booking_id' => ['required', 'integer'],
         ]);
+        $returnOrigin = $this->resolveReturnOrigin($request);
 
-        [$attempt, $reused] = DB::transaction(function () use ($validated, $request): array {
+        [$attempt, $reused] = DB::transaction(function () use ($validated, $request, $returnOrigin): array {
             $booking = FlightBookings::query()
                 ->whereKey($validated['booking_id'])
                 ->lockForUpdate()
@@ -65,6 +66,7 @@ class NomodCheckoutController extends Controller
                 ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
                 ->where('status', PaymentAttempt::STATUS_CREATED)
                 ->whereNotNull('checkout_url')
+                ->where('return_origin', $returnOrigin)
                 ->latest('id')
                 ->first();
 
@@ -98,6 +100,7 @@ class NomodCheckoutController extends Controller
                 'status' => PaymentAttempt::STATUS_INITIATING,
                 'amount' => $checkoutMoney['amount'],
                 'currency' => $checkoutMoney['currency'],
+                'return_origin' => $returnOrigin,
             ]), false];
         });
 
@@ -109,7 +112,7 @@ class NomodCheckoutController extends Controller
         $snapshot = $this->bookingPricingService->snapshotFor($booking);
 
         try {
-            $checkout = $this->nomodHostedCheckoutService->createCheckout($attempt, $booking, $snapshot);
+            $checkout = $this->nomodHostedCheckoutService->createCheckout($attempt, $booking, $snapshot, $attempt->return_origin);
         } catch (Throwable $exception) {
             $attempt->update(['status' => PaymentAttempt::STATUS_CREATION_FAILED]);
 
@@ -188,6 +191,27 @@ class NomodCheckoutController extends Controller
                 'booking_id' => 'This booking is not eligible for a new payment checkout.',
             ]);
         }
+    }
+
+    private function resolveReturnOrigin(Request $request): string
+    {
+        $host = strtolower($request->getHost());
+        $allowedHosts = array_values(array_unique(array_filter(array_map(
+            static fn (?string $host): string => strtolower(trim((string) $host)),
+            [
+                ...((array) config('services.nomod.allowed_return_hosts', [])),
+                parse_url((string) config('app.url'), PHP_URL_HOST) ?: null,
+                parse_url((string) config('app.frontend_url'), PHP_URL_HOST) ?: null,
+            ],
+        ))));
+
+        if (! in_array($host, $allowedHosts, true)) {
+            throw ValidationException::withMessages([
+                'booking_id' => 'Nomod checkout is not enabled for this website domain.',
+            ]);
+        }
+
+        return 'https://'.$host;
     }
 
     private function checkoutResponse(PaymentAttempt $attempt): array
