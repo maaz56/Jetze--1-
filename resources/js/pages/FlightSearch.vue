@@ -1,5 +1,6 @@
 <script setup>
 import FlightFilterCard from "@/components/common/FlightFilterCard.vue";
+import FlightLayoverTooltip from "@/components/common/FlightLayoverTooltip.vue";
 import Spinner from "@/components/common/Spinner.vue";
 
 import { Button } from "@/components/ui/button";
@@ -635,11 +636,7 @@ function flightMatchesDuration(flight) {
         return true;
     }
 
-    const totalMinutes =
-        flight?.leg?.flights?.reduce(
-            (sum, leg) => sum + (leg?.travel_time || 0),
-            0,
-        ) || 0;
+    const totalMinutes = getFlightTotalDurationMinutes(flight);
 
     return totalMinutes <= Number(maxDurationFilter.value);
 }
@@ -828,11 +825,55 @@ const getSegmentLayoverMinutes = (segment, nextSegment) => {
     return diff > 0 ? diff : 0;
 };
 
+const getLegTotalDurationMinutes = (flight, leg) => {
+    const flightMinutes = Math.max(0, Number(leg?.travel_time) || 0);
+
+    // AT supplies travel_time as the sum of the flown segments only. Add the
+    // wait between segments so a connection is included in the total journey.
+    if (flight?.provider?.identifier !== "AT") return flightMinutes;
+
+    const segments = Array.isArray(leg?.segments) ? leg.segments : [];
+    const layoverMinutes = segments.slice(0, -1).reduce(
+        (total, segment, index) =>
+            total + getSegmentLayoverMinutes(segment, segments[index + 1]),
+        0,
+    );
+
+    return flightMinutes + layoverMinutes;
+};
+
+const getFlightTotalDurationMinutes = (flight) =>
+    flight?.leg?.flights?.reduce(
+        (total, leg) => total + getLegTotalDurationMinutes(flight, leg),
+        0,
+    ) || 0;
+
 const formatLayoverDuration = (minutes) => {
     const total = Math.max(0, Number(minutes) || 0);
     const hours = Math.floor(total / 60);
     const mins = total % 60;
     return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+};
+
+const formatLayoverLabel = (minutes) => {
+    const total = Math.max(0, Number(minutes) || 0);
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    return `${hours}h ${String(mins).padStart(2, "0")}m`;
+};
+
+const getLayoverAirportLabel = (segment) => {
+    const airport = segment?.to || {};
+    const name =
+        airport?.name ||
+        airport?.airport?.name ||
+        airport?.city?.name ||
+        airport?.iata ||
+        "Connecting airport";
+    const code = airport?.iata || airport?.city?.code || airport?.code || "";
+
+    if (!code || name === code || name.includes(`(${code})`)) return name;
+    return `${name} (${code})`;
 };
 
 const getFlightLayovers = (flight) => {
@@ -867,10 +908,7 @@ const maxDuration = computed(() => {
     if (!allFlights.value.length) return 24 * 60;
     return Math.max(
         ...allFlights.value.map((flight) => {
-            return flight.leg.flights.reduce(
-                (sum, leg) => sum + (Number(leg.travel_time) || 0),
-                0,
-            );
+            return getFlightTotalDurationMinutes(flight);
         }),
     );
 });
@@ -2388,17 +2426,9 @@ watch(isLoggedIn, (newVal) => {
                                             filteredFlights = [
                                                 ...allFlights,
                                             ].sort((a, b) => {
-                                                const getDuration = (flight) =>
-                                                    flight.leg.flights.reduce(
-                                                        (sum, leg) =>
-                                                            sum +
-                                                            (leg.travel_time ||
-                                                                0),
-                                                        0,
-                                                    );
                                                 return (
-                                                    getDuration(a) -
-                                                    getDuration(b)
+                                                    getFlightTotalDurationMinutes(a) -
+                                                    getFlightTotalDurationMinutes(b)
                                                 );
                                             })
                                         "
@@ -2737,10 +2767,13 @@ watch(isLoggedIn, (newVal) => {
                         <span class="text-sm font-medium text-gray-500 mb-5">
                             {{
                                 Math.floor(
-                                    moment.duration(item?.leg?.flights[0]?.travel_time, "m").asHours(),
+                                    getLegTotalDurationMinutes(
+                                        item,
+                                        item?.leg?.flights[0],
+                                    ) / 60,
                                 )
                             }}h
-                            {{ moment.duration(item?.leg?.flights[0]?.travel_time, "m").minutes() }}m
+                            {{ getLegTotalDurationMinutes(item, item?.leg?.flights[0]) % 60 }}m
                         </span>
 
                         <div class="relative w-full flex justify-center items-center">
@@ -2788,16 +2821,10 @@ watch(isLoggedIn, (newVal) => {
                                 <TooltipContent
                                     v-if="item?.leg?.flights[0]?.has_layovers"
                                     side="top"
-                                    class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                    :side-offset="12"
+                                    class="rounded-lg border-0 p-0 shadow-xl"
                                 >
-                                    <p class="mb-1 font-semibold">Layover time</p>
-                                    <div
-                                        v-for="(layover, layoverIndex) in getFlightLayovers(item?.leg?.flights[0])"
-                                        :key="`${layover.airport}-${layoverIndex}`"
-                                    >
-                                        {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
-                                        {{ layover.duration }}
-                                    </div>
+                                    <FlightLayoverTooltip :flight="item?.leg?.flights[0]" />
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -2922,8 +2949,8 @@ watch(isLoggedIn, (newVal) => {
                         </div>
                         <div class="relative flex-1 flex flex-col items-center px-1">
                             <p class="mb-3 text-sm font-medium text-gray-500">
-                                {{ Math.floor(moment.duration(leg?.travel_time, "m").asHours()) }}h
-                                {{ moment.duration(leg?.travel_time, "m").minutes() }}m
+                                {{ Math.floor(getLegTotalDurationMinutes(item, leg) / 60) }}h
+                                {{ getLegTotalDurationMinutes(item, leg) % 60 }}m
                             </p>
                             <div class="relative w-full flex items-center">
                                 <div class="h-[2px] w-full bg-gray-200 rounded-full"></div>
@@ -2964,16 +2991,10 @@ watch(isLoggedIn, (newVal) => {
                                     <TooltipContent
                                         v-if="leg?.has_layovers"
                                         side="top"
-                                        class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                        :side-offset="12"
+                                        class="rounded-lg border-0 p-0 shadow-xl"
                                     >
-                                        <p class="mb-1 font-semibold">Layover time</p>
-                                        <div
-                                            v-for="(layover, layoverIndex) in getFlightLayovers(leg)"
-                                            :key="`${layover.airport}-${layoverIndex}`"
-                                        >
-                                            {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
-                                            {{ layover.duration }}
-                                        </div>
+                                        <FlightLayoverTooltip :flight="leg" />
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -3746,16 +3767,10 @@ watch(isLoggedIn, (newVal) => {
                                                             </TooltipTrigger>
                                                             <TooltipContent
                                                                 side="top"
-                                                                class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                                                :side-offset="12"
+                                                                class="rounded-lg border-0 p-0 shadow-xl"
                                                             >
-                                                                <p class="mb-1 font-semibold">Layover time</p>
-                                                                <div
-                                                                    v-for="(layover, layoverIndex) in getFlightLayovers(summaryFlight)"
-                                                                    :key="`${layover.airport}-${layoverIndex}`"
-                                                                >
-                                                                    {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
-                                                                    {{ layover.duration }}
-                                                                </div>
+                                                                <FlightLayoverTooltip :flight="summaryFlight" />
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>
@@ -3813,15 +3828,11 @@ watch(isLoggedIn, (newVal) => {
                                                 summaryFlight?.segments?.[summarySegmentIndex + 1] &&
                                                 getSegmentLayoverMinutes(summarySegment, summaryFlight.segments[summarySegmentIndex + 1])
                                             "
-                                            class="flex items-center justify-center gap-2 border-y border-amber-200 bg-amber-100 px-3 py-2.5 text-xs font-semibold text-amber-800"
+                                            class="flex items-center justify-center border-y border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-600"
                                         >
-                                            <Clock class="h-3.5 w-3.5" />
-                                            Layover:
-                                            {{
-                                                formatLayoverDuration(
-                                                    getSegmentLayoverMinutes(summarySegment, summaryFlight.segments[summarySegmentIndex + 1]),
-                                                )
-                                            }}
+                                            {{ formatLayoverLabel(getSegmentLayoverMinutes(summarySegment, summaryFlight.segments[summarySegmentIndex + 1])) }}
+                                            layover
+                                            {{ getLayoverAirportLabel(summarySegment) }}
                                         </div>
                                     </template>
                                 </div>
