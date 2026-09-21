@@ -12,7 +12,7 @@ import Header from '@/components/shared/Header.vue';
 import QuickServices from './Home/QuickServices.vue';
 import OffersSection from './Home/OffersSection.vue';
 import TrustFeaturesCarousel from './Home/TrustFeaturesCarousel.vue';
-import TopFlightRoutesSection from './Home/TopFlightRoutesSection.vue';
+import TopFlightRoutesSection from './Home/TopFlightRoutesSection.v     ue';
 import WhyChooseUs from './Home/WhyChooseUs.vue';
 import TrendingRoutes from './Home/TrendingRoutes.vue';
 import Collections from './Home/Collections.vue';
