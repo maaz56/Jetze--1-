@@ -36,6 +36,7 @@ import {
     CarouselPrevious,
 } from "@/components/ui/carousel";
 import Autocomplete from "@/components/common/Autocomplete.vue";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Select,
     SelectContent,
@@ -123,7 +124,7 @@ const activeTab = ref("flights");
 const tabs = [
     { id: "flights", name: "Flights", icon: '/plane.png'  },
     { id: "hotels", name: "Hotels", icon:  '/residential.png' },
-    { id: "Holidays", name: "Holidays", icon:  '/holidays.png', badge: "New" },
+    { id: "holidays", name: "Holidays", icon:  '/holidays.png', badge: "New" },
 ];
 
 const setActiveTab = (tabId) => {
@@ -991,50 +992,42 @@ onMounted(() => {
 </script>
 
 <template>
-    <div
-        id="main-search-card"
-        class="relative mt-8 sm:mt-28 h-auto max-w-7xl mx-auto overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl"
-    >
-        <div
-            id="hero-service-tabs"
-            class="absolute inset-x-0 -top-[58px] z-20 hidden justify-center md:flex"
-        >
-            <div class="flex min-w-[420px] items-stretch justify-center overflow-hidden rounded-lg border border-gray-100 bg-white text-slate-900 shadow-[0_16px_38px_rgba(15,23,42,0.16)]">
-                <button
-                    v-for="tab in tabs"
-                    :key="tab.id"
-                    type="button"
-                    @click="setActiveTab(tab.id)"
-                    :class="[
-                        'group relative flex h-[88px] w-[138px] sm:w-[145px] flex-col items-center justify-center gap-1.5 transition-colors',
-                        activeTab === tab.id ? 'text-primary' : 'text-slate-700 hover:text-primary',
-                    ]"
+    <div class="relative mx-auto max-w-7xl pt-[58px] sm:pt-[66px]">
+        <!-- Main booking services, visually separated from the utility navigation. -->
+        <div class="absolute left-1/2 top-0 z-10 flex -translate-x-1/2 items-stretch rounded-2xl border border-slate-100 bg-white p-1.5 shadow-[0_14px_30px_rgba(15,23,42,0.16)] sm:p-2">
+            <button
+                v-for="tab in tabs"
+                :key="tab.id"
+                type="button"
+                @click="setActiveTab(tab.id)"
+                :class="[
+                    'relative flex min-w-[78px] flex-col items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:min-w-[112px] sm:px-6 sm:py-3 sm:text-sm',
+                    activeTab === tab.id
+                        ? 'bg-blue-50 text-primary shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-primary',
+                ]"
+            >
+                <span
+                    v-if="tab.badge"
+                    class="absolute right-1 top-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white sm:right-2 sm:text-[9px]"
                 >
-                    <span
-                        v-if="tab.badge"
-                        class="absolute right-4 top-0 rounded-b-sm bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white"
-                    >
-                        {{ tab.badge }}
-                    </span>
-                    <img
-                        v-if="isImageIcon(tab.icon)"
-                        :src="tab.icon"
-                        :alt="tab.name"
-                        class="h-7 w-7 object-contain"
-                    />
-                    <component v-else :is="tab.icon" class="h-7 w-7 stroke-[1.7]" />
-                    <span class="text-[13px] sm:text-[14px] font-bold">{{ tab.name }}</span>
-                    <span
-                        v-if="activeTab === tab.id"
-                        aria-hidden="true"
-                        class="absolute inset-x-8 bottom-0 h-[3px] rounded-t bg-primary"
-                    ></span>
-                </button>
-            </div>
+                    {{ tab.badge }}
+                </span>
+                <img :src="tab.icon" :alt="tab.name" class="h-7 w-7 object-contain sm:h-8 sm:w-8" />
+                <span>{{ tab.name }}</span>
+                <span
+                    v-if="activeTab === tab.id"
+                    aria-hidden="true"
+                    class="absolute inset-x-4 -bottom-1 h-0.5 rounded-full bg-primary sm:inset-x-6"
+                ></span>
+            </button>
         </div>
 
+        <div
+            class="h-auto overflow-visible rounded-2xl border border-white/80 bg-white shadow-[0_20px_40px_rgba(15,23,42,0.18)]"
+        >
         <!-- Content Area -->
-        <div class="pt-8 sm:pt-9 pb-4 px-4 sm:px-6">
+        <div class="px-4 py-4 sm:px-6 sm:py-5">
             <!-- Loading State -->
             <div
                 v-if="isLoading"
@@ -1055,20 +1048,20 @@ onMounted(() => {
             >
                 <!-- Trip Type Selection & Title Row -->
                 <div
-                    class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-1 sm:mt-1.5 mb-3.5 sm:mb-4"
+                    class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-2"
                 >
                     <!-- Trip Type Buttons -->
                     <div
-                        class="flex w-full sm:w-auto items-center bg-slate-100/90 rounded-lg p-1 sm:p-1.5 flex-row gap-1 sm:gap-1.5 border border-slate-200/60 shadow-2xs"
+                        class="flex w-full sm:w-auto bg-gray-100 rounded p-1 flex-row gap-1"
                     >
                         <!-- Round Trip -->
                         <button
                             @click="setFlightType('return')"
                             :class="[
-                                'w-full sm:w-auto h-9 sm:h-9 px-3.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'return'
-                                    ? 'bg-white text-primary border border-slate-200/80 shadow-xs font-bold'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
+                                    : 'text-gray-600 hover:bg-white',
                             ]"
                         >
                             {{ $t("Round Trip") }}
@@ -1078,10 +1071,10 @@ onMounted(() => {
                         <button
                             @click="setFlightType('one-way')"
                             :class="[
-                                'w-full sm:w-auto h-9 sm:h-9 px-3.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'one-way'
-                                    ? 'bg-white text-primary border border-slate-200/80 shadow-xs font-bold'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
+                                    : 'text-gray-600 hover:bg-white',
                             ]"
                         >
                             {{ $t("One Way") }}
@@ -1091,18 +1084,18 @@ onMounted(() => {
                         <button
                             @click="setFlightType('multi-city')"
                             :class="[
-                                'w-full sm:w-auto h-9 sm:h-9 px-3.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
                                 flightType === 'multi-city'
-                                    ? 'bg-white text-primary border border-slate-200/80 shadow-xs font-bold'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
+                                    : 'text-gray-600 hover:bg-white',
                             ]"
                         >
                             {{ $t("Multi-City") }}
                         </button>
                     </div>
 
-                    <!-- Right Indicator (Adjusted for generous breathing room) -->
-                    <div class="hidden xl:flex items-center gap-2 text-primary font-bold text-xs sm:text-sm">
+                    <!-- Right Indicator (Akbar Travels style) -->
+                    <div class="hidden sm:flex items-center gap-2 text-primary font-bold text-sm">
                         <Plane class="w-4 h-4" />
                         <span>Book Flight Tickets</span>
                     </div>
@@ -1775,6 +1768,7 @@ onMounted(() => {
                 </div>
             </div>
         </div>
+    </div>
     </div>
 </template>
 
