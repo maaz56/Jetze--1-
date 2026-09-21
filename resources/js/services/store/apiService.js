@@ -252,6 +252,12 @@ export default {
     initializeAbhiPay(params) {
         return apiClient.post("/initialize-abhipay", params);
     },
+    createNomodCheckout(bookingId) {
+        return apiClient.post("/payments/nomod/checkout", { booking_id: bookingId });
+    },
+    getNomodPaymentStatus(paymentAttempt) {
+        return apiClient.get(`/payments/nomod/${paymentAttempt}/status`);
+    },
     checkPaymentStatus(params) {
         return apiClient.get("/check-payment-status", {
             params: params,

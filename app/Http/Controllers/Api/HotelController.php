@@ -307,7 +307,7 @@ class HotelController extends Controller
         $roomDetailsById = collect($roomDetails)->keyBy('room_id');
         $searchRooms = collect($searchHotel['rooms'])
             ->map(function (array $room) use ($roomDetailsById): array {
-                $room['room_details'] = $this->matchHotelRoomDetails($room, $roomDetailsById);
+                $room['room_details'] = $this->matchHotelRoomDetailsById($room, $roomDetailsById);
 
                 return $room;
             })
@@ -1291,7 +1291,7 @@ class HotelController extends Controller
     {
         return collect($providerHotel['RoomDetails'] ?? [])
             ->filter(fn ($room) => is_array($room)
-                && ! empty($room['RoomId'])
+                && $this->normalizeRoomId($room['RoomId'] ?? null) !== null
                 && ! empty($room['RoomName']))
             ->map(function (array $room): array {
                 $images = collect($room['imageURL'] ?? [])
@@ -1301,7 +1301,7 @@ class HotelController extends Controller
                     ->all();
 
                 return [
-                    'room_id' => (string) $room['RoomId'],
+                    'room_id' => $this->normalizeRoomId($room['RoomId'] ?? null),
                     'name' => $room['RoomName'] ?? 'Room details',
                     'size' => $room['RoomSize'] ?? null,
                     'description' => $room['RoomDescription'] ?? null,
@@ -1313,62 +1313,38 @@ class HotelController extends Controller
             ->all();
     }
 
-    /**
-     * Attach static room content to a live search room without affecting its price or booking code.
-     * TBO does not always return RoomID in Search, so a unique high-confidence name match is allowed.
-     */
-    protected function matchHotelRoomDetails(array $searchRoom, Collection $roomDetailsById): ?array
+    /** Attach static room content only when TBO's live and static RoomID values match exactly. */
+    protected function matchHotelRoomDetailsById(array $searchRoom, Collection $roomDetailsById): ?array
     {
-        $roomId = (string) ($searchRoom['room_id'] ?? '');
-        if ($roomId !== '' && $roomDetailsById->has($roomId)) {
-            return $roomDetailsById->get($roomId);
-        }
-
-        $searchTokens = $this->roomNameTokens($searchRoom['name'] ?? null);
-        if (count($searchTokens) < 2) {
+        $roomId = $this->normalizeRoomId($searchRoom['room_id'] ?? null);
+        if ($roomId === null) {
             return null;
         }
 
-        $matches = $roomDetailsById
-            ->map(function (array $roomDetail) use ($searchTokens): array {
-                $detailTokens = $this->roomNameTokens($roomDetail['name'] ?? null);
-                $sharedTokens = array_intersect($searchTokens, $detailTokens);
-                $score = count($sharedTokens) / max(count($searchTokens), count($detailTokens), 1);
-
-                return [
-                    'room_detail' => $roomDetail,
-                    'score' => $score,
-                    'shared_count' => count($sharedTokens),
-                ];
-            })
-            ->filter(fn (array $match) => $match['shared_count'] >= 2)
-            ->sortByDesc('score')
-            ->values();
-
-        $bestMatch = $matches->first();
-        $secondBestMatch = $matches->get(1);
-
-        if (! $bestMatch || $bestMatch['score'] < 0.75) {
-            return null;
-        }
-
-        if ($secondBestMatch && ($bestMatch['score'] - $secondBestMatch['score']) < 0.12) {
-            return null;
-        }
-
-        return $bestMatch['room_detail'];
+        return $roomDetailsById->get($roomId);
     }
 
-    /** Normalize TBO room names into comparable meaningful words. */
-    protected function roomNameTokens(array|string|null $roomName): array
+    /**
+     * TBO returns room identifiers inconsistently: a scalar TBORoomID for some
+     * rooms and an array-shaped RoomID for others. Convert either form to one
+     * usable identifier, treating the provider's placeholder "0" as absent.
+     */
+    protected function normalizeRoomId(mixed ...$values): ?string
     {
-        $name = is_array($roomName) ? implode(' ', $roomName) : (string) $roomName;
-        $normalized = strtolower(preg_replace('/[^a-z]+/i', ' ', $name));
+        foreach ($values as $value) {
+            foreach (is_array($value) ? $value : [$value] as $candidate) {
+                if (! is_scalar($candidate)) {
+                    continue;
+                }
 
-        return array_values(array_unique(array_filter(
-            preg_split('/\s+/', trim($normalized)) ?: [],
-            fn (string $token) => strlen($token) > 1 && ! in_array($token, ['with', 'and', 'the'], true),
-        )));
+                $roomId = trim((string) $candidate);
+                if ($roomId !== '' && $roomId !== '0') {
+                    return $roomId;
+                }
+            }
+        }
+
+        return null;
     }
 
     protected function normalizeRoom(array $room, string $displayCurrency, ?string $fallbackCurrency = null): array
@@ -1380,7 +1356,10 @@ class HotelController extends Controller
         return [
             'name' => $room['Name'] ?? [],
             'currency' => $currency ?: null,
-            'room_id' => $room['RoomID'] ?? null,
+            'room_id' => $this->normalizeRoomId(
+                $room['TBORoomID'] ?? null,
+                $room['RoomID'] ?? null,
+            ),
             'booking_code' => $room['BookingCode'] ?? null,
             'inclusion' => $room['Inclusion'] ?? null,
             'total_fare' => $totalFare,

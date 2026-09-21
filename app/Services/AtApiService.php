@@ -1223,6 +1223,31 @@ private function extractTrips($tripsData): array
 
     public function atPaymentRequest($params)
     {
+        $reservation = is_array($params['pnrData'] ?? null) ? $params['pnrData'] : [];
+        // Preserve the established wallet-flow contract, where FareType was
+        // supplied alongside pnrData by the browser.
+        $reservation['FareType'] ??= $params['FareType'] ?? null;
+
+        $response = $this->startDepositPayment(
+            $reservation,
+            (int) ($params['net_amount'] ?? 0),
+            (string) ($params['bookingType'] ?? 'HP'),
+        );
+
+        return $response === null ? null : json_encode($response);
+    }
+
+    /**
+     * Settle an already-created AT reservation from trusted server-side data.
+     *
+     * This deliberately accepts the stored reservation response rather than a
+     * browser request. It is used by the Nomod fulfilment worker, while
+     * atPaymentRequest() remains as the backwards-compatible wallet flow.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function startDepositPayment(array $reservation, int $netAmount, string $bookingType = 'HP'): ?array
+    {
 
         $accessToken = $this->getAccessToken();
         $clientId = $accessToken['ClientID'] ?? null;
@@ -1232,8 +1257,26 @@ private function extractTrips($tripsData): array
         ];
 
         $paymentUrl = "{$this->flightBaseUrl}/Payment/StartPay";
-        $transactionID = $params['pnrData']['TransactionID'] ?? null;
-        $TUI = $params['FareType'] === 'DM' ? $params['pnrData']['BookingResponses'][0]['TUI'] ?? null : $params['pnrData']['TUI'] ?? null;
+        $transactionID = $reservation['TransactionID'] ?? null;
+        $fareType = strtoupper((string) ($reservation['FareType'] ?? ''));
+        $TUI = $fareType === 'DM'
+            ? $reservation['BookingResponses'][0]['TUI'] ?? null
+            : $reservation['TUI'] ?? null;
+
+        if (! $transactionID || ! $TUI || $netAmount <= 0) {
+            Log::error('AT payment could not be started from the stored reservation.', [
+                'has_transaction_id' => (bool) $transactionID,
+                'has_tui' => (bool) $TUI,
+                'net_amount' => $netAmount,
+                'fare_type' => $fareType,
+            ]);
+
+            return [
+                'status' => false,
+                'message' => 'AT reservation payment data is incomplete.',
+                'error' => 'AT reservation payment data is incomplete.',
+            ];
+        }
         /*
         |--------------------------------------------------------------------------
         | BUILD PAYMENT PAYLOAD
@@ -1242,7 +1285,7 @@ private function extractTrips($tripsData): array
         $payload = [
             'TransactionID' => $transactionID,
             'PaymentAmount' => 0,
-            'NetAmount' => (int) $params['net_amount'],
+            'NetAmount' => $netAmount,
             'BrowserKey' => $this->browserKey,
             'ClientID' => $clientId,
             'TUI' => $TUI,
@@ -1281,7 +1324,7 @@ private function extractTrips($tripsData): array
             'TargetCurrency' => '',
             'TargetAmount' => 0,
             'ServiceType' => 'ITI',
-            'BookingType' => $params['bookingType'] ?? 'HP',
+            'BookingType' => $bookingType,
         ];
 
         Log::info('AT Payment Payload (final):', $payload);
@@ -1308,14 +1351,18 @@ private function extractTrips($tripsData): array
                     'response' => $responseData,
                 ]);
 
-                return json_encode([
+                return [
                     'status' => false,
                     'message' => $message,
                     'error' => $message,
-                ]);
+                ];
             }
 
-            return $responseBodyString;
+            return is_array($responseData) ? $responseData : [
+                'status' => false,
+                'message' => 'AT returned an invalid payment response.',
+                'error' => 'AT returned an invalid payment response.',
+            ];
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             Log::error('AT Payment Error: ' . $e->getMessage());
@@ -1724,7 +1771,15 @@ private function extractTrips($tripsData): array
     /** Convert a locked decimal to AT's numeric JSON format at the provider boundary. */
     private function atNumericAmount(mixed $amount): int|float
     {
-        $normalized = rtrim(rtrim((string) $amount, '0'), '.');
+        $normalized = trim((string) $amount);
+
+        // Never trim an integer directly: rtrim('6580', '0') becomes '658'
+        // and changes the supplier amount. Only insignificant zeroes in a
+        // decimal fraction may be removed.
+        if (str_contains($normalized, '.')) {
+            $normalized = rtrim(rtrim($normalized, '0'), '.');
+        }
+
         $normalized = $normalized === '' || $normalized === '-0' ? '0' : $normalized;
 
         return str_contains($normalized, '.') ? (float) $normalized : (int) $normalized;

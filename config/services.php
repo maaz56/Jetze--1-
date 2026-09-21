@@ -58,4 +58,29 @@ return [
         'key' => env('STRIPE_KEY'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Nomod Hosted Checkout
+    |--------------------------------------------------------------------------
+    |
+    | These credentials must only ever be used by Laravel. In particular, the
+    | API key and webhook signing secret must not be exposed through Vite or a
+    | JSON endpoint.
+    |
+    */
+    'nomod' => [
+        // Prefer the name used by Nomod's Hosted Checkout documentation while
+        // allowing the initial integration variable during a safe rollout.
+        'api_key' => trim((string) env('NOMOD_HOSTED_CHECKOUT_API_KEY', env('NOMOD_API_KEY'))),
+        'base_url' => rtrim(env('NOMOD_API_BASE_URL', 'https://api.nomod.com'), '/'),
+        'timeout' => (int) env('NOMOD_TIMEOUT_SECONDS', 15),
+        'webhook_secret' => env('NOMOD_WEBHOOK_SECRET'),
+        'webhook_tolerance_seconds' => (int) env('NOMOD_WEBHOOK_TOLERANCE_SECONDS', 300),
+        'redirects' => [
+            'success' => env('NOMOD_SUCCESS_URL', rtrim(env('APP_URL', ''), '/').'/payment/nomod/success'),
+            'failure' => env('NOMOD_FAILURE_URL', rtrim(env('APP_URL', ''), '/').'/payment/nomod/failure'),
+            'cancelled' => env('NOMOD_CANCELLED_URL', rtrim(env('APP_URL', ''), '/').'/payment/nomod/cancelled'),
+        ],
+    ],
+
 ];

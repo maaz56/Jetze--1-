@@ -583,7 +583,7 @@ class BookingController extends Controller
             ]);
 
         }
-        if ($request->paymentMethod == 'hold') {
+        if ($request->paymentMethod == 'hold' && config('app.booking_email_notifications', true)) {
 
             $admin = User::where('role', 'admin')->first();
 
@@ -948,7 +948,7 @@ class BookingController extends Controller
 
     private function sendBookingCanceledMail($booking): void
     {
-        if (!$booking) {
+        if (!$booking || ! config('app.booking_email_notifications', true)) {
             return;
         }
 
@@ -970,7 +970,7 @@ class BookingController extends Controller
 
     private function sendBookingStatusMail($booking, ?string $status = null, ?array $recipientEmails = null): void
     {
-        if (!$booking) {
+        if (!$booking || ! config('app.booking_email_notifications', true)) {
             return;
         }
 

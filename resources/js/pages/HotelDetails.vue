@@ -20,7 +20,7 @@ import {
   Star,
   X,
 } from "lucide-vue-next";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
@@ -51,7 +51,8 @@ const imageGallery = computed(() => [...new Set([
 const previewImages = computed(() => imageGallery.value.slice(1, 5));
 const activeGalleryImage = computed(() => galleryImages.value[activeGalleryIndex.value] || null);
 const roomOptions = computed(() => hotel.value?.rooms || []);
-const selectedRoom = computed(() => roomOptions.value.find((room) => room.booking_code === selectedBookingCode.value) || roomOptions.value[0] || null);
+const isSelectedRoomPage = computed(() => route.name === "HotelRoomDetails");
+const selectedRoom = computed(() => roomOptions.value.find((room) => room.booking_code === selectedBookingCode.value) || null);
 const facilities = computed(() => hotel.value?.facilities || []);
 const attractions = computed(() => hotel.value?.attractions || []);
 const visibleFacilities = computed(() => isFacilitiesExpanded.value ? facilities.value : facilities.value.slice(0, 8));
@@ -124,7 +125,7 @@ const toggleRoomDescription = (room) => {
   expandedRoomDescriptions.value = nextExpandedDescriptions;
 };
 
-/** Return safe static metadata matched by TBO RoomID or a unique room-name fallback. */
+/** Return static room metadata only when its TBO RoomID matched the live room exactly. */
 const roomDetails = (room) => room?.room_details || null;
 const roomImages = (room) => [...new Set((roomDetails(room)?.images || []).filter(Boolean))];
 const roomImageIndex = (room) => roomImageIndexes.value[room?.booking_code] || 0;
@@ -188,13 +189,35 @@ const moveGallery = (direction) => {
   activeGalleryIndex.value = (activeGalleryIndex.value + direction + totalImages) % totalImages;
 };
 
-/** Choose a room locally; the provider price is still rechecked before checkout. */
+/** Open the selected room's dedicated details page before the final provider recheck. */
 const chooseRoom = (room) => {
-  selectedBookingCode.value = room?.booking_code || "";
+  if (!room?.booking_code) {
+    return;
+  }
+
+  router.push({
+    name: "HotelRoomDetails",
+    query: {
+      search_session_id: route.query.search_session_id,
+      hotel_code: route.query.hotel_code,
+      booking_code: room.booking_code,
+    },
+  });
 };
 
 /** Return to the hotel search page without retaining this property's static response. */
 const backToSearch = () => {
+  if (isSelectedRoomPage.value) {
+    router.push({
+      name: "HotelDetails",
+      query: {
+        search_session_id: route.query.search_session_id,
+        hotel_code: route.query.hotel_code,
+      },
+    });
+    return;
+  }
+
   router.push({ name: "HotelSearch" });
 };
 
@@ -202,6 +225,12 @@ const backToSearch = () => {
 const loadHotelDetails = async () => {
   const searchSessionId = String(route.query.search_session_id || "");
   const hotelCode = String(route.query.hotel_code || "");
+  const bookingCode = String(route.query.booking_code || "");
+
+  isLoading.value = true;
+  errorMessage.value = "";
+  prebookError.value = "";
+  selectedBookingCode.value = "";
 
   if (!searchSessionId || !hotelCode) {
     errorMessage.value = "Hotel details require an active hotel search.";
@@ -216,7 +245,11 @@ const loadHotelDetails = async () => {
       currency_code: getSelectedCurrencyCode(),
     });
     hotel.value = response.data || null;
-    selectedBookingCode.value = hotel.value?.rooms?.[0]?.booking_code || "";
+    selectedBookingCode.value = bookingCode;
+
+    if (isSelectedRoomPage.value && !selectedRoom.value) {
+      errorMessage.value = "The selected room is no longer available. Please choose another room.";
+    }
   } catch (error) {
     errorMessage.value = hotelStore.getErrorMessage || "Unable to load hotel details.";
   } finally {
@@ -249,11 +282,12 @@ const continueToCheckout = async () => {
       query: { prebook_id: response.data?.prebook_id },
     });
   } catch (error) {
-    prebookError.value = hotelStore.getErrorMessage || "Unable to confirm this room. Please try again.";
+    prebookError.value = hotelStore.getErrorMessage || "Unable to continue to checkout. Please try again.";
   }
 };
 
 onMounted(loadHotelDetails);
+watch(() => route.fullPath, loadHotelDetails);
 </script>
 
 <template>
@@ -263,7 +297,7 @@ onMounted(loadHotelDetails);
     <div class="mx-auto w-full max-w-7xl px-4">
       <Button variant="outline" class="mb-6 gap-2" @click="backToSearch">
         <ArrowLeft class="h-4 w-4" />
-        Back to hotel search
+        {{ isSelectedRoomPage ? "Change room" : "Back to hotel search" }}
       </Button>
 
       <div v-if="isLoading" class="space-y-5 animate-pulse">
@@ -279,7 +313,7 @@ onMounted(loadHotelDetails);
       </section>
 
       <section v-else-if="hotel" class="space-y-7">
-        <div v-if="imageGallery.length" class="grid gap-3 overflow-hidden rounded-2xl lg:grid-cols-[1.1fr_0.9fr]">
+        <div v-if="!isSelectedRoomPage && imageGallery.length" class="grid gap-3 overflow-hidden rounded-2xl lg:grid-cols-[1.1fr_0.9fr]">
           <button
             type="button"
             class="group relative h-72 overflow-hidden rounded-2xl bg-slate-200 text-left md:h-[430px]"
@@ -331,11 +365,68 @@ onMounted(loadHotelDetails);
           </div>
         </div>
 
-        <div v-else class="flex h-72 items-center justify-center rounded-2xl bg-slate-200 text-slate-500">
+        <div v-else-if="!isSelectedRoomPage" class="flex h-72 items-center justify-center rounded-2xl bg-slate-200 text-slate-500">
           <ImageOff class="mr-2 h-5 w-5" /> Images unavailable
         </div>
 
-        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section v-if="isSelectedRoomPage && selectedRoom" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+            <p class="text-xs font-bold uppercase tracking-wide text-primary">Selected room</p>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ formatRoomName(selectedRoom) }}</h1>
+            <p class="mt-1 flex items-start gap-2 text-sm text-slate-600"><MapPin class="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {{ hotel.name }}, {{ [hotel.city, hotel.country].filter(Boolean).join(", ") }}</p>
+          </div>
+
+          <div class="grid lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="min-w-0 p-5 sm:p-6">
+              <div class="relative h-64 overflow-hidden rounded-xl bg-slate-100 sm:h-[440px]">
+                <img
+                  v-if="roomImage(selectedRoom) && !isImageFailed(roomImage(selectedRoom))"
+                  :src="roomImage(selectedRoom)"
+                  :alt="formatRoomName(selectedRoom)"
+                  class="h-full w-full object-cover"
+                  :class="{ 'opacity-0': !isImageLoaded(roomImage(selectedRoom)) }"
+                  @load="markImageLoaded(roomImage(selectedRoom))"
+                  @error="markImageFailed(roomImage(selectedRoom))"
+                >
+                <div v-if="roomImage(selectedRoom) && !isImageLoaded(roomImage(selectedRoom)) && !isImageFailed(roomImage(selectedRoom))" class="absolute inset-0 animate-pulse bg-slate-200" />
+                <div v-if="!roomImage(selectedRoom) || isImageFailed(roomImage(selectedRoom))" class="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500"><ImageOff class="mr-2 h-5 w-5 shrink-0" /> No verified image is available for this room.</div>
+                <button v-if="roomImages(selectedRoom).length > 1" type="button" class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-2 text-slate-900 shadow" aria-label="Previous room image" @click="moveRoomImage(selectedRoom, -1)"><ChevronLeft class="h-5 w-5" /></button>
+                <button v-if="roomImages(selectedRoom).length > 1" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-2 text-slate-900 shadow" aria-label="Next room image" @click="moveRoomImage(selectedRoom, 1)"><ChevronRight class="h-5 w-5" /></button>
+                <button v-if="roomImages(selectedRoom).length" type="button" class="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full bg-slate-950/80 px-3 py-2 text-sm font-semibold text-white" @click="openRoomGallery(selectedRoom, roomImageIndex(selectedRoom))"><Images class="h-4 w-4" /> {{ roomImageIndex(selectedRoom) + 1 }} of {{ roomImages(selectedRoom).length }} photos</button>
+              </div>
+
+              <div class="mt-6">
+                <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-slate-700">
+                  <span v-if="roomDetails(selectedRoom)?.size">{{ roomDetails(selectedRoom).size }}</span>
+                  <span>{{ staySummary }}</span>
+                  <span>{{ selectedRoom.meal_type || "Meal details unavailable" }}</span>
+                </div>
+                <p v-if="roomDetails(selectedRoom)?.description" class="mt-4 whitespace-pre-line text-sm leading-6 text-slate-600">{{ roomDetails(selectedRoom).description }}</p>
+                <p v-else class="mt-4 text-sm leading-6 text-slate-500">Additional room description is not available from the provider.</p>
+                <div class="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm text-slate-700">
+                  <p class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0" :class="selectedRoom.is_refundable ? 'text-emerald-600' : 'text-slate-500'" /> {{ selectedRoom.is_refundable ? "Refundable room option" : "Non-refundable room option" }}</p>
+                  <p v-if="selectedRoom.inclusion" class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> {{ selectedRoom.inclusion }}</p>
+                  <p v-if="selectedRoom.bedding_group" class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {{ selectedRoom.bedding_group }}</p>
+                </div>
+              </div>
+            </div>
+
+            <aside class="flex flex-col border-t border-slate-200 bg-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0">
+              <p class="text-sm font-semibold text-slate-600">Total for your stay</p>
+              <p class="mt-2 text-3xl font-bold text-slate-900"><CircleDollarSign class="mr-1 inline h-5 w-5 text-primary" />{{ formatMoney(roomMoney(selectedRoom)) }}</p>
+              <p v-if="selectedRoom.display_tax_money" class="mt-1 text-sm text-slate-500">Tax {{ formatMoney(selectedRoom.display_tax_money) }}</p>
+              <div class="mt-6 border-t border-slate-200 pt-5 text-sm text-slate-600">
+                <p class="flex items-center gap-2"><CalendarDays class="h-4 w-4 text-primary" /> {{ hotel.stay?.check_in }} to {{ hotel.stay?.check_out }}</p>
+                <p class="mt-3">TBO will recheck availability and the final price before checkout.</p>
+              </div>
+              <p v-if="prebookError" class="mt-4 text-sm font-medium text-red-700">{{ prebookError }}</p>
+              <Button class="mt-6 h-11 w-full text-sm font-bold" :disabled="isPrebooking" :is-loading="isPrebooking" @click="continueToCheckout">Continue to checkout</Button>
+              <Button variant="outline" class="mt-3 h-10 w-full text-sm font-bold" @click="backToSearch">Choose a different room</Button>
+            </aside>
+          </div>
+        </section>
+
+        <div v-if="!isSelectedRoomPage" class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div class="space-y-6">
             <section class="rounded-xl border border-slate-200 bg-white p-5">
               <div class="flex flex-wrap items-center gap-2">
@@ -462,11 +553,6 @@ onMounted(loadHotelDetails);
               </div>
               <p v-else class="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No rooms are available in this search anymore. Please return to search.</p>
 
-              <p v-if="prebookError" class="mt-4 text-sm font-medium text-red-700">{{ prebookError }}</p>
-              <div class="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs text-slate-500">TBO will recheck the selected room's final availability and price before checkout.</p>
-                <Button class="h-11 gap-2 px-5 text-sm font-bold" :disabled="!selectedRoom || isPrebooking" :is-loading="isPrebooking" @click="continueToCheckout">Confirm room price</Button>
-              </div>
             </section>
 
             <section v-if="attractions.length" class="rounded-xl border border-slate-200 bg-white p-5">

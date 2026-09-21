@@ -37,14 +37,14 @@ onMounted(() => {
         </div>
 
         <!-- OVERLAPPING SEARCH SECTION -->
-        <div class="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-64 sm:-mt-72 lg:-mt-80 animate-fade-in-up">
+        <div class="relative z-20 mx-auto -mt-[385px] w-full max-w-7xl px-4 sm:-mt-[425px] sm:px-6 lg:-mt-[460px] lg:px-8 animate-fade-in-up">
             
             <Header />
 
         </div>
 
         <!-- OFFERS & SEASONAL PROMOTIONS -->
-        <div class="mt-4 sm:mt-6">
+        <div class="mt-8 sm:mt-10">
             <OffersSection />
         </div>
 

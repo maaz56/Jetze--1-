@@ -27,6 +27,8 @@ use App\Http\Controllers\Api\FlyDubaiController;
 use App\Http\Controllers\Api\GroupTicketController;
 use App\Http\Controllers\Api\HotelController;
 use App\Http\Controllers\Api\ModifyRequestController;
+use App\Http\Controllers\Api\NomodCheckoutController;
+use App\Http\Controllers\Api\NomodWebhookController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PromoImageController;
@@ -116,6 +118,16 @@ Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     $userData['permissions'] = $user->getAllPermissions()->pluck('name');
     return response()->json($userData);
 });
+
+// Hosted checkout creation is authenticated; Nomod credentials and monetary
+// values never cross the browser boundary.
+Route::middleware(['auth:sanctum', 'throttle:10,1'])
+    ->post('payments/nomod/checkout', [NomodCheckoutController::class, 'store']);
+Route::middleware(['auth:sanctum', 'throttle:30,1'])
+    ->get('payments/nomod/{paymentAttempt}/status', [NomodCheckoutController::class, 'show'])
+    ->whereUuid('paymentAttempt');
+Route::post('webhooks/nomod', [NomodWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1');
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::resource('users', UserController::class);

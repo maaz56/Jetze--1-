@@ -27,7 +27,7 @@ class DepositDataController extends Controller
             'date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
             'receipt_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Validates uploaded image
-            'payment_type' => 'required|string',
+            'payment_type' => 'required|string|max:255',
             'additional_details' => 'nullable|string',
             'agent_id' => 'nullable|integer|exists:users,id',
             'bank_id' => 'nullable|integer|exists:banks,id',
@@ -49,6 +49,10 @@ class DepositDataController extends Controller
                 ->whereKey($validated['bank_id'])
                 ->where('is_active', true)
                 ->firstOrFail();
+        // A client may only choose a bank by ID.  The persisted bank name and
+        // currency always come from the active bank record, never from request
+        // values, so the immutable AED ledger value cannot be forged client-side.
+        $paymentType = $bank?->bank_name ?? $validated['payment_type'];
         $currencyCode = strtoupper(trim($bank?->currency ?: $validated['currency']));
         $conversion = app(CurrencyConversionService::class);
         $baseMoney = $conversion->toBaseMoney($validated['amount'], $currencyCode);
@@ -64,11 +68,11 @@ class DepositDataController extends Controller
 
         // Create the deposit record
         $deposit = DepositData::create([
-            'date' => $request->date,
-            'amount' => $request->amount,
+            'date' => $validated['date'],
+            'amount' => $validated['amount'],
             'receipt_image' => $receiptUrl,
-            'payment_type' => $request->payment_type,
-            'additional_details' => $request->additional_details,
+            'payment_type' => $paymentType,
+            'additional_details' => $validated['additional_details'] ?? null,
             'agent_id' => $agentId,
             'bank_id' => $bank?->id,
             'currency' => $currencyCode,

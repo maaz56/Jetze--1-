@@ -123,6 +123,11 @@ const actions = {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            // Let callers keep the form intact and avoid showing a successful
+            // submission when the API rejected the deposit.
+            throw error;
+        } finally {
+            context.commit(NOT_IS_LOADING);
         }
     },
     async [UPDATE_DEPOSIT_STATUS](context, params) {

@@ -41,6 +41,15 @@
                       </span>
                       <span>Wallet Balance</span>
                     </button>
+                    <button type="button" @click="activePaymentTab = 'nomod'" :class="[
+                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
+                      activePaymentTab === 'nomod' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                    ]" :aria-current="activePaymentTab === 'nomod' ? 'page' : undefined">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                        <CreditCard class="h-5 w-5" />
+                      </span>
+                      <span>Nomod</span>
+                    </button>
                   <!-- <button type="button" @click="activePaymentTab = 'credit-card'" :class="[
                     'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
                     activePaymentTab === 'credit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
@@ -342,6 +351,24 @@
                       {{ isProcessing ? 'Processing...' : 'Make Payment' }}
                     </button>
                   </div>
+                </div>
+
+                <!-- Nomod Hosted Checkout -->
+                <div v-else-if="activePaymentTab === 'nomod'" class="w-full">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                      <CreditCard class="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h2 class="text-lg font-semibold text-primary">Nomod</h2>
+                      <p class="text-sm text-slate-500">Secure card and alternative payment checkout.</p>
+                    </div>
+                  </div>
+
+                  <NomodCheckoutButton
+                    v-if="booking_id"
+                    :booking-id="booking_id"
+                  />
                 </div>
 
                 <!-- Default/Placeholder Info -->
@@ -742,6 +769,7 @@ import html2pdf from "html2pdf.js";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
+import NomodCheckoutButton from "@/components/payment/NomodCheckoutButton.vue";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";
 import {

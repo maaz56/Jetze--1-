@@ -3712,7 +3712,13 @@ watch(isLoggedIn, (newVal) => {
                                                 </div>
 
                                                 <!-- Track (widened — dashes + plane icon get real room to breathe) -->
-                                                <div class="flex w-full max-w-[10rem] shrink-0 flex-col items-center gap-1.5 pt-3 sm:max-w-[10rem]">
+                                                <div class="relative flex w-full max-w-[10rem] shrink-0 flex-col items-center gap-1.5 pt-3 sm:max-w-[10rem]">
+                                                    <div class="whitespace-nowrap text-xs font-semibold text-gray-500">
+                                                        {{
+                                                            formatSegmentDuration(summarySegment) ||
+                                                            `${Math.floor(moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").asHours())}h ${moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").minutes()}m`
+                                                        }}
+                                                    </div>
                                                     <div class="flex w-full items-center gap-2">
                                                         <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                                                         <span class="h-px min-w-[24px] flex-1 bg-emerald-300"></span>
@@ -3720,12 +3726,39 @@ watch(isLoggedIn, (newVal) => {
                                                         <span class="h-px min-w-[24px] flex-1 bg-emerald-300"></span>
                                                         <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                                                     </div>
-                                                    <div class="whitespace-nowrap text-xs font-semibold text-gray-500">
-                                                        {{
-                                                            formatSegmentDuration(summarySegment) ||
-                                                            `${Math.floor(moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").asHours())}h ${moment.duration(summarySegment?.travel_time || summaryFlight?.travel_time, "m").minutes()}m`
-                                                        }}
-                                                    </div>
+                                                    <span
+                                                        v-if="flightDetailsActiveTab === 'fare-options' && summaryFlight?.has_layovers"
+                                                        class="inline-flex items-center gap-px rounded-full bg-amber-50 px-1.5 py-[3px] text-[9px] font-semibold leading-none text-amber-600"
+                                                    >
+                                                        <GitCommitHorizontal class="h-2 w-2" />
+                                                        {{ summaryFlight?.layovers_count }}
+                                                        {{ summaryFlight?.layovers_count === 1 ? "Stop" : "Stops" }}
+                                                    </span>
+                                                    <TooltipProvider
+                                                        v-if="flightDetailsActiveTab === 'fare-options' && summaryFlight?.has_layovers"
+                                                    >
+                                                        <Tooltip>
+                                                            <TooltipTrigger as-child>
+                                                                <span
+                                                                    class="absolute inset-0 z-10 cursor-help"
+                                                                    :aria-label="`Show layover time for ${summaryFlight?.layovers_count} stop${summaryFlight?.layovers_count === 1 ? '' : 's'}`"
+                                                                ></span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent
+                                                                side="top"
+                                                                class="max-w-56 bg-gray-900 px-3 py-2 text-xs text-white"
+                                                            >
+                                                                <p class="mb-1 font-semibold">Layover time</p>
+                                                                <div
+                                                                    v-for="(layover, layoverIndex) in getFlightLayovers(summaryFlight)"
+                                                                    :key="`${layover.airport}-${layoverIndex}`"
+                                                                >
+                                                                    {{ layover.airport }}<span v-if="layover.code"> ({{ layover.code }})</span>:
+                                                                    {{ layover.duration }}
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                 </div>
 
                                                 <!-- Arrival -->

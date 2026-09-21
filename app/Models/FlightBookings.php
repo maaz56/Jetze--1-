@@ -51,4 +51,9 @@ class FlightBookings extends Model
         return $this->hasMany(ProviderBookingEvent::class, 'booking_id');
     }
 
+    /** Payment attempts are separate from booking status and provider fulfilment. */
+    public function paymentAttempts()
+    {
+        return $this->hasMany(PaymentAttempt::class, 'booking_id');
+    }
 }

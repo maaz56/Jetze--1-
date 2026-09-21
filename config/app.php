@@ -13,6 +13,7 @@ return [
     |
     */
     'otp_enabled' => env('OTP_ENABLED', true),
+    'booking_email_notifications' => env('BOOKING_EMAIL_NOTIFICATIONS_ENABLED', true),
     'vite_mode' => env('VITE_MODE', ''),
 
     'zoho' => [

@@ -121,33 +121,38 @@ class TboHotelService
             $options['json'] = $payload;
         }
 
-        try {
-            $logPayload = $endpoint === 'Book'
-                ? Arr::except($payload, ['CustomerDetails', 'EmailId', 'PhoneNumber', 'PaymentInfo'])
-                : $payload;
+        $startedAt = microtime(true);
 
+        try {
             Log::info('TBO Hotel API Request', [
                 'request_id' => $requestId,
                 'method' => $method,
                 'endpoint' => $endpoint,
-                'payload' => $logPayload,
+                'url' => $url,
+                'timeout_seconds' => $options['timeout'],
+                'payload' => $this->loggablePayload($endpoint, $payload),
             ]);
 
             $response = $this->client->request($method, $url, $options);
             $body = (string) $response->getBody();
+            $decoded = json_decode($body, true);
 
             Log::info('TBO Hotel API Response', [
                 'request_id' => $requestId,
+                'method' => $method,
                 'endpoint' => $endpoint,
+                'url' => $url,
                 'status' => $response->getStatusCode(),
+                'duration_ms' => $this->requestDurationMs($startedAt),
+                'provider_status' => is_array($decoded) ? data_get($decoded, 'Status') : null,
             ]);
-            $decoded = json_decode($body, true);
 
             if (!is_array($decoded)) {
                 Log::warning('TBO Hotel API returned non-JSON response', [
                     'request_id' => $requestId,
                     'endpoint' => $endpoint,
                     'status' => $response->getStatusCode(),
+                    'duration_ms' => $this->requestDurationMs($startedAt),
                     'body' => mb_substr($body, 0, 1000),
                 ]);
 
@@ -161,7 +166,10 @@ class TboHotelService
 
             Log::info('TBO Hotel API Response Body', [
                 'request_id' => $requestId,
+                'method' => $method,
                 'endpoint' => $endpoint,
+                'status' => $response->getStatusCode(),
+                'duration_ms' => $this->requestDurationMs($startedAt),
                 'response' => $decoded,
             ]);
 
@@ -169,7 +177,10 @@ class TboHotelService
         } catch (RequestException $e) {
             Log::error('TBO Hotel API request failed', [
                 'request_id' => $requestId,
+                'method' => $method,
                 'endpoint' => $endpoint,
+                'url' => $url,
+                'duration_ms' => $this->requestDurationMs($startedAt),
                 'message' => $e->getMessage(),
                 'response' => $e->hasResponse()
                     ? mb_substr((string) $e->getResponse()->getBody(), 0, 2000)
@@ -180,12 +191,36 @@ class TboHotelService
         } catch (GuzzleException $e) {
             Log::error('TBO Hotel API guzzle error', [
                 'request_id' => $requestId,
+                'method' => $method,
                 'endpoint' => $endpoint,
+                'url' => $url,
+                'duration_ms' => $this->requestDurationMs($startedAt),
                 'message' => $e->getMessage(),
             ]);
 
             throw $e;
         }
+    }
+
+    /** Redact traveller and payment fields while retaining a useful provider payload trace. */
+    protected function loggablePayload(string $endpoint, array $payload): array
+    {
+        if ($endpoint !== 'Book') {
+            return $payload;
+        }
+
+        return Arr::except($payload, [
+            'CustomerDetails',
+            'EmailId',
+            'PhoneNumber',
+            'PaymentInfo',
+        ]);
+    }
+
+    /** Return a rounded duration suitable for correlating request and response log entries. */
+    protected function requestDurationMs(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
     protected function ensureConfigured(): void

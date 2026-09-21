@@ -127,6 +127,16 @@ const tabs = [
 ];
 
 const setActiveTab = (tabId) => {
+    if (tabId === "hotels") {
+        router.push({ name: "HotelSearch" });
+        return;
+    }
+
+    if (tabId === "holidays") {
+        router.push({ name: "HolidayPackages" });
+        return;
+    }
+
     activeTab.value = tabId;
 };
 
@@ -1765,6 +1775,7 @@ onMounted(() => {
                 </div>
             </div>
         </div>
+    </div>
     </div>
 </template>
 

@@ -1,15 +1,16 @@
 <script setup>
 import { useRoute, useRouter } from 'vue-router';
 
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import TravelPortCustomerPaymentView from './Travelport/TravelPortCustomerPaymentView.vue';
 import OneApiCustomerPaymentView from './OneApi/OneApiCustomerPaymentView.vue';
 import ATCustomerPaymentView from './AT/ATCustomerPaymentView.vue';
 
 const router = useRouter();
 const route = useRoute();
-const provider = route.query.flight_provider ;
-const flight_mode = route.query.flight_mode ;
+const provider = computed(() => route.query.flight_provider);
+const flight_mode = computed(() => route.query.flight_mode);
+const bookingId = computed(() => route.query.booking_id);
 watch(provider,()=>{
     console.log(provider);
     console.log(flight_mode);

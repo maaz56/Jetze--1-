@@ -125,6 +125,11 @@ export const clientRoutes = [
                 component: () => import("@/pages/HolidayDetails.vue"),
             },
             {
+                path: "hotel/room-details",
+                name: "HotelRoomDetails",
+                component: () => import("@/pages/HotelDetails.vue"),
+            },
+            {
                 path: "umrah-package-details",
                 name: "UmrahPackageDetails",
 
@@ -188,6 +193,14 @@ export const clientRoutes = [
                 path: "customer-payment-view",
                 name: "CustomerPaymentView",
                 component: () => import("@/pages/CustomerPaymentView.vue"),
+            },
+            {
+                path: "payment/nomod/:outcome(success|failure|cancelled)",
+                name: "NomodPaymentReturn",
+                component: () => import("@/pages/payment/NomodReturn.vue"),
+                meta: {
+                    requiresAuth: true,
+                },
             },
             // Blog pages are rendered by Laravel Blade.
             // {

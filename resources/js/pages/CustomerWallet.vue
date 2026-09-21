@@ -1,7 +1,7 @@
 <script setup>
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RefreshCcw, Search, ArrowLeft, ImageIcon, UploadIcon, SaveIcon, UserPlusIcon, CalendarIcon, CheckCircleIcon, Receipt, EyeIcon, TrashIcon, LoaderIcon, InboxIcon, Printer, Download, Share, CreditCard, ExternalLink } from "lucide-vue-next";
+import { RefreshCcw, Search, ArrowLeft, ImageIcon, UploadIcon, SaveIcon, UserPlusIcon, CalendarIcon, CheckCircleIcon, Receipt, EyeIcon, TrashIcon, LoaderIcon, InboxIcon, Printer, Download, Share, CreditCard, ExternalLink, Landmark, Check } from "lucide-vue-next";
 import { useAuthStore } from "@/services/stores/auth";
 import { useStore } from "vuex";
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
@@ -26,6 +26,7 @@ import {
     FETCH_CURRENCIES,
     INITIALIZE_ABHI_PAY,
     CHECK_PAYMENT_STATUS,
+    FETCH_BANKS,
 } from "@/services/store/actions.type";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RangeCalendar } from '@/components/ui/range-calendar';
@@ -56,6 +57,7 @@ const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
 const paymentType = ref();
+const selectedBankId = ref(null);
 const selectedCurrencyCode = ref(getSelectedCurrencyCode());
 const depositCurrency = ref(getSelectedCurrencyCode());
 const additionalDetails = ref("");
@@ -63,13 +65,25 @@ const user_id = computed(() => user.value?.id);
 const loading = ref(true);
 const error = ref(null);
 const isLoading = ref(false);
+const isSubmittingDeposit = ref(false);
 const formErrors = ref([]);
+const banks = computed(() => store.getters["bank/banks"] || []);
+const selectedBank = computed(() => banks.value.find((bank) => bank.id === selectedBankId.value) || null);
 
 const isBankTransferType = (type) => {
     if (!type) return false;
     const normalizedType = String(type).trim().toLowerCase();
     return normalizedType !== "abhipay-deposit";
 };
+
+const bankPaymentType = (bankId) => `bank:${bankId}`;
+const isBankPaymentType = (type) => String(type || "").startsWith("bank:");
+
+function selectBank(bank) {
+    selectedBankId.value = bank.id;
+    paymentType.value = bankPaymentType(bank.id);
+    depositCurrency.value = bank.currency;
+}
 
 // Abhi Pay specific refs
 const abhiPayDate = ref(new Date().toISOString().slice(0, 10));
@@ -90,6 +104,21 @@ watch(deposit, (newDeposit) => {
     }
 });
 watch(paymentType, (newType) => {
+    if (isBankPaymentType(newType)) {
+        const bankId = Number(String(newType).replace("bank:", ""));
+        const bank = banks.value.find((item) => item.id === bankId);
+
+        if (bank) {
+            selectedBankId.value = bank.id;
+            depositCurrency.value = bank.currency;
+            return;
+        }
+
+        selectedBankId.value = null;
+    } else {
+        selectedBankId.value = null;
+    }
+
     if (!isBankTransferType(newType)) {
         receiptImage.value = null;
     }
@@ -151,6 +180,10 @@ function fetchCurrencies() {
     store.dispatch("currency/" + FETCH_CURRENCIES);
 }
 
+function fetchBanks() {
+    return store.dispatch("bank/" + FETCH_BANKS);
+}
+
 const handleReceiptImage = (event) => {
     receiptImage.value = event.target.files[0];
 };
@@ -183,10 +216,13 @@ async function handleDepositData() {
     if (!date.value) formErrors.value.push("Date field is required.");
     if (!amount.value) formErrors.value.push("Amount field is required.");
     if (!paymentType.value) formErrors.value.push("Payment type is required.");
+    if (isBankPaymentType(paymentType.value) && !selectedBank.value) {
+        formErrors.value.push("Select an active bank account.");
+    }
     if (!depositCurrency.value) formErrors.value.push("Currency is required.");
     if (formErrors.value.length > 0) return;
 
-    loading.value = true;
+    isSubmittingDeposit.value = true;
     error.value = null;
 
     try {
@@ -196,7 +232,14 @@ async function handleDepositData() {
         if (receiptImage.value) {
             depositData.append("receipt_image", receiptImage.value);
         }
-        depositData.append("payment_type", paymentType.value);
+        // The server independently resolves this ID to an active bank, its name,
+        // and its currency before recording the immutable ledger value.
+        if (selectedBank.value) {
+            depositData.append("bank_id", String(selectedBank.value.id));
+            depositData.append("payment_type", selectedBank.value.bank_name);
+        } else {
+            depositData.append("payment_type", paymentType.value);
+        }
         depositData.append("additional_details", additionalDetails.value);
         depositData.append("currency", depositCurrency.value);
         depositData.append("payment_method", "bank");
@@ -206,13 +249,15 @@ async function handleDepositData() {
         amount.value = "";
         receiptImage.value = null;
         paymentType.value = "";
+        selectedBankId.value = null;
         additionalDetails.value = "";
         await fetchAgentDeposits();
+        fetchAgentLedger();
     } catch (err) {
         console.error("Error saving deposit data:", err);
         error.value = "Failed to save deposit data. Please try again.";
     } finally {
-        loading.value = false;
+        isSubmittingDeposit.value = false;
     }
 }
 
@@ -299,6 +344,7 @@ onMounted(() => {
         fetchAgentDeposits();
         fetchAgentLedger();
         fetchCurrencies();
+        fetchBanks();
     }
     window.addEventListener("currency-changed", refreshForCurrencyChange);
 });
@@ -309,6 +355,8 @@ watch(user, (newUser) => {
     if (newUser?.id) {
         fetchAgentDeposits();
         fetchAgentLedger();
+        fetchCurrencies();
+        fetchBanks();
     }
 });
 </script>
@@ -360,6 +408,59 @@ watch(user, (newUser) => {
             </div>
         </div>
 
+        <!-- Available bank accounts -->
+        <section v-if="banks.length"
+            class="mb-4 overflow-hidden rounded-lg border border-slate-200 bg-gradient-to-br from-white via-white to-primary/5 shadow-sm">
+            <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Bank transfer</p>
+                    <h2 class="mt-1 text-xl font-bold text-slate-900">Select bank account</h2>
+                    <p class="mt-1 text-sm text-slate-500">Choose the account where you sent the funds.</p>
+                </div>
+                <span class="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 sm:block">Scroll to view all</span>
+            </div>
+
+            <div class="flex gap-3 overflow-x-auto px-4 py-3 snap-x snap-mandatory">
+                <button v-for="bank in banks" :key="bank.id" type="button" @click="selectBank(bank)"
+                    :aria-pressed="selectedBankId === bank.id"
+                    :class="[
+                        'relative min-w-[265px] max-w-[290px] snap-start overflow-hidden rounded-md border p-3 text-left shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
+                        selectedBankId === bank.id
+                            ? 'border-primary bg-primary/[0.07] ring-1 ring-primary shadow-primary/10'
+                            : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md',
+                    ]">
+                    <div :class="['absolute inset-x-0 top-0 h-1', selectedBankId === bank.id ? 'bg-primary' : 'bg-transparent']"></div>
+                    <Check v-if="selectedBankId === bank.id"
+                        class="absolute right-3 top-3 h-5 w-5 rounded-full bg-primary p-1 text-white shadow-sm" />
+                    <div class="flex items-center gap-3 pr-7">
+                        <img v-if="bank.logo_path" :src="bank.logo_path" :alt="`${bank.bank_name} logo`"
+                            class="h-10 w-10 rounded-md border border-slate-100 bg-white object-contain p-1" />
+                        <div v-else class="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+                            <Landmark class="h-5 w-5 text-primary" />
+                        </div>
+                        <div class="min-w-0">
+                            <p class="font-semibold text-slate-900 truncate">{{ bank.bank_name }}</p>
+                            <p class="mt-0.5 text-xs text-slate-500">Bank account</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 space-y-1.5 border-t border-slate-200/80 pt-2.5">
+                        <div>
+                            <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Account title</p>
+                            <p class="mt-0.5 truncate text-sm font-medium text-slate-700">{{ bank.account_title }}</p>
+                        </div>
+                        <div class="flex items-end justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Account number</p>
+                                <p class="mt-0.5 truncate font-mono text-sm font-semibold text-slate-900">{{ bank.account_number }}</p>
+                            </div>
+                            <span class="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">{{ bank.currency }}</span>
+                        </div>
+                        <p v-if="bank.iban" class="truncate text-xs text-slate-500">IBAN: {{ bank.iban }}</p>
+                    </div>
+                </button>
+            </div>
+        </section>
+
         <!-- Deposit section -->
         <div class="bg-white rounded-lg mb-3">
             <span class="text-2xl font-bold">New Deposit</span>
@@ -375,7 +476,7 @@ watch(user, (newUser) => {
                     </div>
                     <div v-if="isBankTransferType(paymentType)" class="grid">
                         <label>Receipt image</label>
-                        <Input type="file" @change="handleReceiptImage" />
+                        <Input type="file" accept="image/jpeg,image/png,image/gif" @change="handleReceiptImage" />
                     </div>
                     <div class="grid">
                         <label>Payment type</label>
@@ -386,13 +487,6 @@ watch(user, (newUser) => {
                             <SelectContent>
                                 <SelectGroup>
                                     <SelectLabel>Payment method</SelectLabel>
-                                    <SelectItem value="abhipay-deposit">
-                                        <div class="flex items-center gap-2">
-                                            <span class="truncate max-w-[150px] block">
-                                                One-Bill
-                                            </span>
-                                        </div>
-                                    </SelectItem>
                                     <SelectItem value="cash">
                                         <div class="flex items-center gap-2">
                                             <span class="truncate max-w-[150px] block">
@@ -401,12 +495,26 @@ watch(user, (newUser) => {
                                         </div>
                                     </SelectItem>
                                 </SelectGroup>
+                                <SelectGroup v-if="banks.length">
+                                    <SelectLabel>Bank account</SelectLabel>
+                                    <SelectItem v-for="bank in banks" :key="bank.id" :value="bankPaymentType(bank.id)">
+                                        <div class="flex items-center gap-2.5">
+                                            <img v-if="bank.logo_path" :src="bank.logo_path" :alt="`${bank.bank_name} logo`"
+                                                class="h-6 w-6 shrink-0 rounded object-contain" />
+                                            <div v-else class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/10">
+                                                <Landmark class="h-3.5 w-3.5 text-primary" />
+                                            </div>
+                                            <span class="truncate max-w-[150px] block">{{ bank.bank_name }}</span>
+                                        </div>
+                                    </SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
                     <div class="grid">
                         <label>Currency</label>
-                        <Select v-model="depositCurrency" :disabled="paymentType === 'abhipay-deposit'">
+                        <Select v-model="depositCurrency"
+                            :disabled="paymentType === 'abhipay-deposit' || selectedBankId !== null">
                             <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem v-for="currency in currencies" :key="currency.code" :value="currency.code">
@@ -486,10 +594,11 @@ watch(user, (newUser) => {
                     </Button>
 
                     <!-- Bank Transfer Button - visible for all other payment types -->
-                    <Button v-else @click="handleDepositData"
+                    <Button v-else @click="handleDepositData" :disabled="isSubmittingDeposit"
                         class="bg-primary hover:bg-primary/50 text-white font-semibold py-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
-                        <SaveIcon class="w-5 h-5 mr-2" />
-                        Deposit
+                        <LoaderIcon v-if="isSubmittingDeposit" class="w-5 h-5 mr-2 animate-spin" />
+                        <SaveIcon v-else class="w-5 h-5 mr-2" />
+                        {{ isSubmittingDeposit ? 'Saving...' : 'Deposit' }}
                     </Button>
                 </div>
             </div>
@@ -571,7 +680,7 @@ watch(user, (newUser) => {
                                         <th scope="col" class="px-1 py-3">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <t  body>
                                     <tr v-for="deposit in agentDepositData.deposits" :key="deposit.id"
                                         class="bg-white border-b hover:bg-gray-50">
                                         <td class="px-3 py-4 font-medium text-gray-900 whitespace-nowrap">
@@ -613,7 +722,7 @@ watch(user, (newUser) => {
                                             </div>
                                         </td>
                                     </tr>
-                                </tbody>
+                                </t>
                             </table>
                         </div>
                     </div>
