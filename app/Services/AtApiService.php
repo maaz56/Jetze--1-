@@ -1053,7 +1053,7 @@ private function extractTrips($tripsData): array
                 'Amount' => 0,
                 'Index' => '',
                 'OrderID' => $index + 1, // keep static or change if needed
-                'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
+                'TUI' => $this->resolveAncillaryTui($request, $cachedValidationResponse, $index),
             ];
         }
 
@@ -1125,7 +1125,7 @@ private function extractTrips($tripsData): array
                 'Amount' => 0,
                 'Index' => '',
                 'OrderID' => $index + 1, // keep static or change if needed
-                'TUI' => $this->resolveActualTui($tui, $cachedValidationResponse, $index),
+                'TUI' => $this->resolveAncillaryTui($request, $cachedValidationResponse, $index),
             ];
         }
 
@@ -1137,7 +1137,7 @@ private function extractTrips($tripsData): array
 
         $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
 
-        // Log::info('Seat request payload (final): ', $payload);
+        Log::info('Seat request payload (final): ', $payload);
 
         try {
             $req = new \GuzzleHttp\Psr7\Request(
@@ -1150,7 +1150,7 @@ private function extractTrips($tripsData): array
             $response = $this->client->send($req);
             $responseBody = json_decode($response->getBody(), true);
 
-            // Log::info($responseBody);
+            Log::info($responseBody);
             return $responseBody;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -1664,6 +1664,88 @@ private function extractTrips($tripsData): array
         }
 
         return (string) ($frontendTui ?? '');
+    }
+
+    /**
+     * SeatLayout and SSR must use the TUI returned by GetSPricer, not the search TUI.
+     */
+    private function resolveAncillaryTui(array $request, ?array $cachedValidationResponse = null, int $index = 0): string
+    {
+        $pricedTui = $this->firstTuiForIndex([
+            $request['priced_tui'] ?? null,
+            $request['pricedTui'] ?? null,
+            $request['get_s_pricer_tui'] ?? null,
+            $request['getSPricerTui'] ?? null,
+            $request['TUI'] ?? null,
+            data_get($request, 'provider_pricing.tui'),
+            data_get($request, 'providerPricing.tui'),
+            data_get($request, 'pricing_response.TUI'),
+            data_get($request, 'pricingResponse.TUI'),
+            data_get($request, 'get_s_pricer_response.TUI'),
+            data_get($request, 'getSPricerResponse.TUI'),
+            data_get($request, 'get_s_pricer.TUI'),
+            data_get($request, 'getSPricer.TUI'),
+        ], $index);
+
+        if ($pricedTui && !Str::startsWith($pricedTui, 'ATDM-')) {
+            return $pricedTui;
+        }
+
+        $pricedTuiFromList = $this->firstTuiForIndex([
+            $request['priced_tui_list'] ?? null,
+            $request['pricedTuiList'] ?? null,
+            $request['TUIList'] ?? null,
+            data_get($request, 'provider_pricing.tui_list'),
+            data_get($request, 'providerPricing.tuiList'),
+            data_get($request, 'pricing_response.TUIList'),
+            data_get($request, 'pricingResponse.TUIList'),
+            data_get($request, 'get_s_pricer_response.TUIList'),
+            data_get($request, 'getSPricerResponse.TUIList'),
+        ], $index);
+
+        if ($pricedTuiFromList && !Str::startsWith($pricedTuiFromList, 'ATDM-')) {
+            return $pricedTuiFromList;
+        }
+
+        $fallbackTui = $request['ref_id'] ?? $request['TUI'] ?? $pricedTui ?? '';
+
+        return $this->resolveActualTui($fallbackTui, $cachedValidationResponse, $index);
+    }
+
+    private function firstTuiForIndex(array $values, int $index): ?string
+    {
+        foreach ($values as $value) {
+            $tui = $this->tuiForIndex($value, $index);
+
+            if ($tui !== null && $tui !== '') {
+                return $tui;
+            }
+        }
+
+        return null;
+    }
+
+    private function tuiForIndex(mixed $value, int $index): ?string
+    {
+        if (is_array($value)) {
+            if (array_key_exists('TUI', $value)) {
+                return $this->tuiForIndex($value['TUI'], $index);
+            }
+
+            if (array_key_exists('tui', $value)) {
+                return $this->tuiForIndex($value['tui'], $index);
+            }
+
+            return $this->tuiForIndex($value[$index] ?? $value[0] ?? null, $index);
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        $tui = trim((string) $value);
+
+        return $tui === '' ? null : $tui;
     }
 
     private function buildDmSsrPayload($params, int $tripIndex): array

@@ -34,6 +34,7 @@ const pnrLoading = ref(false);
 const pnrError = ref("");
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const headerDefaultAirportCodes = ["PEW","LHE","SKT","ISB","KHI","MUX","GWD"];
+const ONWARD_DATE_MIN_ERROR = "OnwardDate cannot be less than Today";
 
 
 const tabs = [
@@ -133,6 +134,27 @@ const openDepartureCalendar = () => {
     nextTick(() => departureCalendar.value?.open());
 };
 
+const getLocalDateString = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const normalizeDateValue = (date) => {
+    if (!date) return "";
+    if (typeof date === "string") return date.slice(0, 10);
+    if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        return getLocalDateString(date);
+    }
+    return "";
+};
+
+const isDateBeforeToday = (date) => {
+    const normalizedDate = normalizeDateValue(date);
+    return Boolean(normalizedDate && normalizedDate < todayDate);
+};
+
 function validate() {
     errors.value = {};
     const { flightType, origin, destination, dateRange, multiCityTrips } =
@@ -150,6 +172,9 @@ function validate() {
         if (!dateRange.start) {
             errors.value.start = "Start date is required.";
             valid = false;
+        } else if (isDateBeforeToday(dateRange.start)) {
+            errors.value.start = ONWARD_DATE_MIN_ERROR;
+            valid = false;
         }
     } else if (flightType === "return" || flightType === "two-way") {
         if (!origin) {
@@ -162,6 +187,9 @@ function validate() {
         }
         if (!dateRange.start) {
             errors.value.start = "Start date is required.";
+            valid = false;
+        } else if (isDateBeforeToday(dateRange.start)) {
+            errors.value.start = ONWARD_DATE_MIN_ERROR;
             valid = false;
         }
         if (!dateRange.end) {
@@ -176,6 +204,8 @@ function validate() {
             if (!trip.destination)
                 tripErrors.destination = "Destination is required.";
             if (!trip.date) tripErrors.date = "Date is required.";
+            else if (isDateBeforeToday(trip.date))
+                tripErrors.date = ONWARD_DATE_MIN_ERROR;
             errors.value.multiCityTrips[idx] = tripErrors;
             if (tripErrors.origin || tripErrors.destination || tripErrors.date)
                 valid = false;
@@ -237,7 +267,7 @@ function swapOriginDestination() {
 watch(
     () => localValue.value.dateRange?.start,
     (val) => {
-        if (val && errors.value.start) {
+        if (val && !isDateBeforeToday(val) && errors.value.start) {
             errors.value.start = undefined;
         }
     },
@@ -310,6 +340,7 @@ watch(
         dates.forEach((date, idx) => {
             if (
                 date &&
+                !isDateBeforeToday(date) &&
                 errors.value.multiCityTrips &&
                 errors.value.multiCityTrips[idx] &&
                 errors.value.multiCityTrips[idx].date
@@ -353,7 +384,7 @@ const totalTravelers = computed(
         localValue.value.child +
         localValue.value.infant,
 );
-const todayDate = new Date().toISOString().split("T")[0];
+const todayDate = getLocalDateString();
 const setFlightType = (type) => {
     localValue.value.flightType = type;
     if (type === "one-way") {

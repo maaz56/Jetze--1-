@@ -1762,6 +1762,49 @@ const getFareBaggageSummaries = (baggagePolicies) => {
     ];
 };
 
+function uniqueTruthyValues(values) {
+    return [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))];
+}
+
+function getFareRbdClasses(fare) {
+    const codes = [];
+
+    if (Array.isArray(fare?.booking_codes)) {
+        fare.booking_codes.forEach((code) => {
+            codes.push(
+                code?.booking_code,
+                code?.rbd,
+                code?.rbd_code,
+                code?.class_of_service,
+                code?.classOfService,
+            );
+        });
+    }
+
+    if (Array.isArray(fare?.fare_components)) {
+        fare.fare_components.forEach((component) => {
+            codes.push(
+                component?.booking_code,
+                component?.rbd,
+                component?.rbd_code,
+                component?.class_of_service,
+                component?.classOfService,
+            );
+        });
+    }
+
+    codes.push(
+        fare?.booking_code,
+        fare?.rbd,
+        fare?.RBD,
+        fare?.rbd_code,
+        fare?.class_of_service,
+        fare?.classOfService,
+    );
+
+    return uniqueTruthyValues(codes);
+}
+
 // Get traveler type label (keep existing function)
 const getTravelerTypeLabel = (travelerType) => {
     const labels = {
@@ -4073,12 +4116,24 @@ watch(isLoggedIn, (newVal) => {
                                                                     {{ fare?.name_class || fare?.class || "Standard" }}
                                                                 </h5>
                                                             </div>
+                                                             <div v-if="getFareRbdClasses(fare).length">
+                                                                <div class="flex flex-wrap gap-1.5">
+                                                                    <span
+                                                                        v-for="rbdClass in getFareRbdClasses(fare)"
+                                                                        :key="rbdClass"
+                                                                        class="inline-flex items-center rounded border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs font-bold text-primary"
+                                                                    >
+                                                                        {{ rbdClass }}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
                                                             <div class="shrink-0 text-right text-lg font-extrabold leading-none text-primary sm:text-xl">
                                                                 {{ formatFareDisplayMoney(fare) }}
                                                             </div>
                                                         </div>
 
                                                         <div class="space-y-3 py-4 text-sm text-gray-700">
+                                                           
                                                             <div>
                                                                 <h6 class="mb-2 text-base font-bold text-gray-900">Baggage</h6>
                                                                 <div v-for="(summary, summaryIndex) in getFareBaggageSummaries(fare?.baggage_policies)" :key="summaryIndex" class="mb-1 flex items-start gap-2">

@@ -202,6 +202,15 @@ class AtFlightTransformer
                         "name" => $fare['FareClass'] ?? 'Economy',
                         "name_class" => $fare['FCType'] ?? 'Economy',
                         "brand_tier" => $fare['FCGroup'] ?? 'Economy',
+                        "rbd_code" => $fare['RBD'] ?? null,
+                        "fare_basis_code" => $fare['FBC'] ?? null,
+                        "booking_codes" => array_map(function (array $segment) use ($fare): array {
+                            return [
+                                "segment_ref_id" => $segment['ref_id'],
+                                "booking_code" => $fare['RBD'] ?? null,
+                                "fare_basis_code" => $fare['FBC'] ?? null,
+                            ];
+                        }, $segments),
                         "currency" => [
                             "code" => $currency,
                             "name" => $currency,

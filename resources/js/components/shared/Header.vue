@@ -154,6 +154,7 @@ const route = useRoute();
 const router = useRouter();
 const RECENT_SEARCHES_KEY = "recent_search_history";
 const MAX_RECENT_SEARCHES = 4;
+const ONWARD_DATE_MIN_ERROR = "OnwardDate cannot be less than Today";
 
 const flightType = ref("one-way");
 const flights = computed(() => flightStore.flights);
@@ -621,6 +622,23 @@ const addTrip = () => {
     ];
 };
 
+const normalizeDateValue = (date) => {
+    if (!date) return "";
+    if (typeof date === "string") return date.slice(0, 10);
+    if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+    return "";
+};
+
+const isDateBeforeToday = (date) => {
+    const normalizedDate = normalizeDateValue(date);
+    return Boolean(normalizedDate && normalizedDate < todayDate.value);
+};
+
 const removeTrip = (index) => {
     if (multiCityTrips.value.length > 2) {
         multiCityTrips.value = multiCityTrips.value.filter(
@@ -880,11 +898,15 @@ function searchFlights() {
                 );
             if (!trip.date)
                 errors.push(`Please select a date for trip ${index + 1}`);
+            else if (isDateBeforeToday(trip.date))
+                errors.push(`Trip ${index + 1}: ${ONWARD_DATE_MIN_ERROR}`);
         });
     } else {
         if (!origin.value) errors.push("Please select an Origin");
         if (!destination.value) errors.push("Please select a Destination");
         if (!dateRange.value.start) errors.push("Please select a Date");
+        else if (isDateBeforeToday(dateRange.value.start))
+            errors.push(ONWARD_DATE_MIN_ERROR);
     }
 
     if (errors.length > 0) {
