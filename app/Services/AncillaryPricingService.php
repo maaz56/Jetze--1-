@@ -154,20 +154,57 @@ class AncillaryPricingService
         return $totals;
     }
 
-    /** Recalculate the quote total as locked fare total plus active ancillary total. */
+    /**
+     * Recalculate provider cost and customer selling totals after ancillary changes.
+     *
+     * AT receives Net Fare plus SSR cost, while the customer continues to pay the
+     * quote's locked gross selling fare (including its locked adjustments) plus SSRs.
+     */
     private function recalculateQuote(PriceQuote $quote): void
     {
         $totals = $this->ancillaryTotals($quote);
-        $fareProviderAmount = (string) (data_get($quote->provider_pricing_data, 'net_amount') ?? $quote->provider_amount);
-        $providerAmount = bcadd($fareProviderAmount, $totals['provider_money']['amount'], 8);
-        $aedAmount = bcmul($providerAmount, (string) $quote->provider_rate_to_aed, 12);
-        $displayAmount = bcdiv($aedAmount, (string) $quote->display_rate_to_aed, 12);
+        $fareNetAmount = (string) (data_get($quote->provider_pricing_data, 'net_amount') ?? $quote->provider_amount);
+        $providerAmount = bcadd($fareNetAmount, $totals['provider_money']['amount'], 8);
+        $providerAedAmount = bcmul($providerAmount, (string) $quote->provider_rate_to_aed, 12);
+        $fareSellingMoney = $this->lockedFareSellingMoney($quote, $totals);
+        $aedAmount = bcadd($fareSellingMoney['base_amount'], $totals['base_money']['amount'], 12);
+        $displayAmount = bcadd($fareSellingMoney['display_amount'], $totals['display_money']['amount'], 12);
 
         $quote->update([
             'provider_amount' => $this->round($providerAmount, $quote->provider_currency),
+            'provider_aed_amount' => $this->round($providerAedAmount, 'AED'),
             'aed_amount' => $this->round($aedAmount, 'AED'),
             'display_amount' => $this->round($displayAmount, $quote->display_currency),
         ]);
+    }
+
+    /**
+     * Return the fare-only selling price locked when the quote was created.
+     *
+     * The gross provider fare and saved margin/promotion rows are immutable, so an
+     * ancillary replacement cannot accidentally turn the customer total back into
+     * Net Fare. The fallback supports older quotes without commercial audit fields.
+     *
+     * @param array{provider_money: array{amount: string}, base_money: array{amount: string}, display_money: array{amount: string}} $activeTotals
+     * @return array{base_amount: string, display_amount: string}
+     */
+    private function lockedFareSellingMoney(PriceQuote $quote, array $activeTotals): array
+    {
+        if ($quote->provider_gross_aed_amount !== null) {
+            $adjustmentAmount = (string) $quote->adjustments()->sum('aed_amount');
+            $baseAmount = bcadd((string) $quote->provider_gross_aed_amount, $adjustmentAmount, 12);
+            $displayAmount = bcdiv($baseAmount, (string) $quote->display_rate_to_aed, 12);
+
+            return [
+                'base_amount' => $baseAmount,
+                'display_amount' => $displayAmount,
+            ];
+        }
+
+        return [
+            'base_amount' => bcsub((string) $quote->aed_amount, $activeTotals['base_money']['amount'], 12),
+            'display_amount' => bcsub((string) $quote->display_amount, $activeTotals['display_money']['amount'], 12),
+        ];
     }
 
     /** Convert a provider amount using rates stored on the quote, not today's admin rates. */

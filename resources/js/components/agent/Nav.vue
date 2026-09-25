@@ -73,6 +73,9 @@ const mobileMenuOpen = ref(false);
 const open = ref(false);
 const error = ref();
 const loading = ref(false);
+let activeLedgerRequestKey = null;
+let activeLedgerRequest = null;
+let queuedLedgerRequestKey = null;
 
 
 
@@ -82,21 +85,44 @@ const { Meta_J, Ctrl_J } = useMagicKeys({
         if (e.key === "j" && (e.metaKey || e.ctrlKey)) e.preventDefault();
     },
 });
-function fetchAgentLedger() {
-    if (user_id.value) {
-        try {
-            store.dispatch("ledger/" + FETCH_AGENT_LEDGER, {
-                userId: user_id.value,
-                currency_code: selectedCurrencyCode.value,
-            });
-            loading.value = false;
-        } catch (err) {
-            error.value = "Failed to load user data. Please try again.";
-            loading.value = false;
-        }
-    } else {
+async function fetchAgentLedger() {
+    if (!user_id.value) {
         error.value = "No user ID provided.";
         loading.value = false;
+        return;
+    }
+
+    const requestKey = `${user_id.value}:${selectedCurrencyCode.value}`;
+
+    if (activeLedgerRequestKey === requestKey) {
+        return activeLedgerRequest;
+    }
+
+    if (activeLedgerRequest) {
+        queuedLedgerRequestKey = requestKey;
+        return activeLedgerRequest;
+    }
+
+    activeLedgerRequestKey = requestKey;
+    activeLedgerRequest = store.dispatch("ledger/" + FETCH_AGENT_LEDGER, {
+        userId: user_id.value,
+        currency_code: selectedCurrencyCode.value,
+    });
+
+    try {
+        await activeLedgerRequest;
+    } catch (err) {
+        error.value = "Failed to load user data. Please try again.";
+    } finally {
+        const queuedRequestKey = queuedLedgerRequestKey;
+        activeLedgerRequestKey = null;
+        activeLedgerRequest = null;
+        queuedLedgerRequestKey = null;
+        loading.value = false;
+
+        if (queuedRequestKey && queuedRequestKey !== requestKey) {
+            fetchAgentLedger();
+        }
     }
 }
 

@@ -268,6 +268,10 @@ const atFareBreakdownLoading = ref(false);
 const atFareBreakdownError = ref("");
 const atFareBreakdown = ref(null);
 let lastAtFareBreakdownKey = "";
+const atFareRulesLoading = ref(false);
+const atFareRulesError = ref("");
+const atFareRules = ref(null);
+let lastAtFareRulesKey = "";
 const savedAmount = ref(0);
 const isCreatingQuote = ref(false);
 const isCheckoutLoading = computed(
@@ -1614,6 +1618,68 @@ async function fetchAtFareBreakdown() {
     }
 }
 
+/** Fetch AT fare rules only when the Fare Rules tab is opened for this selected fare. */
+async function fetchAtFareRules() {
+    const provider = String(
+        selectedFlight.value?.provider?.name
+        ?? selectedFlight.value?.provider?.identifier
+        ?? "",
+    ).toLowerCase();
+
+    if (provider !== "at") return;
+
+    const flightRefId = selectedFlight.value?.leg?.ref_id;
+    const searchToken = selectedFlight.value?.quote_search_token;
+    const fareReferences = [...selectedFares].filter(Boolean);
+
+    if (!flightRefId || !searchToken || fareReferences.length === 0) {
+        atFareRulesError.value = "Selected fare rules are unavailable. Please search again.";
+        return;
+    }
+
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
+    if (requestKey === lastAtFareRulesKey || atFareRulesLoading.value) return;
+
+    atFareRules.value = null;
+    atFareRulesLoading.value = true;
+    atFareRulesError.value = "";
+
+    try {
+        const response = await apiService.post("/at/fare-rules", {
+            flight_ref_id: flightRefId,
+            fare_references: fareReferences,
+            search_token: searchToken,
+        });
+        atFareRules.value = response.data?.fare_rules ?? null;
+        lastAtFareRulesKey = requestKey;
+    } catch (error) {
+        atFareRulesError.value = error.response?.data?.message || "Unable to fetch provider fare rules.";
+    } finally {
+        atFareRulesLoading.value = false;
+    }
+}
+
+function atFareRulesForFlight(flightIndex) {
+    return (atFareRules.value?.rules ?? []).filter(
+        (rule) => Number(rule.trip_index) === Number(flightIndex),
+    );
+}
+
+function fareRuleInfoText(info) {
+    const passengerAmounts = [
+        ["Adult", info?.adult_amount],
+        ["Child", info?.child_amount],
+        ["Infant", info?.infant_amount],
+        ["Youth", info?.youth_amount],
+    ]
+        .filter(([, amount]) => amount !== null && amount !== undefined && String(amount).trim() !== "")
+        .map(([type, amount]) => `${type}: ${amount}`);
+
+    return [info?.description, passengerAmounts.join(" • ")]
+        .filter(Boolean)
+        .join(" — ");
+}
+
 watch(
     [
         flightDetailsActiveTab,
@@ -1623,6 +1689,9 @@ watch(
     () => {
         if (flightDetailsActiveTab.value === "fare-breakdown") {
             fetchAtFareBreakdown();
+        }
+        if (flightDetailsActiveTab.value === "fare-rules") {
+            fetchAtFareRules();
         }
     },
 );
@@ -3620,6 +3689,7 @@ watch(isLoggedIn, (newVal) => {
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="fare-rules"
+                                        @click="fetchAtFareRules"
                                         class="flight-sheet-tab"
                                     >
                                         <ListRestart class="h-4 w-4" />
@@ -4166,6 +4236,14 @@ watch(isLoggedIn, (newVal) => {
 
                             <!-- Fare Rules Tab -->
                             <TabsContent value="fare-rules" class="mt-0 space-y-4">
+                                <div v-if="atFareRulesLoading" class="animate-pulse space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                                    <div class="h-5 w-44 rounded bg-gray-200"></div>
+                                    <div class="h-14 rounded bg-gray-100"></div>
+                                    <div class="h-14 rounded bg-gray-100"></div>
+                                </div>
+                                <div v-else-if="atFareRulesError" class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+                                    {{ atFareRulesError }}
+                                </div>
                                 <div
                                     v-for="(flight, flightIndex) in selectedFlight?.leg?.flights"
                                     :key="flight?.ref_id || flightIndex"
@@ -4180,7 +4258,29 @@ watch(isLoggedIn, (newVal) => {
                                         </p>
                                     </div>
                                     <div class="divide-y divide-gray-100">
-                                        <template v-if="getSelectedFare(flightIndex)?.fare_policies?.length">
+                                        <template v-if="atFareRulesForFlight(flightIndex).length">
+                                            <div
+                                                v-for="(rule, ruleIndex) in atFareRulesForFlight(flightIndex)"
+                                                :key="`${rule.fuid || 'segment'}-${ruleIndex}`"
+                                                class="px-4 py-3 sm:px-5"
+                                            >
+                                                <p v-if="rule.origin_destination" class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{{ rule.origin_destination }}</p>
+                                                <div v-for="(group, groupIndex) in rule.rules" :key="groupIndex" class="flex gap-3 py-2 first:pt-0 last:pb-0">
+                                                    <Ticket class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                                    <div>
+                                                        <p class="font-semibold text-gray-900">{{ group.head }}</p>
+                                                        <p
+                                                            v-for="(info, infoIndex) in group.info"
+                                                            :key="infoIndex"
+                                                            class="mt-0.5 text-sm text-gray-600"
+                                                        >
+                                                            {{ fareRuleInfoText(info) || "Not specified" }}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template v-else-if="getSelectedFare(flightIndex)?.fare_policies?.length">
                                             <div
                                                 v-for="(policy, policyIndex) in getSelectedFare(flightIndex).fare_policies"
                                                 :key="policy?.segment_ref_id || policyIndex"

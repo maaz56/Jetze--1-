@@ -86,6 +86,9 @@ const selectedCurrencySymbol = computed(
 const loading = ref(true);
 const error = ref(null);
 const isLoginMode = ref(true)
+let activeLedgerRequestKey = null;
+let activeLedgerRequest = null;
+let queuedLedgerRequestKey = null;
 const emit = defineEmits(['login-click', 'search-click'])
 const isScrolled = ref(false);
 const isSearchResultsPage = computed(() =>
@@ -101,17 +104,41 @@ const handleScroll = () => {
     isScrolled.value = window.scrollY > 140;
 };
 
-function fetchAgentLedger() {
-    if (user_id.value) {
-        try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
-                userId: user_id.value,
-                currency_code: selectedCurrencyCode.value,
-            });
-            loading.value = false;
-        } catch (err) {
-            error.value = "Failed to load user data. Please try again.";
-            loading.value = false;
+async function fetchAgentLedger() {
+    if (!user_id.value) {
+        return;
+    }
+
+    const requestKey = `${user_id.value}:${selectedCurrencyCode.value}`;
+
+    if (activeLedgerRequestKey === requestKey) {
+        return activeLedgerRequest;
+    }
+
+    if (activeLedgerRequest) {
+        queuedLedgerRequestKey = requestKey;
+        return activeLedgerRequest;
+    }
+
+    activeLedgerRequestKey = requestKey;
+    activeLedgerRequest = store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
+        userId: user_id.value,
+        currency_code: selectedCurrencyCode.value,
+    });
+
+    try {
+        await activeLedgerRequest;
+    } catch (err) {
+        error.value = "Failed to load user data. Please try again.";
+    } finally {
+        const queuedRequestKey = queuedLedgerRequestKey;
+        activeLedgerRequestKey = null;
+        activeLedgerRequest = null;
+        queuedLedgerRequestKey = null;
+        loading.value = false;
+
+        if (queuedRequestKey && queuedRequestKey !== requestKey) {
+            fetchAgentLedger();
         }
     }
 }

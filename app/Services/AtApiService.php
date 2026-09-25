@@ -360,23 +360,27 @@ class AtApiService
         return $trips;
     }
 
-    /**
+/**
      * Map cabin class to API expected format
      */
-    private function mapCabinClass(string $cabinClass): string
+     private function mapCabinClass(string $cabinClass): string
     {
+        $cabinClass = strtoupper(trim($cabinClass));
+
         $cabinMap = [
             'Y' => 'E',      // Economy
             'E' => 'E',      // Economy
-            'Economy' => 'E',
-            'economy' => 'E',
+            'ECONOMY' => 'E',
+            'S' => 'PE',     // Premium Economy
+            'PE' => 'PE',    // Premium Economy
+            'PREMIUM ECONOMY' => 'PE',
             'C' => 'B',      // Business
             'J' => 'B',      // Business
-            'Business' => 'B',
-            'business' => 'B',
+            'B' => 'B',      // Business
+            'BUSINESS' => 'B',
             'F' => 'F',      // First
-            'First' => 'F',
-            'first' => 'F',
+            'FIRST' => 'F',
+            'FIRST CLASS' => 'F',
         ];
 
         return $cabinMap[$cabinClass] ?? 'E';
@@ -704,6 +708,59 @@ private function extractTrips($tripsData): array
                 'body' => $exception->hasResponse()
                     ? (string) $exception->getResponse()->getBody()
                     : null,
+            ]);
+
+            return null;
+        }
+    }
+
+    /** Fetch AT fare rules for selected fares, using server-side credentials only. */
+    public function fetchFareRules(array $trips, string $tripType): ?array
+    {
+        $accessToken = $this->getAccessToken();
+        $token = $accessToken['Token'] ?? null;
+        $clientId = $accessToken['ClientID'] ?? $this->clientId;
+
+        if (!$token || !$clientId) {
+            Log::error('AT fare-rule request could not start because signature credentials are unavailable.');
+            return null;
+        }
+
+        $payload = [
+            'Trips' => $trips,
+            'ClientID' => $clientId,
+            'Mode' => 'SY',
+            'Options' => '',
+            'Source' => 'LV',
+            'TripType' => $tripType,
+        ];
+        $path = '/' . ltrim((string) config('at.fare_rule_path', '/Flights/FareRule'), '/');
+        $url = "{$this->flightBaseUrl}{$path}";
+
+        Log::info('AT fare-rule request', ['url' => $url, 'payload' => $payload]);
+
+        try {
+            $response = $this->client->post($url, [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Authorization' => $token,
+                ],
+                'json' => $payload,
+            ]);
+            $rawBody = (string) $response->getBody();
+            $body = json_decode($rawBody, true);
+
+            Log::info('AT fare-rule response', [
+                'status' => $response->getStatusCode(),
+                'body' => $body,
+            ]);
+
+            return is_array($body) ? $body : ['raw' => $rawBody];
+        } catch (RequestException $exception) {
+            Log::error('AT fare-rule request failed', [
+                'message' => $exception->getMessage(),
+                'status' => $exception->hasResponse() ? $exception->getResponse()->getStatusCode() : null,
+                'body' => $exception->hasResponse() ? (string) $exception->getResponse()->getBody() : null,
             ]);
 
             return null;

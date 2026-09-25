@@ -378,6 +378,73 @@ class FlightController extends Controller
         return response()->json($this->quoteResponse($quote), 201);
     }
 
+    /** Request and normalize AT fare rules from the active server-cached search. */
+    public function prepareAtFareRules(Request $request)
+    {
+        $validated = $request->validate([
+            'flight_ref_id' => ['required', 'string'],
+            'fare_references' => ['required', 'array', 'min:1'],
+            'fare_references.*' => ['required', 'string'],
+            'search_token' => ['required', 'uuid'],
+        ]);
+
+        $flight = Cache::get($this->quoteFlightCacheKey(
+            $validated['search_token'],
+            $validated['flight_ref_id'],
+        ));
+
+        if (!is_array($flight)) {
+            return response()->json([
+                'message' => 'Your search has expired. Please search again before viewing fare rules.',
+            ], 422);
+        }
+
+        if (strtoupper((string) data_get($flight, 'provider.identifier')) !== 'AT') {
+            return response()->json([
+                'message' => 'Fare rules are currently available for AT flights only.',
+            ], 422);
+        }
+
+        $availableFareReferences = collect(data_get($flight, 'leg.flights', []))
+            ->flatMap(fn (array $leg) => collect($leg['fares'] ?? [])->pluck('ref_id'))
+            ->filter()
+            ->all();
+
+        if (array_diff($validated['fare_references'], $availableFareReferences)) {
+            return response()->json([
+                'message' => 'One or more selected fares are no longer available in this search.',
+            ], 422);
+        }
+
+        $trips = $this->atFareRuleTrips($flight, $validated['fare_references']);
+
+        if (count($trips) !== count($validated['fare_references'])) {
+            return response()->json([
+                'message' => 'Fare-rule details are unavailable for one or more selected fares.',
+            ], 422);
+        }
+
+        $tripType = strtoupper((string) data_get($flight, 'provider.fare_type', 'ON'));
+        $response = $this->atApiService->fetchFareRules($trips, $tripType);
+
+        if ($response === null) {
+            return response()->json([
+                'message' => 'Unable to retrieve AT fare rules. Please try again.',
+            ], 502);
+        }
+
+        if ((string) data_get($response, 'Code') !== '200') {
+            return response()->json([
+                'message' => data_get($response, 'Msg.0', 'AT could not retrieve fare rules for this fare.'),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'AT fare rules fetched successfully.',
+            'fare_rules' => $this->normalizeAtFareRules($response),
+        ]);
+    }
+
     /**
      * Request raw AT FlightInfo for the fares selected in the active server-cached search.
      */
@@ -550,6 +617,88 @@ class FlightController extends Controller
         }
 
         return $trips;
+    }
+
+    /** Build AT FareRule trips from trusted cached gross fares, never browser values. */
+    private function atFareRuleTrips(array $flight, array $fareReferences): array
+    {
+        $selectedFareReferences = array_flip($fareReferences);
+        $tuis = data_get($flight, 'provider.TUI');
+        $trips = [];
+
+        foreach (data_get($flight, 'leg.flights', []) as $flightIndex => $leg) {
+            foreach ($leg['fares'] ?? [] as $fare) {
+                if (!isset($selectedFareReferences[$fare['ref_id'] ?? ''])) {
+                    continue;
+                }
+
+                $tui = is_array($tuis) ? ($tuis[$flightIndex] ?? $tuis[0] ?? null) : $tuis;
+                $amount = data_get($fare, 'provider_gross_money.amount') ?? $fare['total_price'] ?? null;
+
+                if (!$tui || $amount === null || !isset($fare['index'])) {
+                    continue;
+                }
+
+                $trips[] = [
+                    'Amount' => (float) $amount,
+                    'Index' => (string) $fare['index'],
+                    'OrderID' => $flightIndex,
+                    'TUI' => $tui,
+                ];
+            }
+        }
+
+        return $trips;
+    }
+
+    /** Normalize AT's nested fare-rule response for the transition Fare Rules tab. */
+    private function normalizeAtFareRules(array $response): array
+    {
+        $rules = [];
+
+        foreach (data_get($response, 'Trips', []) as $tripIndex => $trip) {
+            foreach (data_get($trip, 'Journey', []) as $journeyIndex => $journey) {
+                foreach (data_get($journey, 'Segments', []) as $segmentIndex => $segment) {
+                    foreach (data_get($segment, 'Rules', []) as $segmentRule) {
+                        $ruleGroups = collect(data_get($segmentRule, 'Rule', []))
+                            ->map(fn (array $group) => [
+                                'head' => $group['Head'] ?? 'Fare condition',
+                                'info' => collect($group['Info'] ?? [])
+                                    ->map(fn (array $info) => [
+                                        'description' => $info['Description'] ?? null,
+                                        'adult_amount' => $info['AdultAmount'] ?? null,
+                                        'child_amount' => $info['ChildAmount'] ?? null,
+                                        'infant_amount' => $info['InfantAmount'] ?? null,
+                                        'youth_amount' => $info['YouthAmount'] ?? null,
+                                        'currency' => $info['CurrencyCode'] ?? null,
+                                        'time_day' => $info['TimeDay'] ?? null,
+                                    ])
+                                    ->values()
+                                    ->all(),
+                            ])
+                            ->values()
+                            ->all();
+
+                        $rules[] = [
+                            'trip_index' => $tripIndex,
+                            'journey_index' => $journeyIndex,
+                            'segment_index' => $segmentIndex,
+                            'provider' => $segment['VAC'] ?? data_get($journey, 'Provider'),
+                            'fuid' => $segment['FUID'] ?? null,
+                            'origin_destination' => $segmentRule['OrginDestination'] ?? null,
+                            'fare_rule_text' => $segmentRule['FareRuleText'] ?? null,
+                            'remarks' => $segmentRule['FareRuleRemarks'] ?? $segmentRule['FareRuleRemark'] ?? null,
+                            'rules' => $ruleGroups,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return [
+            'currency' => data_get($response, 'CurrencyCode'),
+            'rules' => $rules,
+        ];
     }
 
     /**

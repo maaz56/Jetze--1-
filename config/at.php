@@ -4,6 +4,7 @@ return [
 
     'sign_base_url' => env('AT_SIGN_BASE_URL'),
     'flight_base_url' => env('AT_FLIGHT_BASE_URL'),
+    'fare_rule_path' => env('AT_FARE_RULE_PATH', '/Flights/FareRule'),
     'merchant_id' => env('AT_MERCHANT_ID'),
     'api_key'     => env('AT_API_KEY'),
     'client_id'   => env('AT_CLIENT_ID'),
