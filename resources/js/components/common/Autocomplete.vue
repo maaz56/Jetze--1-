@@ -16,7 +16,7 @@
                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                     :name="`${uniqueId}-search`" data-lpignore="true"
                     :class="[
-                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent pt-8 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
+                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent pb-6 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
                         showIcon ? 'pl-12 pr-4' : 'px-4',
                         !isFocused ? 'text-transparent caret-transparent' : '',
                     ]"
@@ -153,6 +153,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    excludedIataCodes: {
+        type: Array,
+        default: () => [],
+    },
     defaultSuggestionsResolver: {
         type: Function,
         default: null,
@@ -240,6 +244,19 @@ const getCountryName = (item) => {
     return countryByCode.get(normalized) || String(code);
 };
 
+const getAirportCountrySearchTerms = (item) => {
+    if (!item) return [];
+
+    const country = item.country;
+    const countryName = getCountryName(item);
+    const countryCode = item.iata_country_code || item.country_code ||
+        (typeof country === "string" ? country : country?.code);
+
+    return [countryName, countryCode, country?.name]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase());
+};
+
 const updateDropdownStyle = () => {
     if (!inputEl.value) {
         dropdownStyle.value = { display: 'none' };
@@ -275,6 +292,13 @@ const normalizeAirportResponse = (payload) => {
 
 const airportKey = (airport) =>
     String(airport?.iata_code || airport?.id || "").trim().toLowerCase();
+
+const excludedAirportKeys = computed(() => new Set(
+    props.excludedIataCodes.filter(Boolean)
+        .map((code) => String(code).trim().toLowerCase()),
+));
+
+const isExcludedAirport = (airport) => excludedAirportKeys.value.has(airportKey(airport));
 
 const uniqueAirports = (groups) => {
     const seen = new Set();
@@ -625,7 +649,7 @@ const setDefaultSuggestions = () => {
         configuredSuggestions,
     ]);
 
-    searchResults.value = suggestions.slice(0, limit);
+    searchResults.value = suggestions.filter((airport) => !isExcludedAirport(airport)).slice(0, limit);
     focusedIndex.value = searchResults.value.length ? 0 : -1;
     isLoading.value = false;
 };
@@ -676,14 +700,18 @@ const updateSearchResults = debounce(() => {
         }
 
         const filteredResults = props.source.filter((item) => {
+            if (isExcludedAirport(item)) return false;
+
             const name = item.name ? item.name.toLowerCase() : "";
             const iataCode = item.iata_code ? item.iata_code.toLowerCase() : "";
             const cityName = item.city_name ? item.city_name.toLowerCase() : "";
+            const countryTerms = getAirportCountrySearchTerms(item);
 
             return (
                 iataCode === query ||
                 name.includes(query) ||
-                cityName.includes(query)
+                cityName.includes(query) ||
+                countryTerms.some((country) => country.includes(query))
             );
         });
 
@@ -732,6 +760,9 @@ function handleInput(event) {
         dropdownId: uniqueId.value,
     };
     search.value = event.target.value;
+    if (!search.value.trim()) {
+        emit("update:modelValue", "");
+    }
     emit("query-changed", event.target.value);
     nextTick(() => {
         updatePosition(); // Update dropdown position when opening
@@ -740,9 +771,7 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
-    if (search.value || selectedItem.value) {
-        clearSelectedValue();
-    }
+    // Keep the selected airport visible until the user clears it.
     // Show dropdown on focus, including default suggestions when input is empty.
     isOpen.value = true;
     eventBus.value = {
@@ -750,29 +779,32 @@ function handleFocus() {
         dropdownOpen: true,
         dropdownId: uniqueId.value,
     };
-    setDefaultSuggestions();
-    fetchRecentAirportSuggestions({ force: true });
-    fetchDefaultAirportSuggestions();
+    if (search.value) {
+        updateSearchResults();
+    } else {
+        setDefaultSuggestions();
+        fetchRecentAirportSuggestions({ force: true });
+        fetchDefaultAirportSuggestions();
+    }
     nextTick(() => {
         updatePosition();
     });
 }
 
 function handleInputClick() {
-    // If an airport is already selected, clear it fully on click.
-    if (search.value || selectedItem.value) {
-        clearSelectedValue();
-    }
-
     isOpen.value = true;
     eventBus.value = {
         ...eventBus.value,
         dropdownOpen: true,
         dropdownId: uniqueId.value,
     };
-    setDefaultSuggestions();
-    fetchRecentAirportSuggestions({ force: true });
-    fetchDefaultAirportSuggestions();
+    if (search.value) {
+        updateSearchResults();
+    } else {
+        setDefaultSuggestions();
+        fetchRecentAirportSuggestions({ force: true });
+        fetchDefaultAirportSuggestions();
+    }
     nextTick(() => {
         updatePosition();
     });
@@ -897,6 +929,12 @@ watch(() => props.modelValue, (newValue) => {
     }
 });
 
+watch(() => props.excludedIataCodes, () => {
+    if (isOpen.value) {
+        updateSearchResults();
+    }
+}, { deep: true });
+
 watch(() => props.source, () => {
     if (search.value) {
         if (props.remoteSearch) {
@@ -932,7 +970,7 @@ watch(() => props.source, () => {
 
 /* Custom scrollbar styling */
 .custom-scrollbar {
-    overflow: hidden;
+    overflow-y: auto;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

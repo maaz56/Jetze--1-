@@ -896,6 +896,8 @@ function searchFlights() {
                 errors.push(
                     `Please select a destination for trip ${index + 1}`,
                 );
+            if (trip.origin && trip.origin === trip.destination)
+                errors.push("Origin and destination cannot be the same airport");
             if (!trip.date)
                 errors.push(`Please select a date for trip ${index + 1}`);
             else if (isDateBeforeToday(trip.date))
@@ -904,6 +906,8 @@ function searchFlights() {
     } else {
         if (!origin.value) errors.push("Please select an Origin");
         if (!destination.value) errors.push("Please select a Destination");
+        if (origin.value && origin.value === destination.value)
+            errors.push("Origin and destination cannot be the same airport");
         if (!dateRange.value.start) errors.push("Please select a Date");
         else if (isDateBeforeToday(dateRange.value.start))
             errors.push(ONWARD_DATE_MIN_ERROR);
@@ -984,6 +988,31 @@ watch(user_id, (newUserId) => {
         fetchAgent();
     }
 });
+
+watch([origin, destination], ([newOrigin, newDestination], [previousOrigin, previousDestination]) => {
+    if (!newOrigin || newOrigin !== newDestination) return;
+
+    if (newOrigin !== previousOrigin && newDestination === previousDestination) {
+        origin.value = null;
+        return;
+    }
+
+    destination.value = null;
+});
+
+watch(multiCityTrips, (trips, previousTrips = []) => {
+    trips.forEach((trip, index) => {
+        if (!trip.origin || trip.origin !== trip.destination) return;
+
+        const previousTrip = previousTrips[index] || {};
+        if (trip.origin !== previousTrip.origin && trip.destination === previousTrip.destination) {
+            trip.origin = null;
+            return;
+        }
+
+        trip.destination = null;
+    });
+}, { deep: true });
 
 onMounted(() => {
     store.dispatch("airport/" + FETCH_AIRPORTS);
@@ -1152,6 +1181,7 @@ onMounted(() => {
                                 "
                                 :placeholder="$t('origin')"
                                 :source="airports"
+                                :excluded-iata-codes="[destination]"
                                 :search-debounce="350"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
@@ -1201,6 +1231,7 @@ onMounted(() => {
                                 "
                                 :placeholder="$t('destination')"
                                 :source="airports"
+                                :excluded-iata-codes="[origin]"
                                 :search-debounce="350"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
@@ -1451,6 +1482,7 @@ onMounted(() => {
                                         "
                                         :placeholder="$t('origin')"
                                         :source="airports"
+                                        :excluded-iata-codes="[trip.destination]"
                                         :search-debounce="350"
                                         :icon="'MapPin'"
                                         show-icon
@@ -1479,6 +1511,7 @@ onMounted(() => {
                                         "
                                         :placeholder="$t('destination')"
                                         :source="airports"
+                                        :excluded-iata-codes="[trip.origin]"
                                         :search-debounce="350"
                                         :default-suggestions="
                                             headerDefaultAirportCodes

@@ -169,6 +169,10 @@ function validate() {
             errors.value.destination = "Destination is required.";
             valid = false;
         }
+        if (origin && origin === destination) {
+            errors.value.destination = "Origin and destination cannot be the same airport.";
+            valid = false;
+        }
         if (!dateRange.start) {
             errors.value.start = "Start date is required.";
             valid = false;
@@ -183,6 +187,10 @@ function validate() {
         }
         if (!destination) {
             errors.value.destination = "Destination is required.";
+            valid = false;
+        }
+        if (origin && origin === destination) {
+            errors.value.destination = "Origin and destination cannot be the same airport.";
             valid = false;
         }
         if (!dateRange.start) {
@@ -203,6 +211,8 @@ function validate() {
             if (!trip.origin) tripErrors.origin = "Origin is required.";
             if (!trip.destination)
                 tripErrors.destination = "Destination is required.";
+            if (trip.origin && trip.origin === trip.destination)
+                tripErrors.destination = "Origin and destination cannot be the same airport.";
             if (!trip.date) tripErrors.date = "Date is required.";
             else if (isDateBeforeToday(trip.date))
                 tripErrors.date = ONWARD_DATE_MIN_ERROR;
@@ -670,6 +680,7 @@ const startCountdown = (remainingTime) => {
                                     @selected="focusDestination"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :excluded-iata-codes="[localValue.destination]"
                                     :search-debounce="350"
                                     :icon="'MapPin'"
                                     show-icon
@@ -708,6 +719,7 @@ const startCountdown = (remainingTime) => {
                                     @selected="openDepartureCalendar"
                                     placeholder="Destination"
                                     :source="airports"
+                                    :excluded-iata-codes="[localValue.origin]"
                                     :search-debounce="350"
                                     :icon="'MapPin'"
                                     show-icon
@@ -976,6 +988,7 @@ const startCountdown = (remainingTime) => {
                                     v-model="localValue.multiCityTrips[0].origin"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :excluded-iata-codes="[localValue.multiCityTrips[0].destination]"
                                     :search-debounce="350"
                                     :icon="'MapPin'"
                                     show-icon
@@ -1002,6 +1015,7 @@ const startCountdown = (remainingTime) => {
                                     show-icon
                                     compact-icon
                                     :source="airports"
+                                    :excluded-iata-codes="[localValue.multiCityTrips[0].origin]"
                                     :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     :auto-fill-defaults="true"
@@ -1123,6 +1137,7 @@ const startCountdown = (remainingTime) => {
                                     v-model="trip.origin"
                                     placeholder="Origin"
                                     :source="airports"
+                                    :excluded-iata-codes="[trip.destination]"
                                     :search-debounce="350"
                                     :icon="'MapPin'"
                                     show-icon
@@ -1146,6 +1161,7 @@ const startCountdown = (remainingTime) => {
                                     show-icon
                                     compact-icon
                                     :source="airports"
+                                    :excluded-iata-codes="[trip.origin]"
                                     :search-debounce="350"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"

@@ -662,16 +662,16 @@ class FlightController extends Controller
                     foreach (data_get($segment, 'Rules', []) as $segmentRule) {
                         $ruleGroups = collect(data_get($segmentRule, 'Rule', []))
                             ->map(fn (array $group) => [
-                                'head' => $group['Head'] ?? 'Fare condition',
+                                'head' => $this->normalizeAtFareRuleText($group['Head'] ?? null) ?? 'Fare condition',
                                 'info' => collect($group['Info'] ?? [])
                                     ->map(fn (array $info) => [
-                                        'description' => $info['Description'] ?? null,
-                                        'adult_amount' => $info['AdultAmount'] ?? null,
-                                        'child_amount' => $info['ChildAmount'] ?? null,
-                                        'infant_amount' => $info['InfantAmount'] ?? null,
-                                        'youth_amount' => $info['YouthAmount'] ?? null,
-                                        'currency' => $info['CurrencyCode'] ?? null,
-                                        'time_day' => $info['TimeDay'] ?? null,
+                                        'description' => $this->normalizeAtFareRuleText($info['Description'] ?? null),
+                                        'adult_amount' => $this->normalizeAtFareRuleText($info['AdultAmount'] ?? null),
+                                        'child_amount' => $this->normalizeAtFareRuleText($info['ChildAmount'] ?? null),
+                                        'infant_amount' => $this->normalizeAtFareRuleText($info['InfantAmount'] ?? null),
+                                        'youth_amount' => $this->normalizeAtFareRuleText($info['YouthAmount'] ?? null),
+                                        'currency' => $this->normalizeAtFareRuleText($info['CurrencyCode'] ?? null),
+                                        'time_day' => $this->normalizeAtFareRuleText($info['TimeDay'] ?? null),
                                     ])
                                     ->values()
                                     ->all(),
@@ -685,7 +685,7 @@ class FlightController extends Controller
                             'segment_index' => $segmentIndex,
                             'provider' => $segment['VAC'] ?? data_get($journey, 'Provider'),
                             'fuid' => $segment['FUID'] ?? null,
-                            'origin_destination' => $segmentRule['OrginDestination'] ?? null,
+                            'origin_destination' => $this->normalizeAtFareRuleText($segmentRule['OrginDestination'] ?? null),
                             'fare_rule_text' => $this->normalizeAtFareRuleText($segmentRule['FareRuleText'] ?? null),
                             'remarks' => $this->normalizeAtFareRuleText(
                                 $segmentRule['FareRuleRemarks'] ?? $segmentRule['FareRuleRemark'] ?? null,
@@ -712,6 +712,7 @@ class FlightController extends Controller
 
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $text = preg_replace('/<br\s*\/?\s*>/i', "\n", $text);
+        $text = strip_tags($text);
         $text = trim(preg_replace("/\r\n?/", "\n", $text));
 
         return $text === '' ? null : $text;

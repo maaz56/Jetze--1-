@@ -1349,6 +1349,26 @@ function formatFareDisplayMoney(fare) {
     return formatAmount(calculateFare(fare));
 }
 
+/** Keep currency and value separate so the fare-card header can size them independently. */
+function fareDisplayMoneyParts(fare) {
+    const money = fare?.selling_display_money ?? fare?.display_money;
+
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return {
+            currency: money.currency,
+            amount: Number(money.amount).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }),
+        };
+    }
+
+    return {
+        currency: "",
+        amount: formatAmount(calculateFare(fare)),
+    };
+}
+
 /** Build the converted total for the cheapest fare of each flight leg. */
 function flightDisplayMoney(flight) {
     const legs = flight?.leg?.flights;
@@ -2275,7 +2295,7 @@ watch(isLoggedIn, (newVal) => {
                                 >{{ selectedAirline.length }}</span
                             >
                         </h3>
-                        <div class="max-h-60 overflow-y-auto">
+                        <div>
                             <div class="flex justify-between items-center mb-2">
                                 <button
                                     @click="
@@ -2626,7 +2646,7 @@ watch(isLoggedIn, (newVal) => {
                                 <CarouselItem
                                     v-for="airline in cheapestFlightsByAirline"
                                     :key="airline.airlineId"
-                                    class="min-w-[208px] basis-full pl-3 sm:basis-[40%] lg:basis-[40%] xl:basis-[26.6667%] 2xl:basis-1/5"
+                                    class="basis-full pl-3 sm:basis-1/2 xl:basis-1/4"
                                 >
                                     <button
                                         type="button"
@@ -3634,7 +3654,7 @@ watch(isLoggedIn, (newVal) => {
         <Transition name="slide-sooper">
             <div
                 v-if="isSooperFlihgtDetailsOpen"
-                class="fixed inset-y-0 right-0 flex h-full w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl z-40 sm:w-[66%] sm:max-w-[784px] sm:rounded-l-xl"
+                class="fixed inset-y-0 right-0 flex h-full w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl z-40 sm:w-[73%] sm:max-w-[864px] sm:rounded-l-xl"
             >
                 <!-- The close button sits over the tab bar so the navigation stays at the very top. -->
                 <div class="pointer-events-none absolute right-0 top-0 z-30 flex h-[59px] items-center bg-white/95 px-3 sm:px-5">
@@ -4177,28 +4197,28 @@ watch(isLoggedIn, (newVal) => {
                                                                 : ''
                                                         "
                                                     >
-                                                        <div class="flex items-start justify-between gap-3 border-b border-primary/40 pb-3">
-                                                            <div class="flex min-w-0 items-center gap-2">
-                                                                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="selectedFares[flightIndex] === fare.ref_id ? 'border-primary' : 'border-gray-300'">
-                                                                    <span v-if="selectedFares[flightIndex] === fare.ref_id" class="h-2.5 w-2.5 rounded-full bg-primary"></span>
-                                                                </span>
-                                                                <h5 class="truncate text-base font-bold capitalize text-gray-950">
-                                                                    {{ fare?.name_class || fare?.class || "Standard" }}
-                                                                </h5>
-                                                            </div>
-                                                             <div v-if="getFareRbdClasses(fare).length">
-                                                                <div class="flex flex-wrap gap-1.5">
-                                                                    <span
-                                                                        v-for="rbdClass in getFareRbdClasses(fare)"
-                                                                        :key="rbdClass"
-                                                                        class="inline-flex items-center rounded border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs font-bold text-primary"
-                                                                    >
-                                                                        {{ rbdClass }}
-                                                                    </span>
+                                                        <div class="border-b border-primary/40 pb-3">
+                                                            <div class="flex min-w-0 items-start">
+                                                                <div class="flex min-w-0 flex-1 items-start justify-between gap-2">
+                                                                    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                                                                        <h5 class="min-w-0 break-words text-l mr-2 font-bold leading-5 text-gray-900">
+                                                                            {{ fare?.name_class || fare?.name || fare?.class || "Standard fare" }}
+                                                                        </h5>
+                                                                        <div v-if="getFareRbdClasses(fare).length" class="flex flex-wrap gap-1">
+                                                                            <span
+                                                                                v-for="rbdClass in getFareRbdClasses(fare)"
+                                                                                :key="rbdClass"
+                                                                                class="inline-flex items-center rounded border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                                                                            >
+                                                                                {{ rbdClass }}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <p class="flex shrink-0 items-baseline gap-1 text-right text-base font-bold leading-none text-primary sm:text-lg">
+                                                                        <span class="text-[0.70em] font-semibold">{{ fareDisplayMoneyParts(fare).currency }}</span>
+                                                                        <span class="text-[1em] font-bold">{{ fareDisplayMoneyParts(fare).amount }}</span>
+                                                                    </p>
                                                                 </div>
-                                                            </div>
-                                                            <div class="shrink-0 text-right text-lg font-extrabold leading-none text-primary sm:text-xl">
-                                                                {{ formatFareDisplayMoney(fare) }}
                                                             </div>
                                                         </div>
 
