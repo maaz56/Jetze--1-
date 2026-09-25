@@ -750,10 +750,7 @@ private function extractTrips($tripsData): array
             $rawBody = (string) $response->getBody();
             $body = json_decode($rawBody, true);
 
-            Log::info('AT fare-rule response', [
-                'status' => $response->getStatusCode(),
-                'body' => $body,
-            ]);
+            Log::info(json_encode($body, JSON_PRETTY_PRINT));
 
             return is_array($body) ? $body : ['raw' => $rawBody];
         } catch (RequestException $exception) {
