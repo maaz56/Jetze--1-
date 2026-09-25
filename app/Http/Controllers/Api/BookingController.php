@@ -23,6 +23,7 @@ use App\Services\OneApiService;
 use App\Services\PIAApiService;
 use App\Services\SabreApiService;
 use App\Services\AtApiService;
+use App\Services\AtPreBookingSsrLimitService;
 use App\Services\AgentWalletBalanceService;
 use App\Services\BookingPricingService;
 use App\Services\BookingVoidSettlementService;
@@ -63,6 +64,7 @@ class BookingController extends Controller
     protected $bookingPricingService;
     protected $bookingVoidSettlementService;
     protected $providerBookingEventService;
+    protected $atPreBookingSsrLimitService;
 
     public function __construct(
         SabreApiService $sabreApiService,
@@ -78,6 +80,7 @@ class BookingController extends Controller
         BookingPricingService $bookingPricingService,
         BookingVoidSettlementService $bookingVoidSettlementService,
         ProviderBookingEventService $providerBookingEventService,
+        AtPreBookingSsrLimitService $atPreBookingSsrLimitService,
     ) {
         $this->sabreApiService = $sabreApiService;
         // $this->safepayService = $safepayService;
@@ -93,6 +96,7 @@ class BookingController extends Controller
         $this->bookingPricingService = $bookingPricingService;
         $this->bookingVoidSettlementService = $bookingVoidSettlementService;
         $this->providerBookingEventService = $providerBookingEventService;
+        $this->atPreBookingSsrLimitService = $atPreBookingSsrLimitService;
     }
 
     public function index(Request $request)
@@ -1372,12 +1376,38 @@ class BookingController extends Controller
                 $quote = $this->priceQuoteService->findActive($request->quote_id, $request->user());
             }
 
-            $rawResponse = $atApiService->fetchAncillaries($request->body);
-            $response = app(AtAncillaryTransformer::class)->transform(
-                $rawResponse,
-                $quote?->display_currency ?? data_get($request->body, 'currency_code', 'AED'),
-                $quote?->provider_currency ?? 'AED',
-            );
+            if ($quote) {
+                $capability = $this->atPreBookingSsrLimitService->capabilityForQuote($quote);
+                $requestFlags = $this->atPreBookingSsrLimitService->requestFlags($capability);
+                $displayCurrency = $quote->display_currency;
+                $providerCurrency = $quote->provider_currency;
+
+                if (!$requestFlags['includeSSR'] && !$requestFlags['includeSeatLayout']) {
+                    $response = $this->atPreBookingSsrLimitService->emptyAncillaries(
+                        $capability,
+                        $displayCurrency,
+                        $providerCurrency,
+                    );
+                } else {
+                    $rawResponse = $atApiService->fetchAncillaries([
+                        ...$request->input('body', []),
+                        ...$requestFlags,
+                    ]);
+                    $response = app(AtAncillaryTransformer::class)->transform(
+                        $rawResponse,
+                        $displayCurrency,
+                        $providerCurrency,
+                    );
+                    $response = $this->atPreBookingSsrLimitService->apply($response, $capability);
+                }
+            } else {
+                $rawResponse = $atApiService->fetchAncillaries($request->body);
+                $response = app(AtAncillaryTransformer::class)->transform(
+                    $rawResponse,
+                    data_get($request->body, 'currency_code', 'AED'),
+                    'AED',
+                );
+            }
         }
 
         return response()->json([

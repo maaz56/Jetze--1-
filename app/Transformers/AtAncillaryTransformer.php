@@ -20,8 +20,8 @@ class AtAncillaryTransformer
     public function transform(array $response, string $displayCurrency, string $providerCurrency = 'AED'): array
     {
         $data = $response['data'] ?? [];
-        $ssrData = $data['ssrData'] ?? [];
-        $seatLayout = $data['seatLayout'] ?? [];
+        $ssrData = is_array($data['ssrData'] ?? null) ? $data['ssrData'] : [];
+        $seatLayout = is_array($data['seatLayout'] ?? null) ? $data['seatLayout'] : [];
         $providerCurrency = strtoupper($providerCurrency ?: ($ssrData['CurrencyCode'] ?? 'AED'));
         $displayCurrency = strtoupper($displayCurrency ?: 'AED');
 
@@ -135,6 +135,7 @@ class AtAncillaryTransformer
     {
         return [
             'FUID' => $segment['FUID'] ?? null,
+            'VAC' => $segment['VAC'] ?? $segment['AirlineCode'] ?? null,
             'FlightNo' => $segment['FlightNo'] ?? null,
             'AirlineName' => $segment['AirlineName'] ?? null,
             'AirlineUnit' => $segment['AirlineUnit'] ?? null,

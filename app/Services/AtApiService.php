@@ -1061,8 +1061,8 @@ private function extractTrips($tripsData): array
     public function fetchAncillaries($request)
     {
         // Log::info('Fetching ancillaries with data: ', $request);
-        $ssrData = $this->getSSR($request);
-        $seatLayout = $this->getSeatLayout($request);
+        $ssrData = ($request['includeSSR'] ?? true) ? $this->getSSR($request) : [];
+        $seatLayout = ($request['includeSeatLayout'] ?? true) ? $this->getSeatLayout($request) : [];
         $data = [
             'ssrData' => $ssrData,
             'seatLayout' => $seatLayout,

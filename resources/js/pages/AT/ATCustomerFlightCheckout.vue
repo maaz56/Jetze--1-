@@ -163,6 +163,8 @@ const showAncillariesTab = ref(false);
 const isSeatMapOpen = ref(false);
 const sooperResponse = ref(null);
 const selectedSeats = ref({})
+const atAncillaryStorageKey = computed(() => `at_checkout_ancillaries_${route.query.quote_id || route.query.flight_id || 'current'}`);
+const localAtAncillarySummary = ref(null);
 
 
 
@@ -204,6 +206,19 @@ const seatLayout = computed(() => (
     ancillaries.value?.ancillaries?.data?.seatLayout ||
     null
 ));
+const preBookingSsrLimitations = computed(() => (
+    ancillaries.value?.limitations ||
+    ancillaries.value?.ancillaries?.limitations ||
+    ancillaries.value?.ancillaries?.data?.limitations ||
+    null
+));
+const isPreBookingServiceAvailable = (service) => (
+    preBookingSsrLimitations.value?.services?.[service]?.available !== false
+);
+const preBookingServiceMessage = (service) => (
+    preBookingSsrLimitations.value?.services?.[service]?.message ||
+    `${service.charAt(0).toUpperCase() + service.slice(1)} is not available for this airline before booking.`
+);
 const passengers = computed(() => getPassengers(bookingDetails.value) || []);
 const formatDateTime = (date) => moment.parseZone(date).format('DD MMM YYYY, HH:mm');
 
@@ -211,8 +226,24 @@ const extraServicesTotal = computed(() => {
     return getExtrasTotal();
 });
 const addOnsAmount = computed(() => Number(
-    lockedPriceQuote.value?.ancillary_money?.provider_money?.amount ?? 0,
+    localAtAncillarySummary.value?.provider_amount
+        ?? lockedPriceQuote.value?.ancillary_money?.provider_money?.amount
+        ?? 0,
 ));
+const localCheckoutDisplayMoney = computed(() => {
+    const quoteMoney = lockedPriceQuote.value?.display_money;
+
+    if (!quoteMoney) return null;
+
+    const quoteTotal = Number(quoteMoney.amount ?? 0);
+    const quoteAncillaryTotal = Number(lockedPriceQuote.value?.ancillary_money?.display_money?.amount ?? 0);
+    const localAncillaryTotal = Number(localAtAncillarySummary.value?.display_amount ?? quoteAncillaryTotal);
+
+    return {
+        ...quoteMoney,
+        amount: String((quoteTotal - quoteAncillaryTotal) + localAncillaryTotal),
+    };
+});
 const isLockedCheckoutTotalReady = computed(() => (
     !isLockedPriceQuoteLoading.value
     && !lockedPriceQuoteError.value
@@ -411,7 +442,7 @@ function clearSegmentGroup(segIdx, pIdx, groupCode) {
     }
 }
 
-async function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
+function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
     const extra = selectedExtras[tripIdx]?.[type]?.[journeyIdx]?.[segmentIdx]?.[passengerIdx];
     if (!extra) return;
 
@@ -421,8 +452,7 @@ async function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx)
     if (!extraCharges[tripIdx][type][journeyIdx][segmentIdx]) extraCharges[tripIdx][type][journeyIdx][segmentIdx] = {};
 
     extraCharges[tripIdx][type][journeyIdx][segmentIdx][passengerIdx] = ancillaryProviderAmount(extra);
-
-    await syncAncillaryQuote();
+    syncAtAncillaryLocalStorage();
 }
 
 function handleSSRSelection(tripIdx, journeyIdx, segmentIdx, travellerIdx, ssr, type) {
@@ -466,7 +496,7 @@ function removeSelection(tripIdx, type, journeyIdx, segmentIdx, travellerIdx) {
         delete selectedSeat[tripIdx]?.[journeyIdx]?.[segmentIdx]?.[travellerIdx];
     }
 
-    syncAncillaryQuote();
+    syncAtAncillaryLocalStorage();
 }
 
 function getFUID(tripIdx, journeyIdx, segmentIdx) {
@@ -501,6 +531,10 @@ function getSeatsByRowAndColumn(seats, row, columnIndex) {
 
 function getExtrasTotal(tripIdx = null) {
     if (String(route?.query?.flight_provider).toLowerCase() === 'at') {
+        if (tripIdx === null && localAtAncillarySummary.value) {
+            return Number(localAtAncillarySummary.value.provider_amount ?? 0);
+        }
+
         const money = tripIdx === null
             ? lockedPriceQuote.value?.ancillary_money?.provider_money
             : lockedPriceQuote.value?.ancillary_totals_by_trip?.[tripIdx]?.provider_money;
@@ -582,6 +616,100 @@ function selectedAncillaryReferences() {
     return selections;
 }
 
+/** Build the exact AT SSR rows that booking needs, without re-fetching ancillaries. */
+function selectedAtBookingAncillaryItems({ includeStored = false } = {}) {
+    const items = [];
+
+    Object.entries(selectedExtras).forEach(([tripIdx, flightExtras]) => {
+        Object.entries(flightExtras || {}).forEach(([type, journeys]) => {
+            if (!isPreBookingServiceAvailable(type)) return;
+
+            Object.entries(journeys || {}).forEach(([journeyIdx, segments]) => {
+                Object.entries(segments || {}).forEach(([segmentIdx, passengers]) => {
+                    Object.entries(passengers || {}).forEach(([passengerIdx, item]) => {
+                        if (!item?.SSID) return;
+
+                        const fuid = item.FUID || (type === 'seat'
+                            ? getSeatFUID(tripIdx, journeyIdx, segmentIdx)
+                            : getFUID(tripIdx, journeyIdx, segmentIdx));
+                        const paxId = item.PaxID || Number(passengerIdx) + 1;
+                        const providerAmount = item?.provider_money?.amount ?? ancillaryProviderAmount(item);
+                        const displayAmount = item?.display_money?.amount ?? providerAmount;
+
+                        items.push({
+                            type,
+                            trip_index: Number(tripIdx),
+                            journey_index: Number(journeyIdx),
+                            segment_index: Number(segmentIdx),
+                            passenger_id: paxId,
+                            provider_references: {
+                                fuid,
+                                pax_id: paxId,
+                                ssid: Number(item.SSID),
+                            },
+                            provider_amount: String(providerAmount ?? 0),
+                            display_amount: String(displayAmount ?? 0),
+                        });
+                    });
+                });
+            });
+        });
+    });
+
+    if (!items.length && includeStored && Array.isArray(localAtAncillarySummary.value?.items)) {
+        return localAtAncillarySummary.value.items.filter(item => isPreBookingServiceAvailable(item.type));
+    }
+
+    return items;
+}
+
+function buildAtAncillaryLocalSummary() {
+    const items = selectedAtBookingAncillaryItems();
+    const providerAmount = items.reduce((total, item) => total + Number(item.provider_amount || 0), 0);
+    const displayAmount = items.reduce((total, item) => total + Number(item.display_amount || 0), 0);
+    const quoteMoney = lockedPriceQuote.value?.display_money;
+    const quoteTotal = Number(quoteMoney?.amount ?? 0);
+    const quoteAncillaryTotal = Number(lockedPriceQuote.value?.ancillary_money?.display_money?.amount ?? 0);
+    const totalAmount = (quoteTotal - quoteAncillaryTotal) + displayAmount;
+
+    return {
+        items,
+        provider_amount: String(providerAmount),
+        display_amount: String(displayAmount),
+        total_amount: String(totalAmount),
+        currency: quoteMoney?.currency || lockedPriceQuote.value?.display_money?.currency || route.query.currency_code || 'AED',
+        updated_at: new Date().toISOString(),
+    };
+}
+
+function syncAtAncillaryLocalStorage() {
+    if (String(route.query.flight_provider).toLowerCase() !== 'at') return;
+
+    const summary = buildAtAncillaryLocalSummary();
+    localAtAncillarySummary.value = summary;
+    amount.value = Number(summary.total_amount || 0);
+
+    if (summary.items.length > 0) {
+        localStorage.setItem(atAncillaryStorageKey.value, JSON.stringify(summary));
+    } else {
+        localStorage.removeItem(atAncillaryStorageKey.value);
+    }
+}
+
+function restoreAtAncillaryLocalStorage() {
+    try {
+        const raw = localStorage.getItem(atAncillaryStorageKey.value);
+        localAtAncillarySummary.value = raw ? JSON.parse(raw) : null;
+    } catch {
+        localAtAncillarySummary.value = null;
+    }
+}
+
+function clearAtAncillaryLocalStorage() {
+    localStorage.removeItem(atAncillaryStorageKey.value);
+    localAtAncillarySummary.value = null;
+}
+
 /** Restore server-saved quote selections after a checkout reload or failed update. */
 function hydrateQuoteAncillarySelections(items = []) {
     Object.keys(selectedExtras).forEach(key => delete selectedExtras[key]);
@@ -621,26 +749,9 @@ function hydrateQuoteAncillarySelections(items = []) {
     });
 }
 
-/** Validate and lock the current selections on the active quote before checkout can continue. */
+/** Keep AT selections local; booking sends the mapped IDs in one request. */
 async function syncAncillaryQuote() {
-    const quoteId = route.query.quote_id;
-
-    if (!quoteId || String(route.query.flight_provider).toLowerCase() !== 'at') return;
-
-    isAncillaryPricingUpdating.value = true;
-
-    try {
-        const response = await apiService.put(`/flight-quotes/${quoteId}/ancillaries`, {
-            selections: selectedAncillaryReferences(),
-        });
-        lockedPriceQuote.value = response.data.quote;
-    } catch (error) {
-        toast.error(error?.response?.data?.message || 'Unable to update ancillary price.');
-        await fetchAncillaries({ force: true });
-        return false;
-    } finally {
-        isAncillaryPricingUpdating.value = false;
-    }
+    return selectedAtBookingAncillaryItems();
 }
 
 const confirmSeatSelection = () => {
@@ -664,7 +775,7 @@ const confirmSeatSelection = () => {
 }
 function patchAncillaryCharges() {
     if (String(route?.query?.flight_provider).toLowerCase() === 'at') {
-        return syncAncillaryQuote();
+        return Promise.resolve();
     }
 
     store.dispatch("flight/" + PATCH_ANCILLARIES, {
@@ -1317,6 +1428,13 @@ function formatAncillaryMoney(item) {
 
 /** Sum selected extras in the checkout display currency for UI-only price details. */
 function formatExtrasDisplayMoney(tripIdx = null) {
+    if (tripIdx === null && localAtAncillarySummary.value) {
+        return formatConvertedMoney({
+            amount: localAtAncillarySummary.value.display_amount,
+            currency: localAtAncillarySummary.value.currency,
+        });
+    }
+
     const money = tripIdx === null
         ? lockedPriceQuote.value?.ancillary_money?.display_money
         : lockedPriceQuote.value?.ancillary_totals_by_trip?.[tripIdx]?.display_money;
@@ -1342,11 +1460,11 @@ function formatLockedCheckoutTotal() {
         return "Updating price...";
     }
 
-    if (!lockedPriceQuote.value?.display_money) {
+    if (!localCheckoutDisplayMoney.value) {
         return "Price unavailable";
     }
 
-    return formatConvertedMoney(lockedPriceQuote.value?.display_money);
+    return formatConvertedMoney(localCheckoutDisplayMoney.value);
 }
 
 function parsePnrResponse() {
@@ -1580,7 +1698,10 @@ async function saveBooking(type) {
         globalError.value = "";
 
         const savedMarginBreakdown = getSavedMarginBreakdown();
-        amount.value = Number(lockedPriceQuote.value?.display_money?.amount ?? 0);
+        if (selectedAtBookingAncillaryItems().length || !localAtAncillarySummary.value) {
+            syncAtAncillaryLocalStorage();
+        }
+        amount.value = Number(localCheckoutDisplayMoney.value?.amount ?? lockedPriceQuote.value?.display_money?.amount ?? 0);
 
         await store.dispatch("flight/" + SAVE_BOOKING, {
             main_contact: mainContact.value,
@@ -1599,6 +1720,7 @@ async function saveBooking(type) {
             flight_mode: "B2C",
             flight_provider: route?.query.flight_provider,
             quote_id: route?.query.quote_id,
+            selected_at_ancillaries: selectedAtBookingAncillaryItems({ includeStored: true }),
             type: paymentMethod.value || type,
             paymentMethod: paymentMethod.value || type,
             booking_status:
@@ -1623,6 +1745,7 @@ async function saveBooking(type) {
 
 const closeDialogue = () => {
     isOpen.value = false;
+    clearAtAncillaryLocalStorage();
 
     router.push({
         name: "CustomerPaymentView", // Replace with the name of your route
@@ -1649,6 +1772,7 @@ watch(bookingDetails, () => {
         parsePnrResponse();
         //     //console.log("pnrData", pnrData.value);
         // fetchAncillaries();
+        clearAtAncillaryLocalStorage();
         router.push({
             name: "CustomerPaymentView", // Replace with the name of your route
             query: {
@@ -2265,6 +2389,7 @@ onMounted(() => {
     fetchCustomerMarginValues();
     fetchCustomerSettings();
     fetchAgentLedger();
+    restoreAtAncillaryLocalStorage();
     fetchLockedPriceQuote();
 });
 
@@ -2331,6 +2456,7 @@ watch(flight, () => {
     </div>
     <!-- Main Content - Flight Source 1 -->
     <div v-if="route?.query?.flight_source == 1 && !showPreview" class="min-h-screen bg-gray-50 py-4">
+        <pre>{{qoute}}</pre>
         <div class="max-w-7xl  mx-auto px-3 sm:px-4">
             <div v-if="!isLoading && flight">
                 <!-- Header -->
@@ -2820,7 +2946,12 @@ watch(flight, () => {
                                                             </p>
                                                         </div>
 
-                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div v-if="!isPreBookingServiceAvailable('baggage')"
+                                                            class="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-lg">
+                                                            {{ preBookingServiceMessage('baggage') }}
+                                                        </div>
+
+                                                        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                             <div v-for="(trip, tripIdx) in ssrData?.Trips || []" :key="tripIdx"
                                                                 class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                                                                 <h5 class="text-sm font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
@@ -2967,7 +3098,11 @@ watch(flight, () => {
                                                     </TabsContent>
 
                                                     <TabsContent value="seats" class="p-4 sm:p-6">
-                                                        <div v-if="seatLayout?.Trips?.length">
+                                                        <div v-if="!isPreBookingServiceAvailable('seat')"
+                                                            class="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-lg">
+                                                            {{ preBookingServiceMessage('seat') }}
+                                                        </div>
+                                                        <div v-else-if="seatLayout?.Trips?.length">
                                                             <div class="mb-6">
                                                                 <h4 class="text-lg font-semibold text-gray-800 mb-2">Want your own seat?</h4>
                                                                 <p class="text-sm text-gray-600">
@@ -3134,7 +3269,11 @@ watch(flight, () => {
                                                     </TabsContent>
 
                                                     <TabsContent value="meals" class="p-4 sm:p-6">
-                                                        <div v-if="ssrData?.Trips?.length">
+                                                        <div v-if="!isPreBookingServiceAvailable('meal')"
+                                                            class="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-lg">
+                                                            {{ preBookingServiceMessage('meal') }}
+                                                        </div>
+                                                        <div v-else-if="ssrData?.Trips?.length">
                                                             <div class="mb-6">
                                                                 <h4 class="text-lg font-semibold text-gray-800 mb-2">Meals</h4>
                                                                 <p class="text-sm text-gray-600">
