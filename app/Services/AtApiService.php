@@ -1204,7 +1204,7 @@ private function extractTrips($tripsData): array
             $response = $this->client->send($req);
             $responseBody = json_decode($response->getBody(), true);
 
-            Log::info($responseBody);
+            Log::info(json_encode($responseBody));
             return $responseBody;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {

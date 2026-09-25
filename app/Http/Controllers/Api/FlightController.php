@@ -686,8 +686,10 @@ class FlightController extends Controller
                             'provider' => $segment['VAC'] ?? data_get($journey, 'Provider'),
                             'fuid' => $segment['FUID'] ?? null,
                             'origin_destination' => $segmentRule['OrginDestination'] ?? null,
-                            'fare_rule_text' => $segmentRule['FareRuleText'] ?? null,
-                            'remarks' => $segmentRule['FareRuleRemarks'] ?? $segmentRule['FareRuleRemark'] ?? null,
+                            'fare_rule_text' => $this->normalizeAtFareRuleText($segmentRule['FareRuleText'] ?? null),
+                            'remarks' => $this->normalizeAtFareRuleText(
+                                $segmentRule['FareRuleRemarks'] ?? $segmentRule['FareRuleRemark'] ?? null,
+                            ),
                             'rules' => $ruleGroups,
                         ];
                     }
@@ -699,6 +701,20 @@ class FlightController extends Controller
             'currency' => data_get($response, 'CurrencyCode'),
             'rules' => $rules,
         ];
+    }
+
+    /** Convert AT's HTML/newline fare-rule text to safe plain text for the UI. */
+    private function normalizeAtFareRuleText(mixed $text): ?string
+    {
+        if (!is_string($text)) {
+            return null;
+        }
+
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/<br\s*\/?\s*>/i', "\n", $text);
+        $text = trim(preg_replace("/\r\n?/", "\n", $text));
+
+        return $text === '' ? null : $text;
     }
 
     /**

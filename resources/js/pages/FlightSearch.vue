@@ -4278,6 +4278,8 @@ watch(isLoggedIn, (newVal) => {
                                                         </p>
                                                     </div>
                                                 </div>
+                                                <p v-if="rule.fare_rule_text" class="whitespace-pre-line break-words py-2 text-sm leading-6 text-gray-700">{{ rule.fare_rule_text }}</p>
+                                                <p v-if="rule.remarks" class="whitespace-pre-line break-words py-2 text-sm text-gray-500">{{ rule.remarks }}</p>
                                             </div>
                                         </template>
                                         <template v-else-if="getSelectedFare(flightIndex)?.fare_policies?.length">
