@@ -7,11 +7,15 @@ const props = defineProps({
         type: [Number, String],
         required: true,
     },
+    disabled: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const isStarting = ref(false);
 const error = ref("");
-const canStart = computed(() => Boolean(props.bookingId) && !isStarting.value);
+const canStart = computed(() => Boolean(props.bookingId) && !props.disabled && !isStarting.value);
 
 const startCheckout = async () => {
     if (!canStart.value) return;
@@ -48,9 +52,9 @@ const startCheckout = async () => {
                     </svg>
                 </span>
                 <div>
-                    <h2 class="font-semibold text-slate-900">Pay with Nomod</h2>
+                    <h2 class="font-semibold text-slate-900">Secure Card Payment</h2>
                     <p class="mt-1 text-sm leading-5 text-slate-600">
-                        Pay securely using your card or available Nomod payment methods. Your wallet balance will not be used.
+                        Pay securely using your debit or credit card. A 2.5% processing fee is applied to the booking total; your wallet balance will not be used.
                     </p>
                 </div>
             </div>
@@ -60,7 +64,7 @@ const startCheckout = async () => {
                 class="inline-flex min-h-11 shrink-0 items-center justify-center rounded bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                 @click="startCheckout"
             >
-                {{ isStarting ? "Redirecting…" : "Pay with Nomod" }}
+                {{ isStarting ? "Processing…" : "Make Payment" }}
             </button>
         </div>
         <p v-if="error" class="mt-3 text-sm text-destructive" role="alert">{{ error }}</p>

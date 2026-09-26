@@ -550,6 +550,7 @@ class BookingController extends Controller
                 : null,
             'itinerary_ref' => $itineraryRef ?? null,
             'expiry_time' => $expiryTime ?? null,
+            'payment_expires_at' => now()->addMinutes(20),
             'status' => $request->booking_status ?? 'booked', // falls back to safe default
         ]);
 
@@ -1008,6 +1009,7 @@ class BookingController extends Controller
     public function confirmPnr(Request $request)
     {
         Log::info($request);
+        $walletPaymentLock = null;
 
         if ($request->flight_provider === 'at') {
             $booking = FlightBookings::with('priceSnapshot')->find($request->bookingId);
@@ -1019,11 +1021,36 @@ class BookingController extends Controller
             if ($request->user()?->role !== 'admin' && (int) $booking->agent_id !== (int) $request->user()?->id) {
                 return response()->json(['message' => 'You cannot confirm this booking.'], 403);
             }
+            $request->validate([
+                'bookingId' => ['required', 'integer'],
+                'booking_status' => ['required', 'string', 'in:ticketed,issued'],
+                'pnr' => ['nullable', 'string', 'max:255'],
+            ]);
+
+
+            if ($booking->payment_expires_at && ! $booking->payment_expires_at->isFuture()) {
+                return response()->json([
+                    'message' => 'This booking payment window has expired. Please create a new booking.',
+                ], 422);
+            }
 
             if (!$this->agentWalletBalanceService->canPayForBooking($booking)) {
                 return response()->json([
                     'message' => 'Your wallet balance is insufficient to confirm this booking.',
                 ], 422);
+            }
+
+            if (in_array(strtolower((string) $booking->status), ['ticketed', 'issued'], true)) {
+                return response()->json([
+                    'message' => 'This booking has already been ticketed.',
+                ], 409);
+            }
+
+            $walletPaymentLock = Cache::lock('wallet-confirm:agent:'.$booking->agent_id, 120);
+            if (! $walletPaymentLock->get()) {
+                return response()->json([
+                    'message' => 'A wallet payment is already being processed for this agent.',
+                ], 409);
             }
         }
 
@@ -1069,6 +1096,43 @@ class BookingController extends Controller
 
         }else if ($request->flight_provider === 'at') {
 
+            // Never trust the amount (or reservation payload) posted by the
+            // browser. The server-side price snapshot is the source of truth.
+            $lockedProviderAmount = $booking->priceSnapshot?->provider_amount;
+            if (!is_numeric($lockedProviderAmount) || (float) $lockedProviderAmount <= 0
+                || floor((float) $lockedProviderAmount) !== (float) $lockedProviderAmount) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
+                return response()->json([
+                    'message' => 'The locked booking amount is invalid for AT payment.',
+                ], 422);
+            }
+
+            $storedReservation = json_decode((string) $booking->pnr_response, true);
+            if (!is_array($storedReservation) || empty($storedReservation)) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
+                return response()->json([
+                    'message' => 'The stored AT reservation is unavailable.',
+                ], 422);
+            }
+
+            $flightData = json_decode((string) $booking->flight_data, true) ?: [];
+            $flight = data_get($flightData, 'original.leg.flights.0')
+                ?? data_get($flightData, 'leg.flights.0');
+
+            // Override all payment inputs with trusted booking values.
+            $request->merge([
+                'net_amount' => (int) $lockedProviderAmount,
+                'pnrData' => $storedReservation,
+                'FareType' => $storedReservation['FareType'] ?? $request->input('FareType'),
+                'bookingType' => data_get($flight, 'hold_info') === null ? 'HP' : 'HB',
+            ]);
+
+            Log::info('AT wallet payment using locked booking values', [
+                'booking_id' => $booking->id,
+                'price_snapshot_id' => $booking->price_snapshot_id,
+                'provider_amount' => (int) $lockedProviderAmount,
+            ]);
+
             $atApiService = new AtApiService();
             Log::info('Booking held, skipping confirmation step.');
             $res = $atApiService->atPaymentRequest($request);
@@ -1076,6 +1140,7 @@ class BookingController extends Controller
             Log::info($res);
             $res = json_decode($res, true);
             if ($res == null) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
                 return response()->json([
                     'message ' => 'Booking confirmation failed',
                     'error ' => 'No response from NDC WT API'
@@ -1084,6 +1149,7 @@ class BookingController extends Controller
             }
 
             if (($res['status'] ?? true) === false) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
                 return response()->json([
                     'message' => 'Booking confirmation failed',
                     'error' => $res['error'] ?? $res['message'] ?? 'Payment Failed !',
@@ -1115,6 +1181,7 @@ class BookingController extends Controller
             );
 
             $this->sendBookingStatusMail($booking, $booking->status);
+        if ($walletPaymentLock) { $walletPaymentLock->release(); }
         }
 
         return response()->json([

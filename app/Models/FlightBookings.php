@@ -10,6 +10,11 @@ class FlightBookings extends Model
     use HasFactory;
     protected $guarded = [];
 
+    protected function casts(): array
+    {
+        return ['payment_expires_at' => 'datetime'];
+    }
+
     public function pessangers()
     {
         return $this->hasMany(FlightPassenger::class, 'booking_id');
@@ -57,3 +62,4 @@ class FlightBookings extends Model
         return $this->hasMany(PaymentAttempt::class, 'booking_id');
     }
 }
+

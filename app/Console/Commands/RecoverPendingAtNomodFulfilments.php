@@ -16,6 +16,25 @@ class RecoverPendingAtNomodFulfilments extends Command
 
     public function handle(ProviderBookingEventService $providerBookingEventService): int
     {
+        $expired = 0;
+        PaymentAttempt::query()
+            ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('status', [PaymentAttempt::STATUS_CREATED, PaymentAttempt::STATUS_INITIATING])
+            ->whereHas('booking', fn ($query) => $query
+                ->whereNotNull('payment_expires_at')
+                ->where('payment_expires_at', '<=', now()))
+            ->orderBy('id')
+            ->eachById(function (PaymentAttempt $attempt) use (&$expired): void {
+                $expired += PaymentAttempt::query()
+                    ->whereKey($attempt->id)
+                    ->whereIn('status', [PaymentAttempt::STATUS_CREATED, PaymentAttempt::STATUS_INITIATING])
+                    ->update([
+                        'status' => PaymentAttempt::STATUS_CANCELLED,
+                        'failed_at' => now(),
+                        'fulfilment_error' => 'Payment window expired before Nomod checkout completion.',
+                    ]);
+            });
+
         $pendingIds = PaymentAttempt::query()
             ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
             ->where('status', PaymentAttempt::STATUS_PAID)
@@ -69,7 +88,7 @@ class RecoverPendingAtNomodFulfilments extends Command
                 });
             });
 
-        $this->info(sprintf('Dispatched %d pending AT Nomod fulfilment(s); quarantined %d uncertain request(s).', $pendingIds->count(), $quarantined));
+        $this->info(sprintf('Expired %d pending payment attempt(s); dispatched %d pending AT Nomod fulfilment(s); quarantined %d uncertain request(s).', $expired, $pendingIds->count(), $quarantined));
 
         return self::SUCCESS;
     }

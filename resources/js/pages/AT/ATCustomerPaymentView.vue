@@ -41,14 +41,23 @@
                       </span>
                       <span>Wallet Balance</span>
                     </button>
-                    <button type="button" @click="activePaymentTab = 'nomod'" :class="[
+                    <button type="button" v-on:click="activePaymentTab = 'debit-card'" :class="[
                       'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
-                      activePaymentTab === 'nomod' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
-                    ]" :aria-current="activePaymentTab === 'nomod' ? 'page' : undefined">
+                      activePaymentTab === 'debit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                    ]" :aria-current="activePaymentTab === 'debit-card' ? 'page' : undefined">
                       <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
                         <CreditCard class="h-5 w-5" />
                       </span>
-                      <span>Nomod</span>
+                      <span>Debit Card</span>
+                    </button>
+                    <button type="button" v-on:click="activePaymentTab = 'credit-card'" :class="[
+                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
+                      activePaymentTab === 'credit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                    ]" :aria-current="activePaymentTab === 'credit-card' ? 'page' : undefined">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                        <CreditCard class="h-5 w-5" />
+                      </span>
+                      <span>Credit Card</span>
                     </button>
                   <!-- <button type="button" @click="activePaymentTab = 'credit-card'" :class="[
                     'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
@@ -83,7 +92,7 @@
 
               <!-- Right: Dynamic Information Box Based on Selected Method -->
               <div class="min-w-0 p-4 sm:p-5">
-                <div v-if="activePaymentTab === 'credit-card' || activePaymentTab === 'debit-card'" class="w-full">
+                <div v-if="false" class="w-full">
                   <div class="flex items-center gap-3 text-primary">
                     <span class="flex h-10 w-10 items-center justify-center rounded border border-primary/20 bg-primary/10">
                       <CreditCard class="h-5 w-5" />
@@ -342,9 +351,9 @@
                       <p class="text-sm text-slate-500">Total payable amount</p>
                       <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatPaymentAmount() }}</p>
                     </div>
-                    <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing" :class="[
+                    <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing || isBookingExpired" :class="[
                       'inline-flex min-h-12 items-center justify-center rounded px-7 py-3 font-semibold uppercase tracking-wide transition-colors',
-                      paymentMethod && !isProcessing
+                      paymentMethod && !isProcessing && !isBookingExpired
                         ? 'bg-primary text-white hover:bg-primary/90'
                         : 'cursor-not-allowed bg-slate-200 text-slate-500'
                     ]">
@@ -354,20 +363,21 @@
                 </div>
 
                 <!-- Nomod Hosted Checkout -->
-                <div v-else-if="activePaymentTab === 'nomod'" class="w-full">
+                <div v-else-if="activePaymentTab === 'debit-card' || activePaymentTab === 'credit-card'" class="w-full">
                   <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
                       <CreditCard class="h-5 w-5" />
                     </span>
                     <div>
-                      <h2 class="text-lg font-semibold text-primary">Nomod</h2>
-                      <p class="text-sm text-slate-500">Secure card and alternative payment checkout.</p>
+                      <h2 class="text-lg font-semibold text-primary">{{ activePaymentTab === 'debit-card' ? 'Debit Card' : 'Credit Card' }}</h2>
+                      <p class="text-sm text-slate-500">Secure debit or credit card checkout.</p>
                     </div>
                   </div>
 
                   <NomodCheckoutButton
                     v-if="booking_id"
                     :booking-id="booking_id"
+                    :disabled="isBookingExpired"
                   />
                 </div>
 
@@ -856,7 +866,7 @@ const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const airportMargins = computed(() => store.getters["airport/airportMargin"] || {});
 const abhiPayResponse = computed(() => store.getters["payment/abhiPayResponse"]);
 const paymentStatus = computed(() => store.getters["payment/paymentStatus"]);
-const bookingExpiryTime = computed(() => bookingDetails.value?.[0]?.expiry_time || null);
+const bookingExpiryTime = computed(() => bookingDetails.value?.[0]?.payment_expires_at || null);
 const isBookingExpired = computed(() => {
   if (!bookingExpiryTime.value) return false;
 
@@ -1466,7 +1476,7 @@ watch(paymentMethod, () => {
 
 // Payment Methods Handler
 function handlePaymentMethod(type) {
-  if (isBookingExpired.value && type !== "wallet") {
+  if (isBookingExpired.value) {
     toast.error('This booking has expired. Please search again before paying.');
     return;
   }
@@ -1490,7 +1500,7 @@ function handlePaymentMethod(type) {
 }
 
 function selectPaymentMethod(type) {
-  if (isBookingExpired.value && type !== "wallet") return;
+  if (isBookingExpired.value) return;
 
   paymentMethod.value = type;
 }

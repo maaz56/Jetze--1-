@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\NomodCheckoutException;
 use App\Models\BookingPriceSnapshot;
+use App\Models\CustomerSetting;
 use App\Models\FlightBookings;
 use App\Models\PaymentAttempt;
 use Illuminate\Support\Facades\Http;
@@ -69,12 +70,24 @@ class NomodHostedCheckoutService
         ];
     }
 
-    /** Return the locked booking amount and currency for a new checkout. */
+    /** Calculate the immutable Nomod customer charge from the locked amount. */
     public function checkoutMoney(BookingPriceSnapshot $snapshot): array
     {
+        $baseAmount = $this->decimalAmount($snapshot->selling_amount);
+        $settings = CustomerSetting::query()->first();
+        $percentageRate = $this->decimalString($settings?->nomod_percentage_charge ?? '2.5000');
+        $fixedFee = $this->decimalString($settings?->nomod_fixed_charge ?? '0');
+        $percentageFee = bcdiv(bcmul($baseAmount, $percentageRate, 8), '100', 8);
+        $feeAmount = bcadd($percentageFee, $fixedFee, 8);
+
         return [
-            'amount' => $this->decimalAmount($snapshot->selling_amount),
+            'amount' => $this->decimalAmount(bcadd($baseAmount, $feeAmount, 8)),
             'currency' => strtoupper((string) $snapshot->selling_currency),
+            'base_amount' => $baseAmount,
+            'percentage_fee' => $percentageFee,
+            'fixed_fee' => $fixedFee,
+            'fee_amount' => $feeAmount,
+            'percentage_rate' => $percentageRate,
         ];
     }
 
@@ -140,6 +153,10 @@ class NomodHostedCheckoutService
             'metadata' => [
                 'payment_attempt' => $attempt->uuid,
                 'booking_id' => (string) $booking->id,
+                'base_amount' => (string) $attempt->base_amount,
+                'percentage_fee' => (string) $attempt->percentage_fee,
+                'fixed_fee' => (string) $attempt->fixed_fee,
+                'fee_amount' => (string) $attempt->fee_amount,
             ],
         ];
     }
@@ -164,6 +181,12 @@ class NomodHostedCheckoutService
     private function decimalAmount(mixed $amount): string
     {
         return number_format((float) $amount, 2, '.', '');
+    }
+
+    private function decimalString(mixed $amount): string
+    {
+        $value = (string) $amount;
+        return preg_match("/^-?\d+(?:\.\d+)?$/", $value) ? $value : "0";
     }
 
     private function isHttpsUrl(string $url): bool

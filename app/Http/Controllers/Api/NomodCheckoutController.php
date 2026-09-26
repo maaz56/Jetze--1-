@@ -42,6 +42,12 @@ class NomodCheckoutController extends Controller
 
             $this->ensureBookingCanBePaidBy($booking, $request);
 
+            if ($booking->payment_expires_at && ! $booking->payment_expires_at->isFuture()) {
+                throw ValidationException::withMessages([
+                    'booking_id' => 'This booking payment window has expired. Please create a new booking.',
+                ]);
+            }
+
             $snapshot = $booking->priceSnapshot()->first();
             if (! $snapshot) {
                 throw ValidationException::withMessages([
@@ -99,6 +105,10 @@ class NomodCheckoutController extends Controller
                 'reference_id' => sprintf('JETZE-FLIGHT-%d-%s', $booking->id, Str::upper(Str::random(12))),
                 'status' => PaymentAttempt::STATUS_INITIATING,
                 'amount' => $checkoutMoney['amount'],
+                'base_amount' => $checkoutMoney['base_amount'],
+                'percentage_fee' => $checkoutMoney['percentage_fee'],
+                'fixed_fee' => $checkoutMoney['fixed_fee'],
+                'fee_amount' => $checkoutMoney['fee_amount'],
                 'currency' => $checkoutMoney['currency'],
                 'return_origin' => $returnOrigin,
             ]), false];
@@ -159,6 +169,10 @@ class NomodCheckoutController extends Controller
             'booking_id' => $attempt->booking_id,
             'status' => $attempt->status,
             'amount' => $attempt->amount,
+            'base_amount' => $attempt->base_amount,
+            'percentage_fee' => $attempt->percentage_fee,
+            'fixed_fee' => $attempt->fixed_fee,
+            'fee_amount' => $attempt->fee_amount,
             'currency' => $attempt->currency,
             'created_at' => $attempt->created_at,
             'paid_at' => $attempt->paid_at,

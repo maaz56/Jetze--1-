@@ -41,6 +41,10 @@ class PaymentAttempt extends Model
     {
         return [
             'amount' => 'decimal:8',
+            'base_amount' => 'decimal:8',
+            'percentage_fee' => 'decimal:8',
+            'fixed_fee' => 'decimal:8',
+            'fee_amount' => 'decimal:8',
             'checkout_created_at' => 'datetime',
             'paid_at' => 'datetime',
             'failed_at' => 'datetime',

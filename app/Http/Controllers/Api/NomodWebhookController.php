@@ -120,16 +120,18 @@ class NomodWebhookController extends Controller
                     ->where('status', PaymentAttempt::STATUS_PAID)
                     ->whereKeyNot($lockedAttempt->id)
                     ->exists();
+                $isLatePayment = $lockedBooking->payment_expires_at
+                    && ! $lockedBooking->payment_expires_at->isFuture();
                 $lockedAttempt->update([
                     'status' => PaymentAttempt::STATUS_PAID,
                     'provider_charge_id' => data_get($payload, 'data.id') ?? data_get($payload, 'objectId'),
                     'paid_at' => $lockedAttempt->paid_at ?? now(),
                     'fulfilment_status' => $hasAnotherPaidAttempt
                         ? PaymentAttempt::FULFILMENT_DUPLICATE_PAYMENT_REVIEW
-                        : $lockedAttempt->fulfilment_status,
+                        : ($isLatePayment ? PaymentAttempt::FULFILMENT_RECONCILIATION_REQUIRED : $lockedAttempt->fulfilment_status),
                     'fulfilment_error' => $hasAnotherPaidAttempt
                         ? 'Another successful Nomod payment exists for this booking. Review the duplicate payment before any supplier action.'
-                        : $lockedAttempt->fulfilment_error,
+                        : ($isLatePayment ? 'Payment was completed after the booking payment window expired. Refund/review is required before any supplier action.' : $lockedAttempt->fulfilment_error),
                 ]);
 
                 $event->update([
@@ -144,7 +146,7 @@ class NomodWebhookController extends Controller
                         PaymentAttempt::PROVIDER_NOMOD,
                         $hasAnotherPaidAttempt
                             ? 'payment_duplicate_review'
-                            : 'payment_paid',
+                            : ($isLatePayment ? 'payment_after_expiry' : 'payment_paid'),
                         [
                             'payment_attempt_uuid' => $lockedAttempt->uuid,
                             'checkout_id' => $lockedAttempt->provider_checkout_id,
@@ -158,6 +160,7 @@ class NomodWebhookController extends Controller
 
                 return ! $wasAlreadyPaid
                     && ! $hasAnotherPaidAttempt
+                    && ! $isLatePayment
                     && strtolower((string) $lockedBooking->flight_provider) === 'at';
             });
 

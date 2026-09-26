@@ -104,6 +104,21 @@ class CustomerController extends Controller
             ], 404);
         }
 
+        if ($request->has('nomod_percentage_charge') || $request->has('nomod_fixed_charge')) {
+            abort_unless($request->user()?->role === 'admin', 403, 'Only admins can change Nomod charges.');
+            $request->validate([
+                'nomod_percentage_charge' => ['nullable', 'numeric', 'min:0', 'max:100'],
+                'nomod_fixed_charge' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            ]);
+        }
+
+        if ($request->has('nomod_percentage_charge')) {
+            $settings->nomod_percentage_charge = $request->input('nomod_percentage_charge');
+        }
+        if ($request->has('nomod_fixed_charge')) {
+            $settings->nomod_fixed_charge = $request->input('nomod_fixed_charge');
+        }
+
         if ($request->has('is_card_allowed')) {
             $settings->is_card_allowed = $request->boolean('is_card_allowed');
         }
