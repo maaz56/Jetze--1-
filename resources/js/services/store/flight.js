@@ -179,10 +179,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getFlights(params);
-            // console.log(JSON.stringify(response.data));
             context.commit(SET_FLIGHTS, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -194,10 +192,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getFlight(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_FLIGHT, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -207,12 +203,9 @@ const actions = {
     async [FETCH_PROVIDERS](context, params) {
         context.commit(IS_LOADING);
         try {
-            // console.log(params);
             const response = await apiService.getFlightProviders(params);
-            console.log(JSON.stringify(response));
             context.commit(SET_PROVIDERS, response.data);
         } catch (error) {
-            // console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -223,10 +216,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sortFlights(params.flights);
-            console.log(JSON.stringify(response.data));
             context.commit(SET_FILTERED_FLIGHTS, response.data);
         } catch (error) {
-            // console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -238,10 +229,8 @@ const actions = {
         
         try {
             const response = await apiService.getFlightBookingDetail(params);
-            // //console.log(JSON.stringify(response.data));
             context.commit(SET_BOOKING_DETAILS, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -254,10 +243,8 @@ const actions = {
         try {
             const response =
                 await apiService.getCustomerFlightBookingDetail(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_CUSTOMER_BOOKING_DETAILS, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -266,12 +253,10 @@ const actions = {
     },
     async [FETCH_PNR_DETAILS](context, params) {
         context.commit(IS_LOADING);
-        //console.log("PNR Fetch : ", context);
         try {
             const response = await apiService.getPnrDetails(params);
             context.commit(SET_PNR, response.data.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -280,13 +265,10 @@ const actions = {
     },
     async [FETCH_PNR_DATA](context, params) {
         context.commit(IS_LOADING);
-        //console.log("PNR Fetch : ", context);
         try {
             const response = await apiService.getPnrData(params);
-            console.log("PNR Data: ", response);
             context.commit(SET_BOOKING_DETAILS, response?.data?.booking);
         } catch (error) {
-            console.log(error);
             toast("Booking Not Found", {
                 type: "error",
             });
@@ -297,16 +279,13 @@ const actions = {
     async [CANCEL_BOOKING](context, params) {
         context.commit(IS_LOADING);
         try {
-            //console.log("Cancel Booking Params: ", params);
             const response = await apiService.cancelBooking(params);
-            // console.log(JSON.stringify(response.data));
             context.commit(SET_PNR_STATUS, response.data);
             context.state.isLoading = false;
             toast("Booking canceled successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -329,7 +308,6 @@ const actions = {
             //     booking_id: response.data.booking.id,
             // });
         } catch (error) {
-            console.log(error);
 
             toast("Something went wrong.", {
                 type: "error",
@@ -340,10 +318,8 @@ const actions = {
     async [CREATE_INVOICE](context, params) {
         try {
             const response = await apiService.createInvoice(params);
-            // console.log(JSON.stringify(response.data));
             context.state.isLoading = false;
         } catch (error) {
-            // console.log(error);
 
             context.commit(SET_API_ERROR, error);
         }
@@ -359,7 +335,6 @@ const actions = {
                 booking_id: response.data.booking.id,
             });
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -376,7 +351,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -394,7 +368,6 @@ const actions = {
             });
             return response;
         } catch (error) {
-            console.log(error);
             const errorMessage =
                 error?.response?.data?.message ||
                 error?.response?.data?.error ||
@@ -410,12 +383,9 @@ const actions = {
     async [FETCH_BOOKINGS](context, params) {
         context.commit(IS_LOADING);
         try {
-            ////console.log(params);
             const response = await apiService.getBookings(params);
-            //console.log(response.data);
             context.commit(SET_BOOKINGS, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -427,11 +397,9 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getBookings(params);
-            // //console.log(JSON.stringify(response.data));
             context.commit(SET_BOOKING_DATA, response.data);
             context.state.isLoading = false;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -442,10 +410,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveBooking(params);
-            // //console.log(JSON.stringify(response.data));
             context.state.isLoading = false;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -457,14 +423,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveBooking(params);
-            console.log(JSON.stringify(response.data));
             context.commit(SET_BOOKING_DETAILS, response.data.booking);
 
             toast("Booking saved successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             if(error.response && error.response.data && error.response.data.already_booked) {
                 context.state.already_booked = error.response.data.already_booked;
                 toast(error.response.data.message, {
@@ -486,10 +450,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveAdminBooking(params);
-            // //console.log(JSON.stringify(response.data));
             context.state.isLoading = false;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -503,7 +465,6 @@ const actions = {
             context.commit(SET_ADMIN_BOOKING, response.data);
             context.state.isLoading = false;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -515,11 +476,9 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getAdminBooking(params);
-            // //console.log(JSON.stringify(response.data));
             context.commit(SET_ADMIN_BOOKING_DATA, response.data);
             context.state.isLoading = false;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -531,14 +490,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendQuotation(params);
-            // //console.log(response.data);
             return response.data;
         } catch (error) {
             toast("Something went wrong.", {
                 type: "error",
             });
 
-            console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },
@@ -547,10 +504,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getCustomerBookings(params);
-            //console.log(response.data);
             context.commit(SET_CUSTOMER_BOOKINGS, response.data);
         } catch (error) {
-            console.log(error);
 
             context.commit(SET_API_ERROR, error);
         }
@@ -560,10 +515,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getCustomerBooking(params);
-            console.log(JSON.stringify(response.data));
             context.commit(SET_ALL_CUSTOMER_BOOKING, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -575,14 +528,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendPriceRequest(params);
-            // //console.log(response.data);
             context.commit(SET_PRICE_RESPONSE, response.data.price_response);
                         context.commit(SET_FARE_RULES, response.data.fare_rules);
 
 
             return response.data;
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message || "Something went wrong.", {
                 type: "error",
             });
@@ -593,17 +544,14 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendAddToCart(params);
-            // //console.log(response.data);
             context.commit(SET_CART, response.data);
 
             return response.data;
         } catch (error) {
-            console.log(error);
             // toast("Something went wrong.", {
             //     type: "error",
             // });
             // router.back();
-            console.log(error);
             context.commit(SET_QOUTE_ERROR, error);
         }
     },
@@ -613,28 +561,23 @@ const actions = {
             const response = params.quote_id && String(params.flight_provider).toLowerCase() === "at"
                 ? await apiService.getQuoteAncillaries(params.quote_id)
                 : await apiService.fetchAncillaries(params);
-            console.log(response.data);
             context.commit(SET_ANCILLARIES, response.data);
             return response.data;
         } catch (error) {
-            console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },
     async [PATCH_ANCILLARIES](context, params) {
         // context.commit(IS_LOADING);
-        console.log("Patching Ancillaries with params: ");
         context.state.isPatchingAncillaries = true;
         try {
             const response = await apiService.patchAncillaries(params);
             context.commit(SET_ANCILLARIES_RESPONSE, response.data);
-            console.log(response.data);
             context.state.isPatchingAncillaries = false;
 
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            console.log(error);
             context.state.isPatchingAncillaries = false;
             toast(error?.response?.data?.message || "Something went wrong.", {
                 type: "error",
@@ -648,12 +591,10 @@ const actions = {
         // context.commit(IS_LOADING);
         try {
             const response = await apiService.sendPaymentRequest(params);
-            //console.log(response.data);
             // context.commit(NOT_IS_LOADING);
 
             return response.data;
         } catch (error) {
-            console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },
@@ -661,13 +602,11 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendEmail(params);
-            //console.log(response.data);
             context.commit(NOT_IS_LOADING);
             toast("Email sent successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },
@@ -675,11 +614,9 @@ const actions = {
         // context.commit(IS_LOADING);
         try {
             const response = await apiService.updateBookingAmount(params);
-            //console.log(response.data);
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            console.log(error);
             context.commit(SET_API_ERROR, error);
             throw error;
         }
@@ -711,7 +648,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },
@@ -723,7 +659,6 @@ const mutations = {
             error?.response?.data?.error ||
             "There is a problem in the system. Please try again later or contact support if the issue persists.";
 
-        //console.log(error.response.data.errors);
 
         // router.back();
     },
@@ -773,7 +708,6 @@ const mutations = {
         state.flights = filteredFlights;
     },
     [SET_ALL_CUSTOMER_BOOKING](state, data) {
-        console.log(data);
         state.allCustomerBooking = data;
         state.isLoading = false;
     },

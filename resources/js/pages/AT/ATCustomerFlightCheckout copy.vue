@@ -177,8 +177,6 @@ const totalPrice = computed(() => {
     const basePrice = parseFloat(flight.value?.pricing?.totalPrice || "0");
     const marginAmount = parseFloat("0");
 
-    //console.log("Base Price:", basePrice); // Debug log
-    //console.log("Margin Amount:", marginAmount); // Debug log
 
     return basePrice + marginAmount;
 });
@@ -590,13 +588,11 @@ function fetchFlight() {
     //     price_margin: route.query.price_margin,
     //     supplier: route.query.supplier,
     // }).then(() => {
-    //     //console.log("Flight data fetched successfully:", flight.value);
     // });
     let selectedFlight;
     selectedFlight = localStorage.getItem("selectedFlight");
     flight.value = JSON.parse(selectedFlight);
     initializeSelectionStructures();
-    //console.log("Flight data fetched successfully:", flight.value);
 
 }
 
@@ -664,11 +660,9 @@ function parsePnrResponse() {
     try {
         const pnrResponseString = bookingDetails?.value?.pnr_response;
 
-        //console.log('pnrResposenString', pnrResponseString);
         if (pnrResponseString) {
             pnrData.value = JSON.parse(pnrResponseString);
         } else {
-            //console.log("No pnr_response found in bookingDetails");
             pnrData.value = null;
         }
     } catch (e) {
@@ -788,7 +782,6 @@ function handlePaymentMethod(type) {
         paymentMethod.value = 'hold';
         isConfirmDialogOpen.value = true;
     } else if (type == 'card') {
-        //console.log('Opening payment dialog for card payment');
         paymentMethod.value = 'card';
         openPaymentDialog();
 
@@ -801,13 +794,10 @@ function handlePaymentMethod(type) {
 const initializeStripe = async () => {
     try {
         if (stripe.value) {
-            //console.log('Stripe already initialized');
             return;
         }
 
-        //console.log('Initializing Stripe with public key', publicKey.value);
         stripe.value = await loadStripe(publicKey.value);
-        //console.log('Stripe loaded:', stripe.value);
         if (!stripe.value) {
             console.error('loadStripe returned null');
             throw new Error('Failed to initialize Stripe: loadStripe returned null');
@@ -937,7 +927,6 @@ watch(bookingDetails, () => {
         // calculateBookedPrice();
         // if (!priceReValidation(totalTicketPrice.value, pnrData?.value?.data?.billable_price)) {
         //     priceMismatchDialog.value = true;
-        //     // console.log('dialog is open')
         // } else {
         //     confirmBooking();
         // }
@@ -947,14 +936,12 @@ watch(bookingDetails, () => {
         // calculateBookedPrice();
         // if (!priceReValidation(totalTicketPrice.value, pnrData?.value?.data?.billable_price)) {
         //     priceMismatchDialog.value = true;
-        //     // console.log("dialog is open");
         // } else {
         //     confirmBooking();
         // }
     }
     else if (paymentMethod.value === 'hold') {
         parsePnrResponse();
-        //console.log("pnrData", pnrData.value);
         router.push({
             name: "CustomerPaymentView", // Replace with the name of your route
             query: {
@@ -1240,10 +1227,8 @@ function renderSafepayButton() {
                     amount: 1000.5,
                 },
                 onPayment: function (data) {
-                    //console.log('Payment successful:', data);
                 },
                 onCancel: function () {
-                    //console.log('cancelled');
                 },
             })
             .render('#safepay-button-container');
@@ -1338,43 +1323,35 @@ const scanWithTesseract = async (imageBlob) => {
             }
         });
 
-        //console.log("Tesseract result:", result);
 
         let text = result.data.text.toUpperCase();
 
         // 🔹 Step 1: Fix long "LL" runs → "<"
         text = text.replace(/L{2,}/g, match => "<".repeat(match.length));
-        //console.log("After LL→< fix:", text);
 
         // 🔹 Step 2: Fix "C L C" patterns → <<< 
         text = text.replace(/C+L+C+/g, "<".repeat(3));
-        //console.log("After CLC fix:", text);
 
         // 🔹 Step 3: Convert single C → <
         text = text.replace(/C/g, "<");
-        //console.log("After C→< fix:", text);
 
         // 🔹 Step 4: Fix common country code misreads (5AU → SAU, 0 → O, etc.)
         text = text.replace(/\b5([A-Z]{2})\b/g, "S$1");
         text = text.replace(/\b0([A-Z]{2})\b/g, "O$1");
-        //console.log("After country code fixes:", text);
 
         // 🔹 Step 5: Fix numbers misread as letters and vice versa
         text = text
             .replace(/O(?=\d)/g, '0')     // O before digit → 0
             .replace(/(?<=\d)O/g, '0')    // O after digit → 0
             .replace(/(?<=\d)I(?=\d)/g, '1'); // I between digits → 1
-        //console.log("After digit/letter fixes:", text);
 
         // 🔹 Step 6: Remove invalid characters (keep MRZ set)
         text = text.replace(/[^A-Z0-9<\n]/g, "");
-        //console.log("Final cleaned text:", text);
 
         const mrzMatch = extractMRZ(text);
 
         if (mrzMatch) {
             passportData.value = parseMRZ(mrzMatch);
-            //console.log(passportData.value);
 
             // Fetch country and wait a bit for countries to update
             await fetchCountry(passportData.value.issuingCountry);
@@ -1407,7 +1384,6 @@ const extractMRZ = (text) => {
     const mrzRegex = /([A-Z0-9<]{44}\n[A-Z0-9<]{44})|([A-Z0-9<]{30}\n[A-Z0-9<]{30}\n[A-Z0-9<]{30})/;
     const match = text.match(mrzRegex);
 
-    //console.log("Extracted MRZ:", match?.[0]);
     return match ? match[0] : null;
 };
 
@@ -1430,7 +1406,6 @@ const parseTD3Format = (lines) => {
     const line1 = lines[0];
     const line2 = lines[1];
 
-    //console.log("Parsing TD3 format:", line1, line2);
 
     const nameParts = line1.substring(5).split('<<');
     const surname = nameParts[0].replace(/</g, '');
@@ -1580,9 +1555,6 @@ function saveSSRExtra(tripIdx, type, journeyIdx, segmentIdx, passengerIdx) {
 
     extraCharges[tripIdx][type][journeyIdx][segmentIdx][passengerIdx] = extra.Charge || 0
 
-    console.log(`${type} saved:`, extra)
-    console.log('Selected Extras:', selectedExtras)
-    console.log('Extra Charges:', extraCharges)
 }
 // SSR Selection Handler
 function handleSSRSelection(tripIdx, journeyIdx, segmentIdx, travellerIdx, ssr, type) {
@@ -1694,7 +1666,6 @@ function getSeatsByRowAndColumn(seats, row, columnIndex) {
 
 // Methods
 function initializeSelectedSeat() {
-    // console.log(flight);
     const selectedSeats = {};
     flight.value.leg.flights.forEach((flight, flightIdx) => {
         selectedSeats[flightIdx] = {};
@@ -1703,7 +1674,6 @@ function initializeSelectedSeat() {
         });
     });
     selectedSeat.value = selectedSeats;
-    // console.log(selectedSeat.value);
 };
 
 
@@ -1734,7 +1704,6 @@ const getAvailableSeats = (flightIdx) => {
 
 
 const getSegmentRefId = (flightIdx, segmentIdx) => {
-    console.log('Flight Index:', flightIdx);
     return ancillaries.value.providers[0].legs[flightIdx].flight.segments[segmentIdx]?.ref_id;
 }
 const formatSeatType = (type) => {
@@ -1749,12 +1718,10 @@ const formatSeatType = (type) => {
 
 const handleSeatChange = (flightIdx, seat) => {
     // Handle seat selection logic
-    //console.log('Seat selected:', seat)
 }
 
 const saveSeat = (flightIdx) => {
     // Handle save seat logic
-    //console.log('Saving seat for flight:', flightIdx, selectedSeat.value[flightIdx])
 }
 const formatTime = (milliseconds) => {
     const totalSeconds = Math.floor(milliseconds / 1000);

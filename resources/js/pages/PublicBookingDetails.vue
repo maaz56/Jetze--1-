@@ -102,7 +102,6 @@ const totalTicketPrice = ref(0);
 
 function sendEmail() {
 
-    //console.log("email", custEmail?.value);
     store.dispatch("flight/" + SEND_EMAIL, {
         email: custEmail?.value ? custEmail?.value : bookingDetails?.value?.[0]?.main_email,
         booking_id: bookingDetails.value?.[0]?.flight_id,
@@ -228,8 +227,6 @@ async function voidRequest() {
 // }
 
 function handleConfirmDialogOpen() {
-    //console.log("agenledger", agentLedger?.value.balance);
-    //console.log("totalTicketPrice", totalTicketPrice?.value);
     if (agentLedger?.value.balance < totalTicketPrice?.value) {
         isLowBalanceDialogOpen.value = true;
         return;
@@ -314,7 +311,6 @@ function cancelBooking() {
         error.value = "No PNR provided.";
         return;
     }
-    //console.log(pnr);
 
     store.dispatch("flight/" + CANCEL_BOOKING, {
         pnr: pnr,
@@ -383,7 +379,6 @@ function parsePnrResponse() {
             flightData.value = parseFlightData(bookingDetails?.value?.[0]?.flight_data);
             selectedFares.value = bookingDetails?.value?.[0]?.fare_reference ? JSON.parse(bookingDetails.value[0].fare_reference) : [];
         } else {
-            //console.log("No pnr_response found in bookingDetails");
             pnrData.value = null;
         }
     } catch (e) {
@@ -399,7 +394,6 @@ function parseSooperResponse() {
         if (sooperResponseString) {
             sooperResponse.value = JSON.parse(sooperResponseString);
         } else {
-            //console.log("No sooper_response found in bookingDetails");
             sooperResponse.value = null;
         }
     } catch (e) {

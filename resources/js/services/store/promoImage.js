@@ -35,7 +35,6 @@ const actions = {
             context.commit(SET_PROMO_IMAGE, response.data);
             return response.data;
         } catch (error) {
-            //console.log(error);
             // toast("Something went wrong.", {
             //     type: "error",
             // });
@@ -56,7 +55,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 type: "error",
             });
@@ -74,7 +72,6 @@ const actions = {
             });
             return response.data;
         } catch (error) {
-                                    console.log(error);
 
             toast("Something went wrong.", {
                 type: "error",
@@ -94,7 +91,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -116,7 +112,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

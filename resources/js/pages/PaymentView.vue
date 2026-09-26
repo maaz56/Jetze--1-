@@ -9,8 +9,6 @@ const route = useRoute();
 const provider = route.query.flight_provider ;
 const flight_mode = route.query.flight_mode ;
 watch(provider,()=>{
-    console.log(provider);
-    console.log(flight_mode);
 })
 </script>
 <template>

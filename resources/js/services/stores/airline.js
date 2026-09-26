@@ -22,7 +22,6 @@ export const useAirlineStore = defineStore("airline", {
                 });
                 this.airlines = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -31,7 +30,6 @@ export const useAirlineStore = defineStore("airline", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.apiErrors = error.response.data.errors;
                 }
             } finally {

@@ -47,7 +47,6 @@ export const useUserStore = defineStore("user", {
         async fetchUser(params) {
             this.isLoading = true;
             try {
-                //console.log(params);
                 const response = await apiService.get(`/users/${params.id}`);
                 this.user = response.data.data;
 
@@ -65,7 +64,6 @@ export const useUserStore = defineStore("user", {
             this.isLoading = true;
             try {
                 const response = await apiService.post("/users", params);
-                console.log(response);
                 await this.fetchUsers();
 
                 handleResponse(response);
@@ -97,7 +95,6 @@ export const useUserStore = defineStore("user", {
             }
         },
         async updateUser(params) {
-            //console.log(params);
             this.isLoading = true;
             try {
                 const response = await apiService.put(

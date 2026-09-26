@@ -36,7 +36,6 @@ const searchQuery = ref('');
 const isDropdownOpen = ref(false);
 const selectedUsers = ref([]);
 const dropdownRef = ref(null);
-// //console.log(users);
 // Computed
 const filteredUsers = computed(() => {
   
@@ -44,7 +43,6 @@ const filteredUsers = computed(() => {
   if (!searchQuery.value) return props.users;
   
   const query = searchQuery.value.toLowerCase();
-  //console.log(props.users);
   return props.users.filter(user => 
     user.name?.toLowerCase().includes(query) || 
     user.email?.toLowerCase().includes(query) 

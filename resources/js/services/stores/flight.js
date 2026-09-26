@@ -49,10 +49,8 @@ export const useFlightStore = defineStore("flight", {
                     params: requestParams,
                 });
 
-                console.log(response);
 
                 // Log response for debugging
-                //console.log(JSON.stringify(response.data));
 
                 // Persist search parameters in localStorage
                 const previousSearch = {
@@ -83,7 +81,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [
@@ -114,7 +111,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [
@@ -132,7 +128,6 @@ export const useFlightStore = defineStore("flight", {
                 const response = await apiService.get(
                     `/flight/${params.flight_id}/${params.supplier}`,
                 );
-                //console.log(JSON.stringify(response.data));
                 this.flight = response.data;
                 this.validationErrors = [];
             } catch (error) {
@@ -145,7 +140,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [
@@ -163,7 +157,6 @@ export const useFlightStore = defineStore("flight", {
                 const response = await apiService.get("/bookings", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 this.bookings = response.data;
                 this.validationErrors = [];
             } catch (error) {
@@ -176,7 +169,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [
@@ -192,7 +184,6 @@ export const useFlightStore = defineStore("flight", {
             this.isLoading = true;
             try {
                 const response = await apiService.post("bookings", params);
-                //console.log(JSON.stringify(response.data));
                 toast(response.data.message, {
                     type: response.data.type,
                 });
@@ -207,7 +198,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [
@@ -225,7 +215,6 @@ export const useFlightStore = defineStore("flight", {
                 const response = await apiService.get("flight-quotation", {
                     params: params,
                 });
-                //console.log(response.data);
                 this.validationErrors = [];
                 return response.data;
             } catch (error) {
@@ -238,7 +227,6 @@ export const useFlightStore = defineStore("flight", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 } else {
                     this.validationErrors = [

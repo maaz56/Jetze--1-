@@ -36,7 +36,6 @@ const actions = {
             const response = await apiService.saveKeys(params);
             context.commit(SET_CITIES, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -59,7 +58,6 @@ const actions = {
                 });
             }
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -74,7 +72,6 @@ const actions = {
             const response = await apiService.fetchKeys();
             context.commit(SET_KEYS, response.data);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -98,7 +95,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

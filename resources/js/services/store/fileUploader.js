@@ -30,10 +30,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getUploadedFiles(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_FILES, response.data);
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 theme: "dark",
                 type: "error",
@@ -46,7 +44,6 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.uploadFile(formData);
-            //console.log(JSON.stringify(response.data));
             context.dispatch(FETCH_UPLOADED_FILES);
             toast("File Uploaded.", {
                 theme: "dark",
@@ -54,7 +51,6 @@ const actions = {
                 dangerouslyHTMLString: true,
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 theme: "dark",
                 type: "error",
@@ -64,11 +60,9 @@ const actions = {
     },
 
     async [DELETE_UPLOADED_FILE](context, params) {
-        //console.log(params);
         context.commit(IS_LOADING);
         try {
             const response = await apiService.deleteUploadedFile(params);
-            //console.log(JSON.stringify(response.data));
             context.dispatch(FETCH_UPLOADED_FILES);
             context.commit(
                 SET_FILES,
@@ -80,7 +74,6 @@ const actions = {
                 dangerouslyHTMLString: true,
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 theme: "dark",
                 type: "error",

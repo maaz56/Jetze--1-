@@ -32,7 +32,6 @@ const actions = {
             const response = await apiService.getCountries(params);
             context.commit(SET_COUNTRIES, response.data);
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -54,7 +53,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

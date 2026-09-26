@@ -62,9 +62,7 @@ const actions = {
   async [FETCH_BLOG]({ commit }, id) {
     commit(IS_LOADING);
     try {
-      console.log(id);
       const response = await apiService.fetchBlog(id);
-      console.log(response.data);
       commit(SET_BLOG, response.data);
       return response;
     } catch (error) {

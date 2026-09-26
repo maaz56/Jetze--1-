@@ -1732,7 +1732,6 @@ watch(passengers, (newPassengers) => {
 }, { immediate: true });
 // Whenever amount first loads, set base
 watch(payment, () => {
-  console.log("Payment query param changed:", payment.value);
   if (payment.value == true) {
     checkPaymentStatus();
   }
@@ -1785,7 +1784,6 @@ function getLatestPnrFareWithoutMargins() {
         }
       });
     });
-      console.log("Calculated latest PNR fare without margins:", total);
 
     return total;
   }
@@ -1798,7 +1796,6 @@ function getLatestPnrFareWithoutMargins() {
   ];
 
   const matchedAmount = amountPaths.find((value) => Number(value) > 0);
-  console.log("Calculated latest PNR fare without margins:", matchedAmount);
   return parseFloat(matchedAmount || 0);
 }
 

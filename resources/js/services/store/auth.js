@@ -42,11 +42,9 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getUser();
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_USER, response.data);
             context.state.isLoading = false;
         } catch (error) {
-            //console.log(error);
             context.state.isLoading = false;
         }
     },
@@ -55,14 +53,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.login(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_USER, response.data.user);
             context.commit(SET_TOKEN, response.data.authorisation);
             toast(response.data.message, {
                 type: response.data.type,
             });
         } catch (error) {
-            //console.log(error);
             context.commit(SET_API_ERROR, error);
         }   
     },
@@ -71,12 +67,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.register(params);
-            //console.log(JSON.stringify(response.data));
             toast(response.data.message, {
                 type: response.data.type,
             });
         } catch (error) {
-            //console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },
@@ -85,14 +79,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.register(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_USER, response.data.user);
             context.commit(SET_TOKEN, response.data.authorisation);
             toast('Registered successfully.', {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -104,12 +96,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.forgotPassword(params);
-            //console.log(JSON.stringify(response.data));
             toast('Your password has been changed.', {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -122,12 +112,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.resetPassword(params);
-            //console.log(JSON.stringify(response.data));
             toast('Your password has reset successfully.', {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -139,13 +127,11 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.logout();
-            //console.log(JSON.stringify(response.data));
             context.commit(RESET_TOKEN);
             toast(response.data.message, {
                 type: response.data.type,
             });
         } catch (error) {
-            //console.log(error);
             context.commit(SET_API_ERROR, error);
             context.commit(RESET_TOKEN);
         }
@@ -154,11 +140,9 @@ const actions = {
     async [SHOW_LOGIN_DIALOG](context) {
         context.commit(IS_LOADING);
         try {
-            console.log("Toggling login dialog");
             // Here you can add any logic needed before showing the login dialog
             context.commit(SET_DIALOG_OPEN);
         } catch (error) {
-            //console.log(error);
             context.commit(SET_API_ERROR, error);
         }
     },

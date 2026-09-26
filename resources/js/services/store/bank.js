@@ -46,10 +46,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getBanks(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_BANK, response.data);
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -66,7 +64,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 type: "error",
             });
@@ -78,14 +75,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.updateBank(params);
-            //console.log(response.data);
             context.dispatch(FETCH_BANKS);
             toast("Bank has been updated successfully.", {
                 type: "success",
             });
             return response;
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -103,7 +98,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -125,7 +119,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

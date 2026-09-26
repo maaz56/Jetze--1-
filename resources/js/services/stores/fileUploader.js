@@ -20,11 +20,9 @@ export const useFileUploaderStore = defineStore("fileUploader", {
                 const response = await apiService.get("/uploads", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 this.files = response.data; // Directly set files from response
                 localStorage.setItem("uploads", JSON.stringify(this.files)); // Update localStorage
             } catch (error) {
-                //console.log(error);
                 toast(error, {
                     theme: "dark",
                     type: "error",
@@ -43,7 +41,6 @@ export const useFileUploaderStore = defineStore("fileUploader", {
                         "Content-Type": "multipart/form-data",
                     },
                 });
-                //console.log(JSON.stringify(response.data));
                 await this.fetchUploadedFiles(); // Refresh the uploaded files
                 toast("File Uploaded.", {
                     theme: "dark",
@@ -51,7 +48,6 @@ export const useFileUploaderStore = defineStore("fileUploader", {
                     dangerouslyHTMLString: true,
                 });
             } catch (error) {
-                //console.log(error);
                 toast(error, {
                     theme: "dark",
                     type: "error",
@@ -63,13 +59,11 @@ export const useFileUploaderStore = defineStore("fileUploader", {
         },
 
         async deleteUploadedFile(params) {
-            //console.log(params);
             this.isLoading = true;
             try {
                 const response = await apiService.delete(
                     `/uploads/${params.file_name}`,
                 );
-                //console.log(JSON.stringify(response.data));
                 await this.fetchUploadedFiles(); // Refresh the uploaded files
                 this.files = this.files.filter(
                     (file) => file.name !== params.name,
@@ -81,7 +75,6 @@ export const useFileUploaderStore = defineStore("fileUploader", {
                     dangerouslyHTMLString: true,
                 });
             } catch (error) {
-                //console.log(error);
                 toast(error, {
                     theme: "dark",
                     type: "error",

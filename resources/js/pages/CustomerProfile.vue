@@ -148,7 +148,6 @@ const getRemainingTime = (expiry) => {
 }
 function filterBookings(type) {
     activeFilter.value = type
-    //console.log("Filter changed to:", type);
     fetchBookings();
 
 
@@ -157,7 +156,6 @@ function filterBookings(type) {
 function updateCustomerProfile() {
     // Here you would typically send the updated customer data to your backend API
     // For demonstration, we'll just log the updated customer data
-    console.log("Updated Customer Profile:", customer.value);
     // Close the dialog after saving
     closeEditDialog();
 }

@@ -106,7 +106,6 @@ function fetchAgent() {
             store.dispatch(`user/${FETCH_AGENT_DATA}`, {
                 userId: user_id.value,
             }).then(()=>{
-                //console.log("Agent data fetched successfully", agentData.value);
             });
             loading.value = false;
         } catch (err) {
@@ -120,7 +119,6 @@ function fetchAgent() {
 }
 
 function fetchCountries(event) {
-    //console.log(event.target.value);
 
     store.dispatch("country/" + FETCH_COUNTRIES, {
         searchQuery: event.target.value,
@@ -162,7 +160,6 @@ watch(user_id, (newUserId) => {
 
 onMounted(() => {
     if (user.value?.id) {
-        //console.log("User ID found:", user.value.id);
         fetchAgent();
     }
     fetchFlight();

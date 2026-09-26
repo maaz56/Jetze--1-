@@ -38,10 +38,8 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
                 const response = await apiService.get("/umrah-packages", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 this.umrahPackages = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -56,7 +54,6 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
                 await this.fetchUmrahPackages();
                 toast("Umrah package saved successfully", { type: "success" });
             } catch (error) {
-                //console.log(error);
                 toast(error, { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -68,13 +65,11 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
             this.isLoading = true;
             try {
                 await apiService.put("/umrah-packages", params);
-                //console.log(JSON.stringify(response.data));
                 await this.fetchUmrahPackages();
                 toast("Umrah package has been updated successfully.", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -93,7 +88,6 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -105,10 +99,8 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
             this.isLoading = true;
             try {
                 const response = await apiService.get("/umrah-header-images");
-                //console.log(JSON.stringify(response.data));
                 this.headerImages = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -123,7 +115,6 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
                 await this.fetchUmrahHeaderImages();
                 toast("Header images saved successfully", { type: "success" });
             } catch (error) {
-                //console.log(error);
                 toast(error, { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -142,7 +133,6 @@ export const useUmrahPackageStore = defineStore("umrahPackage", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {

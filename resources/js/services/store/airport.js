@@ -138,7 +138,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -152,10 +151,8 @@ const actions = {
         commit(IS_LOADING);
         try {
             const response = await apiService.getAirportMargins();
-            // console.log("airport margins", response.data);
             commit(SET_AIRPORT_MARGIN, response.data);
         } catch (error) {
-            // console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -179,7 +176,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

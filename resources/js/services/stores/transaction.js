@@ -26,10 +26,8 @@ export const useTransactionStore = defineStore("transaction", {
                 const response = await apiService.get("transactions", {
                     params: params,
                 });
-                //console.log(response.data);
                 this.transactions = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -43,12 +41,10 @@ export const useTransactionStore = defineStore("transaction", {
             this.isLoading = true;
             try {
                 const response = await apiService.post("transactions", params);
-                //console.log(response.data);
                 toast("Transaction saved successfully.", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -62,12 +58,10 @@ export const useTransactionStore = defineStore("transaction", {
             this.isLoading = true;
             try {
                 const response = await apiService.put("transactions", params);
-                //console.log(response.data);
                 toast("Transaction updated successfully.", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });

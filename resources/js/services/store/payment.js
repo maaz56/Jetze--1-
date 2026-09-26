@@ -53,10 +53,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getCities(params);
-            //console.log('Cities' + JSON.stringify(response.data));
             context.commit(SET_CITIES, response.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -67,10 +65,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.initializeAbhiPay(params);
-            //console.log('Cities' + JSON.stringify(response.data));
             context.commit(SET_ABHIPAY_RESPONSE, response.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -82,13 +78,11 @@ const actions = {
         context.state.isCheckingPaymentStatus = true;
         try {
             const response = await apiService.checkPaymentStatus(params);
-            console.log('Payment Status' + JSON.stringify(response.data));
             context.state.deposit = response.data.deposit;
             context.commit(SET_PAYMENT_STATUS, response.data);
             context.state.isCheckingPaymentStatus = false;
 
         } catch (error) {
-            console.log(error);
             toast('Failed To check Payment Status.', {
                 "type": "error",
             })
@@ -113,7 +107,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

@@ -1537,7 +1537,6 @@ watch(passengers, (newPassengers) => {
   }
 }, { immediate: true });
 watch(payment, () => {
-  console.log("Payment query param changed:", payment.value);
   if (payment.value == true) {
     checkPaymentStatus();
   }
@@ -1827,18 +1826,15 @@ function calculateTaxes(fare) {
   );
 }
 function calculateCustomerMargin(price, discountPercentage, marginPercentage) {
-  // console.log("customer margin",{price,discountPercentage,marginPercentage})
   const total = parseFloat(price) || 0;
   const discount = (total * (parseFloat(discountPercentage) || 0)) / 100;
   const margin = (total * (parseFloat(marginPercentage) || 0)) / 100;
 
   // If discount is provided, return negative discount value, else return margin value
   if (discountPercentage && parseFloat(discountPercentage) > 0) {
-    // console.log("Applying discount:", -discount);
     return -discount;
   }
   customerMarginAmt.value = margin;
-  // console.log("Applying margin:", margin);
   return margin;
 }
 function calculateFareMargin(basePrice, marginAmount, marginType, amountType) {

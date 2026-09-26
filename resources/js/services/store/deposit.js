@@ -52,7 +52,6 @@ const actions = {
             context.commit(SET_DEPOSIT_DATA, response.data);
 
         } catch (error) {
-            //console.log(error);
             // toast("Something went wrong.", {
             //     type: "error",
             // });
@@ -69,7 +68,6 @@ const actions = {
             context.commit(SET_DEPOSIT_DATA_WITH_AGENTS, response.data);
 
         } catch (error) {
-            //console.log(error);
             // toast("Something went wrong.", {
             //     type: "error",
             // });
@@ -85,7 +83,6 @@ const actions = {
             const response = await apiService.getDepositDetails(params);
             context.commit(SET_DEPOSIT_DETAILS, response.data);
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -96,11 +93,9 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getTotalApprovedDeposits(params);
-            //console.log(response.data);
             context.commit(SET_DEPOSIT_TOTAL_DATA, response.data);
 
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -118,7 +113,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast(error, {
                 type: "error",
             });
@@ -138,7 +132,6 @@ const actions = {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -155,7 +148,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -177,7 +169,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

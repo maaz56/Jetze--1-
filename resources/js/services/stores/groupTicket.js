@@ -24,10 +24,8 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                 const response = await apiService.get("/group-tickets", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 this.flights = response.data.flights;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -36,7 +34,6 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 }
             } finally {
@@ -51,10 +48,8 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                     "/group-tickets",
                     params,
                 );
-                //console.log(JSON.stringify(response.data));
                 await this.fetchGroupTickets();
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -63,7 +58,6 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 }
             } finally {
@@ -75,10 +69,8 @@ export const useGroupTicketStore = defineStore("groupTicket", {
             this.isLoading = true;
             try {
                 const response = await apiService.put("/group-tickets", params);
-                //console.log(JSON.stringify(response.data));
                 await this.fetchGroupTickets();
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -87,7 +79,6 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 }
             } finally {
@@ -101,10 +92,8 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                 const response = await apiService.delete("/group-tickets", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 await this.fetchGroupTickets();
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -113,7 +102,6 @@ export const useGroupTicketStore = defineStore("groupTicket", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.validationErrors = error.response.data.errors;
                 }
             } finally {

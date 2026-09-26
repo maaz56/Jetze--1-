@@ -193,19 +193,16 @@ export const useAuthStore = defineStore("auth", {
         },
 
         async register(params) {
-            console.log(params);
             this.isLoading = true;
             this.generalError = null;
             this.validationMessages = null;
             try {
                 await ensureCsrfCookie();
                 const response = await apiService.post("/register", params);
-                console.log(response);
                 // handleResponse(response);
                 this.success = response?.data?.success || false;
 
                 if (this.success) {
-                    //console.log(response);
                     const user = response?.data?.user;
                     if (response?.data?.user.role == "admin") {
                         router.push({ name: "Dashboard" });
@@ -315,13 +312,11 @@ export const useAuthStore = defineStore("auth", {
         async resetPassword(params) {
             this.isLoading = true;
             try {
-                //console.log(params);
 
                 const response = await apiService.post(
                     "/reset-password",
                     params,
                 );
-                //console.log(response);
                 handleResponse(response);
                 this.success = response?.data?.success || false;
 

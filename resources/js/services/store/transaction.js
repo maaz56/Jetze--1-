@@ -35,10 +35,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getTransaction(params);
-            //console.log(response.data);
             context.commit(SET_TRANSACTIONS, response.data)
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -50,12 +48,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveTransaction(params);
-            //console.log(response.data);
             toast('Transaction saved successfully.', {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -67,12 +63,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.updateTransaction(params);
-            //console.log(response.data);
             toast('Transaction updated successfully.', {
                 "type": "success",
             })
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -94,7 +88,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

@@ -49,14 +49,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveRequest(params);
-            //console.log('Cities' + JSON.stringify(response.data));
             toast("Request sent successfully.", {
                 type: "success",
             });
             context.commit(NOT_IS_LOADING);
             
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -70,7 +68,6 @@ const actions = {
             context.commit(SET_REQUESTS, response.data);
             context.commit(NOT_IS_LOADING);
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -85,7 +82,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -102,7 +98,6 @@ const actions = {
             });
             return response.data;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -119,7 +114,6 @@ const actions = {
             });
             return response.data;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -141,7 +135,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

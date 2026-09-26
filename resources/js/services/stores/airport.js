@@ -26,7 +26,6 @@ export const useAirportStore = defineStore("airport", {
                 });
                 this.airports = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -35,7 +34,6 @@ export const useAirportStore = defineStore("airport", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.apiErrors = error.response.data.errors;
                 }
             } finally {

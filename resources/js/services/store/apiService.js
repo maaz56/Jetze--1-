@@ -698,7 +698,6 @@ export default {
     },
 
     updateUmrahPackage(params) {
-        //console.log(params);
         return apiClient.patch("/umrah-packages", params);
     },
 

@@ -52,7 +52,6 @@ const actions = {
             context.commit(SET_PROMOTIONS, response.data);
             return response.data;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", { type: "error" });
             context.commit(SET_API_ERROR, error);
             throw error;
@@ -135,7 +134,6 @@ const actions = {
             context.commit(SET_PROMOTION_PROVIDERS, response.data);
             return response.data;
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", { type: "error" });
             context.commit(SET_API_ERROR, error);
             throw error;

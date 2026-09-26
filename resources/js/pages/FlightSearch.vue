@@ -493,7 +493,6 @@ watch(
                 const priceA = displayFlightPrice(a);
                 const priceB = displayFlightPrice(b);
 
-                // console.log(priceA, priceB);
 
                 return priceA - priceB;
             });
@@ -1090,7 +1089,6 @@ function filterByArrivalTime() {
 }
 function searchFlights() {
     const now = Date.now();
-    console.log("Timer: " + countdown.value);
     let errors = [];
 
     if (flightType.value === "multi-city") {
@@ -1480,7 +1478,6 @@ function formatGrandTotalDisplayMoney() {
 
 function calculateGrandTotal() {
     let total = 0;
-    // console.log("Selected Flight:", selectedFlight?.value);
     selectedFlight?.value?.leg?.flights?.forEach((flight) => {
         flight?.fares?.forEach((fare) => {
             if (selectedFares.includes(fare.ref_id)) {
@@ -1594,7 +1591,6 @@ function selectFares(flightIdx, ref_id) {
     } else {
         selectedFares[flightIdx] = ref_id;
     }
-    // console.log("Selected Fares:", selectedFares);
 }
 
 /** Fetch raw AT FlightInfo only when its Fare Breakdown tab is opened for a new fare selection. */
@@ -1926,8 +1922,6 @@ const getDefaultBaggageDescription = (policy) => {
 watch(
     selectedFlight,
     () => {
-        //console.log("Selected flight changed:", selectedFlight.value);
-        //console.log("Selected fares:", selectedFares.value);
         initializeSelectedFares(selectedFlight.value);
         loadingDetails.value = false;
     },

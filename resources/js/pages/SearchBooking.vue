@@ -30,7 +30,6 @@ const bookings = computed(() => store.getters["flight/allCustomerBooking"]);
 
 function filterBookings(type) {
     activeFilter.value = type;
-    console.log("Filter changed to:", type);
     emit("filter-change", type);
     debouncedFetchBookings();
 }

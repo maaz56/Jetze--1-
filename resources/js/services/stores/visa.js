@@ -34,10 +34,8 @@ export const useVisaStore = defineStore("visa", {
                 const response = await apiService.get("/visas", {
                     params: params,
                 });
-                //console.log(JSON.stringify(response.data));
                 this.visas = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -52,7 +50,6 @@ export const useVisaStore = defineStore("visa", {
                 await this.fetchVisas();
                 toast("Visa saved successfully", { type: "success" });
             } catch (error) {
-                //console.log(error);
                 toast(error, { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -69,7 +66,6 @@ export const useVisaStore = defineStore("visa", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -88,7 +84,6 @@ export const useVisaStore = defineStore("visa", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -100,10 +95,8 @@ export const useVisaStore = defineStore("visa", {
             this.isLoading = true;
             try {
                 const response = await apiService.get("/visa-header-images");
-                //console.log(JSON.stringify(response.data));
                 this.headerImages = response.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -118,7 +111,6 @@ export const useVisaStore = defineStore("visa", {
                 await this.fetchVisaHeaderImages();
                 toast("Header images saved successfully", { type: "success" });
             } catch (error) {
-                //console.log(error);
                 toast(error, { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {
@@ -137,7 +129,6 @@ export const useVisaStore = defineStore("visa", {
                     type: "success",
                 });
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", { type: "error" });
                 this.apiErrors = error.response?.data?.errors || [];
             } finally {

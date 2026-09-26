@@ -47,7 +47,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
             return response;
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -63,7 +62,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
             return response;
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -81,7 +79,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
             return response;
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -105,7 +102,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

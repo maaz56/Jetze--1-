@@ -12,8 +12,6 @@ const provider = computed(() => route.query.flight_provider);
 const flight_mode = computed(() => route.query.flight_mode);
 const bookingId = computed(() => route.query.booking_id);
 watch(provider,()=>{
-    console.log(provider);
-    console.log(flight_mode);
 })
 </script>
 <template>

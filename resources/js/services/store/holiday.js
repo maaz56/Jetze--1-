@@ -60,10 +60,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getHolidays(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_HOLIDAYS, response.data);
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -80,7 +78,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 type: "error",
             });
@@ -92,13 +89,11 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.updateHoliday(params);
-            //console.log(response.data);
             context.dispatch(FETCH_HOLIDAYS);
             toast("Holiday has been updated successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -115,7 +110,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -127,10 +121,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getHolidayHeaderImages(params);
-            //console.log(JSON.stringify(response.data));
             context.commit(SET_HOLIDAY_HEADER_IMAGES, response.data);
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -147,7 +139,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error, {
                 type: "error",
             });
@@ -164,7 +155,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -186,7 +176,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

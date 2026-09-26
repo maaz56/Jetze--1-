@@ -212,10 +212,6 @@ const submitModifyRequest = () => {
         user_id: bookingDetails.value?.[0].agent_id ?? user_id.value,
     })
 
-    console.log('Submitting:', {
-        reason: selectedReason.value,
-        message: message.value
-    })
 
     // TODO: Call your API here
     // await api.modifyRequest({ reason: selectedReason.value, message: message.value })
@@ -226,7 +222,6 @@ const submitModifyRequest = () => {
 
 function sendEmail() {
 
-    //console.log("email", custEmail?.value);
     store.dispatch("flight/" + SEND_EMAIL, {
         email: custEmail?.value ? custEmail?.value : bookingDetails?.value?.[0]?.main_email,
         booking_id: bookingDetails.value?.[0]?.flight_id,
@@ -352,25 +347,20 @@ async function voidRequest() {
 // }
 
 const calculateCustomerMargin = (price, discountPercentage, marginPercentage) => {
-    // console.log("customer margin",{price,discountPercentage,marginPercentage})
     const total = parseFloat(price) || 0;
     const discount = (total * (parseFloat(discountPercentage) || 0)) / 100;
     const margin = (total * (parseFloat(marginPercentage) || 0)) / 100;
 
     // If discount is provided, return negative discount value, else return margin value
     if (discountPercentage && parseFloat(discountPercentage) > 0) {
-        // console.log("Applying discount:", -discount);
         return -discount;
     }
-    // console.log("Applying margin:", margin);
     return margin;
 };
 function fetchCustomerMarginValues() {
     store.dispatch("customerMargin/" + FETCH_CUSTOMER_MARGIN);
 }
 function handleConfirmDialogOpen() {
-    //console.log("agenledger", agentLedger?.value.balance);
-    //console.log("totalTicketPrice", totalTicketPrice?.value);
     if (agentLedger?.value.balance < totalTicketPrice?.value) {
         isLowBalanceDialogOpen.value = true;
         return;
@@ -459,7 +449,6 @@ function cancelBooking() {
         handleLogin();
         return;
     }
-    //console.log(pnr);
 
     store.dispatch("flight/" + CANCEL_BOOKING, {
         pnr: pnr,
@@ -535,7 +524,6 @@ function parsePnrResponse() {
             flightData.value = parseFlightData(bookingDetails?.value?.[0]?.flight_data);
             selectedFares.value = bookingDetails?.value?.[0]?.fare_reference ? JSON.parse(bookingDetails.value[0].fare_reference) : [];
         } else {
-            //console.log("No pnr_response found in bookingDetails");
             pnrData.value = null;
         }
     } catch (e) {
@@ -551,7 +539,6 @@ function parseSooperResponse() {
         if (sooperResponseString) {
             sooperResponse.value = JSON.parse(sooperResponseString);
         } else {
-            //console.log("No sooper_response found in bookingDetails");
             sooperResponse.value = null;
         }
     } catch (e) {

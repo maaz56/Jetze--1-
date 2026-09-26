@@ -872,7 +872,6 @@ function changeMultiCityDate(index, direction) {
 }
 
 function importPnr(pnr) {
-    console.log(pnr);
     router.push({
         name: "PnrDetails",
         query: { pnr: pnr },

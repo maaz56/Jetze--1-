@@ -30,10 +30,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getCities(params);
-            //console.log('Cities' + JSON.stringify(response.data));
             context.commit(SET_CITIES, response.data);
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -55,7 +53,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

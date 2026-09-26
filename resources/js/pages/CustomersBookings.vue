@@ -75,7 +75,6 @@ const activeFilter = ref('all');
 
 function filterBookings(type) {
     activeFilter.value = type
-    //console.log("Filter changed to:", type);
     fetchBookings();
 
 
@@ -174,9 +173,7 @@ const handlePayment = async () => {
     const res = await store.dispatch("flight/" + SEND_PAYMENT_REQUEST, {
         amount: 10000,
     });
-    //console.log("res", res);
     const clientSecret = res.clientSecret;
-    //console.log(stripe.value, cardElement.value, clientSecret);
     const result = await stripe.value.confirmCardPayment(clientSecret, {
         payment_method: {
             card: cardElement.value,

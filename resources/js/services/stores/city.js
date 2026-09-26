@@ -19,10 +19,8 @@ export const useCityStore = defineStore("city", {
                 const response = await apiService.get("/cities", {
                     params: params,
                 });
-                //console.log("Cities" + JSON.stringify(response.data));
                 this.cities = response.data.data;
             } catch (error) {
-                //console.log(error);
                 toast("Something went wrong.", {
                     type: "error",
                 });
@@ -31,7 +29,6 @@ export const useCityStore = defineStore("city", {
                     error.response.data &&
                     error.response.data.errors
                 ) {
-                    //console.log(error.response.data.errors);
                     this.apiErrors = error.response.data.errors;
                 }
             } finally {

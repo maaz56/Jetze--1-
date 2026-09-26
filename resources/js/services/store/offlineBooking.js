@@ -49,10 +49,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.getCities(params);
-            //console.log('Cities' + JSON.stringify(response.data));
             context.commit(SET_CITIES, response.data);
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -64,14 +62,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveOfflineBooking(bookingData);
-            //console.log('Booking Saved' + JSON.stringify(response.data));
             toast('Booking saved successfully.', {
                 "type": "success",
             });
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while saving the booking.', {
                 "type": "error",
             })
@@ -88,7 +84,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while fetching bookings.', {
                 "type": "error",
             })
@@ -106,7 +101,6 @@ const actions = {
             context.commit(NOT_IS_LOADING);
 
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while fetching booking details.', {
                 "type": "error",
             })
@@ -119,14 +113,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.deleteOfflineBooking(params);
-            //console.log('Booking Deleted' + JSON.stringify(response.data));
             toast('Booking deleted successfully.', {
                 "type": "success",
             });
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while deleting the booking.', {
                 "type": "error",
             })
@@ -139,14 +131,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.updateOfflineBooking(bookingData);
-            //console.log('Booking Updated' + JSON.stringify(response.data));
             toast('Booking updated successfully.', {
                 "type": "success",
             });
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while updating the booking.', {
                 "type": "error",
             })
@@ -159,14 +149,12 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.sendOfflineBookingEmail(bookingData);
-            //console.log('Booking Updated' + JSON.stringify(response.data));
             toast('Email sent successfully.', {
                 "type": "success",
             });
             context.commit(NOT_IS_LOADING);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast('Something went wrong while updating the booking.', {
                 "type": "error",
             })
@@ -190,7 +178,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

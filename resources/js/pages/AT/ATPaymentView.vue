@@ -261,11 +261,9 @@ function handleConfirmDialogOpen() {
 }
 function priceReValidation(bookedPrice, pnrPrice) {
   if ((parseFloat(bookedPrice)).toFixed(2) !== (parseFloat(pnrPrice)).toFixed(2)) {
-    console.log('has Differnece');
     priceDifference.value = (parseFloat(pnrPrice) - parseFloat(bookedPrice)).toFixed(2);
     return false;
   }
-  console.log('No differnece')
   return true;
 }
 // Add these computed properties
@@ -397,7 +395,6 @@ function calculateBookedPrice() {
             + parseFloat(margin || 0)) * passengerCount;
         surcharge.value = billablePrice - billable;
         amount.value = parseFloat(total.toFixed(2));
-        console.log(amount);
       }
     });
   });

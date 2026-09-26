@@ -45,7 +45,6 @@ const actions = {
             commit(SET_AIRLINES, response.data);
             return response.data;
         } catch (error) {
-            //console.log(error);
             toast("Something went wrong.", {
                 type: "error",
             });
@@ -64,7 +63,6 @@ const actions = {
                 dangerouslyHTMLString: true,
             });
         } catch (error) {
-             //console.log(error);
             toast(error.response.data.message, {
                 theme: "dark",
                 type: "error",
@@ -101,7 +99,6 @@ const actions = {
             context.commit(SET_AIRLINES, response.data);
             
         } catch (error) {
-            console.log(error);
             toast(error, {
                 theme: "dark",
                 type: "error",
@@ -124,7 +121,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },

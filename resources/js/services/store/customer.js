@@ -53,7 +53,6 @@ const actions = {
             const response = await apiService.getCustomers(params);
             context.commit(SET_CUSTOMERS, response.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -66,7 +65,6 @@ const actions = {
             const response = await apiService.getCustomerData(params);
             context.commit(SET_CUSTOMER, response.data.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -79,7 +77,6 @@ const actions = {
             const response = await apiService.getCustomerSettings(params);
             context.commit(SET_CUSTOMER_SETTINGS, response.data.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -95,7 +92,6 @@ const actions = {
             })
             context.commit(SET_CUSTOMER_SETTINGS, response.data.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -111,7 +107,6 @@ const actions = {
             })
             context.commit(SET_CUSTOMER_SETTINGS, response.data.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -127,7 +122,6 @@ const actions = {
             })
             context.commit(SET_CUSTOMER, response.data.data);
         } catch (error) {
-            console.log(error);
             toast('Something went wrong.', {
                 "type": "error",
             })
@@ -143,7 +137,6 @@ const actions = {
             })
             context.commit(NOT_IS_LOADING);
         } catch (error) {
-            console.log(error);
             toast(error.response?.data?.message || 'Something went wrong.', {
                 "type": "error",
             })
@@ -166,7 +159,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors)
             state.apiErrors = error.response.data.errors;
         }
     },

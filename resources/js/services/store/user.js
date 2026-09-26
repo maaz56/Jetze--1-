@@ -79,7 +79,6 @@ const actions = {
             const response = await apiService.getUsers(params);
             context.commit(SET_USERS, response.data);
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -93,7 +92,6 @@ const actions = {
             const response = await apiService.getUsersSummary(params);
             context.commit(SET_USERS_SUMMARY, response.data);
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -109,7 +107,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "success",
             });
@@ -121,12 +118,10 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.saveAdminAgentData(params);
-            // console.log(response);
             toast("Admin Agent saved successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -164,7 +159,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast("Staff creation failed.", {
                 type: "error",
             });
@@ -188,7 +182,6 @@ const actions = {
             return response;
 
         } catch (error) {
-            console.log(error);
             toast("Charges failed to save.", {
                 type: "error",
             });
@@ -199,11 +192,9 @@ const actions = {
     async [FETCH_AGENTS_CHARGES](context, params) {
         context.commit(IS_LOADING);
         try {
-            //console.log(params);
             const response = await apiService.getAgentCharges(params);
             context.commit(SET_AGENT_CHARGES, response.data);
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -221,7 +212,6 @@ const actions = {
             });
             context.state.isSaving = false;
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -238,7 +228,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -251,7 +240,6 @@ const actions = {
             const response = await apiService.getAgentData(params);
             context.commit(SET_AGENT_DATA, response.data);
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -262,14 +250,12 @@ const actions = {
     async [UPDATE_AGENT_DATA](context, params) {
         context.commit(IS_LOADING);
         try {
-            //console.log(params);
             const response = await apiService.updateAgentData(params);
             context.commit(SET_AGENT_DATA, "Agent data saved successfully");
             toast("User has been updated successfully.", {
                 type: "success",
             });
         } catch (error) {
-            console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -287,7 +273,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "success",
             });
@@ -304,7 +289,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -320,7 +304,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -337,7 +320,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -354,7 +336,6 @@ const actions = {
                 type: "success",
             });
         } catch (error) {
-            //console.log(error);
             toast(error?.response?.data?.message, {
                 type: "error",
             });
@@ -377,7 +358,6 @@ const mutations = {
             error.response.data &&
             error.response.data.errors
         ) {
-            //console.log(error.response.data.errors);
             state.apiErrors = error.response.data.errors;
         }
     },
