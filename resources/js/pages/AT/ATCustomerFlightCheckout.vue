@@ -4,7 +4,7 @@ import Button from "@/components/ui/button/Button.vue";
 import Input from "@/components/ui/input/Input.vue";
 import Label from "@/components/ui/label/Label.vue";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ClockIcon, PlusCircle, SquareCheckBig, SquareX, Upload, XCircle } from "lucide-vue-next";
+import { ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ClockIcon, Luggage, PlusCircle, SquareCheckBig, SquareX, Upload, XCircle } from "lucide-vue-next";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
@@ -172,6 +172,14 @@ const cardElement = ref(null);
 const clientSecret = ref('');
 const publicKey = ref(import.meta.env.VITE_STRIPE_KEY);
 const showExtrasPanel = ref(false);
+const activeExtrasTravellerIndex = ref(0);
+const activeExtrasTab = ref('baggage');
+
+const openExtraServices = () => {
+    activeExtrasTravellerIndex.value = 0;
+    activeExtrasTab.value = 'baggage';
+    showExtrasPanel.value = true;
+};
 
 // Add these methods
 const saveExtrasSelections = () => {
@@ -513,6 +521,10 @@ function getUniqueRows(seats) {
     if (!seats?.length) return [];
     const rows = seats.map(seat => seat.SeatNumber.replace(/[A-F]/g, ''));
     return [...new Set(rows)].sort((a, b) => parseInt(a) - parseInt(b));
+}
+
+function getSeatByRowAndLetter(seats, row, letter) {
+    return seats?.find((seat) => String(seat?.SeatNumber) === `${row}${letter}`) || null;
 }
 
 function getSeatsByRowAndColumn(seats, row, columnIndex) {
@@ -865,7 +877,6 @@ const loading = ref(true);
 const scanning = ref(false);
 const error = ref(null);
 
-const isOpenCountryDropdown = ref(false);
 const mainContact = ref({
     email: user?.customer?.email,
     phone: user?.customer?.phone,
@@ -909,7 +920,6 @@ const errors = reactive({
     mainContact: {
         email: "",
         phone: "",
-        country: "",
     },
     travellers: [],
 });
@@ -1089,7 +1099,6 @@ const validateForm = () => {
     globalError.value = "";
     errors.mainContact.email = "";
     errors.mainContact.phone = "";
-    errors.mainContact.country = "";
 
     errors.travellers.forEach((traveller) => {
         Object.keys(traveller).forEach((key) => {
@@ -1110,11 +1119,6 @@ const validateForm = () => {
         isValid = false;
     } else if (!mainContact.value.phoneValid && !validatePhone(mainContact.value.phone)) {
         errors.mainContact.phone = "Please enter a valid phone number";
-        isValid = false;
-    }
-
-    if (!mainContact.value.country) {
-        errors.mainContact.country = "Country is required";
         isValid = false;
     }
 
@@ -1322,12 +1326,6 @@ function fetchCustomerMarginValues() {
 }
 
 
-function fetchCountries(event, country) {
-
-    store.dispatch("country/" + FETCH_COUNTRIES, {
-        searchQuery: event.target.value ?? country,
-    });
-}
 function fetchCountry(country) {
 
     store.dispatch("country/" + FETCH_COUNTRIES, {
@@ -2479,7 +2477,7 @@ watch(flight, () => {
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <!-- Main Content -->
-                    <div class="lg:col-span-3 space-y-4">
+                    <div class="lg:col-span-3 flex flex-col gap-4">
                         <!-- Price Details Card - Moved to top -->
 
 
@@ -2487,14 +2485,14 @@ watch(flight, () => {
 
 
                         <!-- Contact Information Card -->
-                        <div class="bg-white shadow-sm border border-gray-200">
+                        <div class="order-2 bg-white shadow-sm border border-gray-200">
                             <div class="bg-gray-50 border-b border-gray-200 p-3">
                                 <h2 class="text-base font-medium text-gray-900">Contact Information</h2>
                                 <p class="text-xs text-gray-500 mt-1">We'll use this information to send you booking
                                     confirmations</p>
                             </div>
                             <div class="p-4">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                                     <div>
                                         <Label for="main-email" class="text-xs font-medium text-gray-600">Email <span
                                                 class="text-red-500">*</span></Label>
@@ -2521,42 +2519,6 @@ watch(flight, () => {
                                         <div v-if="errors.mainContact.phone" class="text-red-500 text-xs mt-1">{{
                                             errors.mainContact.phone }}</div>
                                     </div>
-                                    <div>
-                                        <Label class="text-xs font-medium text-gray-600">Country <span
-                                                class="text-red-500">*</span></Label>
-                                        <Popover v-model:open="isOpenCountryDropdown">
-                                            <PopoverTrigger as-child>
-                                                <Button variant="outline" role="combobox"
-                                                    class="w-full justify-between mt-1 text-sm h-9"
-                                                    :class="{ 'border-red-300': errors.mainContact.country }">
-                                                    {{mainContact.country !== "" ? countries.find((country) =>
-                                                        country.value === mainContact.country)?.label || mainContact.country
-                                                    : "Select country"}}
-                                                    <ChevronsUpDown class="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent class="w-full p-0">
-                                                <Command>
-                                                    <CommandInput @input="fetchCountries"
-                                                        placeholder="Search country..." />
-                                                    <CommandEmpty>No results found.</CommandEmpty>
-                                                    <CommandList>
-                                                        <CommandGroup>
-                                                            <CommandItem v-for="country in countries"
-                                                                :key="country.value" :value="country.label"
-                                                                @select="(ev) => { if (typeof ev.detail.value === 'string') { mainContact.country = ev.detail.value; } open = false; }">
-                                                                {{ country.label }}
-                                                                <Check
-                                                                    :class="cn('ml-auto h-4 w-4', mainContact.country === country.value ? 'opacity-100' : 'opacity-0')" />
-                                                            </CommandItem>
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                        <div v-if="errors.mainContact.country" class="text-red-500 text-xs mt-1">{{
-                                            errors.mainContact.country }}</div>
-                                    </div>
                                 </div>
                                 <div class="bg-gray-50 p-3 hidden">
                                     <h3 class="text-xs font-medium text-gray-600 mb-2">Agency Contact</h3>
@@ -2577,7 +2539,7 @@ watch(flight, () => {
                         </div>
 
                         <!-- Traveller Details Card with Accordions -->
-                        <div class="bg-white shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="order-1 bg-white shadow-sm border border-gray-200 overflow-hidden">
                             <div class="bg-gray-50 border-b border-gray-200 p-3">
                                 <h2 class="text-base font-medium text-gray-900">Traveller Details</h2>
                                 <p class="text-xs text-gray-500 mt-1">Use all names exactly as they appear on your
@@ -2879,21 +2841,23 @@ watch(flight, () => {
                                             </div>
 
 
-                                            <div class="flex justify-end pt-4 border-t border-gray-200">
-                                                <Button variant="outline"
-                                                    class="bg-white border-none shadow-none text-primary hover:underline hover:text-primary hover:bg-white px-4 py-2 rounded-lg text-sm font-medium"
-                                                    @click="traveller.showAncillaries = !traveller.showAncillaries">
-                                                    <span class="flex items-center gap-2">
-                                                        <XCircle v-if="traveller.showAncillaries" class="w-4 h-4" />
-                                                        <PlusCircle v-else class="w-4 h-4" />
-                                                        {{ traveller.showAncillaries ? 'Hide Extra Services' : 'Add Extra Services' }}
-                                                    </span>
-                                                </Button>
-                                            </div>
-
-                                            <div v-if="traveller.showAncillaries" class="bg-white border-t border-gray-100">
-                                                <Tabs default-value="baggage" class="w-full">
-                                                    <div class="px-1 pt-4">
+                                            <Dialog v-if="index === activeExtrasTravellerIndex" v-model:open="showExtrasPanel">
+                                                <DialogContent class="w-[80vw] max-w-none h-[90vh] max-h-[90vh] flex flex-col overflow-hidden bg-white p-0">
+                                                    <DialogHeader class="shrink-0 border-b border-gray-200 px-6 py-4 pr-12">
+                                                        <div class="flex flex-wrap items-center justify-between gap-3">
+                                                            <div>
+                                                                <DialogTitle class="text-xl font-semibold text-gray-900">Extra Services</DialogTitle>
+                                                                <DialogDescription class="text-sm text-gray-500">Add baggage, choose seats, or select meals for your travellers.</DialogDescription>
+                                                            </div>
+                                                            <select v-model="activeExtrasTravellerIndex" class="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-primary focus:outline-none">
+                                                                <option v-for="(passenger, passengerIndex) in travellers" :key="passengerIndex" :value="passengerIndex">
+                                                                    {{ passenger.type }} Traveller {{ passengerIndex + 1 }}
+                                                                </option>
+                                                            </select>
+                                                        </div>
+                                                    </DialogHeader>
+                                                    <Tabs v-model="activeExtrasTab" class="flex min-h-0 flex-1 flex-col">
+                                                    <div class="shrink-0 px-6 pt-4">
                                                         <TabsList class="grid grid-cols-3 bg-gray-100 p-1 rounded-lg">
                                                             <TabsTrigger value="baggage"
                                                                 class="rounded-md data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm">
@@ -2910,12 +2874,15 @@ watch(flight, () => {
                                                         </TabsList>
                                                     </div>
 
-                                                    <TabsContent value="baggage" class="p-4 sm:p-6">
-                                                        <div class="mb-6">
-                                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">About your baggage</h4>
-                                                            <p class="text-sm text-gray-600">
-                                                                Need additional baggage? Save time and money by purchasing extra baggage in advance
-                                                            </p>
+                                                    <TabsContent value="baggage" class="mt-0 flex-1 overflow-y-auto p-5 sm:p-6">
+                                                        <div class="mb-5 flex items-center gap-3">
+                                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                                                <Luggage class="h-5 w-5" />
+                                                            </div>
+                                                            <div>
+                                                                <h4 class="text-lg font-semibold text-gray-800">Baggage options</h4>
+                                                                <p class="text-sm text-gray-500">Choose extra baggage for your flight.</p>
+                                                            </div>
                                                         </div>
 
                                                         <div v-if="!isPreBookingServiceAvailable('baggage')"
@@ -2923,28 +2890,29 @@ watch(flight, () => {
                                                             {{ preBookingServiceMessage('baggage') }}
                                                         </div>
 
-                                                        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div v-else class="space-y-6">
                                                             <div v-for="(trip, tripIdx) in ssrData?.Trips || []" :key="tripIdx"
-                                                                class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                                                                <h5 class="text-sm font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
-                                                                    {{ trip?.From }} to {{ trip?.To }}
+                                                                class="mx-auto w-full max-w-none py-1">
+                                                                <h5 class="text-sm font-semibold text-gray-800 mb-3">
+                                                                    {{ trip?.From }} <span class="mx-2 text-gray-300">→</span> {{ trip?.To }}
                                                                 </h5>
 
                                                                 <div v-for="(journey, journeyIdx) in trip?.Journey || []" :key="journeyIdx" class="mb-6 last:mb-0">
                                                                     <div v-for="(segment, segmentIdx) in journey?.Segments || []" :key="segmentIdx" class="mb-4">
-                                                                        <div class="font-medium text-sm text-gray-700 mb-3 bg-gray-50 px-3 py-2 rounded-lg">
-                                                                            Segment {{ segmentIdx + 1 }}: {{ segment?.VAC }} Flight
+                                                                        <div class="mb-3 flex items-center justify-between text-sm">
+                                                                            <span class="font-medium text-gray-700">Segment {{ segmentIdx + 1 }}</span>
+                                                                            <span class="text-gray-500">{{ segment?.VAC }} Flight</span>
                                                                         </div>
 
                                                                         <div v-if="flight?.leg?.flights?.[tripIdx]?.fares" class="space-y-3">
                                                                             <div v-for="fare in flight?.leg?.flights?.[tripIdx]?.fares" :key="fare.ref_id">
-                                                                                <div v-if="selectedFares?.includes(fare?.ref_id)" class="space-y-3">
+                                                                                <div v-if="selectedFares?.includes(fare?.ref_id)" class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                                                                                     <div v-if="fare.baggage_policies?.some(p => p.type === 'carry')">
                                                                                         <div v-for="policy in [fare.baggage_policies.find(p => p.type === 'carry')]"
                                                                                             :key="policy.description"
-                                                                                            class="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                                                                            class="flex items-start gap-2">
                                                                                             <CheckCircle class="w-4 h-4 text-green-600 mt-0.5" />
-                                                                                            <div>
+                                                                                            <div class="flex items-baseline gap-2">
                                                                                                 <p class="text-sm font-medium text-gray-900">
                                                                                                     {{ policy.weight_limit || policy.description }} {{ policy.weight_unit || '' }} cabin baggage
                                                                                                 </p>
@@ -2956,9 +2924,9 @@ watch(flight, () => {
                                                                                     <div v-if="fare.baggage_policies?.some(p => p.type === 'checked')">
                                                                                         <div v-for="policy in [fare.baggage_policies.find(p => p.type === 'checked')]"
                                                                                             :key="policy.description"
-                                                                                            class="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                                                                            class="flex items-start gap-2">
                                                                                             <CheckCircle class="w-4 h-4 text-green-600 mt-0.5" />
-                                                                                            <div>
+                                                                                            <div class="flex items-baseline gap-2">
                                                                                                 <p class="text-sm font-medium text-gray-900">
                                                                                                     {{ policy.weight_limit || policy.description }} {{ policy.weight_unit || '' }} checked baggage
                                                                                                 </p>
@@ -2966,7 +2934,7 @@ watch(flight, () => {
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div v-else class="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                                                                                    <div v-else class="flex items-center gap-2 text-gray-600">
                                                                                         <XCircle class="w-4 h-4 text-red-500 mt-0.5" />
                                                                                         <p class="text-sm text-gray-600">Checked baggage not included</p>
                                                                                     </div>
@@ -2976,7 +2944,7 @@ watch(flight, () => {
 
                                                                         <div v-if="segment?.SSR?.filter(s => s.Type === '2').length" class="mt-4">
                                                                             <div v-if="extraCharges[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]"
-                                                                                class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+                                                                                class="mt-4 p-3 bg-blue-50 rounded-lg mb-4">
                                                                                 <div class="flex items-center justify-between gap-3">
                                                                                     <div class="flex items-center gap-2">
                                                                                         <CheckCircle class="w-4 h-4 text-blue-600" />
@@ -3001,65 +2969,47 @@ watch(flight, () => {
                                                                                 </p>
                                                                             </div>
 
-                                                                            <Dialog>
-                                                                                <DialogTrigger as-child>
-                                                                                    <button
-                                                                                        class="flex items-center text-primary font-medium text-sm hover:text-primary/80 bg-primary/5 px-4 py-2 rounded-lg hover:bg-primary/10">
-                                                                                        <PlusCircle class="w-4 h-4 mr-2" />
-                                                                                        Add extra baggage
-                                                                                    </button>
-                                                                                </DialogTrigger>
-                                                                                <DialogContent class="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden bg-white">
-                                                                                    <DialogHeader class="pb-4 border-b border-gray-100">
-                                                                                        <DialogTitle class="text-xl font-semibold text-gray-800">Add your extra baggage</DialogTitle>
-                                                                                        <DialogDescription class="text-sm text-gray-600">
-                                                                                            You can select here which baggage you prefer
-                                                                                        </DialogDescription>
-                                                                                    </DialogHeader>
-                                                                                    <div class="flex-1 overflow-y-auto mt-4 pr-2">
-                                                                                        <h3 class="text-base font-medium text-gray-700 mb-4 bg-gray-50 px-4 py-2 rounded-lg">
-                                                                                            {{ trip?.From }} to {{ trip?.To }}
-                                                                                        </h3>
-                                                                                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                                            <div class="mt-4 pt-3">
+                                                                                <div class="mb-4 flex items-center justify-between">
+                                                                                    <div>
+                                                                                        <h4 class="text-base font-semibold text-gray-800">Add extra baggage</h4>
+                                                                                        <p class="mt-1 text-sm text-gray-500">Select one option for this segment.</p>
+                                                                                    </div>
+                                                                                    <span class="text-xs font-medium text-gray-500">{{ trip?.From }} → {{ trip?.To }}</span>
+                                                                                </div>
+                                                                                        <div class="grid max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                                                                             <label v-for="ssr in segment?.SSR?.filter(s => s.Type === '2')"
                                                                                                 :key="ssr.ID"
-                                                                                                class="block border-2 rounded-xl shadow-sm p-4 cursor-pointer transition-all hover:shadow-lg bg-white"
-                                                                                                :class="{ 'border-primary ring-2 ring-primary/20 bg-primary/5': selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.ID === ssr.ID, 'border-gray-200': selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.ID !== ssr.ID }">
-                                                                                                <div class="h-32 sm:h-36 md:h-44 flex items-center justify-center rounded-lg overflow-hidden mb-4 bg-gray-50">
-                                                                                                    <img src="/public/assets/baggage.jpg"
-                                                                                                        alt="Baggage"
-                                                                                                        class="h-full object-contain" />
+                                                                                                class="relative flex cursor-pointer items-center gap-4 rounded-xl border bg-white p-4 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                                                                                                :class="selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.ID === ssr.ID ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-slate-200'">
+                                                                                                <input type="radio" class="sr-only"
+                                                                                                    :name="'baggage_' + tripIdx + '_' + journeyIdx + '_' + segmentIdx + '_' + index"
+                                                                                                    :value="ssr.ID"
+                                                                                                    @change="handleSSRSelection(tripIdx, journeyIdx, segmentIdx, index, ssr, 'baggage')" />
+                                                                                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                                                                                    <Luggage class="h-6 w-6" />
                                                                                                 </div>
-                                                                                                <div class="flex items-center mb-3">
-                                                                                                    <input type="radio"
-                                                                                                        class="mr-3 accent-primary w-4 h-4"
-                                                                                                        :name="'baggage_' + tripIdx + '_' + journeyIdx + '_' + segmentIdx + '_' + index"
-                                                                                                        :value="ssr.ID"
-                                                                                                        @change="handleSSRSelection(tripIdx, journeyIdx, segmentIdx, index, ssr, 'baggage')" />
-                                                                                                    <span class="text-sm font-semibold text-gray-800">{{ ssr.Description }}</span>
+                                                                                                <div class="min-w-0 flex-1">
+                                                                                                    <p class="text-sm font-semibold text-gray-800">{{ ssr.Description }}</p>
+                                                                                                    <p class="mt-1 truncate text-xs text-gray-500">{{ ssr.PieceDescription || 'Extra checked baggage' }}</p>
                                                                                                 </div>
-                                                                                                <div class="text-sm text-gray-600 leading-relaxed mb-3">
-                                                                                                    {{ ssr.PieceDescription }}
-                                                                                                </div>
-                                                                                                <div class="text-lg font-bold text-primary">
-                                                                                                    {{ formatAncillaryMoney(ssr) }}
+                                                                                                <div class="text-right">
+                                                                                                    <p class="text-base font-bold text-primary">{{ formatAncillaryMoney(ssr) }}</p>
+                                                                                                    <span class="mt-1 inline-flex h-4 w-4 rounded-full border-2"
+                                                                                                        :class="selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.ID === ssr.ID ? 'border-primary bg-primary ring-2 ring-primary/20' : 'border-slate-300'"></span>
                                                                                                 </div>
                                                                                             </label>
                                                                                         </div>
-                                                                                    </div>
-                                                                                    <DialogFooter class="flex justify-end items-center mt-6 pt-4 border-t border-gray-100">
-                                                                                        <DialogClose as-child>
-                                                                                            <button
-                                                                                                class="bg-primary text-white px-6 py-2 text-sm rounded-lg hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                                                                                :disabled="!selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]"
-                                                                                                @click="saveSSRExtra(tripIdx, 'baggage', journeyIdx, segmentIdx, index)">
-                                                                                                Save Selection
-                                                                                            </button>
-                                                                                        </DialogClose>
-                                                                                    </DialogFooter>
-                                                                                </DialogContent>
-                                                                            </Dialog>
-                                                                        </div>
+                                                                                </div>
+                                                                                <div class="mt-6 flex justify-end border-t border-gray-100 pt-4">
+                                                                                    <button
+                                                                                        class="bg-primary text-white px-6 py-2 text-sm rounded-lg hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                                                                        :disabled="!selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]"
+                                                                                        @click="saveSSRExtra(tripIdx, 'baggage', journeyIdx, segmentIdx, index)">
+                                                                                        Save Baggage
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
                                                                         <div v-else class="text-sm text-gray-500 mt-2">
                                                                             No extra baggage options available for this segment.
                                                                         </div>
@@ -3069,34 +3019,19 @@ watch(flight, () => {
                                                         </div>
                                                     </TabsContent>
 
-                                                    <TabsContent value="seats" class="p-4 sm:p-6">
+                                                    <TabsContent value="seats" class="mt-0 flex-1 overflow-y-auto p-5 sm:p-6">
                                                         <div v-if="!isPreBookingServiceAvailable('seat')"
                                                             class="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-lg">
                                                             {{ preBookingServiceMessage('seat') }}
                                                         </div>
                                                         <div v-else-if="seatLayout?.Trips?.length">
-                                                            <div class="mb-6">
-                                                                <h4 class="text-lg font-semibold text-gray-800 mb-2">Want your own seat?</h4>
-                                                                <p class="text-sm text-gray-600">
-                                                                    Customize your trip with optional extras. Select the services you want now to avoid higher charges later.
-                                                                </p>
-                                                            </div>
-
-                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                            <div class="space-y-6">
                                                                 <div v-for="(trip, tripIdx) in seatLayout?.Trips || []" :key="tripIdx"
-                                                                    class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                                                                    <h5 class="text-sm font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
-                                                                        {{ trip?.Journey?.[0]?.Segments?.[0]?.From || 'Unknown' }} to {{ trip?.Journey?.[0]?.Segments?.[0]?.To || 'Unknown' }}
-                                                                    </h5>
-
+                                                                    class="-mx-5 w-[calc(100%+2.5rem)] rounded-xl bg-white px-5 py-2 sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6">
                                                                     <div v-for="(journey, journeyIdx) in trip?.Journey || []" :key="journeyIdx" class="mb-6 last:mb-0">
                                                                         <div v-for="(segment, segmentIdx) in journey?.Segments || []" :key="segmentIdx" class="mb-4">
-                                                                            <div class="font-medium text-sm text-gray-700 mb-3 bg-gray-50 px-3 py-2 rounded-lg">
-                                                                                Segment: {{ segment?.FlightNo?.trim() || 'Unknown' }} - {{ segment?.AirlineName }}
-                                                                            </div>
-
                                                                             <div v-if="extraCharges[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]"
-                                                                                class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+                                                                                class="p-3 bg-blue-50 rounded-lg mb-4">
                                                                                 <div class="flex items-center justify-between">
                                                                                     <p class="text-sm font-medium text-gray-900">
                                                                                         Seat: {{ selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SeatNumber }}
@@ -3113,82 +3048,46 @@ watch(flight, () => {
                                                                                 </p>
                                                                             </div>
 
-                                                                            <Dialog v-if="segment?.Seats?.length">
-                                                                                <DialogTrigger as-child>
-                                                                                    <button
-                                                                                        class="flex items-center text-primary font-medium text-sm hover:text-primary/80 bg-primary/5 px-4 py-2 rounded-lg hover:bg-primary/10">
-                                                                                        <PlusCircle class="w-4 h-4 mr-2" />
-                                                                                        Select seat
-                                                                                    </button>
-                                                                                </DialogTrigger>
-                                                                                <DialogContent class="max-w-5xl max-h-[100vh] overflow-y-auto bg-white">
-                                                                                    <DialogHeader class="pb-4 border-b border-gray-100">
-                                                                                        <DialogTitle class="text-xl font-semibold text-gray-800">Select Your Seat</DialogTitle>
-                                                                                        <DialogDescription class="text-sm text-gray-600">
-                                                                                            Choose your preferred seat for {{ segment?.FlightNo?.trim() || 'Unknown' }}
-                                                                                        </DialogDescription>
-                                                                                    </DialogHeader>
-                                                                                    <div class="mt-6">
-                                                                                        <h3 class="text-base font-medium text-gray-700 mb-6 bg-gray-50 px-4 py-2 rounded-lg">
-                                                                                            {{ segment?.FlightNo?.trim() || 'Unknown' }} - {{ segment?.AirlineName }}
-                                                                                        </h3>
-
-                                                                                        <div class="mb-8" v-if="segment.Seats.length">
-                                                                                            <h4 class="text-sm font-medium text-gray-700 mb-4">Seat Map</h4>
-                                                                                            <div class="bg-gray-50 border-2 border-gray-200 rounded-xl p-6 overflow-x-auto">
-                                                                                                <div class="flex justify-center mb-4 min-w-[560px]">
-                                                                                                    <div class="grid grid-cols-7 gap-10 text-center">
-                                                                                                        <span v-for="col in ['A', 'B', 'C', ' ', 'D', 'E', 'F']"
-                                                                                                            :key="col"
-                                                                                                            class="text-sm font-semibold text-gray-600 w-8">
-                                                                                                            {{ col }}
-                                                                                                        </span>
+                                                                            <div v-if="segment?.Seats?.length" class="mt-3 w-full rounded-xl bg-slate-50/70 px-6 py-5">
+                                                                                <div v-if="segment.Seats.length">
+                                                                                            <div class="seat-map-scroll mx-auto max-w-full overflow-x-auto pb-1">
+                                                                                                <div class="grid w-max min-w-full gap-x-2 gap-y-2"
+                                                                                                    :style="{ gridTemplateColumns: `2.25rem repeat(${getUniqueRows(segment.Seats).length}, 2.5rem)` }">
+                                                                                                    <div class="flex h-7 items-center justify-center text-[10px] font-semibold text-gray-400">R</div>
+                                                                                                    <div v-for="row in getUniqueRows(segment.Seats)" :key="`header-${row}`"
+                                                                                                        class="flex h-7 items-center justify-center rounded bg-white text-xs font-semibold text-gray-500 shadow-sm">
+                                                                                                        {{ row }}
                                                                                                     </div>
-                                                                                                </div>
 
-                                                                                                <div class="space-y-3 min-w-[560px]">
-                                                                                                    <div v-for="row in getUniqueRows(segment.Seats)" :key="row"
-                                                                                                        class="flex items-center justify-center">
-                                                                                                        <span class="text-sm font-semibold text-gray-700 w-8 text-right mr-4">
-                                                                                                            {{ row }}
-                                                                                                        </span>
-                                                                                                        <div class="grid grid-cols-7">
-                                                                                                            <div v-for="col in [1, 2, 3, 4, 5, 6, 7]" :key="col"
-                                                                                                                class="flex flex-col p-1 items-center">
-                                                                                                                <template v-for="seat in getSeatsByRowAndColumn(segment.Seats, row, col)"
-                                                                                                                    :key="seat?.SSID">
-                                                                                                                    <div v-if="seat" class="flex flex-col items-center">
-                                                                                                                        <div v-if="seat.AvailStatus && seat.SeatStatus === 'Open' && ancillaryProviderAmount(seat) !== 0">
-                                                                                                                            <label class="w-16 h-16 border-2 p-1 rounded-lg cursor-pointer flex items-center justify-center text-sm font-semibold transition-all hover:scale-105 bg-white"
-                                                                                                                                :class="{ 
-                                                                                                                                    'border-green-500 bg-green-50 text-green-800': selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SSID !== seat.SSID, 
-                                                                                                                                    'border-primary bg-primary/10 text-primary': selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SSID === seat.SSID 
-                                                                                                                                }">
-                                                                                                                                <input type="radio"
-                                                                                                                                    class="sr-only"
-                                                                                                                                    :name="'seat_' + tripIdx + '_' + journeyIdx + '_' + segmentIdx + '_' + index"
-                                                                                                                                    :value="seat.SSID"
-                                                                                                                                    @change="handleSeatSelection(tripIdx, journeyIdx, segmentIdx, index, seat)" />
-                                                                                                                                {{ seat.SeatNumber.slice(-1) }}
-                                                                                                                            </label>
-                                                                                                                            <span class="text-xs text-gray-500 leading-none mt-1 font-medium">
-                                                                                                                                {{ ancillaryProviderAmount(seat) > 0 ? formatAncillaryMoney(seat) : 'Free' }}
-                                                                                                                            </span>
-                                                                                                                        </div>
-                                                                                                                        <div v-else
-                                                                                                                            class="w-16 h-16 border-2 border-red-300 bg-red-50 rounded-lg flex items-center justify-center text-sm text-red-600 font-semibold">
-                                                                                                                            x
-                                                                                                                        </div>
-                                                                                                                    </div>
-                                                                                                                </template>
-                                                                                                            </div>
+                                                                                                    <template v-for="letter in ['A', 'B', 'C', 'D', 'E', 'F']" :key="letter">
+                                                                                                        <div class="flex h-10 items-center justify-center rounded bg-white text-xs font-semibold text-gray-500"
+                                                                                                            :class="{ 'mb-3': letter === 'C' }">
+                                                                                                            {{ letter }}
                                                                                                         </div>
-                                                                                                    </div>
+                                                                                                        <template v-for="row in getUniqueRows(segment.Seats)" :key="`${letter}-${row}`">
+                                                                                                            <template v-for="seat in [getSeatByRowAndLetter(segment.Seats, row, letter)]" :key="seat?.SSID || `${letter}-${row}`">
+                                                                                                                <div class="h-10 w-10" :class="{ 'mb-3': letter === 'C' }">
+                                                                                                                   <label v-if="seat && seat.AvailStatus && seat.SeatStatus === 'Open' && ancillaryProviderAmount(seat) !== 0"
+                                                                                                                        class="!m-0 !flex h-10 w-10 cursor-pointer !items-center !justify-center rounded-md border text-center text-[10px] font-semibold leading-none transition-all hover:scale-105"
+                                                                                                                        :class="selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SSID === seat.SSID
+                                                                                                                            ? 'border-primary bg-primary/10 text-primary'
+                                                                                                                            : 'border-green-500 bg-green-50 text-green-800'">
+                                                                                                                        <input type="radio" class="sr-only"
+                                                                                                                            :name="'seat_' + tripIdx + '_' + journeyIdx + '_' + segmentIdx + '_' + index"
+                                                                                                                            :value="seat.SSID"
+                                                                                                                            @change="handleSeatSelection(tripIdx, journeyIdx, segmentIdx, index, seat)" />
+                                                                                                                        {{ seat.SeatNumber }}
+                                                                                                                    </label>
+                                                                                                                    <div v-else-if="seat" class="flex h-10 w-10 items-center justify-center rounded-md border border-red-200 bg-red-50 text-center text-[10px] font-semibold leading-none text-red-500">
+                                                                                                                        {{ seat.SeatNumber }}
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            </template>
+                                                                                                        </template>
+                                                                                                    </template>
                                                                                                 </div>
                                                                                             </div>
-                                                                                        </div>
-
-                                                                                        <div class="mb-6 flex flex-wrap gap-6 text-sm bg-white p-4 rounded-lg border border-gray-200">
+                                                                                        <div class="mb-4 mt-5 flex flex-wrap justify-center gap-4 text-xs text-gray-600">
                                                                                             <div class="flex items-center gap-2">
                                                                                                 <div class="w-5 h-5 border-2 border-green-500 bg-green-50 rounded"></div>
                                                                                                 <span class="font-medium text-gray-700">Available</span>
@@ -3204,29 +3103,24 @@ watch(flight, () => {
                                                                                         </div>
                                                                                     </div>
 
-                                                                                    <DialogFooter class="flex justify-between items-center mt-8 pt-4 border-t border-gray-100">
+                                                                                    <div class="sticky bottom-0 z-20 -mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-white px-5 py-4 shadow-[0_-8px_16px_rgba(15,23,42,0.04)] sm:-mx-6 sm:px-6">
+                                                                                        <div class="text-xs text-gray-500">
+                                                                                            <span class="font-semibold text-gray-700">{{ trip?.Journey?.[0]?.Segments?.[0]?.From || 'Unknown' }} → {{ trip?.Journey?.[0]?.Segments?.[0]?.To || 'Unknown' }}</span>
+                                                                                            <span class="mx-2 text-gray-300">•</span>
+                                                                                            {{ segment?.FlightNo?.trim() || 'Unknown' }}{{ segment?.AirlineName ? ` · ${segment.AirlineName}` : '' }}
+                                                                                        </div>
                                                                                         <div v-if="selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]"
-                                                                                            class="text-sm text-gray-600 font-medium">
+                                                                                            class="text-sm text-gray-600 font-medium ml-auto">
                                                                                             Selected: {{ selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]?.SeatNumber }}
                                                                                         </div>
-                                                                                        <div class="flex gap-3">
-                                                                                            <DialogClose as-child>
-                                                                                                <button class="px-4 py-2 text-sm border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-medium">
-                                                                                                    Cancel
-                                                                                                </button>
-                                                                                            </DialogClose>
-                                                                                            <DialogClose as-child>
-                                                                                                <button
-                                                                                                    class="bg-primary text-white px-6 py-2 text-sm rounded-lg hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
-                                                                                                    :disabled="!selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]"
-                                                                                                    @click="saveSSRExtra(tripIdx, 'seat', journeyIdx, segmentIdx, index)">
-                                                                                                    Save Seat
-                                                                                                </button>
-                                                                                            </DialogClose>
-                                                                                        </div>
-                                                                                    </DialogFooter>
-                                                                                </DialogContent>
-                                                                            </Dialog>
+                                                                                        <button
+                                                                                            class="bg-primary text-white px-6 py-2 text-sm rounded-lg hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+                                                                                            :disabled="!selectedExtras[tripIdx]?.seat?.[journeyIdx]?.[segmentIdx]?.[index]"
+                                                                                            @click="saveSSRExtra(tripIdx, 'seat', journeyIdx, segmentIdx, index)">
+                                                                                            Save Seat
+                                                                                        </button>
+                                                                                    </div>
+                                                                            </div>
                                                                             <p v-else class="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
                                                                                 No seat selection available for this segment.
                                                                             </p>
@@ -3240,7 +3134,7 @@ watch(flight, () => {
                                                         </p>
                                                     </TabsContent>
 
-                                                    <TabsContent value="meals" class="p-4 sm:p-6">
+                                                    <TabsContent value="meals" class="mt-0 flex-1 overflow-y-auto p-4 sm:p-6">
                                                         <div v-if="!isPreBookingServiceAvailable('meal')"
                                                             class="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-lg">
                                                             {{ preBookingServiceMessage('meal') }}
@@ -3253,9 +3147,9 @@ watch(flight, () => {
                                                                 </p>
                                                             </div>
 
-                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                            <div class="space-y-6">
                                                                 <div v-for="(trip, tripIdx) in ssrData?.Trips || []" :key="tripIdx"
-                                                                    class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                                                    class="mx-auto w-full max-w-6xl bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                                                                     <h5 class="text-sm font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                                                                         {{ trip?.From }} to {{ trip?.To }}
                                                                     </h5>
@@ -3330,8 +3224,9 @@ watch(flight, () => {
                                                             No meal services available.
                                                         </p>
                                                     </TabsContent>
-                                                </Tabs>
-                                            </div>
+                                                    </Tabs>
+                                                </DialogContent>
+                                            </Dialog>
 
 
 
@@ -3614,6 +3509,11 @@ watch(flight, () => {
                                             <Button @click="showBookingPreview" :disabled="isSubmitting || !termsAccepted"
                                                 class="w-full bg-primary hover:bg-primary/90 text-sm">
                                                 {{ isSubmitting ? "Processing..." : "Save & Preview" }}
+                                            </Button>
+                                            <Button variant="outline" @click="openExtraServices"
+                                                class="w-full border-primary text-primary hover:bg-primary/5 text-sm">
+                                                <PlusCircle class="mr-2 h-4 w-4" />
+                                                Add Extra Services
                                             </Button>
                                             <div v-if="globalError" class="text-red-500 text-xs text-center">{{
                                                 globalError }}</div>
@@ -3934,7 +3834,7 @@ watch(flight, () => {
                             <h2 class="text-base font-medium text-gray-900">Contact Information</h2>
                         </div>
                         <div class="p-4">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <div class="text-gray-500">Email</div>
                                     <div class="font-medium">{{ mainContact.email }}</div>
@@ -3942,10 +3842,6 @@ watch(flight, () => {
                                 <div>
                                     <div class="text-gray-500">Phone</div>
                                     <div class="font-medium">{{ mainContact.phone }}</div>
-                                </div>
-                                <div>
-                                    <div class="text-gray-500">Country</div>
-                                    <div class="font-medium">{{ mainContact.country }}</div>
                                 </div>
                             </div>
                         </div>
@@ -4567,6 +4463,28 @@ label {
     to {
         transform: rotate(360deg);
     }
+}
+
+.seat-map-scroll {
+    scrollbar-color: #d1d5db transparent;
+    scrollbar-width: thin;
+}
+
+.seat-map-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+
+.seat-map-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.seat-map-scroll::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 9999px;
+}
+
+.seat-map-scroll::-webkit-scrollbar-thumb:hover {
+    background: #c4cbd5;
 }
 
 @media (max-width: 768px) {
