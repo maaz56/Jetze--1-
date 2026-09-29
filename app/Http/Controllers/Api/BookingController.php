@@ -1105,8 +1105,9 @@ class BookingController extends Controller
     {
         Log::info($request);
         $walletPaymentLock = null;
+        $flightProvider = strtolower((string) ($request->input('flight_provider') ?? $request->input('booking_source')));
 
-        if ($request->flight_provider === 'at') {
+        if ($flightProvider === 'at') {
             $booking = FlightBookings::with('priceSnapshot')->find($request->bookingId);
 
             if (!$booking) {
@@ -1192,7 +1193,7 @@ class BookingController extends Controller
 
             }
 
-        }else if ($request->flight_provider === 'at') {
+        }else if ($flightProvider === 'at') {
 
             // Never trust the amount (or reservation payload) posted by the
             // browser. The server-side price snapshot is the source of truth.
