@@ -245,17 +245,6 @@ const multiCityTrips = ref([
 
 const completedProviders = ref(0); // Track completed providers
 const progress = ref(0);
-const searchProgressPercent = (completed = completedProviders.value) => {
-    const totalProviders = Math.max(providers.value?.length || 1, 1);
-    return Math.min(100, Math.max(0, Math.round((completed / totalProviders) * 100)));
-};
-const markStreamingProgress = () => {
-    if (!isSearching.value) return;
-    progress.value = Math.max(progress.value, Math.min(95, searchProgressPercent() || 5));
-};
-const markProviderProgress = () => {
-    progress.value = searchProgressPercent();
-};
 const isSearching = ref(false);
 const filteredFlights = ref([]);
 const classType = ref("Y");
@@ -497,7 +486,7 @@ watch(
     sooperFlights,
     (newFlights) => {
         if (newFlights && newFlights.length > 0) {
-            allFlights.value = [...newFlights];
+            allFlights.value = [...allFlights.value, ...newFlights];
             filteredFlights.value = getFilteredFlights();
 
             filteredFlights.value = [...filteredFlights.value].sort((a, b) => {
@@ -509,7 +498,11 @@ watch(
             });
             // Also update filteredFlights
 
-            markStreamingProgress();
+            const totalProviders = providers.value.length;
+            const completedProviders = allFlights.value.length; // maybe rethink this assumption
+            progress.value = Math.round(
+                (completedProviders / totalProviders) * 100,
+            );
         }
     },
     { deep: true },
@@ -737,7 +730,8 @@ watch(sortedSooperFlights, () => {
 const fetchFlights = () => {
     resetAllFilters();
     allFlights.value = [];
-    flightStore.resetFlightResults();
+    sooperFlights.value = null;
+    sortedSooperFlights.value = null;
     filteredFlights.value = null;
     completedProviders.value = 0;
     progress.value = 0;
@@ -793,7 +787,10 @@ const fetchFlights = () => {
                 .finally(() => {
                     completedProviders.value++;
 
-                    markProviderProgress();
+                    progress.value = Math.round(
+                        (completedProviders.value / providers?.value?.length) *
+                            100,
+                    );
 
                     if (completedProviders.value === providers.value.length) {
                         setTimeout(() => {

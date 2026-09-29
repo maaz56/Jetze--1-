@@ -25,7 +25,6 @@ class AtApiService
     private const PNR_HTTP_TIMEOUT_SECONDS = 25;
     private const PNR_STATUS_HTTP_TIMEOUT_SECONDS = 10;
     private const PNR_HTTP_CONNECT_TIMEOUT_SECONDS = 10;
-    private const SEARCH_STREAM_MAX_ATTEMPTS = 30;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -286,105 +285,6 @@ class AtApiService
         }
     }
 
-    public function streamSearchFlights(array $params, callable $onResponse): ?array
-    {
-        Log::info('Streaming AT flight search with params: ', $params);
-
-        if ($this->useMockApi) {
-            Log::warning('Flight API is OFF. Streaming MOCK search response.');
-            $mockResponse = json_decode(Storage::get('ATResponse.json'), true);
-            $onResponse($mockResponse, [
-                'attempt' => 0,
-                'completed' => true,
-                'tui' => $mockResponse['TUI'] ?? null,
-            ]);
-
-            return $mockResponse;
-        }
-
-        $accessToken = $this->getAccessToken();
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token'],
-        ];
-
-        $searchUrl = "$this->flightBaseUrl/flights/ExpressSearch";
-        $fareType = $this->atFlightTransformer->determineFareType($params);
-        $this->cacheFareType($fareType);
-        $trips = $this->buildTripsArray($params, $fareType);
-
-        $payload = [
-            'FareType' => $fareType,
-            'ADT' => (int) ($params['adults'] ?? 1),
-            'CHD' => (int) ($params['children'] ?? 0),
-            'INF' => (int) ($params['infants'] ?? 0),
-            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
-            'Source' => 'LV',
-            'Mode' => 'AS',
-            'ClientID' => $this->clientId,
-            'MoreFltKey' => '',
-            'ONFltNo' => '',
-            'RTFltNo' => '',
-            'IsMultipleCarrier' => false,
-            'IsRefundable' => false,
-            'preferedAirlines' => $params['preferedAirlines'] ?? [],
-            'TUI' => $params['TUI'] ?? '',
-            'SecType' => $params['SecType'] ?? 'I',
-            'Trips' => $trips,
-            'Parameters' => [
-                'IsDirect' => $params['is_direct'] ?? false,
-                'IsNearbyAirport' => $params['is_nearby_airport'] ?? true,
-                'IsStudentFare' => $params['is_student_fare'] ?? false,
-                'IsSeniorCitizen' => $params['is_senior_citizen'] ?? null,
-                'Airlines' => $params['airlines'] ?? '',
-                'GroupType' => $params['group_type'] ?? '',
-                'IsGDSSearch' => $params['is_gds_search'] ?? true,
-                'IsLCCSearch' => $params['is_lcc_search'] ?? true,
-                'Refundable' => $params['refundable'] ?? '',
-                'IsExtendedSearch' => $params['is_extended_search'] ?? false,
-            ],
-        ];
-
-        if ($fareType === 'DM' && !empty($trips)) {
-            $combinedResponse = $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl);
-            if (is_array($combinedResponse)) {
-                $onResponse($combinedResponse, [
-                    'attempt' => 0,
-                    'completed' => true,
-                    'tui' => $combinedResponse['TUI'] ?? null,
-                ]);
-            }
-
-            return $combinedResponse;
-        }
-
-        try {
-            $request = new Request('POST', $searchUrl, $headers, json_encode($payload));
-            $response = $this->client->send($request);
-            $responseBody = json_decode($response->getBody(), true);
-            Log::info('Express search response: ', $responseBody);
-
-            if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === 'Success') {
-                $this->getWebSettings($responseBody['TUI']);
-
-                return $this->streamGetSearchFlightsRes($responseBody['TUI'], $onResponse);
-            }
-
-            Log::warning('Streaming AT flight search returned non-success message', [
-                'response' => $responseBody,
-            ]);
-
-            return null;
-        } catch (RequestException $e) {
-            Log::error('Error streaming AT flight search: ' . $e->getMessage());
-            if ($e->hasResponse()) {
-                Log::error('Response: ' . $e->getResponse()->getBody());
-            }
-
-            return null;
-        }
-    }
-
     /**
      * Store the resolved fare type in cache for later use in the AT flow.
      */
@@ -521,15 +421,12 @@ public function getSearchFlightsRes($tui)
         $response = $this->client->send($request);
         $body = json_decode($response->getBody(), true);
         $isComplete = strtolower($body['Completed'] ?? 'false');
-        $attempt = 0;
 
         // 🔁 Retry until completed — only the final completed response is returned
         if ($isComplete === 'true') {
             Log::info('GetExpSearch completed immediately.');
             return $body;
         }
-
-        $this->logIncompleteSearchResponse($tui, $body, $attempt);
 
         // Store initial response as base
         $mergedResponse = $body;
@@ -539,15 +436,10 @@ public function getSearchFlightsRes($tui)
             Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
 
             sleep(2);
-            $attempt++;
 
             $response = $this->client->send($request);
             $newBody = json_decode($response->getBody(), true);
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
-
-            if ($isComplete !== 'true') {
-                $this->logIncompleteSearchResponse($tui, $newBody, $attempt);
-            }
 
             // If new response is complete and has no trips, it might be a completion response
             if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
@@ -630,225 +522,6 @@ public function getSearchFlightsRes($tui)
 
         return null;
     }
-}
-
-private function streamGetSearchFlightsRes(string $tui, callable $onResponse): ?array
-{
-    $accessToken = $this->getAccessToken();
-    $headers = [
-        'Content-Type' => 'application/json',
-        'Authorization' => $accessToken['Token'],
-    ];
-
-    $searchResUrl = "$this->flightBaseUrl/flights/GetExpSearch";
-    $payload = [
-        'ClientID' => $this->clientId,
-        'TUI' => $tui,
-    ];
-
-    try {
-        $request = new Request('POST', $searchResUrl, $headers, json_encode($payload));
-        Log::info('Streaming GetExpSearch request payload: ', $payload);
-
-        $response = $this->client->send($request);
-        $body = json_decode($response->getBody(), true);
-        $isComplete = strtolower($body['Completed'] ?? 'false');
-        $attempt = 0;
-
-        if ($isComplete !== 'true') {
-            $this->logIncompleteSearchResponse($tui, $body, $attempt);
-        }
-
-        if ($onResponse($body, [
-            'attempt' => $attempt,
-            'completed' => $isComplete === 'true',
-            'tui' => $tui,
-        ]) === false) {
-            return $body;
-        }
-
-        if ($isComplete === 'true') {
-            Log::info('Streaming GetExpSearch completed immediately.');
-            return $body;
-        }
-
-        $mergedResponse = $body;
-
-        while ($isComplete !== 'true' && $attempt < self::SEARCH_STREAM_MAX_ATTEMPTS) {
-            Log::info('Streaming search not ready. Retrying GetExpSearch. Status: ' . $isComplete);
-            sleep(2);
-            $attempt++;
-
-            $response = $this->client->send($request);
-            $newBody = json_decode($response->getBody(), true);
-            $isComplete = strtolower($newBody['Completed'] ?? 'false');
-
-            if ($isComplete !== 'true') {
-                $this->logIncompleteSearchResponse($tui, $newBody, $attempt);
-            }
-
-            if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
-                Log::info('Streaming search completed with no additional trips.');
-                $mergedResponse['Completed'] = 'true';
-                break;
-            }
-
-            if (isset($newBody['Trips']) && $newBody['Trips'] !== null) {
-                $this->mergeSearchResponseTrips($mergedResponse, $newBody);
-            }
-
-            $mergedResponse['Completed'] = $isComplete;
-            if (isset($newBody['Code'])) {
-                $mergedResponse['Code'] = $newBody['Code'];
-            }
-            if (isset($newBody['Msg'])) {
-                $mergedResponse['Msg'] = $newBody['Msg'];
-            }
-
-            if ($onResponse($newBody, [
-                'attempt' => $attempt,
-                'completed' => $isComplete === 'true',
-                'tui' => $tui,
-            ]) === false) {
-                return $mergedResponse;
-            }
-        }
-
-        if ($isComplete !== 'true') {
-            Log::warning('Streaming GetExpSearch stopped before completion after max attempts.', [
-                'tui' => $tui,
-                'attempts' => $attempt,
-                'max_attempts' => self::SEARCH_STREAM_MAX_ATTEMPTS,
-            ]);
-        }
-
-        return $mergedResponse;
-    } catch (RequestException $e) {
-        Log::error('Error streaming search flights result: ' . $e->getMessage());
-        if ($e->hasResponse()) {
-            Log::error('Response: ' . $e->getResponse()->getBody());
-        }
-
-        return null;
-    }
-}
-
-private function mergeSearchResponseTrips(array &$mergedResponse, array $newBody): void
-{
-    if (!isset($mergedResponse['Trips']) || $mergedResponse['Trips'] === null) {
-        $mergedResponse['Trips'] = [];
-    }
-
-    $newTrips = $this->extractTrips($newBody['Trips'] ?? []);
-    $mergedTrips = $this->extractTrips($mergedResponse['Trips']);
-
-    foreach ($newTrips as $index => $newTripData) {
-        if (isset($mergedTrips[$index])) {
-            if (isset($newTripData['Journey']) && isset($mergedTrips[$index]['Journey'])) {
-                $existingJourney = is_array($mergedTrips[$index]['Journey']) ? $mergedTrips[$index]['Journey'] : [];
-                $newJourney = is_array($newTripData['Journey']) ? $newTripData['Journey'] : [];
-
-                if (!isset($existingJourney[0])) {
-                    $existingJourney = [$existingJourney];
-                }
-                if (!isset($newJourney[0])) {
-                    $newJourney = [$newJourney];
-                }
-
-                $mergedTrips[$index]['Journey'] = array_merge($existingJourney, $newJourney);
-            }
-
-            foreach ($newTripData as $key => $value) {
-                if ($key !== 'Journey' && !isset($mergedTrips[$index][$key])) {
-                    $mergedTrips[$index][$key] = $value;
-                }
-            }
-        } else {
-            $mergedTrips[$index] = $newTripData;
-        }
-    }
-
-    $mergedResponse['Trips'] = $mergedTrips;
-}
-
-private function logIncompleteSearchResponse(string $tui, ?array $responseBody, int $attempt): void
-{
-    $trips = $this->extractTrips($responseBody['Trips'] ?? []);
-
-    Log::warning('AT GetExpSearch returned incomplete response.', [
-        'tui' => $tui,
-        'attempt' => $attempt,
-        'completed' => $responseBody['Completed'] ?? null,
-        'code' => $responseBody['Code'] ?? null,
-        'msg' => $responseBody['Msg'] ?? null,
-        'notices' => $responseBody['Notices'] ?? null,
-        'trip_count' => count($trips),
-        'journey_count' => $this->countAtJourneys($trips),
-        'fare_count' => $this->countAtFares($trips),
-        'response_keys' => is_array($responseBody) ? array_keys($responseBody) : [],
-        'response_preview' => $this->previewLogPayload($responseBody),
-    ]);
-}
-
-private function countAtJourneys(array $trips): int
-{
-    $count = 0;
-
-    foreach ($trips as $trip) {
-        $journeys = $trip['Journey'] ?? [];
-
-        if (!is_array($journeys) || empty($journeys)) {
-            continue;
-        }
-
-        $count += isset($journeys[0]) ? count($journeys) : 1;
-    }
-
-    return $count;
-}
-
-private function countAtFares(array $trips): int
-{
-    $count = 0;
-
-    foreach ($trips as $trip) {
-        $journeys = $trip['Journey'] ?? [];
-
-        if (!is_array($journeys) || empty($journeys)) {
-            continue;
-        }
-
-        if (!isset($journeys[0])) {
-            $journeys = [$journeys];
-        }
-
-        foreach ($journeys as $journey) {
-            $fares = $journey['Fares'] ?? $journey['Fare'] ?? [];
-
-            if (!is_array($fares) || empty($fares)) {
-                continue;
-            }
-
-            $count += isset($fares[0]) ? count($fares) : 1;
-        }
-    }
-
-    return $count;
-}
-
-private function previewLogPayload(?array $payload): ?string
-{
-    if ($payload === null) {
-        return null;
-    }
-
-    $encoded = json_encode($payload);
-
-    if ($encoded === false) {
-        return null;
-    }
-
-    return strlen($encoded) > 8000 ? substr($encoded, 0, 8000) . '... [truncated]' : $encoded;
 }
 
 /**

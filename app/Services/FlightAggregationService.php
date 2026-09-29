@@ -261,16 +261,6 @@ class FlightAggregationService
         ];
     }
 
-    public function transformAtSearchResponse(array $atFlights, array $params): array
-    {
-        $atTransformer = new AtFlightTransformer();
-        $transformedFlights = $atTransformer->fromAT($atFlights, $params);
-        $transformedFlights = $this->segmentMarginService->applySegmentMargins($transformedFlights, $params);
-        $transformedFlights = $this->promotionService->applyPromotions($transformedFlights, $params);
-
-        return $this->commercialPricingService->applyToAtFlights($transformedFlights);
-    }
-
     private function processSooperfare($sooperFlights)
     {
         $processedSooperFlights = [];
