@@ -1,5 +1,7 @@
 <script setup>
-import { Mail, Phone, MapPin, Globe } from "lucide-vue-next";
+import { Mail, Phone } from "lucide-vue-next";
+
+const dubaiLicenseUrl = "https://app.invest.dubai.ae/DUL/973A1265-597D-4538-9826-DBE31481AED5";
 
 const offices = [
   {
@@ -86,7 +88,7 @@ const socials = [
       </div>
 
       <!-- Offices: compact multi-column cards with icons -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 py-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_155px] gap-3.5 py-6">
         <div
           v-for="office in offices"
           :key="office.code"
@@ -115,6 +117,25 @@ const socials = [
             </div>
           </div>
         </div>
+        <a
+          :href="dubaiLicenseUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open Dubai license verification"
+          class="md:col-span-2 xl:col-span-1 flex items-center justify-center gap-3 bg-slate-50/70 border border-gray-200/80 rounded-xl px-4 py-3.5 text-center hover:border-primary/40 hover:bg-white transition-all shadow-2xs group"
+        >
+          <div class="min-w-0">
+            <p class="text-xs font-bold text-gray-900 group-hover:text-primary transition-colors">Dubai License QR</p>
+            <p class="mt-1 text-[10px] leading-snug text-gray-500">Scan to verify</p>
+          </div>
+          <div class="shrink-0 rounded-lg bg-white p-1.5 border border-gray-100 shadow-sm">
+            <img
+              :src="'/assets/dubai-license-qr.svg'"
+              alt="Dubai license verification QR code"
+              class="h-20 w-20 object-contain"
+            />
+          </div>
+        </a>
       </div>
 
       <!-- Bottom bar: Copyright & Accreditation -->
