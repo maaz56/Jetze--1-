@@ -4,7 +4,6 @@ import { resolveApiBaseUrl } from "./apiBaseUrl";
 
 const apiService = axios.create({
     baseURL: resolveApiBaseUrl(),
-    timeout: 300000,
     headers: {
         Accept: "application/json",
        
