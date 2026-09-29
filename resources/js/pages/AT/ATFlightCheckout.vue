@@ -200,7 +200,7 @@ const isOpenCountryDropdown = ref(false);
 const mainContact = ref({
     email: "",
     phone: "",
-    country: "",
+    country: localStorage.getItem("country") || "",
 });
 
 const agencyContact = computed(() => ({
@@ -209,6 +209,20 @@ const agencyContact = computed(() => ({
 }));
 
 const travellers = ref([]);
+
+const resolveMainContactCountry = () => String(
+    mainContact.value.country ||
+    localStorage.getItem("country") ||
+    travellers.value[0]?.nationality ||
+    travellers.value[0]?.issueCountry ||
+    ""
+).trim();
+
+const buildMainContactPayload = () => ({
+    ...mainContact.value,
+    country: resolveMainContactCountry(),
+});
+
 const isSubmitting = ref(false);
 const isPaymentMethodsVisible = ref(false);
 const scanning = ref(false);
@@ -414,7 +428,7 @@ const validateForm = () => {
         isValid = false;
     }
 
-    if (!mainContact.value.country) {
+    if (!resolveMainContactCountry()) {
         errors.mainContact.country = "Country is required";
         isValid = false;
     }
@@ -562,7 +576,7 @@ async function saveBooking(type) {
         globalError.value = "";
 
         await store.dispatch("flight/" + SAVE_BOOKING, {
-            main_contact: mainContact.value,
+            main_contact: buildMainContactPayload(),
             travellers: travellers.value,
             agency_contact: agencyContact.value,
             agent_id: user.value.id,
@@ -899,7 +913,7 @@ function parsePnrResponse() {
 }
 function saveBookingData() {
     store.dispatch("flight/" + SAVE_BOOKING_DATA, {
-        main_contact: mainContact.value,
+        main_contact: buildMainContactPayload(),
         flight_data: flight.value,
         travellers: travellers.value,
         agency_contact: agencyContact.value,

@@ -239,8 +239,36 @@ class BookingController extends Controller
         }
     }
 
+    private function ensureMainContactCountry(Request $request): void
+    {
+        $mainContact = $request->input('main_contact', []);
+
+        if (!is_array($mainContact) || !empty($mainContact['country'])) {
+            return;
+        }
+
+        $firstTraveller = $request->input('travellers.0', []);
+        $fallbackCountry = is_array($firstTraveller)
+            ? ($firstTraveller['nationality'] ?? $firstTraveller['issueCountry'] ?? null)
+            : null;
+
+        $mainContact['country'] = trim((string) ($fallbackCountry ?: 'PK'));
+
+        $request->merge([
+            'main_contact' => $mainContact,
+        ]);
+
+        Log::warning('Booking main_contact.country was missing; applied fallback before validation.', [
+            'fallback_country' => $mainContact['country'],
+            'flight_provider' => $request->input('flight_provider'),
+            'agent_id' => $request->input('agent_id'),
+        ]);
+    }
+
     public function store(Request $request)
     {
+        $this->ensureMainContactCountry($request);
+
         $priceQuote = $this->loadBookingQuote($request);
 
         $pnrResponse = null;

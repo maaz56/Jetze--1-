@@ -1,5 +1,6 @@
 <?php
 namespace App\Services;
+use App\Models\Country;
 use App\Transformers\AtFlightTransformer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
@@ -945,7 +946,8 @@ private function extractTrips($tripsData): array
         $mobile = preg_replace('/\D+/', '', (string) (
             $contact['phoneNationalNumber'] ?? $contact['phone'] ?? ''
         ));
-        $mobileCountryCode = ltrim((string) ($contact['mobileCountryCode'] ?? '92'), '+');
+        $countryCode = $this->resolveContactCountryCode($contact);
+        $mobileCountryCode = $this->resolveMobileCountryCode($contact, $countryCode);
 
         $contactInfo = [
             'Title' => $firstTraveller['title'] ?? 'Mr',
@@ -955,8 +957,8 @@ private function extractTrips($tripsData): array
             'Phone' => '',
             'Email' => $contact['email'] ?? '',
             'Address' => 'N/A',
-            'CountryCode' => strtoupper((string) ($contact['phoneCountryCode'] ?? 'PK')),
-            'MobileCountryCode' => '+' . $mobileCountryCode,
+            'CountryCode' => $countryCode,
+            'MobileCountryCode' => $mobileCountryCode,
             'State' => $firstTraveller['state'] ?? '',
             'City' => $firstTraveller['city'] ?? '',
             'PIN' => substr($mobile, -6),
@@ -1931,6 +1933,95 @@ private function extractTrips($tripsData): array
         $normalized = $normalized === '' || $normalized === '-0' ? '0' : $normalized;
 
         return str_contains($normalized, '.') ? (float) $normalized : (int) $normalized;
+    }
+
+    private function resolveContactCountryCode(array $contact): string
+    {
+        $explicitCountryCode = $this->normalizeIso2CountryCode($contact['phoneCountryCode'] ?? null);
+
+        if ($explicitCountryCode !== null) {
+            return $explicitCountryCode;
+        }
+
+        $resolvedCountryCode = $this->resolveCountryIso2($contact['country'] ?? null);
+
+        if ($resolvedCountryCode !== null) {
+            return $resolvedCountryCode;
+        }
+
+        Log::warning('AT booking contact country missing or unresolved; defaulting CountryCode to PK.', [
+            'main_contact_country' => $contact['country'] ?? null,
+            'main_contact_phone_country_code' => $contact['phoneCountryCode'] ?? null,
+        ]);
+
+        return 'PK';
+    }
+
+    private function resolveMobileCountryCode(array $contact, string $countryCode): string
+    {
+        $explicitMobileCode = preg_replace('/\D+/', '', (string) ($contact['mobileCountryCode'] ?? ''));
+
+        if (!empty($explicitMobileCode)) {
+            return '+' . $explicitMobileCode;
+        }
+
+        $countryDialCodes = [
+            'AE' => '971',
+            'PK' => '92',
+        ];
+
+        return '+' . ($countryDialCodes[$countryCode] ?? $countryDialCodes['PK']);
+    }
+
+    private function resolveCountryIso2($country): ?string
+    {
+        $country = trim((string) $country);
+
+        if ($country === '') {
+            return null;
+        }
+
+        $normalizedCountryCode = $this->normalizeIso2CountryCode($country);
+
+        if ($normalizedCountryCode !== null) {
+            return $normalizedCountryCode;
+        }
+
+        $aliases = [
+            'uae' => 'AE',
+            'u.a.e' => 'AE',
+            'u.a.e.' => 'AE',
+            'dubai' => 'AE',
+        ];
+
+        $countryKey = strtolower($country);
+
+        if (isset($aliases[$countryKey])) {
+            return $aliases[$countryKey];
+        }
+
+        try {
+            $countryRow = Country::query()
+                ->whereRaw('LOWER(name) = ?', [$countryKey])
+                ->orWhereRaw('LOWER(code3) = ?', [$countryKey])
+                ->first(['code']);
+
+            return $this->normalizeIso2CountryCode($countryRow?->code);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to resolve AT booking contact country from countries table.', [
+                'country' => $country,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
+    }
+
+    private function normalizeIso2CountryCode($countryCode): ?string
+    {
+        $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $countryCode));
+
+        return strlen($countryCode) === 2 ? $countryCode : null;
     }
 
     private function bookDmMultiCityTrips($params, ?array $cachedValidationResponse, array $headers, string $bookingUrl, $clientId, array $contactInfo, array $travellers): ?array
