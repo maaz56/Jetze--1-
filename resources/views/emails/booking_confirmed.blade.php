@@ -43,11 +43,11 @@
 </head>
 
 <body
-    style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F0F2F5; color: #1A2C3E; line-height: 1.5;">
+    style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F6F9FC; color: #0F172A; line-height: 1.5;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
         <tbody>
             <tr>
-                <td style="padding: 40px 20px; background-color: #F0F2F5;">
+                <td style="padding: 40px 20px; background-color: #F6F9FC;">
                     <table align="center" cellpadding="0" cellspacing="0" width="620" class="responsive-table"
                         style="border-collapse: collapse; background-color: #FFFFFF; border-radius: 28px; overflow: hidden; box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.12); margin: 0 auto;">
 
@@ -55,7 +55,7 @@
                         <tr>
                             <td style="padding: 0;">
                                 <div
-                                    style="background: #0F4F75; height: 5px;">
+                                    style="background: #2D85D2; height: 5px;">
                                 </div>
                                 <div style="padding: 32px 32px 20px 32px; text-align: center; background: #FFFFFF;">
                                     <img src="{{ asset('assets/logo.png') }}" alt="Jetze.pk" width="165"
@@ -170,16 +170,16 @@
                                     }
                                 @endphp
                                 <div
-                                    style="background: #EEF4F8; display: inline-block; padding: 6px 16px; border-radius: 40px; margin-bottom: 18px;">
-                                    <span style="font-size: 12px; font-weight: 600; color: #A43734; letter-spacing: 0.5px;">✓
+                                    style="background: #EAF4FE; display: inline-block; padding: 6px 16px; border-radius: 40px; margin-bottom: 18px;">
+                                    <span style="font-size: 12px; font-weight: 600; color: #2D85D2; letter-spacing: 0.5px;">✓
                                         CONFIRMATION • {{ strtoupper($bookingRef) }}</span>
                                 </div>
                                 <h1
-                                    style="margin: 0 0 10px 0; font-size: 34px; line-height: 1.2; color: #0F4F75; font-weight: 700; letter-spacing: -0.5px;">
+                                    style="margin: 0 0 10px 0; font-size: 34px; line-height: 1.2; color: #2D85D2; font-weight: 700; letter-spacing: -0.5px;">
                                     Your Booking is Confirmed! ✈️</h1>
-                                <p style="margin: 0; font-size: 16px; color: #5A6E7F;">We are thrilled to confirm your flight booking with Jetze.pk! Your reservation is confirmed, and you're all set for an amazing journey!</p>
+                                <p style="margin: 0; font-size: 16px; color: #64748B;">We are thrilled to confirm your flight booking with Jetze.pk! Your reservation is confirmed, and you're all set for an amazing journey!</p>
                                 @if($totalFlights > 1)
-                                    <p style="margin: 12px 0 0 0; font-size: 14px; color: #A43734; font-weight: 500;">🔄
+                                    <p style="margin: 12px 0 0 0; font-size: 14px; color: #2D85D2; font-weight: 500;">🔄
                                         {{ $totalFlights }}-Flight Itinerary • {{ ucfirst($tripNature) }} Travel</p>
                                 @endif
                             </td>
@@ -194,19 +194,19 @@
                                     <!-- Greeting -->
                                     <tr>
                                         <td style="padding-bottom: 24px;">
-                                            <p style="margin: 0 0 6px 0; font-size: 18px; font-weight: 600; color: #1E2F3F;">
-                                                Dear <span style="color: #A43734;">{{ $resolvedUserName }}</span>,</p>
-                                            <p style="margin: 0; font-size: 15px; color: #4A627A;">Thank you for choosing
+                                            <p style="margin: 0 0 6px 0; font-size: 18px; font-weight: 600; color: #1E293B;">
+                                                Dear <span style="color: #2D85D2;">{{ $resolvedUserName }}</span>,</p>
+                                            <p style="margin: 0; font-size: 15px; color: #475569;">Thank you for choosing
                                                 Jetze.pk! Your flight booking is confirmed. Please review your itinerary
                                                 below:</p>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style="padding-bottom: 24px;">
-                                            <div style="background: #F8FBFF; border: 1px solid #E6EEF6; border-radius: 16px; padding: 16px 18px;">
-                                                <p style="margin: 0 0 6px 0; font-size: 13px; color: #6C869C;"><strong style="color: #1E2F3F;">User Name:</strong> {{ $resolvedUserName }}</p>
-                                                <p style="margin: 0 0 6px 0; font-size: 13px; color: #6C869C;"><strong style="color: #1E2F3F;">Booking Held Until:</strong> {{ $holdUntil }}</p>
-                                                <p style="margin: 0; font-size: 13px; color: #6C869C;"><strong style="color: #1E2F3F;">Total Payment Due:</strong> {{ $currency }} {{ $totalPaymentDue }}</p>
+                                            <div style="background: #F8FBFF; border: 1px solid #DCEAF8; border-radius: 16px; padding: 16px 18px;">
+                                                <p style="margin: 0 0 6px 0; font-size: 13px; color: #64748B;"><strong style="color: #1E293B;">User Name:</strong> {{ $resolvedUserName }}</p>
+                                                <p style="margin: 0 0 6px 0; font-size: 13px; color: #64748B;"><strong style="color: #1E293B;">Booking Held Until:</strong> {{ $holdUntil }}</p>
+                                                <p style="margin: 0; font-size: 13px; color: #64748B;"><strong style="color: #1E293B;">Total Payment Due:</strong> {{ $currency }} {{ $totalPaymentDue }}</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -257,32 +257,32 @@
                                         <tr>
                                             <td style="padding-bottom: 28px;">
                                                 <div
-                                                    style="background: #FFFFFF; border-radius: 24px; border: 1px solid #E8EDF2; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);">
+                                                    style="background: #FFFFFF; border-radius: 24px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);">
 
                                                     <!-- Flight Header with Label -->
                                                     <div
-                                                        style="padding: 14px 24px; background: #F8FAFC; border-bottom: 1px solid #EFF3F8;">
+                                                        style="padding: 14px 24px; background: #F8FAFC; border-bottom: 1px solid #EAF0F6;">
                                                         <table width="100%" cellpadding="0" cellspacing="0"
                                                             style="border-collapse: collapse;">
                                                             <tr>
                                                                 <td style="vertical-align: middle;">
                                                                     @if($totalFlights > 1)
                                                                         <span
-                                                                            style="background: {{ $isReturnFlight ? '#F8EDEA' : '#EEF4F8' }}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; color: {{ $isReturnFlight ? '#A43734' : '#0F4F75' }}; letter-spacing: 0.5px;">{{ $flightLabel }}</span>
+                                                                            style="background: {{ $isReturnFlight ? '#EAF4FE' : '#EAF4FE' }}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; color: {{ $isReturnFlight ? '#2D85D2' : '#2D85D2' }}; letter-spacing: 0.5px;">{{ $flightLabel }}</span>
                                                                     @endif
                                                                     <span
-                                                                        style="font-weight: 700; font-size: 16px; color: #1E2F3F; margin-left: {{ $totalFlights > 1 ? '12px' : '0' }};">{{ $operatingCarrier['name'] ?? 'Jetze.pk Airlines' }}</span>
+                                                                        style="font-weight: 700; font-size: 16px; color: #1E293B; margin-left: {{ $totalFlights > 1 ? '12px' : '0' }};">{{ $operatingCarrier['name'] ?? 'Jetze.pk Airlines' }}</span>
                                                                     <span
-                                                                        style="font-size: 14px; color: #6F8FAA; margin-left: 8px;">Flight
+                                                                        style="font-size: 14px; color: #64748B; margin-left: 8px;">Flight
                                                                         {{ $flightNumber }}</span>
                                                                 </td>
                                                                 <td style="text-align: right; vertical-align: middle;">
                                                                     @if($aircraft)
                                                                         <span
-                                                                            style="font-size: 11px; color: #7C8F9F; background: #F0F3F8; padding: 4px 10px; border-radius: 20px;">{{ $aircraft }}</span>
+                                                                            style="font-size: 11px; color: #64748B; background: #F1F5F9; padding: 4px 10px; border-radius: 20px;">{{ $aircraft }}</span>
                                                                     @endif
                                                                     <span
-                                                                        style="font-size: 12px; color: #A43734; margin-left: 10px; font-weight: 500;">{{ $cabinClass }}</span>
+                                                                        style="font-size: 12px; color: #2D85D2; margin-left: 10px; font-weight: 500;">{{ $cabinClass }}</span>
                                                                 </td>
                                                             </tr>
                                                         </table>
@@ -296,35 +296,35 @@
                                                                 <td style="text-align: center; width: 42%;">
                                                                     <div>
                                                                         <span
-                                                                            style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #A43734;">DEPARTURE</span>
+                                                                            style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #2D85D2;">DEPARTURE</span>
                                                                         <p
-                                                                            style="margin: 12px 0 4px 0; font-size: 32px; font-weight: 800; color: #0F4F75; letter-spacing: -0.5px;">
+                                                                            style="margin: 12px 0 4px 0; font-size: 32px; font-weight: 800; color: #2D85D2; letter-spacing: -0.5px;">
                                                                             {{ $fromAirport['iata'] ?? '—' }}</p>
                                                                         <p
-                                                                            style="margin: 0; font-size: 12px; color: #6C869C; max-width: 160px; margin: 0 auto;">
+                                                                            style="margin: 0; font-size: 12px; color: #64748B; max-width: 160px; margin: 0 auto;">
                                                                             {{ $fromAirport['name'] ?? 'Airport' }}</p>
                                                                         <p
-                                                                            style="margin: 12px 0 0 0; font-size: 15px; font-weight: 600; color: #2C4A6E;">
+                                                                            style="margin: 12px 0 0 0; font-size: 15px; font-weight: 600; color: #334155;">
                                                                             {{ $departureTimeFormatted }}</p>
                                                                         <p
-                                                                            style="margin: 2px 0 0 0; font-size: 11px; color: #8FA0B0;">
+                                                                            style="margin: 2px 0 0 0; font-size: 11px; color: #94A3B8;">
                                                                             {{ $departureDateFormatted }}</p>
                                                                     </div>
                                                                 </td>
                                                                 <td style="text-align: center; width: 16%;">
                                                                     <div>
-                                                                        <div style="font-size: 32px; color: #A43734;">→</div>
+                                                                        <div style="font-size: 32px; color: #2D85D2;">→</div>
                                                                         <div
-                                                                            style="font-size: 12px; font-weight: 500; color: #5F7D9A; margin-top: 8px;">
+                                                                            style="font-size: 12px; font-weight: 500; color: #64748B; margin-top: 8px;">
                                                                             {{ $durationText ?: 'Direct' }}</div>
                                                                         @if($hasLayovers)
                                                                             <div
-                                                                                style="font-size: 10px; color: #A43734; background: #F8EDEA; display: inline-block; padding: 3px 10px; border-radius: 20px; margin-top: 8px;">
+                                                                                style="font-size: 10px; color: #2D85D2; background: #EAF4FE; display: inline-block; padding: 3px 10px; border-radius: 20px; margin-top: 8px;">
                                                                                 {{ $layoversCount }} stop(s)
                                                                             </div>
                                                                         @else
                                                                             <div
-                                                                                style="font-size: 10px; color: #2C8F6E; background: #E3F5EF; display: inline-block; padding: 3px 10px; border-radius: 20px; margin-top: 8px;">
+                                                                                style="font-size: 10px; color: #16A34A; background: #ECFDF5; display: inline-block; padding: 3px 10px; border-radius: 20px; margin-top: 8px;">
                                                                                 Non-stop
                                                                             </div>
                                                                         @endif
@@ -333,18 +333,18 @@
                                                                 <td style="text-align: center; width: 42%;">
                                                                     <div>
                                                                         <span
-                                                                            style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #A43734;">ARRIVAL</span>
+                                                                            style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #2D85D2;">ARRIVAL</span>
                                                                         <p
-                                                                            style="margin: 12px 0 4px 0; font-size: 32px; font-weight: 800; color: #0F4F75; letter-spacing: -0.5px;">
+                                                                            style="margin: 12px 0 4px 0; font-size: 32px; font-weight: 800; color: #2D85D2; letter-spacing: -0.5px;">
                                                                             {{ $toAirport['iata'] ?? '—' }}</p>
                                                                         <p
-                                                                            style="margin: 0; font-size: 12px; color: #6C869C; max-width: 160px; margin: 0 auto;">
+                                                                            style="margin: 0; font-size: 12px; color: #64748B; max-width: 160px; margin: 0 auto;">
                                                                             {{ $toAirport['name'] ?? 'Airport' }}</p>
                                                                         <p
-                                                                            style="margin: 12px 0 0 0; font-size: 15px; font-weight: 600; color: #2C4A6E;">
+                                                                            style="margin: 12px 0 0 0; font-size: 15px; font-weight: 600; color: #334155;">
                                                                             {{ $arrivalTimeFormatted }}</p>
                                                                         <p
-                                                                            style="margin: 2px 0 0 0; font-size: 11px; color: #8FA0B0;">
+                                                                            style="margin: 2px 0 0 0; font-size: 11px; color: #94A3B8;">
                                                                             {{ $arrivalDateFormatted }}</p>
                                                                     </div>
                                                                 </td>
@@ -359,8 +359,8 @@
                                         @if($totalFlights > 1 && $flightIndex < $totalFlights - 1)
                                         <tr>
                                             <td style="text-align: center; padding: 0 0 16px 0;">
-                                                <div style="display: inline-block; background: #F5F7FA; padding: 8px 20px; border-radius: 40px;">
-                                                    <span style="font-size: 12px; color: #6F8FAA;">🔄 Connection • Layover at {{ $flights[$flightIndex]['to']['iata'] ?? 'transit' }}</span>
+                                                <div style="display: inline-block; background: #F8FAFC; padding: 8px 20px; border-radius: 40px;">
+                                                    <span style="font-size: 12px; color: #64748B;">🔄 Connection • Layover at {{ $flights[$flightIndex]['to']['iata'] ?? 'transit' }}</span>
                                                 </div>
                                             </td>
                                         </tr>
@@ -371,10 +371,10 @@
                                         <tr>
                                             <td style="padding-bottom: 28px;">
                                                 <div
-                                                    style="background: #F8FAFC; border-radius: 20px; padding: 40px 24px; text-align: center; border: 1px dashed #A43734;">
-                                                    <p style="margin: 0; font-size: 16px; color: #0F4F75;">Flight details will be
+                                                    style="background: #F8FAFC; border-radius: 20px; padding: 40px 24px; text-align: center; border: 1px dashed #2D85D2;">
+                                                    <p style="margin: 0; font-size: 16px; color: #2D85D2;">Flight details will be
                                                         updated shortly</p>
-                                                    <p style="margin: 8px 0 0 0; font-size: 13px; color: #7C8F9F;">Please check your
+                                                    <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748B;">Please check your
                                                         booking dashboard for real-time updates.</p>
                                                 </div>
                                             </td>
@@ -384,15 +384,15 @@
                                     <!-- Passenger Summary -->
                                     <tr>
                                         <td style="padding: 8px 0 16px 0;">
-                                            <div style="background: #F8FBFE; border-radius: 16px; padding: 14px 20px; border: 1px solid #E8EDF2;">
+                                            <div style="background: #F8FBFF; border-radius: 16px; padding: 14px 20px; border: 1px solid #E2E8F0;">
                                                 <table width="100%" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td style="vertical-align: middle;">
                                                             <span style="font-size: 14px;">👥</span>
-                                                            <span style="font-size: 14px; font-weight: 500; margin-left: 8px; color: #2C4A6E;">{{ $booking->passenger_count ?? 1 }} Adult(s)</span>
+                                                            <span style="font-size: 14px; font-weight: 500; margin-left: 8px; color: #334155;">{{ $booking->passenger_count ?? 1 }} Adult(s)</span>
                                                         </td>
                                                         <td style="text-align: right;">
-                                                            <span style="font-size: 13px; color: #A43734;">✓ Booking Reference: {{ $bookingRef }}</span>
+                                                            <span style="font-size: 13px; color: #2D85D2;">✓ Booking Reference: {{ $bookingRef }}</span>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -402,13 +402,13 @@
                                     @if(!empty($passengerList))
                                         <tr>
                                             <td style="padding: 4px 0 18px 0;">
-                                                <div style="background: #FFFFFF; border-radius: 16px; padding: 16px 20px; border: 1px solid #E8EDF2;">
-                                                    <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #1E2F3F;">
+                                                <div style="background: #FFFFFF; border-radius: 16px; padding: 16px 20px; border: 1px solid #E2E8F0;">
+                                                    <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #1E293B;">
                                                         Passenger List
                                                     </p>
                                                     @foreach($passengerList as $pax)
-                                                        <div style="padding: 10px 0; border-top: {{ $loop->first ? '0' : '1px solid #EEF2F7' }};">
-                                                            <p style="margin: 0; font-size: 13px; color: #2C4A6E; font-weight: 600;">
+                                                        <div style="padding: 10px 0; border-top: {{ $loop->first ? '0' : '1px solid #E2E8F0' }};">
+                                                            <p style="margin: 0; font-size: 13px; color: #334155; font-weight: 600;">
                                                                 {{ $loop->iteration }}. {{ $pax['name'] }} ({{ $pax['type'] }})
                                                             </p>
                                                             
@@ -422,7 +422,7 @@
                                     <!-- CTA and Support -->
                                     <tr>
                                         <td style="padding-top: 8px;">
-                                            <p style="margin: 0 0 24px 0; font-size: 14px; color: #4F6F8F; line-height: 1.5;">
+                                            <p style="margin: 0 0 24px 0; font-size: 14px; color: #64748B; line-height: 1.5;">
                                                 Access your e-ticket and booking details anytime from your booking dashboard.</p>
 
                                             <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
@@ -430,26 +430,26 @@
                                                 <tr class="stack-buttons">
                                                     <td style="text-align: center; padding: 6px 8px;">
                                                         <a href="{{ $eTicketLink }}"
-                                                            style="display: inline-block; padding: 14px 28px; background: #A43734; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; min-width: 190px;">Download Booking PDF</a>
+                                                    style="display: inline-block; padding: 14px 28px; background: #2D85D2; color: #FFFFFF; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; min-width: 190px;">Download Booking PDF</a>
                                                     </td>
                                                     <td style="text-align: center; padding: 6px 8px;">
                                                         <a href="#"
-                                                            style="display: inline-block; padding: 13px 32px; background: transparent; color: #0F4F75; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; border: 1px solid #A43734;">Contact Support</a>
+                                                            style="display: inline-block; padding: 13px 32px; background: transparent; color: #2D85D2; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 15px; border: 1px solid #2D85D2;">Contact Support</a>
                                                     </td>
                                                 </tr>
                                             </table>
 
                                             <div
-                                                style="margin-top: 32px; padding: 16px 20px; background: #F8FAFC; border-radius: 16px; border-left: 4px solid #A43734;">
-                                                <p style="margin: 0; font-size: 13px; color: #7C5E2E;">✈️ <strong>Travel
+                                                style="margin-top: 32px; padding: 16px 20px; background: #F8FAFC; border-radius: 16px; border-left: 4px solid #2D85D2;">
+                                                <p style="margin: 0; font-size: 13px; color: #92400E;">✈️ <strong>Travel
                                                         Tip:</strong> Please arrive at the airport at least 2-3 hours before
                                                     departure. Carry a valid government ID and your booking reference: <strong
-                                                        style="color: #0F4F75;">{{ $bookingRef }}</strong></p>
+                                                        style="color: #2D85D2;">{{ $bookingRef }}</strong></p>
                                             </div>
 
-                                            <p style="margin: 28px 0 0 0; font-size: 15px; font-weight: 500; color: #0F4F75;">
+                                            <p style="margin: 28px 0 0 0; font-size: 15px; font-weight: 500; color: #2D85D2;">
                                                 Thank you for choosing Jetze.pk. We wish you a pleasant journey!<br>
-                                                <span style="font-size: 14px; font-weight: 400; color: #6F8FAA;">The Jetze.pk Team</span>
+                                                <span style="font-size: 14px; font-weight: 400; color: #64748B;">The Jetze.pk Team</span>
                                             </p>
                                         </td>
                                     </tr>
@@ -461,7 +461,7 @@
                         <!-- Footer - Elegant & Professional -->
                         <tr>
                             <td
-                                style="background-color: #F9FBFD; border-top: 1px solid #E9EFF4; padding: 28px 32px 32px 32px; text-align: center;">
+                                style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 28px 32px 32px 32px; text-align: center;">
 
                                 <!-- Social Links -->
                                 <table role="presentation" cellpadding="0" cellspacing="0"
@@ -470,7 +470,7 @@
                                 <td style="padding: 0 8px;">
                                     <a href="#">
                                         <table role="presentation" width="38" height="38"
-                                            style="background-color: #0F4F75; border-radius: 50%;">
+                                            style="background-color: #2D85D2; border-radius: 50%;">
                                             <tr>
                                                 <td align="center" valign="middle">
                                                     <img src="https://img.icons8.com/ios-filled/18/ffffff/facebook-new.png"
@@ -484,7 +484,7 @@
                                 <td style="padding: 0 8px;">
                                     <a href="#">
                                         <table role="presentation" width="38" height="38"
-                                            style="background-color: #0F4F75; border-radius: 50%;">
+                                            style="background-color: #2D85D2; border-radius: 50%;">
                                             <tr>
                                                 <td align="center" valign="middle">
                                                     <img src="https://img.icons8.com/ios-filled/18/ffffff/instagram-new.png"
@@ -498,7 +498,7 @@
                                 <td style="padding: 0 8px;">
                                     <a href="#">
                                         <table role="presentation" width="38" height="38"
-                                            style="background-color: #A43734; border-radius: 50%;">
+                                            style="background-color: #2D85D2; border-radius: 50%;">
                                             <tr>
                                                 <td align="center" valign="middle">
                                                     <img src="https://img.icons8.com/ios-filled/18/ffffff/twitter.png"
@@ -512,7 +512,7 @@
                                 <td style="padding: 0 8px;">
                                     <a href="#">
                                         <table role="presentation" width="38" height="38"
-                                            style="background-color: #0F4F75; border-radius: 50%;">
+                                            style="background-color: #2D85D2; border-radius: 50%;">
                                             <tr>
                                                 <td align="center" valign="middle">
                                                     <img src="https://img.icons8.com/ios-filled/18/ffffff/linkedin.png"
@@ -525,26 +525,26 @@
                             </tr>
                         </table>
 
-                                <p style="margin: 0 0 12px 0; font-size: 13px; color: #6E8AA3;">📞 24/7 Support: +92 00000000
+                                <p style="margin: 0 0 12px 0; font-size: 13px; color: #64748B;">📞 24/7 Support: +92 00000000
                                     &nbsp;|&nbsp; ✉️ <a href="mailto:support@Jetze.pk"
-                                        style="color: #0F4F75; text-decoration: none;">support@Jetze.pk</a></p>
+                                        style="color: #2D85D2; text-decoration: none;">support@Jetze.pk</a></p>
 
                                 <div style="margin: 16px 0 12px 0;">
                                     <a href="#"
-                                        style="color: #8EA3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Privacy
+                                        style="color: #94A3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Privacy
                                         Policy</a>
-                                    <span style="color: #DAE2EA;">|</span>
+                                    <span style="color: #E2E8F0;">|</span>
                                     <a href="#"
-                                        style="color: #8EA3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Terms of
+                                        style="color: #94A3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Terms of
                                         Service</a>
-                                    <span style="color: #DAE2EA;">|</span>
+                                    <span style="color: #E2E8F0;">|</span>
                                     <a href="#"
-                                        style="color: #8EA3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Unsubscribe</a>
+                                        style="color: #94A3B8; text-decoration: none; font-size: 12px; margin: 0 10px;">Unsubscribe</a>
                                 </div>
 
-                                <p style="margin: 20px 0 0 0; font-size: 11px; color: #9AB0C2;">© {{ date('Y') }} Jetze.pk.
+                                <p style="margin: 20px 0 0 0; font-size: 11px; color: #94A3B8;">© {{ date('Y') }} Jetze.pk.
                                     All rights reserved. Your trusted travel partner.</p>
-                                <p style="margin: 12px 0 0 0; font-size: 10px; color: #B2C4D4;">Reference: {{ $bookingRef }} •
+                                <p style="margin: 12px 0 0 0; font-size: 10px; color: #CBD5E1;">Reference: {{ $bookingRef }} •
                                     This is a booking confirmation email. Please keep for your records.</p>
                             </td>
                         </tr>

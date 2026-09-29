@@ -2015,7 +2015,7 @@ watch(isLoggedIn, (newVal) => {
 
 <template>
     <!-- Container -->
-    <div class="min-h-screen bg-slate-100">
+    <div class="flight-results-page min-h-screen bg-slate-100">
         <!-- Main Content -->
         <!-- BACKDROP + MODAL -->
         <LoginMini
@@ -2180,7 +2180,7 @@ watch(isLoggedIn, (newVal) => {
                     v-if="hasFlightResults"
                     class="flight-results-sidebar lg:z-20 lg:w-80 lg:self-start"
                 >
-                    <div @wheel.passive="syncFilterScrollWithPage" class="filter-panel lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:overscroll-contain">
+                    <div @wheel.passive="syncFilterScrollWithPage" class="filter-panel lg:max-h-[calc(100dvh-11.25rem)] lg:overflow-y-auto lg:overscroll-contain">
                     <div class="filter-panel-heading">
                         <div class="flex items-center gap-2">
                             <SlidersHorizontal class="h-5 w-5 text-primary" />
@@ -3174,7 +3174,7 @@ watch(isLoggedIn, (newVal) => {
                     <!-- No Results -->
                     <div
                         v-if="showNoFlightsState || showNoFilteredFlightsState"
-                        class="bg-white border border-gray-200 rounded-xl p-8 text-center"
+                        class="flight-results-empty-state bg-white border border-gray-200 rounded-xl p-8 text-center"
                     >
                         <img
                             src="/public/assets/no-data.webp"
@@ -5292,6 +5292,11 @@ watch(isLoggedIn, (newVal) => {
 </template>
 
 <style scoped>
+:global(html:has(.flight-results-page)),
+:global(body:has(.flight-results-page)) {
+    background-color: #f1f5f9;
+}
+
 .flight-results-search {
     background: hsl(var(--primary));
 }
@@ -5574,12 +5579,12 @@ watch(isLoggedIn, (newVal) => {
 @media (min-width: 1024px) {
     .flight-results-sidebar {
         position: sticky;
-        top: 9rem;
+        top: 10.5rem;
         align-self: start;
     }
 
     .filter-panel {
-        max-height: calc(100vh - 10rem);
+        max-height: calc(100dvh - 11.25rem);
         overflow-y: auto;
         overscroll-behavior: contain;
     }
