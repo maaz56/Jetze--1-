@@ -223,7 +223,7 @@ class AtApiService
             'INF' => (int) ($params['infants'] ?? 0),
             'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
             'Source' => 'LV', // Changed from 'LV' to 'CF' for consistency
-            'Mode' => 'SY',
+            'Mode' => 'AS',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
             "ONFltNo" => "",
@@ -260,7 +260,7 @@ class AtApiService
                 json_encode($payload)
             );
 
-
+            Log::info("express search REquest:".json_encode($payload));
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
             Log::info('Express search response: ', $responseBody);
