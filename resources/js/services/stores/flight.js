@@ -68,7 +68,8 @@ const mergeFlightCollections = (existingFlights = [], incomingFlights = []) => {
 
 const streamUrlForParams = (params) => {
     const apiBase = new URL(resolveApiBaseUrl(), window.location.origin);
-    const url = new URL("flight-search/stream", apiBase);
+    const basePath = apiBase.pathname.endsWith("/") ? apiBase.pathname : `${apiBase.pathname}/`;
+    const url = new URL(`${basePath}flight-search/stream`, apiBase.origin);
 
     Object.entries(params || {}).forEach(([key, value]) => {
         if (value === undefined || value === null || value === "") return;

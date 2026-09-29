@@ -552,6 +552,12 @@ class FlightController extends Controller
 
     public function stream(Request $request)
     {
+        Log::info('Flight search SSE stream opened.', [
+            'ip' => $request->ip(),
+            'airline' => $request->query('airline'),
+            'flightType' => $request->query('flightType'),
+        ]);
+
         $validated = $this->validatedStreamSearchParams($request);
         $params = $this->streamSearchParams($request, $validated);
         $cacheKeyPrefix = $this->flightCacheKey($request);
