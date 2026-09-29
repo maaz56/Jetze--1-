@@ -265,6 +265,31 @@ class BookingController extends Controller
         ]);
     }
 
+    private function atPaymentFailureMessage(array $response): ?string
+    {
+        $messages = array_filter(array_map('strval', (array) ($response['Msg'] ?? [])));
+        $message = $messages[0] ?? ($response['message'] ?? $response['error'] ?? null);
+        $code = (string) ($response['Code'] ?? '');
+
+        if (($response['status'] ?? true) === false) {
+            return (string) ($message ?: 'Payment Failed !');
+        }
+
+        if ($code !== '' && $code !== '200' && $code !== '2000') {
+            return (string) ($message ?: 'AT payment failed with code ' . $code);
+        }
+
+        if ($message && in_array(strtolower((string) $message), [
+            'payment failed !',
+            'payment failed',
+            'insufficient subuserbalance',
+        ], true)) {
+            return (string) $message;
+        }
+
+        return null;
+    }
+
     public function store(Request $request)
     {
         $this->ensureMainContactCountry($request);
@@ -1221,11 +1246,20 @@ class BookingController extends Controller
 
             }
 
-            if (($res['status'] ?? true) === false) {
+            $atPaymentFailureMessage = $this->atPaymentFailureMessage($res);
+            if ($atPaymentFailureMessage !== null) {
                 if ($walletPaymentLock) { $walletPaymentLock->release(); }
+                Log::warning('AT confirmation failed; booking status was not updated.', [
+                    'booking_id' => $booking->id,
+                    'code' => $res['Code'] ?? null,
+                    'message' => $atPaymentFailureMessage,
+                    'response' => $res,
+                ]);
+
                 return response()->json([
                     'message' => 'Booking confirmation failed',
-                    'error' => $res['error'] ?? $res['message'] ?? 'Payment Failed !',
+                    'error' => $atPaymentFailureMessage,
+                    'provider_response' => $res,
                 ], 400);
             }
         }
