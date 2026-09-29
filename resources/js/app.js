@@ -15,17 +15,7 @@ import i18n from "./services/i18n";
 const app = createApp(App);
 const pinia = createPinia();
 
-const promotionalTabTitle = "Cheap flight, Best rate hotel booking and holidays trip";
-const titleSeparator = "     •     ";
-const scrollingTabTitle = promotionalTabTitle + titleSeparator;
-let tabTitlePosition = 0;
-
-window.setInterval(() => {
-  document.title =
-    scrollingTabTitle.slice(tabTitlePosition) +
-    scrollingTabTitle.slice(0, tabTitlePosition);
-  tabTitlePosition = (tabTitlePosition + 1) % scrollingTabTitle.length;
-}, 220);
+document.title = "Cheap flight, Best rate hotel booking and holidays trip";
 
 app.use(store);
 app.use(pinia)
