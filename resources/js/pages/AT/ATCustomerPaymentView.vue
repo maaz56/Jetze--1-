@@ -858,6 +858,7 @@ const publicKey = ref(import.meta.env.VITE_STRIPE_KEY);
 // Computed
 const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
+const isAdmin = computed(() => user.value?.role === 'admin');
 const agentData = computed(() => store.getters["user/agentData"]);
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
@@ -1533,6 +1534,13 @@ const copyBillId = () => {
 };
 // Wallet Confirmation
 async function handleConfirmDialogOpen() {
+  // Admin confirmations do not use an agent wallet. Keep this aligned with
+  // the backend so admins never get redirected to the deposit page.
+  if (isAdmin.value) {
+    isConfirmDialogOpen.value = true;
+    return;
+  }
+
   // Refresh first so the check uses the latest AED wallet balance.
   await fetchAgentLedger();
 
@@ -1564,9 +1572,12 @@ async function confirmBooking() {
         return;
     }
 
-    // Recheck immediately before confirmation in case another wallet action changed the balance.
-    await fetchAgentLedger();
-    if (!hasSufficientWalletBalance.value) {
+    // Recheck immediately before customer confirmation in case another wallet
+    // action changed the balance. Admins are exempt from wallet validation.
+    if (!isAdmin.value) {
+      await fetchAgentLedger();
+    }
+    if (!isAdmin.value && !hasSufficientWalletBalance.value) {
         isConfirmDialogOpen.value = false;
         isLowBalanceDialogOpen.value = true;
         return;

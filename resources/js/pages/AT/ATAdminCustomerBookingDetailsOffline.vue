@@ -75,6 +75,7 @@ const isLoading = computed(() => isBookingDetailsLoading.value );
 
 
 const user = computed(() => authStore.user);
+const isAdmin = computed(() => user.value?.role === 'admin');
 const agentData = computed(() => store.getters["user/agentData"]);
 // const offlineBookings = computed(() => store.getters["flight/bookingData"]);
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
@@ -212,7 +213,7 @@ const pnrDetails = computed(() => store.getters["flight/pnrData"]);
 
 
 
-const booking = ref(null);
+const booking = computed(() => bookingDetails.value?.[0] ?? null);
 const flightData = ref(null);
 const isDetailsInfoVisible = ref(true);
 const totalTicketPrice = ref(0);
@@ -538,9 +539,9 @@ function calculatePnrFinalFare() {
 // }
 
 function handleConfirmDialogOpen() {
-    //console.log("agenledger", agentLedger?.value.balance);
-    //console.log("totalTicketPrice", totalTicketPrice?.value);
-    if (agentLedger?.value.balance < totalTicketPrice?.value) {
+    // Admins confirm operational bookings without using the customer's wallet.
+    // Non-admin customers still require the balance check before confirmation.
+    if (!isAdmin.value && agentLedger?.value.balance < totalTicketPrice?.value) {
         isLowBalanceDialogOpen.value = true;
         return;
     }
@@ -622,37 +623,37 @@ async function fetchPnrDetails() {
 //     });
 // }
 
-function cancelBooking() {
+async function cancelBooking() {
+    if (actionLoading.value) return;
+
     if (!pnr) {
         error.value = "No PNR provided.";
         return;
     }
-    //console.log(pnr);
 
-    store.dispatch("flight/" + CANCEL_BOOKING, {
-        pnr: pnr,
-        booking_source: route.query.flight_provider,
-        flight_source: parseFlightData(bookingDetails?.value?.[0]?.flight_data)?.provider?.source ?? null,
-        bookingId: bookingDetails.value[0].id,
-        orderId: parseFlightData(bookingDetails?.value?.[0]?.pnr_response)?.order?.id ?? null,
+    error.value = '';
+    actionLoading.value = true;
 
+    try {
+        await store.dispatch("flight/" + CANCEL_BOOKING, {
+            pnr: pnr,
+            booking_source: route.query.flight_provider,
+            flight_source: parseFlightData(bookingDetails?.value?.[0]?.flight_data)?.provider?.source ?? null,
+            bookingId: bookingDetails.value[0].id,
+            orderId: parseFlightData(bookingDetails?.value?.[0]?.pnr_response)?.order?.id ?? null,
+        });
 
-    }).then(() => {
-        // Close dialog after successful cancellation
         isDialogOpen.value = false;
-        fetchBookingDetails();
-    }).catch((err) => {
-        error.value = err.message || 'Failed to cancel booking';
-    });
-
-    // store.dispatch("flight/" + CONFIRM_BOOKING, {
-    //     pnr: route.query.pnr,
-
-    //     bookingId: bookingDetails.value[0].id,
-    //     booking_status: "canceled",
-    // });
+        await fetchBookingDetails();
+    } catch (err) {
+        error.value = err?.message || 'Failed to cancel booking';
+    } finally {
+        actionLoading.value = false;
+    }
 }
 async function confirmBooking() {
+    if (actionLoading.value) return;
+
     error.value = '';
     actionLoading.value = true;
     if (!pnr) {
@@ -675,6 +676,8 @@ async function confirmBooking() {
 
         isConfirmDialogOpen.value = false;
         await fetchBookingDetails();
+    } catch (err) {
+        error.value = err?.response?.data?.message || err?.message || 'Failed to confirm booking';
     } finally {
         actionLoading.value = false;
     }
@@ -894,13 +897,11 @@ function calculateGrandTotal() {
     return totalTicketPrice.value;
 }
 
-onMounted(() => {
+onMounted(async () => {
     if (user.value == null) {
-        authStore.fetchUser();
-        // fetchAgent();
-    } else {
-        fetchAgent();
+        await authStore.fetchUser();
     }
+    fetchAgent();
     fetchAgentLedger();
     fetchBookingDetails();
     // fetchPnrDetails();
@@ -1002,7 +1003,7 @@ onMounted(() => {
                     </Dialog>
 
                     <button @click="isDialogOpen = true"
-                        :disabled="['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                        :disabled="actionLoading || ['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2">
                         {{ booking?.status?.toLowerCase() === 'canceled'
                             ? 'Canceled'
@@ -1082,15 +1083,15 @@ onMounted(() => {
                                     class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     Cancel
                                 </button>
-                                <button @click="cancelBooking"
-                                    class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                    Confirm Cancellation
+                                <button @click="cancelBooking" :disabled="actionLoading"
+                                    class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                    {{ actionLoading ? 'Cancelling...' : 'Confirm Cancellation' }}
                                 </button>
                             </div>
                         </div>
                     </div>
                     <button
-                        :disabled="['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status)"
+                        :disabled="actionLoading || ['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
                         @click="handleConfirmDialogOpen"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2">
                         Confirm Booking
@@ -1125,9 +1126,9 @@ onMounted(() => {
                                     class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     Cancel
                                 </button>
-                                <button @click="confirmBooking"
-                                    class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                    Confirm Booking
+                                <button @click="confirmBooking" :disabled="actionLoading"
+                                    class="px-4 py-2 bg-primary border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                    {{ actionLoading ? 'Confirming...' : 'Confirm Booking' }}
                                 </button>
                             </div>
                         </div>

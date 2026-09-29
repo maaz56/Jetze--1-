@@ -1076,7 +1076,10 @@ class BookingController extends Controller
                 ], 422);
             }
 
-            if (!$this->agentWalletBalanceService->canPayForBooking($booking)) {
+            // Admins may perform operational confirmations without an agent wallet.
+            // Every non-admin customer/agent must pass the server-side balance check.
+            $isAdmin = $request->user()?->role === 'admin';
+            if (!$isAdmin && !$this->agentWalletBalanceService->canPayForBooking($booking)) {
                 return response()->json([
                     'message' => 'Your wallet balance is insufficient to confirm this booking.',
                 ], 422);
