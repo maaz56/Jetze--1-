@@ -1,6 +1,82 @@
 import apiService from "@/config/axios";
+import { resolveApiBaseUrl } from "@/config/apiBaseUrl";
 import { defineStore } from "pinia";
 import { toast } from "vue3-toastify";
+
+const flightMergeKey = (flight) => [
+    flight?.provider?.identifier,
+    flight?.provider?.TUI,
+    flight?.provider?.sector,
+    flight?.provider?.travel_date,
+    flight?.leg?.flights?.map((leg) => leg?.flight_number || leg?.flight_index).join("~"),
+    flight?.leg?.flights?.map((leg) => leg?.segments?.map((segment) => [
+        segment?.operating_carrier?.iata,
+        segment?.flight_number,
+        segment?.from?.iata,
+        segment?.to?.iata,
+        segment?.departure_at,
+        segment?.arrival_at,
+    ].join("|")).join("~")).join("~~"),
+].join("::");
+
+const fareMergeKey = (fare) => [
+    fare?.index,
+    fare?.return_identifier,
+    fare?.name,
+    fare?.rbd_code,
+    fare?.fare_basis_code,
+    fare?.provider_booking_money?.amount ?? fare?.base_price,
+    fare?.provider_gross_money?.amount ?? fare?.total_price,
+].join("::");
+
+const mergeFlightCollections = (existingFlights = [], incomingFlights = []) => {
+    const merged = new Map();
+
+    [...(existingFlights || []), ...(incomingFlights || [])].forEach((flight) => {
+        const key = flightMergeKey(flight);
+        if (!merged.has(key)) {
+            merged.set(key, typeof structuredClone !== "undefined" ? structuredClone(flight) : JSON.parse(JSON.stringify(flight)));
+            return;
+        }
+
+        const current = merged.get(key);
+        const next = typeof structuredClone !== "undefined" ? structuredClone(flight) : JSON.parse(JSON.stringify(flight));
+        const currentLegs = current?.leg?.flights || [];
+        const nextLegs = next?.leg?.flights || [];
+
+        currentLegs.forEach((currentLeg, legIndex) => {
+            if (!nextLegs[legIndex]) {
+                nextLegs[legIndex] = currentLeg;
+                return;
+            }
+
+            const fares = new Map();
+            [...(currentLeg.fares || []), ...(nextLegs[legIndex].fares || [])].forEach((fare) => {
+                fares.set(fareMergeKey(fare), fare);
+            });
+            nextLegs[legIndex].fares = Array.from(fares.values());
+        });
+
+        next.quote_search_token = flight?.quote_search_token || current.quote_search_token;
+        next.leg = next.leg || {};
+        next.leg.flights = nextLegs;
+        merged.set(key, next);
+    });
+
+    return Array.from(merged.values());
+};
+
+const streamUrlForParams = (params) => {
+    const apiBase = new URL(resolveApiBaseUrl(), window.location.origin);
+    const url = new URL("flight-search/stream", apiBase);
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        url.searchParams.set(key, Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : value);
+    });
+
+    return url.toString();
+};
 
 export const useFlightStore = defineStore("flight", {
     state: () => ({
@@ -31,65 +107,119 @@ export const useFlightStore = defineStore("flight", {
     actions: {
         async fetchFlights(params) {
             this.isFlightLoading = true;
+            const requestParams = this.normalizedSearchParams(params);
+
             try {
-                // Prepare parameters, ensuring trips array is properly formatted for multi-city
-                const requestParams = { ...params };
-                if (params.flightType === "multi-city" && params.trips) {
-                    // Ensure trips is an array of objects
-                    requestParams.trips = Array.isArray(params.trips)
-                        ? params.trips.map((trip) => ({
-                              origin: trip.origin,
-                              destination: trip.destination,
-                              date: trip.date,
-                          }))
-                        : JSON.parse(params.trips);
-                }
-
-                const response = await apiService.get("/flights", {
-                    params: requestParams,
-                });
-
-
-                // Log response for debugging
-
-                // Persist search parameters in localStorage
                 const previousSearch = {
                     ...requestParams,
                     timestamp: Date.now(),
                 };
-                localStorage.setItem(
-                    "previous_search",
-                    JSON.stringify(previousSearch),
-                );
-                // Update state with response data
-                this.flights = response.data.flights;
-                this.cheapestFlightsByAirline =
-                    response.data.cheapest_flights_by_airline;
-                this.availableAirlines = response.data.available_airlines;
-                this.sooperFlights = response.data.sooper_flights;
+                localStorage.setItem("previous_search", JSON.stringify(previousSearch));
+
+                if (requestParams.airline === "AT" && typeof EventSource !== "undefined") {
+                    await this.streamFlights(requestParams);
+                    this.validationErrors = [];
+                    return;
+                }
+
+                await this.fetchFlightsHttp(requestParams);
                 this.validationErrors = [];
             } catch (error) {
                 console.error("Error fetching flights:", error);
-                toast(
-                    "Failed to fetch flights. Please check your input and try again.",
-                    {
-                        type: "error",
-                    },
-                );
-                if (
-                    error.response &&
-                    error.response.data &&
-                    error.response.data.errors
-                ) {
+                toast("Failed to fetch flights. Please check your input and try again.", {
+                    type: "error",
+                });
+                if (error.response?.data?.errors) {
                     this.validationErrors = error.response.data.errors;
                 } else {
-                    this.validationErrors = [
-                        { message: "An unexpected error occurred." },
-                    ];
+                    this.validationErrors = [{ message: "An unexpected error occurred." }];
                 }
             } finally {
                 this.isFlightLoading = false;
             }
+        },
+        normalizedSearchParams(params) {
+            const requestParams = { ...params };
+            if (params.flightType === "multi-city" && params.trips) {
+                requestParams.trips = Array.isArray(params.trips)
+                    ? params.trips.map((trip) => ({
+                          origin: trip.origin,
+                          destination: trip.destination,
+                          date: trip.date,
+                      }))
+                    : JSON.parse(params.trips);
+            }
+
+            return requestParams;
+        },
+        async fetchFlightsHttp(requestParams) {
+            const response = await apiService.get("/flights", {
+                params: requestParams,
+            });
+
+            this.flights = response.data.flights;
+            this.cheapestFlightsByAirline = response.data.cheapest_flights_by_airline;
+            this.availableAirlines = response.data.available_airlines;
+            this.sooperFlights = mergeFlightCollections(this.sooperFlights || [], response.data.sooper_flights || []);
+        },
+        streamFlights(requestParams) {
+            return new Promise((resolve, reject) => {
+                let receivedChunk = false;
+                const source = new EventSource(streamUrlForParams(requestParams), { withCredentials: true });
+
+                source.addEventListener("chunk", (event) => {
+                    receivedChunk = true;
+                    const data = JSON.parse(event.data);
+                    this.availableAirlines = data.available_airlines || [];
+                    this.sooperFlights = mergeFlightCollections(this.sooperFlights || [], data.sooper_flights || []);
+                });
+
+                source.addEventListener("complete", (event) => {
+                    const data = JSON.parse(event.data);
+                    this.availableAirlines = data.available_airlines || [];
+                    this.sooperFlights = mergeFlightCollections(this.sooperFlights || [], data.sooper_flights || []);
+                    source.close();
+                    resolve(data);
+                });
+
+                source.addEventListener("stream-error", async (event) => {
+                    source.close();
+                    if (receivedChunk) {
+                        resolve(event);
+                        return;
+                    }
+
+                    try {
+                        await this.fetchFlightsHttp(requestParams);
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+
+                source.onerror = async (event) => {
+                    source.close();
+                    if (receivedChunk) {
+                        resolve(event);
+                        return;
+                    }
+
+                    try {
+                        await this.fetchFlightsHttp(requestParams);
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+            });
+        },
+        resetFlightResults() {
+            this.flights = null;
+            this.sooperFlights = null;
+            this.sortedSooperFlights = null;
+            this.cheapestFlightsByAirline = null;
+            this.availableAirlines = null;
+            this.validationErrors = [];
         },
         async sortFlights(params) {
             this.isLoading = true;

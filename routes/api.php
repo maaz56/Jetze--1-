@@ -109,6 +109,7 @@ Route::prefix('admin')->group(function () {
 
 // Fare details are available during public flight search; provider credentials stay server-side.
 Route::post('at/fare-breakdown', [FlightController::class, 'fetchAtFareBreakdown']);
+Route::get('flight-search/stream', [FlightController::class, 'stream'])->middleware('throttle:20,1');
 
 
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {

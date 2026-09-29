@@ -138,6 +138,17 @@ const multiCityTrips = ref([
 
 const completedProviders = ref(0); // Track completed providers
 const progress = ref(0);
+const searchProgressPercent = (completed = completedProviders.value) => {
+    const totalProviders = Math.max(providers.value?.length || 1, 1);
+    return Math.min(100, Math.max(0, Math.round((completed / totalProviders) * 100)));
+};
+const markStreamingProgress = () => {
+    if (!isSearching.value) return;
+    progress.value = Math.max(progress.value, Math.min(95, searchProgressPercent() || 5));
+};
+const markProviderProgress = () => {
+    progress.value = searchProgressPercent();
+};
 const isSearching = ref(false);
 const filteredFlights = ref([]);
 const classType = ref("Y");
@@ -361,7 +372,7 @@ watch(providers, () => {
 
 watch(sooperFlights, (newFlights) => {
     if (newFlights && newFlights.length > 0) {
-        allFlights.value = [...allFlights.value, ...newFlights];
+        allFlights.value = [...newFlights];
 
         // Sort allFlights by price (ascending)
         // Sort allFlights by lowest fare price (ascending)
@@ -387,9 +398,7 @@ watch(sooperFlights, (newFlights) => {
         filteredFlights.value = [...allFlights.value];
 
 
-        const totalProviders = providers.value.length;
-        const completedProviders = allFlights.value.length; // maybe rethink this assumption
-        progress.value = Math.round((completedProviders / totalProviders) * 100);
+        markStreamingProgress();
     }
 }, { deep: true });
 
@@ -487,8 +496,7 @@ watch(sortedSooperFlights, () => {
 })
 const fetchFlights = () => {
     allFlights.value = [];
-    sooperFlights.value = null;
-    sortedSooperFlights.value = null;
+    flightStore.resetFlightResults();
     filteredFlights.value = null;
     completedProviders.value = 0;
     progress.value = 0;
@@ -541,9 +549,9 @@ const fetchFlights = () => {
                 .finally(() => {
                     completedProviders.value++;
 
-                    progress.value = Math.round((completedProviders.value / providers.value.length) * 100);
+                    markProviderProgress();
 
-                    if (completedProviders.value === providers.length) {
+                    if (completedProviders.value === providers.value.length) {
                         setTimeout(() => {
                             isSearching.value = false;
                         }, 1000);
