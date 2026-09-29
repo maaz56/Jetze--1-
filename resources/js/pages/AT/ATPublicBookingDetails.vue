@@ -422,7 +422,7 @@ function handleConfirmDialogOpen() {
     isConfirmDialogOpen.value = true;
 }
 
-function handleCancelBooking() {
+async function handleCancelBooking() {
     error.value = '';
     actionLoading.value = true;
 
@@ -432,7 +432,7 @@ function handleCancelBooking() {
             return;
         }
 
-        store.dispatch("flight/" + CANCEL_BOOKING, {
+        await store.dispatch("flight/" + CANCEL_BOOKING, {
             pnr: pnr,
 
             booking_uuid: pnrData.value?.data?.uuid ?? "null",

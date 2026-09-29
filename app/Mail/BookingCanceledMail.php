@@ -11,6 +11,10 @@ class BookingCanceledMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
+    public $tries = 3;
+    public $backoff = [30, 120, 300];
+    public $timeout = 120;
+
     public $email;
     public $booking;
     public $flightData;

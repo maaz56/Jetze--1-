@@ -1690,7 +1690,12 @@ async function saveBooking(type) {
         amount.value = Number(localCheckoutDisplayMoney.value?.amount ?? lockedPriceQuote.value?.display_money?.amount ?? 0);
 
         await store.dispatch("flight/" + SAVE_BOOKING, {
-            main_contact: mainContact.value,
+            // The booking API requires a contact country. For B2C AT bookings,
+            // use the lead traveller's selected nationality as that country.
+            main_contact: {
+                ...mainContact.value,
+                country: String(travellers.value[0]?.nationality || mainContact.value.country || "").toUpperCase(),
+            },
             travellers: travellers.value,
             agency_contact: agencyContact.value,
             agent_id: user_id?.value || null,

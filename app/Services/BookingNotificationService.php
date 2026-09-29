@@ -18,11 +18,10 @@ class BookingNotificationService
 
         $admin = User::query()->where('role', 'admin')->first();
         $flightData = json_decode((string) $booking->flight_data, true) ?: [];
-        $recipients = array_values(array_unique(array_filter([
-            $booking->main_email,
-            $booking->agency_email,
-            $admin?->email,
-        ])));
+        $recipients = array_values(array_unique(array_filter(array_map(
+            static fn ($email) => strtolower(trim((string) $email)),
+            [$booking->main_email, $booking->agency_email, $admin?->email],
+        ))));
 
         foreach ($recipients as $email) {
             Mail::to($email)->queue(

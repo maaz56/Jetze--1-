@@ -593,10 +593,10 @@ class BookingController extends Controller
             $admin = User::where('role', 'admin')->first();
 
             $flightDataForMail = json_decode($flightBooking->flight_data, true) ?? [];
-            $recipients = [
-                $flightBooking->agency_email,
-                $admin->email,
-            ];
+            $recipients = array_values(array_unique(array_filter(array_map(
+                static fn ($email) => strtolower(trim((string) $email)),
+                [$flightBooking->agency_email, $admin?->email],
+            ))));
 
             foreach ($recipients as $email) {
                 if (!empty($email)) {
@@ -946,9 +946,51 @@ class BookingController extends Controller
                     'message' => 'Booking Canceled successfully',
                     'booking' => $booking,
                 ]);
+        } else if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "at") {
+            $validated = $request->validate(["bookingId" => ["required", "integer"]]);
+            $booking = FlightBookings::find($validated["bookingId"]);
+
+            if (! $booking) {
+                return response()->json(["message" => "Booking not found."], 404);
+            }
+
+            if (in_array(strtolower((string) $booking->status), ["ticketed", "issued"], true)) {
+                return response()->json([
+                    "message" => "A ticketed AT booking must be voided before a cancellation email can be sent.",
+                ], 422);
+            }
+
+            if (in_array(strtolower((string) $booking->status), ["canceled", "cancelled", "voided"], true)) {
+                return response()->json(["message" => "This booking has already been cancelled."], 409);
+            }
+
+            $booking->update(["status" => "canceled"]);
+            $this->providerBookingEventService->record(
+                $booking,
+                "at",
+                "cancel",
+                ["source" => "local_hold_release"],
+                $request->pnr ?: $booking->itinerary_ref,
+            );
+            $this->sendBookingCanceledMail($booking);
+
+            return response()->json([
+                "message" => "AT booking cancelled and notification queued successfully.",
+                "booking" => $booking->fresh(),
+            ]);
         }
+
         return;
 
+    }
+
+    /** Normalize and de-duplicate email recipients. */
+    private function normalizeEmailRecipients(array $emails): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($email) => strtolower(trim((string) $email)),
+            $emails,
+        ))));
     }
 
     private function sendBookingCanceledMail($booking): void
@@ -960,11 +1002,11 @@ class BookingController extends Controller
         $admin = User::where('role', 'admin')->first();
         $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
 
-        $recipients = array_values(array_unique(array_filter([
+        $recipients = $this->normalizeEmailRecipients([
             $booking->main_email,
             $booking->agency_email,
             $admin->email ?? null,
-        ])));
+        ]);
 
         foreach ($recipients as $email) {
             Mail::to($email)->queue(
@@ -993,7 +1035,7 @@ class BookingController extends Controller
             $admin->email ?? null,
         ];
 
-        $recipients = array_values(array_unique(array_filter($recipients)));
+        $recipients = $this->normalizeEmailRecipients($recipients);
 
         foreach ($recipients as $email) {
             $mail = match ($status) {
@@ -1553,6 +1595,12 @@ class BookingController extends Controller
                 $validated['void_description'],
                 $request->user()?->id,
             );
+
+            // AT voiding is the completed cancellation path. Notify the same
+            // recipients as other cancelled bookings only after settlement
+            // has successfully changed the booking status to "voided".
+            $booking = $booking->fresh();
+            $this->sendBookingCanceledMail($booking);
 
             return response()->json([
                 'message' => 'Booking voided and wallet settlement completed successfully.',
