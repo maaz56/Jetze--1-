@@ -223,7 +223,7 @@ class AtApiService
             'INF' => (int) ($params['infants'] ?? 0),
             'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
             'Source' => 'LV', // Changed from 'LV' to 'CF' for consistency
-            'Mode' => 'AS',
+            'Mode' => 'SY',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
             "ONFltNo" => "",

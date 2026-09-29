@@ -40,7 +40,7 @@ class DatabaseSeeder extends Seeder
                 'role' => 'admin',
                 'is_approved' => true,
                 'name' => 'admin',
-                'password' => bcrypt('admin1234'),
+                'password' => bcrypt('Admin@1234'),
                 'email_verified_at' => now()
             ]
         );
@@ -48,14 +48,14 @@ class DatabaseSeeder extends Seeder
 
 
         $this->call([
-            AirportSeeder::class,
-            AircraftSeeder::class,
-            AirlineSeeder::class,
-            airportMarginSeeder::class,
-            CountryStateCityTableSeeder::class,
-            CustomerMarginSeeder::class,
-            CustomerSettingSeeder::class,
-            PermissionSeeder::class,
+            // AirportSeeder::class,
+            // AircraftSeeder::class,
+            // AirlineSeeder::class,
+            // airportMarginSeeder::class,
+            // CountryStateCityTableSeeder::class,
+            // CustomerMarginSeeder::class,
+            // CustomerSettingSeeder::class,
+            // PermissionSeeder::class,
         ]);
     }
 }
