@@ -12,7 +12,9 @@
     @if($ogDescription)<meta property="og:description" content="{{ $ogDescription }}">@endif
     @if($ogImage)<meta property="og:image" content="{{ $ogImage }}">@endif
     <link rel="canonical" href="{{ $canonicalUrl }}">
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="/favicon.png?v=5" sizes="354x354">
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=5">
+    <link rel="apple-touch-icon" href="/favicon.png?v=5">
     @include('partials.google-tag')
     @vite(['resources/css/app.css'])
     <style>

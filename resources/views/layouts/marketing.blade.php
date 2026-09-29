@@ -25,7 +25,9 @@
     <meta name="twitter:description" content="{{ $seo?->twitter_description ?: ($seo?->og_description ?: $pageDescription) }}">
     @if($twitterImage)<meta name="twitter:image" content="{{ $twitterImage }}">@endif
     @if($seo?->schema_json)<script type="application/ld+json">{!! json_encode($seo->schema_json, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>@endif
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="/favicon.png?v=5" sizes="354x354">
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=5">
+    <link rel="apple-touch-icon" href="/favicon.png?v=5">
     @include('partials.google-tag')
     @vite(['resources/css/app.css'])
 </head>
