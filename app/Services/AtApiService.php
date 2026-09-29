@@ -392,7 +392,11 @@ public function getSearchFlightsRes($tui)
     // ✅ MOCK MODE
     if ($this->useMockApi) {
         Log::warning('Using MOCK GetExpSearch response.');
-        return json_decode(Storage::get('ATResponse.json'), true);
+        $mockBody = json_decode(Storage::get('ATResponse.json'), true);
+        $isComplete = strtolower($mockBody['Completed'] ?? 'false');
+        $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+        Log::info("GetExpSearch page 1 response (Status: {$pageStatus}) before merging: ", is_array($mockBody) ? $mockBody : []);
+        return $mockBody;
     }
 
     // 🔴 REAL API CODE
@@ -418,9 +422,13 @@ public function getSearchFlightsRes($tui)
 
         Log::info('GetExpSearch request payload: ', $payload);
 
+        $page = 1;
         $response = $this->client->send($request);
         $body = json_decode($response->getBody(), true);
         $isComplete = strtolower($body['Completed'] ?? 'false');
+        $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+
+        Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($body) ? $body : ['raw' => (string) $response->getBody()]);
 
         // 🔁 Retry until completed — only the final completed response is returned
         if ($isComplete === 'true') {
@@ -437,9 +445,13 @@ public function getSearchFlightsRes($tui)
 
             sleep(2);
 
+            $page++;
             $response = $this->client->send($request);
             $newBody = json_decode($response->getBody(), true);
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
+            $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+
+            Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($newBody) ? $newBody : ['raw' => (string) $response->getBody()]);
 
             // If new response is complete and has no trips, it might be a completion response
             if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
