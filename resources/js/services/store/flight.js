@@ -308,11 +308,17 @@ const actions = {
             //     booking_id: response.data.booking.id,
             // });
         } catch (error) {
+            const errorMessage =
+                error?.response?.data?.message ||
+                error?.response?.data?.error ||
+                error?.message ||
+                "Something went wrong.";
 
-            toast("Something went wrong.", {
+            toast(errorMessage, {
                 type: "error",
             });
             context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
     async [CREATE_INVOICE](context, params) {
