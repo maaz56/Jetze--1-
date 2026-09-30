@@ -10,6 +10,7 @@ use App\Services\PriceQuoteService;
 use App\Services\SooperApiService;
 use App\Transformers\AtAncillaryTransformer;
 use App\Transformers\AtFareBreakdownTransformer;
+use App\Transformers\AtFlightTransformer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FlightController extends Controller
 {
@@ -326,6 +328,144 @@ class FlightController extends Controller
         ];
     }
 
+
+    public function streamAtSearch(Request $request): StreamedResponse
+    {
+        if (strtoupper((string) $request->input('airline')) !== 'AT') {
+            abort(422, 'This streaming endpoint currently supports AT searches only.');
+        }
+
+        $flightType = $request->input('flightType');
+        $params = [
+            'airline' => 'AT',
+            'cabin_class' => $request->input('cabin_class'),
+            'adults' => $request->input('adults', 1),
+            'children' => $request->input('children', 0),
+            'infants' => $request->input('infants', 0),
+            'flight_type' => $flightType,
+            'currency_code' => $this->currencyCodeForRequest($request),
+            'flexible_plus_minus_3' => filter_var($request->input('flexible_plus_minus_3', false), FILTER_VALIDATE_BOOLEAN),
+        ];
+
+        if ($flightType === 'multi-city') {
+            $params['trips'] = $request->input('trips', []);
+        } else {
+            $params['origin'] = $request->input('origin');
+            $params['destination'] = $request->input('destination');
+            $params['departure_date'] = $request->input('departure_date');
+            $params['return_date'] = $request->input('return_date');
+        }
+
+        $cacheKeyPrefix = $this->flightCacheKey($request);
+        $searchToken = (string) Str::uuid();
+        Cache::forget($cacheKeyPrefix . '_sooper_flights');
+        Cache::put($cacheKeyPrefix . '_previous_search', $params, now()->addHour());
+        Cache::put($cacheKeyPrefix . '_currency_code', $params['currency_code'], now()->addHour());
+
+        return response()->stream(function () use ($params, $cacheKeyPrefix, $searchToken) {
+            $emit = static function (string $event, array $payload): void {
+                echo "event: {$event}\n";
+                echo 'data: ' . json_encode($payload) . "\n\n";
+
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+            };
+            $atTransformer = new AtFlightTransformer();
+            $emittedFlightKeys = [];
+            $emittedFlights = [];
+
+            try {
+                $emit('search.started', ['provider' => 'AT']);
+
+                $result = $this->atApiService->searchFlights(
+                    $params,
+                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, $searchToken, &$emittedFlightKeys, &$emittedFlights): void {
+                        if (!empty($newBatch['Heartbeat'])) {
+                            $emit('search.heartbeat', ['page' => $page]);
+                            return;
+                        }
+
+                        $requiredTripCount = match ($params['flight_type'] ?? 'one-way') {
+                            'return' => 2,
+                            'multi-city' => count($params['trips'] ?? []),
+                            default => 1,
+                        };
+                        $availableTripCount = count(array_filter($mergedResponse['Trips'] ?? [], static fn (array $trip): bool => !empty($trip['Journey'])));
+                        $mappedFlights = $availableTripCount >= $requiredTripCount
+                            ? $atTransformer->fromAT($mergedResponse, $params)
+                            : [];
+                        $newFlights = [];
+
+                        foreach ($mappedFlights as $flight) {
+                            $streamKey = $flight['stream_key'] ?? null;
+                            if (!$streamKey || isset($emittedFlightKeys[$streamKey])) {
+                                continue;
+                            }
+
+                            $flight['quote_search_token'] = $searchToken;
+                            $emittedFlightKeys[$streamKey] = true;
+                            $emittedFlights[$streamKey] = $flight;
+                            $flightReference = data_get($flight, 'leg.ref_id');
+                            if ($flightReference) {
+                                Cache::put('flight_quote_' . $searchToken . '_' . $flightReference, $flight, now()->addMinutes(15));
+                            }
+                            $newFlights[] = $flight;
+                        }
+
+                        $completed = strtolower((string) ($mergedResponse['Completed'] ?? 'false')) === 'true';
+                        $emit('search.progress', [
+                            'page' => $page,
+                            'completed' => $completed,
+                            'new_trip_count' => count($newBatch['Trips'] ?? []),
+                            'total_trip_count' => count($mergedResponse['Trips'] ?? []),
+                        ]);
+
+                        if ($newFlights !== []) {
+                            $frontendPayload = [
+                                'page' => $page,
+                                'completed' => $completed,
+                                'flights' => $newFlights,
+                            ];
+
+                            Log::info('AT mapped flight batch forwarded to frontend.', $frontendPayload);
+                            $emit('flights', $frontendPayload);
+                        }
+                    },
+                );
+
+                $completed = strtolower((string) ($result['Completed'] ?? 'false')) === 'true';
+                if (!$completed) {
+                    $emit('search.error', ['message' => 'AT search did not complete in time. Please try again.']);
+                    return;
+                }
+
+                foreach ($emittedFlights as $flight) {
+                    $flightReference = data_get($flight, 'leg.ref_id');
+                    if ($flightReference) {
+                        Cache::put($this->quoteFlightCacheKey($searchToken, $flightReference), $flight, now()->addMinutes(15));
+                    }
+                }
+                Cache::put($cacheKeyPrefix . '_sooper_flights', array_values($emittedFlights), now()->addMinutes(15));
+
+                $emit('search.complete', [
+                    'completed' => true,
+                    'trip_count' => count($result['Trips'] ?? []),
+                    'flight_count' => count($emittedFlightKeys),
+                    'search_token' => $searchToken,
+                ]);
+            } catch (\Throwable $exception) {
+                Log::error('AT streamed search failed.', ['message' => $exception->getMessage()]);
+                $emit('search.error', ['message' => 'Unable to complete the AT flight search. Please try again.']);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache, no-transform',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
     /**
      * Create a server-side quote from selected fares in the current search result.
      */

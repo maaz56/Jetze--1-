@@ -486,7 +486,12 @@ watch(
     sooperFlights,
     (newFlights) => {
         if (newFlights && newFlights.length > 0) {
-            allFlights.value = [...allFlights.value, ...newFlights];
+            allFlights.value = Array.from(new Map(
+                [...allFlights.value, ...newFlights].map((flight) => [
+                    flight.stream_key || flight.leg?.ref_id,
+                    flight,
+                ]),
+            ).values());
             filteredFlights.value = getFilteredFlights();
 
             filteredFlights.value = [...filteredFlights.value].sort((a, b) => {
@@ -500,9 +505,9 @@ watch(
 
             const totalProviders = providers.value.length;
             const completedProviders = allFlights.value.length; // maybe rethink this assumption
-            progress.value = Math.round(
-                (completedProviders / totalProviders) * 100,
-            );
+            progress.value = Math.min(90, Math.round(
+                (completedProviders / Math.max(totalProviders, 1)) * 100,
+            ));
         }
     },
     { deep: true },
@@ -775,9 +780,11 @@ const fetchFlights = () => {
                 ...searchParams,
                 airline: provider.identifier,
             };
-            flightStore
-                .fetchFlights(paramsWithProvider)
+            const searchRequest = provider.identifier === "AT"
+                ? flightStore.streamAtFlights(paramsWithProvider)
+                : flightStore.fetchFlights(paramsWithProvider);
 
+            searchRequest
                 .catch((error) => {
                     console.error(
                         `Error fetching flights for ${provider.identifier}:`,
@@ -785,14 +792,16 @@ const fetchFlights = () => {
                     );
                 })
                 .finally(() => {
-                    completedProviders.value++;
-
-                    progress.value = Math.round(
-                        (completedProviders.value / providers?.value?.length) *
-                            100,
+                    completedProviders.value = Math.min(
+                        completedProviders.value + 1,
+                        Math.max(providers?.value?.length || 0, 1),
                     );
 
-                    if (completedProviders.value === providers.value.length) {
+                    progress.value = Math.min(100, Math.round(
+                        (completedProviders.value / Math.max(providers?.value?.length || 0, 1)) * 100,
+                    ));
+
+                    if (completedProviders.value >= Math.max(providers?.value?.length || 0, 1)) {
                         setTimeout(() => {
                             isSearching.value = false;
                         }, 1000);

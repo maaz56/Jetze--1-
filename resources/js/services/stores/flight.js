@@ -1,4 +1,4 @@
-import apiService from "@/config/axios";
+import apiService, { ensureCsrfCookie } from "@/config/axios";
 import { defineStore } from "pinia";
 import { toast } from "vue3-toastify";
 
@@ -87,6 +87,103 @@ export const useFlightStore = defineStore("flight", {
                         { message: "An unexpected error occurred." },
                     ];
                 }
+            } finally {
+                this.isFlightLoading = false;
+            }
+        },
+        async streamAtFlights(params) {
+            this.isFlightLoading = true;
+            this.sooperFlights = [];
+            this.validationErrors = [];
+
+            const previousSearch = { ...params, timestamp: Date.now() };
+            localStorage.setItem("previous_search", JSON.stringify(previousSearch));
+
+            try {
+                await ensureCsrfCookie();
+
+                const baseUrl = apiService.defaults.baseURL || "/api/";
+                const apiUrl = new URL(baseUrl.endsWith("/") ? baseUrl : baseUrl + "/", window.location.origin);
+                const streamUrl = new URL("flights/at/stream", apiUrl);
+                const token = localStorage.getItem("access_token");
+                const xsrfToken = document.cookie
+                    .split("; ")
+                    .find((cookie) => cookie.startsWith("XSRF-TOKEN="))
+                    ?.split("=")[1];
+                const headers = {
+                    Accept: "text/event-stream",
+                    "Content-Type": "application/json",
+                };
+
+                if (token) {
+                    headers.Authorization = `Bearer ${token}`;
+                }
+                if (xsrfToken) {
+                    headers["X-XSRF-TOKEN"] = decodeURIComponent(xsrfToken);
+                }
+
+                const response = await fetch(streamUrl, {
+                    method: "POST",
+                    headers,
+                    credentials: "include",
+                    body: JSON.stringify(params),
+                });
+
+                if (!response.ok || !response.body) {
+                    throw new Error(`AT stream request failed (${response.status})`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let streamError = null;
+
+                const handleEvent = (rawEvent) => {
+                    const lines = rawEvent.split("\n");
+                    const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+                    const data = lines
+                        .filter((line) => line.startsWith("data:"))
+                        .map((line) => line.slice(5).trim())
+                        .join("\n");
+
+                    if (!event || !data) return;
+
+                    const payload = JSON.parse(data);
+                    if (event === "flights") {
+                        const existing = new Map(
+                            (this.sooperFlights || []).map((flight) => [flight.stream_key, flight]),
+                        );
+                        (payload.flights || []).forEach((flight) => {
+                            if (flight.stream_key) existing.set(flight.stream_key, flight);
+                        });
+                        this.sooperFlights = Array.from(existing.values());
+                    }
+
+                    if (event === "search.error") {
+                        streamError = new Error(payload.message || "AT search failed.");
+                    }
+                };
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+                    let boundary;
+                    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+                        handleEvent(buffer.slice(0, boundary));
+                        buffer = buffer.slice(boundary + 2);
+                    }
+
+                    if (done) break;
+                }
+
+                if (buffer.trim()) handleEvent(buffer);
+                if (streamError) throw streamError;
+            } catch (error) {
+                console.error("Error streaming AT flights:", error);
+                toast(error.message || "AT flight search failed. Please try again.", { type: "error" });
+                this.validationErrors = [{ message: error.message || "AT flight search failed." }];
+                throw error;
             } finally {
                 this.isFlightLoading = false;
             }

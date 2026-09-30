@@ -351,6 +351,7 @@ class AtFlightTransformer
             $sector = implode('-', $sectorParts);
 
             $results[] = [
+                "stream_key" => $this->streamKeyForItem($item),
                 "provider" => array_merge($provider, [
                     'sector' => $sector,
                     'travel_date' => $transformedLegs[0]['departure_at'] ?? null,
@@ -368,6 +369,29 @@ class AtFlightTransformer
         return $results;
     }
 
+    /** Deterministic identity used when AT results arrive in multiple batches. */
+    private function streamKeyForItem(array $item): string
+    {
+        $flights = match ($item['type'] ?? 'oneway') {
+            'return' => [$item['onward']['legs']['flight'] ?? [], $item['return']['legs']['flight'] ?? []],
+            'multicity' => array_map(static fn (array $leg): array => $leg['flight'] ?? [], $item['legs'] ?? []),
+            default => [$item['legs']['flight'] ?? []],
+        };
+
+        $parts = [];
+        foreach ($flights as $flight) {
+            $parts[] = implode('|', [
+                (string) ($flight['Provider'] ?? ''),
+                (string) ($flight['JourneyKey'] ?? ''),
+                (string) ($flight['FBC'] ?? ''),
+                (string) ($flight['FareClass'] ?? ''),
+                (string) ($flight['GrossFare'] ?? ''),
+                (string) ($flight['ReturnIdentifier'] ?? ''),
+            ]);
+        }
+
+        return hash('sha256', implode('~', $parts));
+    }
     /** Return the passenger quantities used in the AT search request. */
     private function passengerCounts(array $params): array
     {

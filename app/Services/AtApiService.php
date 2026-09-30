@@ -26,6 +26,8 @@ class AtApiService
     private const PNR_HTTP_TIMEOUT_SECONDS = 25;
     private const PNR_STATUS_HTTP_TIMEOUT_SECONDS = 10;
     private const PNR_HTTP_CONNECT_TIMEOUT_SECONDS = 10;
+    private const SEARCH_MAX_POLLS = 15;
+    private const SEARCH_POLL_INTERVAL_SECONDS = 2;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -181,7 +183,7 @@ class AtApiService
         }
     }
 
-    public function searchFlights($params)
+    public function searchFlights($params, ?callable $onBatch = null)
     {
         Log::info('Searching flights with params: ', $params);
 
@@ -196,7 +198,7 @@ class AtApiService
             ];
 
             // still call result function (important for flow)
-            return $this->getSearchFlightsRes($mockResponse['TUI']);
+            return $this->getSearchFlightsRes($mockResponse['TUI'], $onBatch);
         }
 
         // 🔴 REAL API CODE
@@ -271,7 +273,7 @@ class AtApiService
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 $this->getWebSettings($responseBody['TUI']);
 
-                return $this->getSearchFlightsRes($responseBody['TUI']);
+                return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch);
             }
 
             Log::warning('Flight search returned non-success message');
@@ -388,7 +390,7 @@ class AtApiService
     }
 
 
-public function getSearchFlightsRes($tui)
+public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 {
     // ✅ MOCK MODE
     if ($this->useMockApi) {
@@ -423,6 +425,7 @@ public function getSearchFlightsRes($tui)
 
         Log::info('GetExpSearch request payload: ', $payload);
 
+        $emittedJourneyKeys = [];
         $page = 1;
         $response = $this->client->send($request);
         $body = json_decode($response->getBody(), true);
@@ -431,20 +434,36 @@ public function getSearchFlightsRes($tui)
 
         Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($body) ? $body : ['raw' => (string) $response->getBody()]);
 
+        $body = $this->removePreviouslySeenJourneys($body, $emittedJourneyKeys);
+
         // 🔁 Retry until completed — only the final completed response is returned
         if ($isComplete === 'true') {
+            $this->emitSearchBatch($onBatch, $body, $body, $page);
             Log::info('GetExpSearch completed immediately.');
             return $body;
         }
 
         // Store initial response as base
         $mergedResponse = $body;
+        $this->emitSearchBatch($onBatch, $body, $mergedResponse, $page);
 
-        // 🔁 Retry until completed
+        // Retry with a bounded wait so an AT search cannot hold a PHP worker indefinitely.
         while ($isComplete !== 'true') {
-            Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
+            if ($page >= self::SEARCH_MAX_POLLS) {
+                Log::warning('AT GetExpSearch timed out before completion.', ['tui' => $tui, 'max_polls' => self::SEARCH_MAX_POLLS]);
+                $mergedResponse['Completed'] = 'false';
+                $mergedResponse['TimedOut'] = true;
+                break;
+            }
 
-            sleep(2);
+            if (connection_aborted()) {
+                Log::info('AT GetExpSearch stopped because the streaming client disconnected.', ['tui' => $tui]);
+                return $mergedResponse;
+            }
+
+            Log::info('Search not ready. Retrying GetExpSearch… Status: ' . $isComplete);
+            $this->emitSearchBatch($onBatch, ['Trips' => [], 'Heartbeat' => true], $mergedResponse, $page);
+            sleep(self::SEARCH_POLL_INTERVAL_SECONDS);
 
             $page++;
             $response = $this->client->send($request);
@@ -453,6 +472,8 @@ public function getSearchFlightsRes($tui)
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
             Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($newBody) ? $newBody : ['raw' => (string) $response->getBody()]);
+
+            $newBody = $this->removePreviouslySeenJourneys($newBody, $emittedJourneyKeys);
 
             // If new response is complete and has no trips, it might be a completion response
             if ($isComplete === 'true' && (!isset($newBody['Trips']) || $newBody['Trips'] === null)) {
@@ -474,6 +495,10 @@ public function getSearchFlightsRes($tui)
 
                 // Merge each trip at the same index
                 foreach ($newTrips as $index => $newTripData) {
+                    if (empty($newTripData['Journey'])) {
+                        continue;
+                    }
+
                     if (isset($mergedTrips[$index])) {
                         // Merge Journey/Segments
                         if (isset($newTripData['Journey']) && isset($mergedTrips[$index]['Journey'])) {
@@ -518,6 +543,8 @@ public function getSearchFlightsRes($tui)
                 $mergedResponse['Msg'] = $newBody['Msg'];
             }
 
+            $this->emitSearchBatch($onBatch, $newBody, $mergedResponse, $page);
+
             // Update body for next iteration
             $body = $newBody;
         }
@@ -537,6 +564,60 @@ public function getSearchFlightsRes($tui)
     }
 }
 
+private function emitSearchBatch(?callable $onBatch, array $newBatch, array $mergedResponse, int $page): void
+{
+    if ($onBatch !== null) {
+        Log::info('AT stream batch received and ready for frontend mapping.', [
+            'page' => $page,
+            'completed' => strtolower((string) ($mergedResponse['Completed'] ?? 'false')) === 'true',
+            'heartbeat' => !empty($newBatch['Heartbeat']),
+            'supplier_response' => $newBatch,
+        ]);
+
+        $onBatch($newBatch, $mergedResponse, $page);
+    }
+}
+
+private function removePreviouslySeenJourneys(array $response, array &$seenJourneyKeys): array
+{
+    $trips = $this->extractTrips($response['Trips'] ?? []);
+    $uniqueTrips = [];
+
+    foreach ($trips as $trip) {
+        $journeys = $trip['Journey'] ?? [];
+        $journeys = is_array($journeys) && isset($journeys[0]) ? $journeys : [$journeys];
+        $uniqueJourneys = [];
+
+        foreach ($journeys as $journey) {
+            if (!is_array($journey)) {
+                continue;
+            }
+
+            $key = hash('sha256', implode('|', [
+                (string) ($journey['Provider'] ?? ''),
+                (string) ($journey['JourneyKey'] ?? ''),
+                (string) ($journey['FBC'] ?? ''),
+                (string) ($journey['FareClass'] ?? ''),
+                (string) ($journey['GrossFare'] ?? ''),
+                (string) ($journey['ReturnIdentifier'] ?? ''),
+            ]));
+
+            if (isset($seenJourneyKeys[$key])) {
+                continue;
+            }
+
+            $seenJourneyKeys[$key] = true;
+            $uniqueJourneys[] = $journey;
+        }
+
+        $trip['Journey'] = $uniqueJourneys;
+        $uniqueTrips[] = $trip;
+    }
+
+    $response['Trips'] = $uniqueTrips;
+
+    return $response;
+}
 /**
  * Extract trips array from response
  * Handles both formats:
