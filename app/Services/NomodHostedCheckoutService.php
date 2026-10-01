@@ -8,6 +8,7 @@ use App\Models\CustomerSetting;
 use App\Models\FlightBookings;
 use App\Models\PaymentAttempt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class NomodHostedCheckoutService
 {
@@ -49,6 +50,19 @@ class NomodHostedCheckoutService
             ->post($this->checkoutPath($baseUrl), $this->payload($attempt, $booking, $amount, $currency, $returnOrigin));
 
         if (! $response->successful()) {
+            Log::warning('Nomod Hosted Checkout API rejected the request.', [
+                'http_status' => $response->status(),
+                'response_body' => mb_substr($response->body(), 0, 4000),
+                'base_url' => $baseUrl,
+                'checkout_path' => $this->checkoutPath($baseUrl),
+                'payment_attempt_uuid' => $attempt->uuid,
+                'booking_id' => $booking->id,
+                'amount' => $amount,
+                'currency' => $currency,
+                'reference_id' => $attempt->reference_id,
+                'return_origin' => $returnOrigin,
+            ]);
+
             throw new NomodCheckoutException(sprintf(
                 'Nomod checkout creation failed with HTTP status %d.',
                 $response->status(),
