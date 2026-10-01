@@ -205,18 +205,6 @@ const timerInterval = ref(null);
 const selectedStop = ref(null);
 const showDialog = ref(false);
 const pnr = ref(null);
-const originAutocomplete = ref(null);
-const destinationAutocomplete = ref(null);
-const departureCalendar = ref(null);
-
-const focusDestination = () => {
-    nextTick(() => destinationAutocomplete.value?.focus());
-};
-
-const openDepartureCalendar = () => {
-    nextTick(() => departureCalendar.value?.open());
-};
-
 function fetchPromoImages() {
     store.dispatch("promoImage/" + FETCH_PROMO_IMAGES);
 }
@@ -1166,9 +1154,8 @@ onMounted(() => {
                                 >{{ $t("FROM") }}</label
                             >
                             <Autocomplete
-                                ref="originAutocomplete"
                                 v-model="origin"
-                                @selected="focusDestination"
+                                clear-on-click
                                 :icon="'MapPin'"
                                 show-icon
                                 :default-value="
@@ -1181,7 +1168,7 @@ onMounted(() => {
                                 :placeholder="$t('origin')"
                                 :source="airports"
                                 :excluded-iata-codes="[destination]"
-                                :search-debounce="350"
+                                :search-debounce="300"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
                                 auto-fill-role="origin"
@@ -1216,9 +1203,8 @@ onMounted(() => {
                                 >{{ $t("TO") }}</label
                             >
                             <Autocomplete
-                                ref="destinationAutocomplete"
                                 v-model="destination"
-                                @selected="openDepartureCalendar"
+                                clear-on-click
                                 :icon="'MapPin'"
                                 show-icon
                                 :default-value="
@@ -1231,7 +1217,7 @@ onMounted(() => {
                                 :placeholder="$t('destination')"
                                 :source="airports"
                                 :excluded-iata-codes="[origin]"
-                                :search-debounce="350"
+                                :search-debounce="300"
                                 :default-suggestions="headerDefaultAirportCodes"
                                 :auto-fill-defaults="true"
                                 auto-fill-role="destination"
@@ -1472,6 +1458,7 @@ onMounted(() => {
                                         <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("FROM") }}</label>
                                     <Autocomplete
                                         v-model="trip.origin"
+                                        clear-on-click
                                         :default-value="
                                             route.query?.origin
                                                 ? route.query?.origin
@@ -1482,7 +1469,7 @@ onMounted(() => {
                                         :placeholder="$t('origin')"
                                         :source="airports"
                                         :excluded-iata-codes="[trip.destination]"
-                                        :search-debounce="350"
+                                        :search-debounce="300"
                                         :icon="'MapPin'"
                                         show-icon
                                         :default-suggestions="
@@ -1499,6 +1486,7 @@ onMounted(() => {
                                         <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("TO") }}</label>
                                     <Autocomplete
                                         v-model="trip.destination"
+                                        clear-on-click
                                         :icon="'MapPin'"
                                         show-icon
                                         :default-value="
@@ -1511,7 +1499,7 @@ onMounted(() => {
                                         :placeholder="$t('destination')"
                                         :source="airports"
                                         :excluded-iata-codes="[trip.origin]"
-                                        :search-debounce="350"
+                                        :search-debounce="300"
                                         :default-suggestions="
                                             headerDefaultAirportCodes
                                         "

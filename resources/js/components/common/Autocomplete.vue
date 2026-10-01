@@ -1,97 +1,74 @@
+
+
 <template>
-    <div class="relative min-w-0 dropdown group">
-        <label v-if="label" class="mb-1 flex items-start justify-start text-sm font-semibold" :style="{ color: text_color }">
-            {{ label }}
-        </label>
-        <div class="relative min-w-0">
-            <div :class="[
-                'relative min-h-[110px] w-full min-w-0 cursor-pointer overflow-hidden rounded border-none bg-white p-4 shadow-none transition-all duration-200',
-                isFocused ? 'ring-0' : 'hover:bg-gray-50',
-            ]">
-                <span class="mb-1 block text-sm font-medium uppercase tracking-wide text-gray-500">
-                    {{ placeholder || 'From' }}
-                </span>
+    <div class="relative min-w-0 dropdown">
+        <div class="relative h-[110px] min-w-0">
+            <input
+                type="text"
+                :placeholder="isFocused ? 'Type to search...' : ''"
+                v-model="search"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                class="absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-0 bg-transparent pl-14 pr-10 text-lg font-bold text-slate-900 outline-none ring-0 sm:text-2xl"
+                :class="{ 'text-transparent caret-transparent': !isFocused }"
+                @input="handleInput"
+                @keydown="handleKeydown"
+                @focus="handleFocus"
+                @click="handleInputClick"
+                @blur="handleBlur"
+                ref="inputEl"
+            />
 
-                <input type="text" :placeholder="isFocused ? 'Type to search...' : ''" v-model="search"
-                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                    :name="`${uniqueId}-search`" data-lpignore="true"
-                    :class="[
-                        'absolute inset-0 z-10 h-full w-full cursor-pointer truncate border-none bg-transparent pb-6 text-2xl font-black text-gray-900 outline-none ring-0 shadow-none sm:text-3xl',
-                        showIcon ? 'pl-12 pr-4' : 'px-4',
-                        !isFocused ? 'text-transparent caret-transparent' : '',
-                    ]"
-                    @input="handleInput" @keydown="handleKeydown" @focus="handleFocus" @click="handleInputClick"
-                    @blur="handleBlur" ref="inputEl" />
-
-                <div v-if="!isFocused" :class="[
-                    'relative min-w-0 pointer-events-none',
-                    showIcon && (compactIcon ? 'pl-8' : 'pl-12'),
-                ]">
-                    <template v-if="displayValue">
-                        <h2 class="max-w-full truncate pr-8 text-2xl font-black leading-tight text-gray-900 sm:text-3xl">{{ displayValue.city }}</h2>
-                        <p class="mt-1 max-w-full truncate pr-8 text-sm font-medium text-gray-600">
-                            {{ displayValue.iata }}, {{ selectedItem.name }}{{ displayValue.country ? ' ' + displayValue.country : '' }}
+            <div
+                v-if="!isFocused"
+                class="pointer-events-none absolute inset-0 flex min-w-0 items-center gap-3 px-4"
+            >
+                <MapPin class="h-7 w-7 shrink-0 text-gray-600" :stroke-width="2" />
+                <div class="min-w-0">
+                    <template v-if="selectedAirport">
+                        <p class="truncate text-lg font-bold leading-tight text-gray-900 sm:text-2xl">
+                            {{ selectedAirport.city_name }}
+                        </p>
+                        <p class="mt-1 mb-2 truncate text-sm text-gray-500">
+                            {{ selectedAirport.iata_code }}, {{ selectedAirport.name }}
                         </p>
                     </template>
                     <template v-else>
-                        <h2 class="max-w-full truncate pr-8 text-2xl font-black leading-tight text-gray-400 sm:text-3xl">Select City</h2>
-                        <p class="mt-1 max-w-full truncate pr-8 text-sm text-gray-400">Airport Name, Country</p>
+                        <p class="text-lg font-bold leading-tight text-gray-900 sm:text-2xl">Select City</p>
+                        <p class="mt-1 text-sm text-gray-500">Airport Name, Country</p>
                     </template>
                 </div>
-
-                <component
-                    v-if="showIcon && icons[icon]"
-                    :is="icons[icon]"
-                    :class="[
-                        'pointer-events-none absolute z-20 -translate-y-1/2 text-slate-400',
-                        compactIcon ? 'left-1 top-4 h-6 w-6' : 'left-3 top-6 h-8 w-8',
-                    ]"
-                    :stroke-width="2.25"
-                    aria-hidden="true"
-                />
-
-                <button v-if="search && isFocused" @click.stop="clearSearch" type="button"
-                    class="absolute right-4 top-4 z-30 rounded-full p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                    </svg>
-                </button>
             </div>
+
+            <button v-if="search && isFocused" @click.stop="clearSearch" type="button"
+                class="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <CircleX class="h-4 w-4" />
+            </button>
         </div>
 
+        <!-- Use teleport to move the dropdown to body to avoid z-index issues -->
         <Teleport to="body">
             <ul v-if="isOpen" :style="dropdownStyle"
-                class="z-[9999] mt-1 min-w-[400px] overflow-hidden rounded border-none bg-white shadow-2xl">
-                <div class="custom-scrollbar max-h-80 overflow-y-auto">
-                    <li v-for="(item, index) in searchResults" :key="item.id || index"
-                        @click.stop="setSelected(item)" :class="[
-                            'flex cursor-pointer items-center justify-between border-b border-gray-50 px-4 py-3 transition-colors',
-                            index === focusedIndex ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
-                        ]">
-                        <div class="flex items-center gap-4">
-                            <div class="rounded-lg bg-gray-100 p-2">
-                                <Plane class="h-5 w-5 text-gray-500" />
-                            </div>
-                            <div class="flex flex-col">
-                                <span class="text-lg font-bold text-gray-900">
-                                    {{ item.city_name }}
-                                    <span v-if="item.iata_code" class="ml-1 font-medium text-gray-400">({{ item.iata_code }})</span>
-                                </span>
-                                <span class="max-w-[250px] truncate text-sm text-gray-500">{{ item.name }}</span>
-                            </div>
-                        </div>
-                        <div v-if="getCountryName(item)" class="text-xs font-bold uppercase tracking-tighter text-gray-400">
-                            {{ getCountryName(item) }}
-                        </div>
+                class="fixed bg-white z-[9999] border border-gray-200 rounded-lg shadow-lg scrollbar-container">
+                <div class="max-h-72 overflow-y-auto scrollbar">
+                    <li class="px-4 py-3 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        :class="{ 'bg-gray-50': index === focusedIndex }" v-for="(item, index) in searchResults"
+                        :key="item.id || index" @click.stop="setSelected(item)">
+                        <div class="font-medium">{{ item.name + " " + "(" + item.iata_code + ")" }}</div>
+                        <span class="font-normal text-sm block text-gray-500">{{ item.city_name }}</span>
                     </li>
 
-                    <li v-if="!isSearching && searchResults.length === 0" class="p-8 text-center font-medium text-gray-400">
-                        <div class="mb-2">📍</div>
-                        No airports found for "{{ search }}"
+                    <!-- Empty state -->
+                    <li v-if="!isSearching && searchResults.length === 0"
+                        class="text-gray-500 h-20 border flex items-center justify-center">
+                        Nothing found.
                     </li>
-                    <li v-if="isSearching" class="flex flex-col items-center justify-center gap-2 p-8">
-                        <Spinner color="#008cff" />
-                        <span class="animate-pulse text-xs text-gray-400">Searching...</span>
+
+                    <!-- Loading state -->
+                    <li v-if="isSearching" class="h-20 border flex items-center justify-center">
+                        <Spinner />
                     </li>
                 </div>
             </ul>
@@ -101,15 +78,12 @@
 
 <script setup>
 import eventBus from "@/services/eventBus";
-import CountryList from "@/components/common/CountryList.json";
 import { debounce } from "lodash";
-import { MapPin, PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
-import { Plane } from 'lucide-vue-next';
+import { CircleX, MapPin, PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
-import apiService from "@/config/axios";
 import Spinner from "../common/Spinner.vue";
-import { Badge } from "../ui/badge";
 
 const store = useStore();
 const props = defineProps({
@@ -133,129 +107,60 @@ const props = defineProps({
         type: String,
         default: "default"
     },
-    icon: {
+    icon:{
         type: String,
         default: "PlaneTakeoff"
     },
-    showIcon: {
+    routeDisplay: {
         type: Boolean,
         default: false,
     },
-    compactIcon: {
+    clearOnClick: {
         type: Boolean,
         default: false,
-    },
-    defaultSuggestionsLimit: {
-        type: Number,
-        default: 8,
-    },
-    defaultSuggestions: {
-        type: Array,
-        default: () => [],
-    },
-    excludedIataCodes: {
-        type: Array,
-        default: () => [],
-    },
-    defaultSuggestionsResolver: {
-        type: Function,
-        default: null,
-    },
-    autoFillDefaults: {
-        type: Boolean,
-        default: false,
-    },
-    autoFillRole: {
-        type: String,
-        default: "",
-    },
-    autoFillSuggestionIndex: {
-        type: Number,
-        default: null,
-    },
-    remoteSearch: {
-        type: Boolean,
-        default: false,
-    },
-    searchDebounce: {
-        type: Number,
-        default: 600,
-    },
-    text_color: {
-        type: String,
-        default: "white"
-    },
-    border_color: {
-        type: String,
-        default: "transparent",
-    },
+    }
+
 });
 
-const emit = defineEmits([
-    "update:modelValue",
-    "selected",
-    "search",
-    "query-changed",
-]);
+const emit = defineEmits(["update:modelValue"]);
 
 const isSearching = computed(() => {
     return (isLoading.value || isLoadingAirport.value) && searchResults.value.length === 0;
 });
 
 const icons = {
-    MapPin,
     PlaneTakeoff,
     PlaneLanding
 }
 const search = ref(props.modelValue || null);
-const selectedItem = ref(null);
 const isOpen = ref(false);
+const isFocused = ref(false);
 const focusedIndex = ref(-1);
 const searchResults = ref([]);
 const isLoading = ref(false);
 const isLoadingAirport = computed(() => store.getters["airport/isLoading"]);
-const isFocused = ref(false);
-const geolocationDefaultSuggestions = ref([]);
-const recentAirportSuggestions = ref([]);
-const hasLoadedDefaultSuggestions = ref(false);
-const hasLoadedRecentSuggestions = ref(false);
-const defaultSuggestionsAreFromGeolocation = ref(false);
-const defaultSuggestionsRequestId = ref(0);
-const recentSuggestionsRequestId = ref(0);
-const RECENT_SEARCHES_KEY = "recent_search_history";
 
 const inputEl = ref(null);
 const uniqueId = ref(`autocomplete-${Math.random().toString(36).substring(2, 9)}`);
 
 // Use a reactive object for dropdownStyle instead of computed
 const dropdownStyle = ref({ display: 'none' });
+const selectedAirport = computed(() => {
+    const value = String(search.value || "").toUpperCase();
 
-const countryByCode = new Map(
-    CountryList.map((country) => [String(country.code).toLowerCase(), country.name]),
-);
+    return props.source.find((item) => String(item?.iata_code || "").toUpperCase() === value) || null;
+});
+const regionNames = typeof Intl !== "undefined" && Intl.DisplayNames
+    ? new Intl.DisplayNames(["en"], { type: "region" })
+    : null;
+const selectedAirportCountry = computed(() => {
+    const code = selectedAirport.value?.iata_country_code;
 
-const getCountryName = (item) => {
-    if (!item) return "";
-    if (item.country_name) return item.country_name;
-    if (item.country && item.country.name) return item.country.name;
-    const code = item.iata_country_code || item.country_code || item.country;
     if (!code) return "";
-    const normalized = String(code).toLowerCase();
-    return countryByCode.get(normalized) || String(code);
-};
 
-const getAirportCountrySearchTerms = (item) => {
-    if (!item) return [];
-
-    const country = item.country;
-    const countryName = getCountryName(item);
-    const countryCode = item.iata_country_code || item.country_code ||
-        (typeof country === "string" ? country : country?.code);
-
-    return [countryName, countryCode, country?.name]
-        .filter(Boolean)
-        .map((value) => String(value).toLowerCase());
-};
+    return regionNames?.of(String(code).toUpperCase()) || code;
+});
+const showRouteDisplay = computed(() => props.routeDisplay && selectedAirport.value && !isFocused.value);
 
 const updateDropdownStyle = () => {
     if (!inputEl.value) {
@@ -265,8 +170,8 @@ const updateDropdownStyle = () => {
     const rect = inputEl.value.getBoundingClientRect();
     dropdownStyle.value = {
         position: 'fixed',
-        top: `${rect.bottom + 8}px`,
-        left: `${rect.left}px`,
+        top: `${rect.bottom + window.scrollY + 8}px`,
+        left: `${rect.left + window.scrollX}px`,
         width: `${rect.width}px`,
         maxHeight: '300px',
         zIndex: 9999
@@ -279,439 +184,21 @@ const updatePosition = () => {
     });
 };
 
-const formatSelection = (item) => {
-    if (!item) return "";
-    return item.iata_code || "";
-};
-
-const normalizeAirportResponse = (payload) => {
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.data)) return payload.data;
-    return [];
-};
-
-const airportKey = (airport) =>
-    String(airport?.iata_code || airport?.id || "").trim().toLowerCase();
-
-const excludedAirportKeys = computed(() => new Set(
-    props.excludedIataCodes.filter(Boolean)
-        .map((code) => String(code).trim().toLowerCase()),
-));
-
-const isExcludedAirport = (airport) => excludedAirportKeys.value.has(airportKey(airport));
-
-const uniqueAirports = (groups) => {
-    const seen = new Set();
-    const airports = [];
-
-    groups.flat().forEach((airport) => {
-        const key = airportKey(airport);
-        if (!airport || !key || seen.has(key)) return;
-
-        seen.add(key);
-        airports.push(airport);
-    });
-
-    return airports;
-};
-
-const extractAirportCodesFromSearch = (searchItem) => {
-    const codes = [];
-
-    if (!searchItem || typeof searchItem !== "object") return codes;
-
-    if (Array.isArray(searchItem.trips)) {
-        searchItem.trips.forEach((trip) => {
-            codes.push(trip?.origin, trip?.destination);
-        });
-    } else {
-        codes.push(searchItem.origin, searchItem.destination);
-    }
-
-    return codes;
-};
-
-const readRecentSearchItems = () => {
-    if (typeof localStorage === "undefined") return [];
-
-    const searchItems = [];
-
-    try {
-        const previousSearch = JSON.parse(localStorage.getItem("previous_search"));
-        if (previousSearch && typeof previousSearch === "object") {
-            searchItems.push(previousSearch);
-        }
-    } catch {}
-
-    try {
-        const recentSearches = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY));
-        if (Array.isArray(recentSearches)) {
-            searchItems.push(...recentSearches);
-        }
-    } catch {}
-
-    return searchItems;
-};
-
-const readRecentAirportCodes = () => {
-    return [...new Set(
-        readRecentSearchItems()
-            .flatMap(extractAirportCodesFromSearch)
-            .map((code) => String(code || "").trim().toUpperCase())
-            .filter((code) => code.length >= 3),
-    )];
-};
-
-const resolvedAutoFillRole = () => {
-    if (props.autoFillRole) return props.autoFillRole;
-
-    const hint = `${props.placeholder || ""} ${props.icon || ""}`.toLowerCase();
-    return hint.includes("destination") || hint.includes("to") || hint.includes("landing")
-        ? "destination"
-        : "origin";
-};
-
-const getRecentCodeForRole = (role) => {
-    for (const searchItem of readRecentSearchItems()) {
-        if (Array.isArray(searchItem?.trips)) {
-            const firstTrip = searchItem.trips.find(
-                (trip) => trip?.origin || trip?.destination,
-            );
-            const code = role === "destination"
-                ? firstTrip?.destination
-                : firstTrip?.origin;
-
-            if (code) return String(code).trim().toUpperCase();
-        }
-
-        const code = role === "destination"
-            ? searchItem?.destination
-            : searchItem?.origin;
-
-        if (code) return String(code).trim().toUpperCase();
-    }
-
-    return "";
-};
-
-const getGeolocationSuggestionIndex = (role) => {
-    if (Number.isInteger(props.autoFillSuggestionIndex)) {
-        return Math.max(0, props.autoFillSuggestionIndex);
-    }
-
-    return role === "destination" ? 1 : 0;
-};
-
-const findAirportByCode = (code, groups) => {
-    const normalizedCode = String(code || "").trim().toLowerCase();
-    if (!normalizedCode) return null;
-
-    return groups
-        .flat()
-        .find((airport) => airportKey(airport) === normalizedCode) || null;
-};
-
-const applyAutoFilledAirport = (airport) => {
-    if (!airport?.iata_code) return false;
-
-    selectedItem.value = airport;
-    search.value = formatSelection(airport);
-    emit("update:modelValue", airport.iata_code);
-    return true;
-};
-
-const maybeAutoFillDefaultAirport = () => {
-    if (
-        !props.autoFillDefaults ||
-        isFocused.value ||
-        selectedItem.value ||
-        String(props.modelValue || "").trim()
-    ) {
-        return;
-    }
-
-    const role = resolvedAutoFillRole();
-    const recentCode = getRecentCodeForRole(role);
-
-    if (recentCode) {
-        const recentAirport = findAirportByCode(recentCode, [
-            recentAirportSuggestions.value,
-            props.source,
-            geolocationDefaultSuggestions.value,
-        ]);
-
-        if (recentAirport) {
-            applyAutoFilledAirport(recentAirport);
-        }
-
-        return;
-    }
-
-    if (
-        !hasLoadedRecentSuggestions.value ||
-        readRecentAirportCodes().length > 0 ||
-        !defaultSuggestionsAreFromGeolocation.value
-    ) {
-        return;
-    }
-
-    applyAutoFilledAirport(
-        geolocationDefaultSuggestions.value[getGeolocationSuggestionIndex(role)],
-    );
-};
-
-const applyFetchedRecentSuggestions = (requestId, suggestions) => {
-    if (requestId !== recentSuggestionsRequestId.value) return;
-
-    recentAirportSuggestions.value = suggestions;
-    hasLoadedRecentSuggestions.value = true;
-
-    if (isOpen.value && !String(search.value || "").trim()) {
-        setDefaultSuggestions();
-    }
-
-    maybeAutoFillDefaultAirport();
-};
-
-const fetchRecentAirportSuggestions = async ({ force = false } = {}) => {
-    if (hasLoadedRecentSuggestions.value && !force) return;
-
-    const requestId = ++recentSuggestionsRequestId.value;
-    const codes = readRecentAirportCodes();
-
-    if (!codes.length) {
-        applyFetchedRecentSuggestions(requestId, []);
-        return;
-    }
-
-    try {
-        const response = await apiService.get("/airports", {
-            params: { codes },
-        });
-
-        applyFetchedRecentSuggestions(
-            requestId,
-            normalizeAirportResponse(response.data),
-        );
-    } catch {
-        applyFetchedRecentSuggestions(requestId, []);
-    }
-};
-
-const getStoredGeolocation = () => {
-    if (typeof localStorage === "undefined") return null;
-
-    const latitude = Number(localStorage.getItem("latitude"));
-    const longitude = Number(localStorage.getItem("longitude"));
-
-    if (
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude) ||
-        latitude < -90 ||
-        latitude > 90 ||
-        longitude < -180 ||
-        longitude > 180
-    ) {
-        return null;
-    }
-
-    return { latitude, longitude };
-};
-
-const applyFetchedDefaultSuggestions = (requestId, suggestions, fromGeolocation = false) => {
-    if (requestId !== defaultSuggestionsRequestId.value) return;
-
-    geolocationDefaultSuggestions.value = suggestions;
-    hasLoadedDefaultSuggestions.value = true;
-    defaultSuggestionsAreFromGeolocation.value = fromGeolocation;
-
-    if (isOpen.value && !String(search.value || "").trim()) {
-        setDefaultSuggestions();
-    }
-
-    maybeAutoFillDefaultAirport();
-};
-
-const fetchDefaultAirportSuggestions = async ({ force = false } = {}) => {
-    if (hasLoadedDefaultSuggestions.value && !force) return;
-
-    const requestId = ++defaultSuggestionsRequestId.value;
-    const limit = Math.max(1, props.defaultSuggestionsLimit || 8);
-    const geolocation = getStoredGeolocation();
-
-    try {
-        const response = await apiService.get(
-            geolocation ? "/nearest-airports" : "/airport-default-suggestions",
-            {
-                params: {
-                    limit,
-                    ...(geolocation || {}),
-                },
-            },
-        );
-
-        applyFetchedDefaultSuggestions(
-            requestId,
-            normalizeAirportResponse(response.data),
-            Boolean(geolocation),
-        );
-    } catch {
-        if (!geolocation) {
-            applyFetchedDefaultSuggestions(requestId, [], false);
-            return;
-        }
-
-        try {
-            const fallbackResponse = await apiService.get(
-                "/airport-default-suggestions",
-                { params: { limit } },
-            );
-
-            applyFetchedDefaultSuggestions(
-                requestId,
-                normalizeAirportResponse(fallbackResponse.data),
-                false,
-            );
-        } catch {
-            applyFetchedDefaultSuggestions(requestId, [], false);
-        }
-    }
-};
-
-const refreshDefaultAirportSuggestions = () => {
-    hasLoadedDefaultSuggestions.value = false;
-    defaultSuggestionsAreFromGeolocation.value = false;
-    fetchDefaultAirportSuggestions({ force: true });
-};
-
-const refreshRecentAirportSuggestions = () => {
-    hasLoadedRecentSuggestions.value = false;
-    fetchRecentAirportSuggestions({ force: true });
-};
-
-const displayValue = computed(() => {
-    if (!selectedItem.value) return null;
-    return {
-        iata: selectedItem.value.iata_code || "",
-        city: selectedItem.value.city_name || "",
-        country: getCountryName(selectedItem.value) || "",
-    };
-});
-
-const syncSelectionFromModelValue = (value) => {
-    if (!value) {
-        search.value = "";
-        selectedItem.value = null;
-        return;
-    }
-
-    const normalizedValue = String(value).trim().toLowerCase();
-    const found = props.source.find((i) => String(i.iata_code || "").trim().toLowerCase() === normalizedValue);
-    if (found) {
-        selectedItem.value = found;
-        search.value = formatSelection(found);
-        return;
-    }
-
-    search.value = value;
-    selectedItem.value = null;
-};
-
-const setDefaultSuggestions = () => {
-    const limit = Math.max(0, props.defaultSuggestionsLimit);
-    let configuredSuggestions = [];
-
-    if (typeof props.defaultSuggestionsResolver === "function") {
-        const resolved = props.defaultSuggestionsResolver(props.source);
-        configuredSuggestions = Array.isArray(resolved) ? resolved : [];
-    } else if (props.defaultSuggestions.length > 0) {
-        const hasStringValues = props.defaultSuggestions.every(
-            (item) => typeof item === "string",
-        );
-
-        if (hasStringValues) {
-            const codes = props.defaultSuggestions.map((item) =>
-                item.toLowerCase(),
-            );
-            configuredSuggestions = props.source.filter((item) =>
-                codes.includes((item.iata_code || "").toLowerCase()),
-            );
-        } else {
-            configuredSuggestions = props.defaultSuggestions;
-        }
-    } else {
-        configuredSuggestions = props.source;
-    }
-
-    const suggestions = uniqueAirports([
-        recentAirportSuggestions.value,
-        geolocationDefaultSuggestions.value,
-        configuredSuggestions,
-    ]);
-
-    searchResults.value = suggestions.filter((airport) => !isExcludedAirport(airport)).slice(0, limit);
-    focusedIndex.value = searchResults.value.length ? 0 : -1;
-    isLoading.value = false;
-};
-
 const updateSearchResults = debounce(() => {
-    if (props.remoteSearch) {
-        const searchQuery = String(search.value || "").trim();
-
-        if (!searchQuery) {
-            setDefaultSuggestions();
-            fetchRecentAirportSuggestions();
-            fetchDefaultAirportSuggestions();
-            isLoading.value = false;
-            return;
-        }
-
-        emit("search", searchQuery);
-        isLoading.value = false;
-        return;
-    }
-
     if (!search.value || search.value === "") {
-        setDefaultSuggestions();
+        searchResults.value = [];
+        isLoading.value = false;
     } else {
-        // normalize the query; if the user typed or a selection filled the field with "Name (CODE)" strip the parentheses
-        let query = search.value.toLowerCase();
-        const codeMatch = query.match(/\(([^)]+)\)$/);
-        if (codeMatch) {
-            query = codeMatch[1].trim();
-        }
-        // If input is in formatted style like "LHE-Lahore-Pakistan", use IATA code part.
-        if (query.includes("-")) {
-            const [firstPart] = query.split("-");
-            if (firstPart && firstPart.trim().length >= 2) {
-                query = firstPart.trim();
-            }
-        }
-
-        // Keep selected airport visible in popover when the input already holds formatted text.
-        if (selectedItem.value) {
-            const selectedCode = (selectedItem.value.iata_code || "").toLowerCase();
-            if (selectedCode && selectedCode === query) {
-                searchResults.value = [selectedItem.value];
-                focusedIndex.value = 0;
-                isLoading.value = false;
-                return;
-            }
-        }
-
+        const query = search.value.toLowerCase();
         const filteredResults = props.source.filter((item) => {
-            if (isExcludedAirport(item)) return false;
-
             const name = item.name ? item.name.toLowerCase() : "";
             const iataCode = item.iata_code ? item.iata_code.toLowerCase() : "";
             const cityName = item.city_name ? item.city_name.toLowerCase() : "";
-            const countryTerms = getAirportCountrySearchTerms(item);
 
             return (
                 iataCode === query ||
                 name.includes(query) ||
-                cityName.includes(query) ||
-                countryTerms.some((country) => country.includes(query))
+                cityName.includes(query)
             );
         });
 
@@ -727,17 +214,9 @@ const updateSearchResults = debounce(() => {
         } else {
             searchResults.value = filteredResults;
         }
-        focusedIndex.value = searchResults.value.length ? 0 : -1;
         isLoading.value = false;
     }
-}, props.remoteSearch ? 350 : props.searchDebounce);
-
-const clearSelectedValue = () => {
-    search.value = "";
-    selectedItem.value = null;
-    emit("update:modelValue", "");
-    emit("query-changed", "");
-};
+}, 300);
 
 watch(search, () => {
     isLoading.value = true;
@@ -745,14 +224,6 @@ watch(search, () => {
 });
 
 function handleInput(event) {
-    // clear any previous selection when user types manually
-    selectedItem.value = null;
-
-    if (props.remoteSearch) {
-        searchResults.value = [];
-        focusedIndex.value = -1;
-    }
-
     isOpen.value = true;
     eventBus.value = {
         ...eventBus.value,
@@ -760,10 +231,8 @@ function handleInput(event) {
         dropdownId: uniqueId.value,
     };
     search.value = event.target.value;
-    if (!search.value.trim()) {
-        emit("update:modelValue", "");
-    }
-    emit("query-changed", event.target.value);
+    emit("update:modelValue", search.value);
+    updateSearchResults();
     nextTick(() => {
         updatePosition(); // Update dropdown position when opening
     });
@@ -771,91 +240,66 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
-    // Keep the selected airport visible until the user clears it.
-    // Show dropdown on focus, including default suggestions when input is empty.
-    isOpen.value = true;
-    eventBus.value = {
-        ...eventBus.value,
-        dropdownOpen: true,
-        dropdownId: uniqueId.value,
-    };
-    if (search.value) {
+    // When input gets focus, update position and show dropdown if there's content
+    // //console.log(isLoadingAirport.value);
+    if (search.value && search.value.length > 0) {
+        isOpen.value = true;
+        eventBus.value = {
+            ...eventBus.value,
+            dropdownOpen: true,
+            dropdownId: uniqueId.value,
+        };
         updateSearchResults();
-    } else {
-        setDefaultSuggestions();
-        fetchRecentAirportSuggestions({ force: true });
-        fetchDefaultAirportSuggestions();
+        nextTick(() => {
+            updatePosition();
+        });
     }
-    nextTick(() => {
-        updatePosition();
-    });
 }
 
 function handleInputClick() {
-    isOpen.value = true;
-    eventBus.value = {
-        ...eventBus.value,
-        dropdownOpen: true,
-        dropdownId: uniqueId.value,
-    };
-    if (search.value) {
-        updateSearchResults();
-    } else {
-        setDefaultSuggestions();
-        fetchRecentAirportSuggestions({ force: true });
-        fetchDefaultAirportSuggestions();
+    if (props.clearOnClick && search.value) {
+        clearSearch();
+        isFocused.value = true;
+        inputEl.value?.focus();
     }
-    nextTick(() => {
-        updatePosition();
-    });
 }
 
 function handleBlur() {
-    isFocused.value = false;
+    window.setTimeout(() => {
+        isFocused.value = false;
+    }, 120);
 }
 
 function setSelected(item) {
     isOpen.value = false;
+    isFocused.value = false;
     eventBus.value = {
         ...eventBus.value,
         dropdownOpen: false,
         dropdownId: null,
     };
-
-    selectedItem.value = item;
-    const formatted = formatSelection(item);
-    search.value = formatted;
-    emit("update:modelValue", item.iata_code); // store only the IATA code externally
-    emit("selected", item);
+    search.value = item.iata_code;
+    emit("update:modelValue", search.value);
 }
 
 function clearSearch() {
     search.value = "";
-    selectedItem.value = null;
     emit("update:modelValue", "");
-    emit("query-changed", "");
-    isOpen.value = true;
-    setDefaultSuggestions();
-    fetchRecentAirportSuggestions({ force: true });
-    fetchDefaultAirportSuggestions();
+    isOpen.value = false;
+    isFocused.value = false;
 }
 
 const handleKeydown = (e) => {
-    if (isLoading.value) updateSearchResults.flush();
+    if (!searchResults.value.length) return;
 
     if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (!searchResults.value.length) return;
         focusedIndex.value =
             (focusedIndex.value + 1) % searchResults.value.length;
     } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (!searchResults.value.length) return;
         focusedIndex.value =
             (focusedIndex.value - 1 + searchResults.value.length) %
             searchResults.value.length;
     } else if (e.key === "Enter") {
-        e.preventDefault();
         if (
             focusedIndex.value >= 0 &&
             focusedIndex.value < searchResults.value.length
@@ -864,12 +308,6 @@ const handleKeydown = (e) => {
         }
     }
 };
-
-const focus = () => {
-    inputEl.value?.focus();
-};
-
-defineExpose({ focus });
 
 // Close the dropdown when clicking outside
 const handleClickOutside = (event) => {
@@ -889,7 +327,6 @@ watch(eventBus, (newVal) => {
 watch(() => props.tabId, () => {
     // When tab changes, we need to update the position after the DOM has updated
     nextTick(() => {
-        syncSelectionFromModelValue(props.modelValue);
         updatePosition();
     });
 });
@@ -898,13 +335,11 @@ onMounted(() => {
     document.addEventListener("click", handleClickOutside);
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
-    window.addEventListener("user-geolocation-updated", refreshDefaultAirportSuggestions);
-    window.addEventListener("storage", refreshRecentAirportSuggestions);
 
     // Initialize with default value if provided
-    syncSelectionFromModelValue(props.modelValue);
-    fetchRecentAirportSuggestions();
-    fetchDefaultAirportSuggestions();
+    if (props.modelValue) {
+        search.value = props.modelValue;
+    }
 
     // Update position after component is mounted
     nextTick(() => {
@@ -916,44 +351,19 @@ onBeforeUnmount(() => {
     document.removeEventListener("click", handleClickOutside);
     window.removeEventListener('scroll', updatePosition, true);
     window.removeEventListener('resize', updatePosition);
-    window.removeEventListener("user-geolocation-updated", refreshDefaultAirportSuggestions);
-    window.removeEventListener("storage", refreshRecentAirportSuggestions);
 });
 
 // Watch for changes to modelValue
 watch(() => props.modelValue, (newValue) => {
-    if (isFocused.value) return;
-
-    if (newValue !== search.value || !selectedItem.value) {
-        syncSelectionFromModelValue(newValue);
+    if (newValue !== search.value) {
+        search.value = newValue;
     }
 });
 
-watch(() => props.excludedIataCodes, () => {
-    if (isOpen.value) {
-        updateSearchResults();
-    }
-}, { deep: true });
-
 watch(() => props.source, () => {
     if (search.value) {
-        if (props.remoteSearch) {
-            searchResults.value = props.source.slice(0, props.defaultSuggestionsLimit);
-            focusedIndex.value = searchResults.value.length ? 0 : -1;
-        } else {
-            updateSearchResults(); // Filter again using the current search term
-        }
-    } else if (isOpen.value) {
-        setDefaultSuggestions();
+        updateSearchResults(); // Filter again using the current search term
     }
-
-    // if the component already has a modelValue but we haven't yet resolved
-    // the matching item (likely because source was empty earlier), try again
-    if (props.modelValue && !selectedItem.value) {
-        syncSelectionFromModelValue(props.modelValue);
-    }
-
-    maybeAutoFillDefaultAirport();
 });
 </script>
 
@@ -969,31 +379,35 @@ watch(() => props.source, () => {
 }
 
 /* Custom scrollbar styling */
-.custom-scrollbar {
-    overflow-y: auto;
+.scrollbar-container {
+    overflow: hidden;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
+.scrollbar::-webkit-scrollbar {
     width: 8px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
+.scrollbar::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 0 4px 4px 0;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
+.scrollbar::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 4px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+.scrollbar::-webkit-scrollbar-thumb:hover {
     background: #a1a1a1;
 }
 
 /* For Firefox */
-.custom-scrollbar {
+.scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.route-display-input:not(:focus) {
+    color: transparent;
 }
 </style>

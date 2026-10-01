@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { ChevronDownIcon, Search, ArrowLeftRight, ArrowRight, Calendar } from "lucide-vue-next";
 import { FETCH_AIRPORTS, FETCH_PNR_DATA } from "@/services/store/actions.type";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
 import Calender from "./Calender.vue";
 import { CircleArrowDown, Plane } from "lucide-vue-next";
@@ -122,18 +122,6 @@ const localValue = ref(normalizeModelValue(props.modelValue));
 const syncingFromParent = ref(false);
 const isSubmit = ref(false);
 const maxMultiCityTrips = 3;
-const originAutocomplete = ref(null);
-const destinationAutocomplete = ref(null);
-const departureCalendar = ref(null);
-
-const focusDestination = () => {
-    nextTick(() => destinationAutocomplete.value?.focus());
-};
-
-const openDepartureCalendar = () => {
-    nextTick(() => departureCalendar.value?.open());
-};
-
 const getLocalDateString = (date = new Date()) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -675,13 +663,12 @@ const startCountdown = (remainingTime) => {
                                     FROM
                                 </label>
                                 <Autocomplete
-                                    ref="originAutocomplete"
                                     v-model="localValue.origin"
-                                    @selected="focusDestination"
+                                    clear-on-click
                                     placeholder="Origin"
                                     :source="airports"
                                     :excluded-iata-codes="[localValue.destination]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
@@ -714,13 +701,12 @@ const startCountdown = (remainingTime) => {
                                     TO
                                 </label>
                                 <Autocomplete
-                                    ref="destinationAutocomplete"
                                     v-model="localValue.destination"
-                                    @selected="openDepartureCalendar"
+                                    clear-on-click
                                     placeholder="Destination"
                                     :source="airports"
                                     :excluded-iata-codes="[localValue.origin]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
@@ -748,6 +734,7 @@ const startCountdown = (remainingTime) => {
                                     ref="departureCalendar"
                                     v-model="localValue.dateRange.start"
                                     :minValue="new Date().toLocaleDateString('en-CA')"
+                                    large-icon
                                     class="w-full h-10 sm:h-auto"
                                 />
                                 <div
@@ -774,6 +761,7 @@ const startCountdown = (remainingTime) => {
                                             localValue.dateRange.start ||
                                             new Date().toLocaleDateString('en-CA')
                                         "
+                                        large-icon
                                         class="w-full h-10 sm:h-auto"
                                     />
                                 </template>
@@ -986,10 +974,11 @@ const startCountdown = (remainingTime) => {
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.multiCityTrips[0].origin"
+                                    clear-on-click
                                     placeholder="Origin"
                                     :source="airports"
                                     :excluded-iata-codes="[localValue.multiCityTrips[0].destination]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
@@ -1010,13 +999,14 @@ const startCountdown = (remainingTime) => {
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.multiCityTrips[0].destination"
+                                    clear-on-click
                                     placeholder="Destination"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
                                     :source="airports"
                                     :excluded-iata-codes="[localValue.multiCityTrips[0].origin]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     :auto-fill-defaults="true"
                                     auto-fill-role="destination"
@@ -1035,6 +1025,7 @@ const startCountdown = (remainingTime) => {
                                 <Calender
                                     v-model="localValue.multiCityTrips[0].date"
                                     :minValue="todayDate"
+                                    large-icon
                                     class="w-full h-10 sm:h-auto"
                                 />
                                 <div v-if="errors.multiCityTrips?.[0]?.date" class="text-destructive mt-1 text-xs">
@@ -1135,10 +1126,11 @@ const startCountdown = (remainingTime) => {
                                 </label>
                                 <Autocomplete
                                     v-model="trip.origin"
+                                    clear-on-click
                                     placeholder="Origin"
                                     :source="airports"
                                     :excluded-iata-codes="[trip.destination]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
@@ -1156,13 +1148,14 @@ const startCountdown = (remainingTime) => {
                                 </label>
                                 <Autocomplete
                                     v-model="trip.destination"
+                                    clear-on-click
                                     placeholder="Destination"
                                     :icon="'MapPin'"
                                     show-icon
                                     compact-icon
                                     :source="airports"
                                     :excluded-iata-codes="[trip.origin]"
-                                    :search-debounce="350"
+                                    :search-debounce="300"
                                     :default-suggestions="headerDefaultAirportCodes"
                                     class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
                                 />
@@ -1178,6 +1171,7 @@ const startCountdown = (remainingTime) => {
                                 <Calender
                                     v-model="trip.date"
                                     :minValue="localValue.multiCityTrips[index - 1]?.date || todayDate"
+                                    large-icon
                                     class="w-full h-10 sm:h-auto"
                                 />
                                 <div v-if="errors.multiCityTrips?.[index]?.date" class="text-destructive mt-1 text-xs">
@@ -1442,6 +1436,13 @@ const startCountdown = (remainingTime) => {
     margin-top: 0.15rem;
     font-size: 0.75rem;
     line-height: 1rem;
+}
+
+/* Match the selected city name to the Departure date's primary text size. */
+.filter-booking-cell :deep(.dropdown .pointer-events-none p:first-child) {
+    margin-bottom: 0.5rem !important;
+    font-size: 1rem !important;
+    line-height: 1.25rem !important;
 }
 
 .filter-booking-cell :deep(button.h-\[110px\]) {
