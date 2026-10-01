@@ -63,6 +63,15 @@ class NomodHostedCheckoutService
                 'return_origin' => $returnOrigin,
             ]);
 
+            // Keep provider-specific details out of the customer UI while
+            // still giving the customer an actionable payment message.
+            if ($response->status() === 400
+                && data_get($response->json(), 'error.code') === 'checkout_invalid_currency') {
+                throw new NomodCheckoutException(
+                    'Card payment is temporarily unavailable for this currency. Please use wallet payment or another supported currency.'
+                );
+            }
+
             throw new NomodCheckoutException(sprintf(
                 'Nomod checkout creation failed with HTTP status %d.',
                 $response->status(),

@@ -133,8 +133,13 @@ class NomodCheckoutController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
+            $safeMessage = $exception instanceof \App\Exceptions\NomodCheckoutException
+                && str_starts_with($exception->getMessage(), 'Card payment is temporarily unavailable')
+                ? $exception->getMessage()
+                : 'Unable to create the payment checkout. Please try again.';
+
             return response()->json([
-                'message' => 'Unable to create the payment checkout. Please try again.',
+                'message' => $safeMessage,
             ], 502);
         }
 
