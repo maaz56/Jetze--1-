@@ -373,7 +373,7 @@ class AtFlightTransformer
     private function streamKeyForItem(array $item): string
     {
         $flights = match ($item['type'] ?? 'oneway') {
-            'return' => [$item['onward']['legs']['flight'] ?? [], $item['return']['legs']['flight'] ?? []],
+            'return' => [$item['onward']['flight'] ?? [], $item['return']['flight'] ?? []],
             'multicity' => array_map(static fn (array $leg): array => $leg['flight'] ?? [], $item['legs'] ?? []),
             default => [$item['legs']['flight'] ?? []],
         };
