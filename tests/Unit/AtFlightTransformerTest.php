@@ -62,6 +62,77 @@ it('combines international multi-city trips by AT provider combinability keys', 
         ->and($flight['legs'][1]['fares'][0]['index'])->toBe('EY|7');
 });
 
+it('keeps repeated international multi-city fares under the same physical flight', function () {
+    $transformer = new AtFlightTransformer();
+
+    $processed = $transformer->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [
+            [
+                'Journey' => [
+                    atJourney([
+                        'Index' => '1G|1',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '9092',
+                        'From' => 'DXB',
+                        'To' => 'DEL',
+                        'JourneyKey' => 'AI,9092,DXB,ATQ,2026-10-22T04:05:00,2026-10-22T09:50:00,2,,04h 15m ,~AI,1826,ATQ,DEL,2026-10-22T12:20:00,2026-10-22T13:35:00,,2,01h 15m ,',
+                        'GrossFare' => 965.0,
+                        'NetFare' => 965.0,
+                    ]),
+                    atJourney([
+                        'Index' => '1G|2',
+                        'ReturnIdentifier' => 2,
+                        'FlightNo' => '9092',
+                        'From' => 'DXB',
+                        'To' => 'DEL',
+                        'JourneyKey' => 'AI,9092,DXB,ATQ,2026-10-22T04:05:00,2026-10-22T09:50:00,2,,04h 15m ,~AI,1826,ATQ,DEL,2026-10-22T12:20:00,2026-10-22T13:35:00,,2,01h 15m ,',
+                        'GrossFare' => 985.0,
+                        'NetFare' => 985.0,
+                    ]),
+                ],
+            ],
+            [
+                'Journey' => [
+                    atJourney([
+                        'Index' => '1G|1',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '2985',
+                        'From' => 'DEL',
+                        'To' => 'BOM',
+                        'JourneyKey' => 'AI,2985,DEL,BOM,2026-10-29T19:30:00,2026-10-29T21:55:00,3,2,02h 25m ,',
+                        'GrossFare' => 360.0,
+                        'NetFare' => 360.0,
+                    ]),
+                    atJourney([
+                        'Index' => '1G|2',
+                        'ReturnIdentifier' => 2,
+                        'FlightNo' => '2985',
+                        'From' => 'DEL',
+                        'To' => 'BOM',
+                        'JourneyKey' => 'AI,2985,DEL,BOM,2026-10-29T19:30:00,2026-10-29T21:55:00,3,2,02h 25m ,',
+                        'GrossFare' => 380.0,
+                        'NetFare' => 380.0,
+                    ]),
+                ],
+            ],
+        ],
+    ], [
+        'flight_type' => 'multi-city',
+        'fare_type' => 'IM',
+    ]);
+
+    expect($processed['flights'])->toHaveCount(1);
+
+    $flight = $processed['flights'][0];
+
+    expect($flight['legs'])->toHaveCount(2)
+        ->and($flight['legs'][0]['fares'])->toHaveCount(2)
+        ->and($flight['legs'][1]['fares'])->toHaveCount(2)
+        ->and(array_column($flight['legs'][0]['fares'], 'index'))->toBe(['1G|1', '1G|2'])
+        ->and(array_column($flight['legs'][1]['fares'], 'index'))->toBe(['1G|1', '1G|2']);
+});
+
 function atJourney(array $overrides = []): array
 {
     return array_merge([

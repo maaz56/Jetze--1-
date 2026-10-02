@@ -915,65 +915,108 @@ class AtFlightTransformer
     private function processMultiCityJourney(array $trips): array
     {
         $final = [];
-        $tripBuckets = [];
+        $allTripLegs = [];
+        $processedItineraries = [];
         Log::info('Processing international multi-city journey with ' . count($trips) . ' trips');
 
         foreach ($trips as $tripIndex => $trip) {
-            $tripBuckets[$tripIndex] = [];
-
-            foreach ($this->groupMultiCityFares($trip['Journey'] ?? []) as $tripLeg) {
-                $leg = $tripLeg['legs'];
-                $flight = $leg['flight'] ?? [];
-                $fare = $leg['fares'][0] ?? [];
-                $key = $this->multiCityCombinationKey($flight, $fare);
-
-                if ($key === null) {
-                    continue;
-                }
-
-                $tripBuckets[$tripIndex][$key][] = $leg;
-            }
+            $allTripLegs[$tripIndex] = array_map(
+                static fn(array $tripLeg): array => $tripLeg['legs'],
+                $this->groupMultiCityFares($trip['Journey'] ?? [])
+            );
         }
 
-        if (empty($tripBuckets) || in_array(0, array_map('count', $tripBuckets), true)) {
+        if (empty($allTripLegs) || in_array(0, array_map('count', $allTripLegs), true)) {
             Log::info('No combinable flights found in one or more international multi-city trips.');
             return [];
         }
 
-        $commonKeys = null;
-        foreach ($tripBuckets as $bucket) {
-            $keys = array_keys($bucket);
-            $commonKeys = $commonKeys === null ? $keys : array_values(array_intersect($commonKeys, $keys));
-        }
+        foreach ($this->buildMultiCityLegCombinations($allTripLegs) as $legCombination) {
+            $commonKeys = null;
 
-        if (empty($commonKeys)) {
-            Log::info('No AT international multi-city flights matched Provider, ReturnIdentifier, VAC and Index.');
-            return [];
-        }
+            foreach ($legCombination as $leg) {
+                $legKeys = $this->multiCityFareCombinationKeys($leg['fares'] ?? []);
+                $commonKeys = $commonKeys === null
+                    ? $legKeys
+                    : array_values(array_intersect($commonKeys, $legKeys));
 
-        foreach ($commonKeys as $key) {
-            $mappedFlightsCount = min(array_map(
-                static fn(array $bucket) => count($bucket[$key] ?? []),
-                $tripBuckets
-            ));
-
-            for ($flightIndex = 0; $flightIndex < $mappedFlightsCount; $flightIndex++) {
-                $legs = [];
-
-                foreach ($tripBuckets as $bucket) {
-                    $legs[] = $bucket[$key][$flightIndex];
+                if (empty($commonKeys)) {
+                    break;
                 }
-
-                $final[] = [
-                    'type' => 'multicity',
-                    'index' => 'multicity_' . (count($final) + 1),
-                    'legs' => $legs,
-                ];
             }
+
+            if (empty($commonKeys)) {
+                continue;
+            }
+
+            $itineraryKey = $this->multiCityItineraryKey($legCombination);
+
+            if (isset($processedItineraries[$itineraryKey])) {
+                continue;
+            }
+
+            $processedItineraries[$itineraryKey] = true;
+
+            $final[] = [
+                'type' => 'multicity',
+                'index' => 'multicity_' . (count($final) + 1),
+                'legs' => array_map(
+                    fn(array $leg): array => $this->filterMultiCityLegFares($leg, $commonKeys),
+                    $legCombination
+                ),
+            ];
         }
 
         Log::info('Completed AT international multi-city mapping. Total mapped results found: ' . count($final));
         return $final;
+    }
+
+    private function buildMultiCityLegCombinations(array $allTripLegs, int $tripIndex = 0, array $current = []): array
+    {
+        if ($tripIndex >= count($allTripLegs)) {
+            return [$current];
+        }
+
+        $combinations = [];
+
+        foreach (array_values($allTripLegs)[$tripIndex] ?? [] as $leg) {
+            foreach ($this->buildMultiCityLegCombinations($allTripLegs, $tripIndex + 1, [...$current, $leg]) as $combination) {
+                $combinations[] = $combination;
+            }
+        }
+
+        return $combinations;
+    }
+
+    private function multiCityFareCombinationKeys(array $fares): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            static fn(array $fare): ?string => $fare['_at_combination_key'] ?? null,
+            $fares
+        ))));
+    }
+
+    private function filterMultiCityLegFares(array $leg, array $commonKeys): array
+    {
+        $leg['fares'] = array_values(array_filter(
+            $leg['fares'] ?? [],
+            static fn(array $fare): bool => in_array($fare['_at_combination_key'] ?? null, $commonKeys, true)
+        ));
+
+        foreach ($leg['fares'] as &$fare) {
+            unset($fare['_at_combination_key']);
+        }
+
+        unset($fare);
+
+        return $leg;
+    }
+
+    private function multiCityItineraryKey(array $legs): string
+    {
+        return hash('sha256', implode('~', array_map(function (array $leg): string {
+            return $this->multiCityPhysicalFlightKey($leg['flight'] ?? []);
+        }, $legs)));
     }
 
     private function groupMultiCityFares(array $journeys): array
@@ -982,16 +1025,7 @@ class AtFlightTransformer
         $processedFlights = [];
 
         foreach ($journeys as $baseJourney) {
-            $combinationKey = $this->multiCityCombinationKey($baseJourney);
-
-            if ($combinationKey === null) {
-                continue;
-            }
-
-            $flightKey = implode('_', [
-                $combinationKey,
-                (string) ($baseJourney['JourneyKey'] ?? ''),
-            ]);
+            $flightKey = $this->multiCityPhysicalFlightKey($baseJourney);
 
             if (isset($processedFlights[$flightKey])) {
                 continue;
@@ -1021,15 +1055,19 @@ class AtFlightTransformer
             $processedFares = [];
 
             foreach ($journeys as $fareJourney) {
-                if (
-                    $this->multiCityCombinationKey($fareJourney) === $combinationKey
-                    && (string) ($fareJourney['JourneyKey'] ?? '') === (string) ($baseJourney['JourneyKey'] ?? '')
-                ) {
+                if ($this->multiCityPhysicalFlightKey($fareJourney) === $flightKey) {
                     if (!$this->hasValidFare($fareJourney['NetFare'] ?? null)) {
                         continue;
                     }
 
+                    $combinationKey = $this->multiCityCombinationKey($fareJourney);
+
+                    if ($combinationKey === null) {
+                        continue;
+                    }
+
                     $fareKey = implode('_', [
+                        $combinationKey,
                         $fareJourney['FareClass'] ?? '',
                         $fareJourney['RBD'] ?? '',
                         $fareJourney['FBC'] ?? '',
@@ -1037,7 +1075,9 @@ class AtFlightTransformer
                     ]);
 
                     if (!isset($processedFares[$fareKey])) {
-                        $fares[] = $this->mapFare($fareJourney);
+                        $fare = $this->mapFare($fareJourney);
+                        $fare['_at_combination_key'] = $combinationKey;
+                        $fares[] = $fare;
                         $processedFares[$fareKey] = true;
                     }
                 }
@@ -1060,6 +1100,23 @@ class AtFlightTransformer
         }
 
         return $final;
+    }
+
+    private function multiCityPhysicalFlightKey(array $flight): string
+    {
+        return hash('sha256', implode('|', [
+            (string) ($flight['Provider'] ?? ''),
+            (string) ($flight['VAC'] ?? ''),
+            (string) ($flight['OAC'] ?? ''),
+            (string) ($flight['MAC'] ?? ''),
+            (string) ($flight['FlightNo'] ?? ''),
+            (string) ($flight['From'] ?? ''),
+            (string) ($flight['To'] ?? ''),
+            (string) ($flight['DepartureTime'] ?? ''),
+            (string) ($flight['ArrivalTime'] ?? ''),
+            (string) ($flight['JourneyKey'] ?? ''),
+            $this->airlineDisambiguationKey($flight),
+        ]));
     }
 
     private function multiCityCombinationKey(array $flight, ?array $fare = null): ?string
