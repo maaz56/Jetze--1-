@@ -142,6 +142,8 @@ const isLoadingAirport = computed(() => store.getters["airport/isLoading"]);
 
 const inputEl = ref(null);
 const uniqueId = ref(`autocomplete-${Math.random().toString(36).substring(2, 9)}`);
+const DEFAULT_AIRPORT_LIMIT = 6;
+const defaultAirportResults = () => props.source.slice(0, DEFAULT_AIRPORT_LIMIT);
 
 // Use a reactive object for dropdownStyle instead of computed
 const dropdownStyle = ref({ display: 'none' });
@@ -170,8 +172,10 @@ const updateDropdownStyle = () => {
     const rect = inputEl.value.getBoundingClientRect();
     dropdownStyle.value = {
         position: 'fixed',
-        top: `${rect.bottom + window.scrollY + 8}px`,
-        left: `${rect.left + window.scrollX}px`,
+        // The dropdown uses fixed positioning, so use viewport coordinates.
+        // Adding scroll offsets here makes it drift away from its input.
+        top: `${rect.bottom + 8}px`,
+        left: `${rect.left}px`,
         width: `${rect.width}px`,
         maxHeight: '300px',
         zIndex: 9999
@@ -186,7 +190,7 @@ const updatePosition = () => {
 
 const updateSearchResults = debounce(() => {
     if (!search.value || search.value === "") {
-        searchResults.value = [];
+        searchResults.value = defaultAirportResults();
         isLoading.value = false;
     } else {
         const query = search.value.toLowerCase();
@@ -240,28 +244,25 @@ function handleInput(event) {
 
 function handleFocus() {
     isFocused.value = true;
-    // When input gets focus, update position and show dropdown if there's content
-    // //console.log(isLoadingAirport.value);
-    if (search.value && search.value.length > 0) {
-        isOpen.value = true;
-        eventBus.value = {
-            ...eventBus.value,
-            dropdownOpen: true,
-            dropdownId: uniqueId.value,
-        };
-        updateSearchResults();
-        nextTick(() => {
-            updatePosition();
-        });
-    }
+    // A click should show the default airports in the dropdown. Filtering only
+    // starts after the user edits the IATA code or search text.
+    searchResults.value = defaultAirportResults();
+    isLoading.value = false;
+    isOpen.value = true;
+    eventBus.value = {
+        ...eventBus.value,
+        dropdownOpen: true,
+        dropdownId: uniqueId.value,
+    };
+    nextTick(() => {
+        updatePosition();
+    });
 }
 
 function handleInputClick() {
-    if (props.clearOnClick && search.value) {
-        clearSearch();
-        isFocused.value = true;
-        inputEl.value?.focus();
-    }
+    // Keep the selected IATA code in place when editing. The user can change
+    // it directly or use the clear button, instead of losing the route on click.
+    inputEl.value?.focus();
 }
 
 function handleBlur() {
