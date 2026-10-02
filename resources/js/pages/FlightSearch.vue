@@ -248,6 +248,8 @@ const progress = ref(0);
 const isSearching = ref(false);
 const filteredFlights = ref([]);
 const classType = ref("Y");
+let activeProviderSearchFingerprint = null;
+let providerSearchInFlight = false;
 const adults = ref(1);
 const children = ref(0);
 const infants = ref(0);
@@ -473,9 +475,35 @@ function fetchProviders() {
             return_date: dateRange.value.end,
         };
     }
-    store.dispatch("flight/" + FETCH_PROVIDERS, {
+
+    if (!searchParams) {
+        return;
+    }
+
+    // The route update and component mount can both request providers. Prevent
+    // the same search from opening two AT streams at the same time.
+    const fingerprint = JSON.stringify({
+        ...searchParams,
+        timestamp: undefined,
+    });
+    if (providerSearchInFlight && activeProviderSearchFingerprint === fingerprint) {
+        return;
+    }
+
+    activeProviderSearchFingerprint = fingerprint;
+    providerSearchInFlight = true;
+
+    const request = store.dispatch("flight/" + FETCH_PROVIDERS, {
         searchParams,
     });
+
+    request.finally(() => {
+        if (activeProviderSearchFingerprint === fingerprint) {
+            providerSearchInFlight = false;
+        }
+    });
+
+    return request;
 }
 
 watch(providers, () => {

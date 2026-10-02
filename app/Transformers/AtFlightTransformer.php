@@ -25,6 +25,7 @@ class AtFlightTransformer
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
         $processed = $this->atFlightProcessor($flightData, $params);
         $results = [];
+        $seenStreamKeys = [];
         $fareType = $this->resolveFareType($flightData, $params);
         $passengerCounts = $this->passengerCounts($params);
 
@@ -350,8 +351,18 @@ class AtFlightTransformer
 
             $sector = implode('-', $sectorParts);
 
+            $streamKey = $this->streamKeyForItem($item);
+            if (isset($seenStreamKeys[$streamKey])) {
+                Log::info('Skipped duplicate AT itinerary after mapping.', [
+                    'stream_key' => $streamKey,
+                ]);
+                continue;
+            }
+
+            $seenStreamKeys[$streamKey] = true;
+
             $results[] = [
-                "stream_key" => $this->streamKeyForItem($item),
+                "stream_key" => $streamKey,
                 "provider" => array_merge($provider, [
                     'sector' => $sector,
                     'travel_date' => $transformedLegs[0]['departure_at'] ?? null,
@@ -386,7 +397,6 @@ class AtFlightTransformer
                 (string) ($flight['FBC'] ?? ''),
                 (string) ($flight['FareClass'] ?? ''),
                 (string) ($flight['GrossFare'] ?? ''),
-                (string) ($flight['ReturnIdentifier'] ?? ''),
             ]);
         }
 
