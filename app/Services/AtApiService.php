@@ -252,7 +252,7 @@ class AtApiService
         ];
 
         if ($fareType === 'DM' && !empty($trips)) {
-            return $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl);
+            return $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl, $onBatch);
         }
 
         try {
@@ -1678,7 +1678,7 @@ private function extractTrips($tripsData): array
         return $trips;
     }
 
-    private function searchTripsOneByOne(array $payload, array $trips, array $headers, string $searchUrl): ?array
+    private function searchTripsOneByOne(array $payload, array $trips, array $headers, string $searchUrl, ?callable $onBatch = null): ?array
     {
         $combinedResponse = null;
         $combinedTrips = [];
@@ -1740,6 +1740,11 @@ private function extractTrips($tripsData): array
         $combinedResponse['TUIList'] = $tuis;
 
         Log::info('Combined DM flight search response: ', $combinedResponse);
+
+        // A DM multi-city search is performed one trip at a time. Emit only once
+        // all trip results have been combined, so the frontend receives complete
+        // multi-city itineraries rather than incomplete individual legs.
+        $this->emitSearchBatch($onBatch, $combinedResponse, $combinedResponse, count($trips));
 
         return $combinedResponse;
     }
