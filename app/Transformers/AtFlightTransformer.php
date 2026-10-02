@@ -573,7 +573,7 @@ class AtFlightTransformer
         if ($flightType === 'multi-city') {
             $trips = $params['trips'] ?? [];
             if (is_array($trips) && !empty($trips)) {
-                return $this->isInternationalMultiCity($trips) ? 'DM' : 'DM';
+                return $this->isInternationalMultiCity($trips) ? 'IM' : 'DM';
             }
 
             return 'IM';
@@ -588,42 +588,104 @@ class AtFlightTransformer
 
     private function isInternationalMultiCity(array $trips): bool
     {
-        $allAirports = [];
-        foreach ($trips as $trip) {
-            if (!empty($trip['origin'])) {
-                $allAirports[] = $trip['origin'];
-            }
+        $countries = [];
+        $airportCodes = [];
 
-            if (!empty($trip['destination'])) {
-                $allAirports[] = $trip['destination'];
+        foreach ($trips as $trip) {
+            foreach (['origin', 'destination', 'From', 'To'] as $key) {
+                if (empty($trip[$key])) {
+                    continue;
+                }
+
+                $countryCode = $this->countryCodeFromAirportInput($trip[$key]);
+
+                if ($countryCode !== null) {
+                    $countries[] = $countryCode;
+                    continue;
+                }
+
+                $airportCode = $this->airportCodeFromTripInput($trip[$key]);
+
+                if ($airportCode !== null) {
+                    $airportCodes[] = $airportCode;
+                }
             }
         }
 
-        $allAirports = array_unique($allAirports);
+        $airportCodes = array_values(array_unique($airportCodes));
 
-        if (empty($allAirports)) {
+        if (!empty($airportCodes)) {
+            $dbCountries = Airport::query()
+                ->whereIn('iata_code', $airportCodes)
+                ->pluck('iata_country_code', 'iata_code')
+                ->map(fn($countryCode) => strtoupper(trim((string) $countryCode)))
+                ->filter();
+
+            if ($dbCountries->count() !== count($airportCodes)) {
+                Log::warning('Unable to resolve all AT multi-city airport countries; defaulting to IM.', [
+                    'airport_codes' => $airportCodes,
+                    'resolved_airport_codes' => $dbCountries->keys()->values()->toArray(),
+                ]);
+
+                return true;
+            }
+
+            $countries = array_merge($countries, $dbCountries->values()->toArray());
+        }
+
+        $countries = array_values(array_unique(array_filter(array_map(
+            fn($countryCode) => strtoupper(trim((string) $countryCode)),
+            $countries
+        ))));
+
+        if (empty($countries)) {
+            Log::warning('Unable to resolve AT multi-city countries; defaulting to IM.', [
+                'trips' => $trips,
+            ]);
             return true;
         }
 
-        $pakistaniAirports = $this->getPakistaniAirports();
+        return count($countries) > 1;
+    }
 
-        foreach ($allAirports as $airport) {
-            if (!in_array(strtoupper($airport), $pakistaniAirports)) {
-                return true;
+    private function airportCodeFromTripInput($airport): ?string
+    {
+        if (is_array($airport)) {
+            foreach (['iata_code', 'iata', 'code', 'value'] as $key) {
+                if (!empty($airport[$key])) {
+                    return strtoupper(trim((string) $airport[$key]));
+                }
+            }
+
+            return null;
+        }
+
+        $airport = strtoupper(trim((string) $airport));
+
+        return $airport !== '' ? $airport : null;
+    }
+
+    private function countryCodeFromAirportInput($airport): ?string
+    {
+        if (!is_array($airport)) {
+            return null;
+        }
+
+        foreach ([
+            'iata_country_code',
+            'country_code',
+            'countryCode',
+            'country.code',
+            'country.iata_code',
+        ] as $key) {
+            $countryCode = data_get($airport, $key);
+
+            if (!empty($countryCode)) {
+                return strtoupper(trim((string) $countryCode));
             }
         }
 
-        return false;
-    }
-
-    private function getPakistaniAirports(): array
-    {
-        return Cache::remember('pakistani_airports', 86400, function () {
-            return Airport::where('iata_country_code', 'PK')
-                ->pluck('iata_code')
-                ->map(fn($code) => strtoupper($code))
-                ->toArray();
-        });
+        return null;
     }
 
     public static function buildAirportData($airport)
@@ -678,10 +740,13 @@ class AtFlightTransformer
         }
         
         if ($flightType === 'multi-city') {
+            $fareType = strtoupper((string) ($this->resolveFareType($apiResponse, $params) ?? 'IM'));
             Log::info('Processing multi-city journey with ' . $tripCount . ' trips');
             $final = $tripCount === 1
                 ? $this->groupAllFares($trips[0]['Journey'])
-                : $this->processMultiCityJourney($trips);
+                : ($fareType === 'DM'
+                    ? $this->processDomesticMultiCityJourney($trips)
+                    : $this->processMultiCityJourney($trips));
         }
         elseif ($flightType === 'return') {
             $final = $tripCount === 2
@@ -795,12 +860,12 @@ class AtFlightTransformer
     }
 
     /**
-     * Process multi-city journey (3+ trips)
+     * Process domestic multi-city journeys as independent one-way choices.
      */
-    private function processMultiCityJourney(array $trips): array
+    private function processDomesticMultiCityJourney(array $trips): array
     {
         $final = [];
-        Log::info('Processing multi-city journey with ' . count($trips) . ' trips');
+        Log::info('Processing domestic multi-city journey with ' . count($trips) . ' trips');
 
         $allTripLegs = [];
         foreach ($trips as $tripIndex => $trip) {
@@ -830,8 +895,178 @@ class AtFlightTransformer
             ];
         }
 
-        Log::info('Completed loop-based multi-city mapping. Total mapped results found: ' . count($final));
+        Log::info('Completed domestic multi-city mapping. Total mapped results found: ' . count($final));
         return $final;
+    }
+
+    /**
+     * Process international multi-city journeys using AT combinability keys.
+     */
+    private function processMultiCityJourney(array $trips): array
+    {
+        $final = [];
+        $tripBuckets = [];
+        Log::info('Processing international multi-city journey with ' . count($trips) . ' trips');
+
+        foreach ($trips as $tripIndex => $trip) {
+            $tripBuckets[$tripIndex] = [];
+
+            foreach ($this->groupMultiCityFares($trip['Journey'] ?? []) as $tripLeg) {
+                $leg = $tripLeg['legs'];
+                $flight = $leg['flight'] ?? [];
+                $fare = $leg['fares'][0] ?? [];
+                $key = $this->multiCityCombinationKey($flight, $fare);
+
+                if ($key === null) {
+                    continue;
+                }
+
+                $tripBuckets[$tripIndex][$key][] = $leg;
+            }
+        }
+
+        if (empty($tripBuckets) || in_array(0, array_map('count', $tripBuckets), true)) {
+            Log::info('No combinable flights found in one or more international multi-city trips.');
+            return [];
+        }
+
+        $commonKeys = null;
+        foreach ($tripBuckets as $bucket) {
+            $keys = array_keys($bucket);
+            $commonKeys = $commonKeys === null ? $keys : array_values(array_intersect($commonKeys, $keys));
+        }
+
+        if (empty($commonKeys)) {
+            Log::info('No AT international multi-city flights matched Provider, ReturnIdentifier, VAC and Index.');
+            return [];
+        }
+
+        foreach ($commonKeys as $key) {
+            $mappedFlightsCount = min(array_map(
+                static fn(array $bucket) => count($bucket[$key] ?? []),
+                $tripBuckets
+            ));
+
+            for ($flightIndex = 0; $flightIndex < $mappedFlightsCount; $flightIndex++) {
+                $legs = [];
+
+                foreach ($tripBuckets as $bucket) {
+                    $legs[] = $bucket[$key][$flightIndex];
+                }
+
+                $final[] = [
+                    'type' => 'multicity',
+                    'index' => 'multicity_' . (count($final) + 1),
+                    'legs' => $legs,
+                ];
+            }
+        }
+
+        Log::info('Completed AT international multi-city mapping. Total mapped results found: ' . count($final));
+        return $final;
+    }
+
+    private function groupMultiCityFares(array $journeys): array
+    {
+        $final = [];
+        $processedFlights = [];
+
+        foreach ($journeys as $baseJourney) {
+            $combinationKey = $this->multiCityCombinationKey($baseJourney);
+
+            if ($combinationKey === null) {
+                continue;
+            }
+
+            $flightKey = implode('_', [
+                $combinationKey,
+                (string) ($baseJourney['JourneyKey'] ?? ''),
+            ]);
+
+            if (isset($processedFlights[$flightKey])) {
+                continue;
+            }
+
+            $flight = $baseJourney;
+
+            unset(
+                $flight['FareClass'],
+                $flight['GrossFare'],
+                $flight['NetFare'],
+                $flight['TrendFare'],
+                $flight['TotalCommission'],
+                $flight['ActualFare'],
+                $flight['WPNetFare'],
+                $flight['TotalFare'],
+                $flight['FareType'],
+                $flight['FBC'],
+                $flight['FCType'],
+                $flight['FCGroup'],
+                $flight['Promo'],
+                $flight['Hold'],
+                $flight['RBD']
+            );
+
+            $fares = [];
+            $processedFares = [];
+
+            foreach ($journeys as $fareJourney) {
+                if (
+                    $this->multiCityCombinationKey($fareJourney) === $combinationKey
+                    && (string) ($fareJourney['JourneyKey'] ?? '') === (string) ($baseJourney['JourneyKey'] ?? '')
+                ) {
+                    if (!$this->hasValidFare($fareJourney['NetFare'] ?? null)) {
+                        continue;
+                    }
+
+                    $fareKey = implode('_', [
+                        $fareJourney['FareClass'] ?? '',
+                        $fareJourney['RBD'] ?? '',
+                        $fareJourney['FBC'] ?? '',
+                        $fareJourney['NetFare'] ?? '',
+                    ]);
+
+                    if (!isset($processedFares[$fareKey])) {
+                        $fares[] = $this->mapFare($fareJourney);
+                        $processedFares[$fareKey] = true;
+                    }
+                }
+            }
+
+            $processedFlights[$flightKey] = true;
+
+            if (empty($fares)) {
+                continue;
+            }
+
+            $final[] = [
+                'type' => 'oneway',
+                'index' => $flightKey,
+                'legs' => [
+                    'flight' => $flight,
+                    'fares' => $fares,
+                ],
+            ];
+        }
+
+        return $final;
+    }
+
+    private function multiCityCombinationKey(array $flight, ?array $fare = null): ?string
+    {
+        $index = $fare['index'] ?? $fare['Index'] ?? $flight['Index'] ?? null;
+        $returnIdentifier = $fare['ReturnIdentifier'] ?? $flight['ReturnIdentifier'] ?? null;
+
+        if ($index === null || $index === '') {
+            return null;
+        }
+
+        return implode('|', [
+            strtoupper(trim((string) ($flight['Provider'] ?? ''))),
+            trim((string) $returnIdentifier),
+            strtoupper(trim((string) ($flight['VAC'] ?? ''))),
+            strtoupper(trim((string) $index)),
+        ]);
     }
 
     private function groupAllFares(array $journeys): array
