@@ -1179,7 +1179,19 @@ const startCountdown = (remainingTime) => {
                                 </div>
                             </div>
 
+                            <div class="multicity-action-cell" aria-hidden="true"></div>
+
+                            <div
+                                v-if="index === 1"
+                                @click="addTrip"
+                                class="multicity-action-cell multicity-add-cell"
+                            >
+                                <button type="button" @click.stop="addTrip">
+                                    Add Another City
+                                </button>
+                            </div>
                             <button
+                                v-else-if="index >= 2"
                                 type="button"
                                 @click="removeTrip(index)"
                                 :disabled="localValue.multiCityTrips.length <= 2"
@@ -1188,17 +1200,8 @@ const startCountdown = (remainingTime) => {
                                 <span class="text-base leading-none">x</span>
                                 <span>Remove</span>
                             </button>
+                            <div v-else class="multicity-action-cell" aria-hidden="true"></div>
                         </div>
-                    </div>
-
-                    <div class="mt-3 flex justify-start">
-                        <Button
-                            @click="addTrip"
-                            :disabled="localValue.multiCityTrips.length >= maxMultiCityTrips"
-                            class="w-full sm:w-auto justify-center bg-white text-gray-900 hover:bg-gray-100 text-sm sm:justify-start border border-gray-200 px-4 py-2 rounded-md shadow-sm"
-                        >
-                            Add Another City
-                        </Button>
                     </div>
                 </div>
             </div>
@@ -1341,13 +1344,12 @@ const startCountdown = (remainingTime) => {
 
 .multicity-extra-row {
     display: grid;
-    grid-template-columns: 88px minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(0, 1.02fr) 112px;
+    grid-template-columns: 150px minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(0, 1.02fr) minmax(0, 1.28fr) 138px;
     align-items: stretch;
     overflow: hidden;
     border: 1px solid rgba(148, 163, 184, 0.26);
     border-radius: 8px;
     background: #ffffff;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
 }
 
 .trip-index-badge {
@@ -1375,6 +1377,36 @@ const startCountdown = (remainingTime) => {
     transition:
         background-color 0.2s ease,
         color 0.2s ease;
+}
+
+.multicity-action-cell {
+    display: flex;
+    min-height: 76px;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #e5e7eb;
+}
+
+.multicity-add-cell {
+    cursor: pointer;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 1rem;
+    font-weight: 700;
+    transition: background-color 0.2s ease;
+}
+
+.multicity-add-cell:hover {
+    background: #d1fae5;
+}
+
+.multicity-add-cell:active {
+    background: #a7f3d0;
+}
+
+.multicity-add-cell button {
+    height: 100%;
+    width: 100%;
 }
 
 .multicity-remove-button:hover {

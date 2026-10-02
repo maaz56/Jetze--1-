@@ -158,7 +158,14 @@ const showDialog = ref(false);
 const timerInterval = ref();
 const isQuoteExpired = ref(false);
 const customerMarginAmt = ref(0);
-const todayDate = new Date();
+const todayDate = computed(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+});
 const showAncillariesTab = ref(false);
 const isSeatMapOpen = ref(false);
 const sooperResponse = ref(null);
@@ -1009,15 +1016,13 @@ const initializeTravellers = () => {
         gender: "",
     }));
 };
-watch(
-  () => travellers.value,
-  (newTravelers) => {
-    newTravelers.forEach(t => {
-      t.issueCountry = t.nationality
-    })
-  },
-  { deep: true }
-)
+// Keep the issuing country in sync on the initial nationality selection, like
+// the other flight checkouts.  Do not use a deep watcher here: it would
+// overwrite a traveller's separately selected issuing country on every edit.
+const setNationality = (traveller, value) => {
+    traveller.nationality = value;
+    traveller.issueCountry = value;
+};
 const getErrorPath = (path) => {
     const parts = path.split(".");
     let current = errors;
@@ -1146,13 +1151,13 @@ const validateForm = () => {
             errors.travellers[index].nationality = "Nationality must be 2 characters (e.g., PK)";
             isValid = false;
         }
-        // if (!traveller.issueCountry) {
-        //     errors.travellers[index].issueCountry = "Issue country is required";
-        //     isValid = false;
-        // } else if (traveller.issueCountry.length !== 2) {
-        //     errors.travellers[index].issueCountry = "Issue country must be 2 characters (e.g., PK)";
-        //     isValid = false;
-        // }
+        if (!traveller.issueCountry) {
+            errors.travellers[index].issueCountry = "Issue country is required";
+            isValid = false;
+        } else if (traveller.issueCountry.length !== 2) {
+            errors.travellers[index].issueCountry = "Issue country must be 2 characters (e.g., PK)";
+            isValid = false;
+        }
 
         if (!traveller.gender) {
             errors.travellers[index].gender = "Gender is required";
@@ -2719,7 +2724,7 @@ watch(flight, () => {
                                                                     2</span>
                                                             </Label>
                                                             <Calender v-model="traveller.dob" type="date"
-                                                                :maxValue="todayDate.toISOString().split('T')[0]"
+                                                                :maxValue="todayDate"
                                                                 :id="`date-of-birth-${index}`"
                                                                 placeholder="Date Of Birth"
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.dob`) }"
@@ -2736,7 +2741,7 @@ watch(flight, () => {
                                                             <CountryDropdown :keyValue="'code'"
                                                                 placeholder="SELECT NATIONALITY"
                                                                 v-model="traveller.nationality"
-                                                                @update:modelValue="(value) => traveller.nationality = value" />
+                                                                @update:modelValue="(value) => setNationality(traveller, value)" />
                                                             <div v-if="getErrorPath(`travellers.${index}.nationality`)"
                                                                 class="error-message">
                                                                 {{ getErrorPath(`travellers.${index}.nationality`) }}
@@ -2819,6 +2824,19 @@ watch(flight, () => {
                                                             <div v-if="getErrorPath(`travellers.${index}.expiryDate`)"
                                                                 class="text-red-500 text-xs mt-1">{{
                                                                     getErrorPath(`travellers.${index}.expiryDate`) }}</div>
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <Label :for="`issue-country-${index}`"
+                                                                class="block text-sm font-medium text-gray-700 mb-1">
+                                                                Issue Country<span class="required">*</span>
+                                                            </Label>
+                                                            <CountryDropdown :keyValue="'code'"
+                                                                placeholder="SELECT ISSUE COUNTRY"
+                                                                v-model="traveller.issueCountry" />
+                                                            <div v-if="getErrorPath(`travellers.${index}.issueCountry`)"
+                                                                class="error-message">
+                                                                {{ getErrorPath(`travellers.${index}.issueCountry`) }}
+                                                            </div>
                                                         </div>
 
                                                     </div>

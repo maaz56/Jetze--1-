@@ -2041,7 +2041,12 @@ watch(isLoggedIn, (newVal) => {
                     v-if="activeTab === 'flights'"
                     class="flight-results-search sticky top-0 z-30 w-full"
                 >
-                    <div class="flight-results-search__hero">
+                    <div
+                        :class="[
+                            'flight-results-search__hero',
+                            modelValue.flightType === 'multi-city' && 'flight-results-search__hero--multicity',
+                        ]"
+                    >
                         <div class="flight-results-search__form">
                             <FlightFilterCard
                                 :countdown="countdown"
@@ -5325,6 +5330,20 @@ watch(isLoggedIn, (newVal) => {
     top: 50%;
     z-index: 1;
     transform: translateY(-50%);
+}
+
+/* Keep every multi-city row inside the blue search area instead of lifting it
+   under the navigation with the default vertically-centred form layout. */
+.flight-results-search__hero--multicity {
+    height: auto;
+    min-height: 0;
+    padding: 1rem 0;
+}
+
+.flight-results-search__hero--multicity .flight-results-search__form {
+    position: relative;
+    top: auto;
+    transform: none;
 }
 
 /* Keep results aligned with the reduced-width flight search form. */

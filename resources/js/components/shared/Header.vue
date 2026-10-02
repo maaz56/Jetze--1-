@@ -1441,21 +1441,16 @@ onMounted(() => {
                             <div
                                 v-for="(trip, index) in multiCityTrips"
                                 :key="index"
-                                class="mb-4 last:mb-0"
+                                class="multicity-trip-row mb-3 last:mb-0"
                             >
                                 <div class="mb-1.5 font-normal text-start text-gray-700">
                                     Trip {{ index + 1 }}
                                 </div>
                                 <div
-                                    :class="[
-                                        'grid grid-cols-1 items-stretch overflow-hidden rounded-md border border-gray-200 bg-white',
-                                        index === 0
-                                            ? 'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]'
-                                            : 'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)]',
-                                    ]"
+                                    class="grid grid-cols-1 items-stretch overflow-hidden rounded-md border border-gray-200 bg-white sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]"
                                 >
-                                    <div class="booking-cell text-start relative w-full">
-                                        <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("FROM") }}</label>
+                                    <div class="booking-cell multicity-booking-cell text-start relative w-full">
+                                        <label class="block text-sm font-medium text-gray-700">{{ $t("FROM") }}</label>
                                     <Autocomplete
                                         v-model="trip.origin"
                                         clear-on-click
@@ -1482,8 +1477,8 @@ onMounted(() => {
                                     />
                                     </div>
 
-                                    <div class="booking-cell text-start relative w-full">
-                                        <label class="block text-sm font-medium text-gray-700 sm:mb-1">{{ $t("TO") }}</label>
+                                    <div class="booking-cell multicity-booking-cell text-start relative w-full">
+                                        <label class="block text-sm font-medium text-gray-700">{{ $t("TO") }}</label>
                                     <Autocomplete
                                         v-model="trip.destination"
                                         clear-on-click
@@ -1510,8 +1505,8 @@ onMounted(() => {
                                     />
                                     </div>
 
-                                    <div class="booking-cell w-full text-start">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Departure</label>
+                                    <div class="booking-cell multicity-booking-cell w-full text-start">
+                                        <label class="block text-sm font-medium text-gray-700">Departure</label>
                                         <Calender
                                             v-model="trip.date"
                                             :minValue="
@@ -1525,13 +1520,13 @@ onMounted(() => {
                                         />
                                     </div>
                                     <div v-if="index === 0" class="w-full text-start">
-                                        <div class="booking-cell w-full text-start">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Travellers &amp; Class</label>
+                                        <div class="booking-cell multicity-booking-cell w-full text-start">
+                                        <label class="block text-sm font-medium text-gray-700">Travellers &amp; Class</label>
                                         <Popover v-model:open="isPopoverOpen">
                                             <PopoverTrigger as-child>
                                                 <button
                                                     type="button"
-                                                    class="w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded border-0 bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                                                    class="multicity-travelers-trigger w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded border-0 bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
                                                 >
                                                     <div class="text-left">
                                                         <p class="font-bold text-lg">
@@ -1637,30 +1632,33 @@ onMounted(() => {
                                         </Popover>
                                         </div>
                                     </div>
+                                    <div v-else-if="index === 1" @click="addTrip" class="booking-cell multicity-booking-cell flex w-full cursor-pointer items-center justify-center bg-emerald-50 text-start transition-colors hover:bg-emerald-100 active:bg-emerald-200">
+                                        <Button
+                                            @click.stop="addTrip"
+                                            class="h-auto w-full border-0 bg-transparent text-base font-semibold text-emerald-700 shadow-none hover:bg-transparent"
+                                        >
+                                            Add Another City
+                                        </Button>
+                                    </div>
                                     <!-- Remove Button -->
-                                    <Button
+                                    <div
                                         v-if="index >= 2"
                                         @click="removeTrip(index)"
-                                        class="text-background h-11 bg-primary hover:bg-primary w-full"
+                                        class="booking-cell multicity-booking-cell flex w-full cursor-pointer items-center justify-center bg-red-50 transition-colors hover:bg-red-100 active:bg-red-200"
                                     >
-                                        Remove
-                                    </Button>
+                                        <Button
+                                            @click.stop="removeTrip(index)"
+                                            class="h-auto w-full border-0 bg-transparent text-base font-semibold text-red-600 shadow-none hover:bg-transparent"
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
-                            <div
-                                class="flex flex-col sm:flex-row justify-between items-center gap-2 p-4"
-                            >
-                                <Button
-                                    @click="addTrip"
-                                    class="text-sm bg-white border border-gray-200 text-gray-800 hover:bg-gray-100 w-full sm:w-auto"
-                                >
-                                    Add Another City
-                                </Button>
-                            </div>
-                            <div class="flex justify-end pb-4 px-4">
+                            <div class="multicity-actions mt-3 flex justify-end">
                                 <button
                                     @click="searchFlights"
-                                    class="w-full sm:w-48 bg-gradient-to-r from-[#49a7ff] to-[#065af3] hover:brightness-105 rounded-full p-4 text-white font-bold flex items-center justify-center gap-2 text-lg sm:text-2xl"
+                                    class="flight-search-button w-full sm:w-48"
                                 >
                                     <Search class="w-5 h-5" />
                                     <span
@@ -1895,6 +1893,57 @@ onMounted(() => {
 
 .booking-cell :deep(.dropdown p) {
     margin-top: 0.15rem;
+}
+
+/* Multi-city uses the same compact density as the one-way form. */
+.multicity-trip-row > .mb-1\.5 {
+    margin-bottom: 0.35rem;
+    font-size: 0.9rem;
+}
+
+.multicity-booking-cell {
+    min-height: 66px;
+    padding: 0.45rem 0.9rem;
+}
+
+.multicity-booking-cell > label {
+    margin-bottom: 0.2rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+}
+
+.multicity-booking-cell :deep(.h-\[110px\]),
+.multicity-booking-cell :deep(.min-h-\[110px\]),
+.multicity-booking-cell :deep(button.h-\[110px\]) {
+    height: 50px !important;
+    min-height: 50px !important;
+}
+
+.multicity-booking-cell :deep(.dropdown .pointer-events-none) {
+    padding-top: 0 !important;
+}
+
+.multicity-booking-cell :deep(.dropdown input) {
+    padding-top: 0 !important;
+}
+
+.multicity-booking-cell :deep(.multicity-travelers-trigger) {
+    height: 50px !important;
+    min-height: 50px !important;
+}
+
+.multicity-actions {
+    padding: 0 0.9rem 0.25rem;
+}
+
+.multicity-actions .flight-search-button {
+    width: 12rem;
+}
+
+@media (max-width: 639px) {
+    .multicity-actions .flight-search-button {
+        width: 100%;
+    }
 }
 
 @keyframes fadeIn {
