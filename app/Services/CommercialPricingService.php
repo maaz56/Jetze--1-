@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-/** Build AT selling prices in AED while preserving the provider booking amount. */
+/** Build AT Net Fare selling prices in AED while preserving Gross Fare for audit. */
 class CommercialPricingService
 {
     public function __construct(
@@ -41,8 +41,8 @@ class CommercialPricingService
                         $providerGrossMoney['currency'],
                     );
                     $margin = $this->segmentMarginService->commercialRuleForFare($provider, $flight);
-                    $marginAmount = $this->adjustmentAmount($grossBaseMoney['amount'], $margin);
-                    $beforePromotion = bcadd($grossBaseMoney['amount'], $marginAmount, 8);
+                    $marginAmount = $this->adjustmentAmount($costBaseMoney['amount'], $margin);
+                    $beforePromotion = bcadd($costBaseMoney['amount'], $marginAmount, 8);
                     $promotion = $this->promotionService->commercialRuleForFare($provider, $flight);
                     $promotionAmount = $this->adjustmentAmount($beforePromotion, $promotion);
                     $sellingAed = bcadd($beforePromotion, $promotionAmount, 8);
@@ -69,7 +69,7 @@ class CommercialPricingService
         return $itineraries;
     }
 
-    /** Calculate locked selling totals from AT's fresh provider price for the selected fares. */
+    /** Calculate locked Net Fare selling totals from AT's fresh provider price for the selected fares. */
     public function quoteTotals(
         array $flight,
         array $fareReferences,
@@ -82,40 +82,40 @@ class CommercialPricingService
         $costBaseMoney = $this->currencyConversionService->toBaseMoney($providerNetAmount, $providerCurrency);
         $grossBaseMoney = $this->currencyConversionService->toBaseMoney($providerGrossAmount, $providerCurrency);
         $selectedFares = $this->selectedFares($flight, $fareReferences);
-        $previousGrossTotal = '0';
+        $previousNetTotal = '0';
 
         foreach ($selectedFares as $item) {
-            $previousGrossTotal = bcadd(
-                $previousGrossTotal,
-                (string) data_get($item, 'fare.provider_gross_money.amount', data_get($item, 'fare.provider_booking_money.amount')),
+            $previousNetTotal = bcadd(
+                $previousNetTotal,
+                (string) data_get($item, 'fare.provider_booking_money.amount'),
                 8,
             );
         }
 
         $adjustments = [];
-        $allocatedGross = '0';
+        $allocatedNet = '0';
         $sellingAed = '0';
         $lastIndex = count($selectedFares) - 1;
 
         foreach ($selectedFares as $index => $item) {
-            $fareGross = $index === $lastIndex
-                ? bcsub($grossBaseMoney['amount'], $allocatedGross, 8)
+            $fareNet = $index === $lastIndex
+                ? bcsub($costBaseMoney['amount'], $allocatedNet, 8)
                 : bcdiv(
                     bcmul(
-                        $grossBaseMoney['amount'],
-                        (string) data_get($item, 'fare.provider_gross_money.amount', data_get($item, 'fare.provider_booking_money.amount')),
+                        $costBaseMoney['amount'],
+                        (string) data_get($item, 'fare.provider_booking_money.amount'),
                         12,
                     ),
-                    $previousGrossTotal,
+                    $previousNetTotal,
                     8,
                 );
-            $allocatedGross = bcadd($allocatedGross, $fareGross, 8);
+            $allocatedNet = bcadd($allocatedNet, $fareNet, 8);
 
             $margin = $this->segmentMarginService->commercialRuleForFare($flight['provider'] ?? [], $item['flight']);
-            $marginAmount = $this->adjustmentAmount($fareGross, $margin);
+            $marginAmount = $this->adjustmentAmount($fareNet, $margin);
             $promotion = $this->promotionService->commercialRuleForFare($flight['provider'] ?? [], $item['flight']);
-            $promotionAmount = $this->adjustmentAmount(bcadd($fareGross, $marginAmount, 8), $promotion);
-            $sellingAed = bcadd($sellingAed, bcadd(bcadd($fareGross, $marginAmount, 8), $promotionAmount, 8), 8);
+            $promotionAmount = $this->adjustmentAmount(bcadd($fareNet, $marginAmount, 8), $promotion);
+            $sellingAed = bcadd($sellingAed, bcadd(bcadd($fareNet, $marginAmount, 8), $promotionAmount, 8), 8);
 
             foreach ([
                 $this->adjustmentPayload('segment_margin', $margin, $marginAmount),

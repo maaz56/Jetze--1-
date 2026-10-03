@@ -259,11 +259,11 @@ class AtFlightTransformer
                             "total_price" => $providerGrossMoney,
                         ],
                         "base_money" => $this->currencyConversionService->toBaseMoney(
-                            $providerGrossMoney['amount'],
+                            $providerBookingMoney['amount'],
                             $currency,
                         ),
                         "display_money" => $this->currencyConversionService->convertMoney(
-                            $providerGrossMoney['amount'],
+                            $providerBookingMoney['amount'],
                             $currency,
                             $displayCurrency,
                         ),
@@ -291,7 +291,7 @@ class AtFlightTransformer
                                     "fees" => $this->currencyConversionService->toBaseMoney(0, $currency),
                                     "service_charges" => $this->currencyConversionService->toBaseMoney(0, $currency),
                                     "surchage" => $this->currencyConversionService->toBaseMoney(0, $currency),
-                                    "total_price" => $this->currencyConversionService->toBaseMoney($providerGrossMoney['amount'], $currency),
+                                    "total_price" => $this->currencyConversionService->toBaseMoney($providerBookingMoney['amount'], $currency),
                                 ],
                                 "display_money" => [
                                     "base_price" => $this->currencyConversionService->convertMoney($fare['NetFare'] ?? 0, $currency, $displayCurrency),
@@ -299,7 +299,7 @@ class AtFlightTransformer
                                     "fees" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
                                     "service_charges" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
                                     "surchage" => $this->currencyConversionService->convertMoney(0, $currency, $displayCurrency),
-                                    "total_price" => $this->currencyConversionService->convertMoney($providerGrossMoney['amount'], $currency, $displayCurrency),
+                                    "total_price" => $this->currencyConversionService->convertMoney($providerBookingMoney['amount'], $currency, $displayCurrency),
                                 ],
                                 "total_base_fare" => $fare['NetFare'] ?? 0,
                                 "fees" => 0,

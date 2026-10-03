@@ -157,8 +157,8 @@ class AncillaryPricingService
     /**
      * Recalculate provider cost and customer selling totals after ancillary changes.
      *
-     * AT receives Net Fare plus SSR cost, while the customer continues to pay the
-     * quote's locked gross selling fare (including its locked adjustments) plus SSRs.
+     * AT receives Net Fare plus SSR cost, while the customer pays the quote's
+     * locked Net Fare selling amount (including its locked adjustments) plus SSRs.
      */
     private function recalculateQuote(PriceQuote $quote): void
     {
@@ -181,18 +181,25 @@ class AncillaryPricingService
     /**
      * Return the fare-only selling price locked when the quote was created.
      *
-     * The gross provider fare and saved margin/promotion rows are immutable, so an
-     * ancillary replacement cannot accidentally turn the customer total back into
-     * Net Fare. The fallback supports older quotes without commercial audit fields.
+     * The provider Net Fare and saved margin/promotion rows are immutable, so an
+     * ancillary replacement cannot accidentally change the locked customer fare.
+     * The fallback supports older quotes without commercial audit fields.
      *
      * @param array{provider_money: array{amount: string}, base_money: array{amount: string}, display_money: array{amount: string}} $activeTotals
      * @return array{base_amount: string, display_amount: string}
      */
     private function lockedFareSellingMoney(PriceQuote $quote, array $activeTotals): array
     {
-        if ($quote->provider_gross_aed_amount !== null) {
+        $fareNetAmount = data_get($quote->provider_pricing_data, 'net_amount');
+
+        if ($fareNetAmount !== null) {
             $adjustmentAmount = (string) $quote->adjustments()->sum('aed_amount');
-            $baseAmount = bcadd((string) $quote->provider_gross_aed_amount, $adjustmentAmount, 12);
+            $netBaseAmount = bcmul(
+                (string) $fareNetAmount,
+                (string) $quote->provider_rate_to_aed,
+                12,
+            );
+            $baseAmount = bcadd($netBaseAmount, $adjustmentAmount, 12);
             $displayAmount = bcdiv($baseAmount, (string) $quote->display_rate_to_aed, 12);
 
             return [
