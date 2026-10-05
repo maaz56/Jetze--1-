@@ -180,6 +180,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('flights', [FlightController::class, 'index']);
     Route::post('flight-quotes', [FlightController::class, 'createPriceQuote'])->middleware('auth:sanctum');
     Route::post('at/fare-rules', [FlightController::class, 'prepareAtFareRules']);
+    Route::post('at/free-ssr-baggage', [FlightController::class, 'fetchAtFreeSsrBaggage']);
     Route::get('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'showQuoteAncillaries'])->middleware('auth:sanctum');
     Route::put('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'updateQuoteAncillaries'])->middleware('auth:sanctum');
     Route::get('flight-quotes/{quoteUuid}', [FlightController::class, 'showPriceQuote'])->middleware('auth:sanctum');

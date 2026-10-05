@@ -189,7 +189,7 @@ class AtFlightTransformer
                                 "type" => "checkIn",
                                 "pieces" => $pieces,
                                 "weight" => $weight,
-                                "description" => $baggageText ? $fare['Inclusions']['Baggage'] . " allowed" : "No checked baggage",
+                                "description" => $baggageText ? $fare['Inclusions']['Baggage'] . " allowed" : "check baggage section",
                                 "traveler_type" => $travelerType,
                                 "segment_ref_id" => $segment['ref_id'],
                             ];

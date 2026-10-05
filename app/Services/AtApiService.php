@@ -153,8 +153,8 @@ class AtApiService
         try {
             $cachedAccessToken = Cache::get(self::ACCESS_TOKEN_CACHE_KEY);
 
+            Log::info( $cachedAccessToken);
             if (is_array($cachedAccessToken) && !empty($cachedAccessToken['Token'])) {
-                Log::info('AT access token loaded from cache.');
                 return $cachedAccessToken;
             }
         } catch (\Throwable $e) {
@@ -1169,7 +1169,7 @@ private function extractTrips($tripsData): array
 
 
     }
-    public function getSSR($request)
+    public function getSSR($request, bool $isPaid = true)
     {
         Log::info('Getting SSR with data: ', $request);
         $accessToken = $this->getAccessToken();
@@ -1209,10 +1209,10 @@ private function extractTrips($tripsData): array
         $tripType = $this->resolveFareType($request);
 
         if ($tripType === 'DM') {
-            return $this->fetchDmAncillaryTrips($priceRequestUrl, $headers, $accessToken['ClientID'], $trips, $tripType, 'SSR');
+            return $this->fetchDmAncillaryTrips($priceRequestUrl, $headers, $accessToken['ClientID'], $trips, $tripType, 'SSR', $isPaid);
         }
 
-        $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
+        $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType, $isPaid);
 
         Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
 
@@ -1313,29 +1313,35 @@ private function extractTrips($tripsData): array
         }
     }
 
-    private function buildAncillaryPayload(array $trips, $clientId, string $tripType): array
+    private function buildAncillaryPayload(array $trips, $clientId, string $tripType, bool $isPaid = true): array
     {
-        return [
+        $payload = [
             'Trips' => $trips,
             'ClientID' => $clientId,
-            'PaidSSR' => 'true',
             'Source' => 'LV',
             'TripType' => $tripType,
         ];
+
+        // AT's paid SSR contract uses PaidSSR. The supplier's free-SSR
+        // contract explicitly requires IsPaid=false, so keep the two request
+        // variants distinct instead of mixing free inclusions with paid add-ons.
+        $payload[$isPaid ? 'PaidSSR' : 'IsPaid'] = $isPaid ? 'true' : 'false';
+
+        return $payload;
     }
 
     /**
      * DM uses an independent TUI for each searched trip, so SSR and seat-layout
      * are requested one trip at a time and merged back in their original order.
      */
-    private function fetchDmAncillaryTrips(string $url, array $headers, $clientId, array $trips, string $tripType, string $resource): ?array
+    private function fetchDmAncillaryTrips(string $url, array $headers, $clientId, array $trips, string $tripType, string $resource, bool $isPaid = true): ?array
     {
         $combined = null;
         $combinedTrips = [];
 
         foreach ($trips as $index => $trip) {
             $supplierTrip = array_merge($trip, ['OrderID' => 1]);
-            $payload = $this->buildAncillaryPayload([$supplierTrip], $clientId, $tripType);
+            $payload = $this->buildAncillaryPayload([$supplierTrip], $clientId, $tripType, $isPaid);
 
             try {
                 Log::info("AT DM {$resource} request for trip " . ($index + 1), $payload);

@@ -1418,6 +1418,20 @@ function ancillaryProviderAmount(item) {
     return Number(item?.provider_money?.amount ?? 0);
 }
 
+/** Free Type-2 SSR lines are fare inclusions, not purchasable extra baggage. */
+function paidBaggageSsrs(segment) {
+    return (segment?.SSR ?? []).filter((ssr) => {
+        if (String(ssr?.Type) !== "2") return false;
+
+        return Number(
+            ssr?.provider_money?.amount
+            ?? ssr?.SSRNetAmount
+            ?? ssr?.Charge
+            ?? 0,
+        ) > 0;
+    });
+}
+
 /** Format an ancillary using the converted checkout amount. */
 function formatAncillaryMoney(item) {
     return formatConvertedMoney(item?.display_money);
@@ -2965,7 +2979,7 @@ watch(flight, () => {
                                                                             </div>
                                                                         </div>
 
-                                                                        <div v-if="segment?.SSR?.filter(s => s.Type === '2').length" class="mt-4">
+                                                                        <div v-if="paidBaggageSsrs(segment).length" class="mt-4">
                                                                             <div v-if="extraCharges[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]"
                                                                                 class="mt-4 p-3 bg-blue-50 rounded-lg mb-4">
                                                                                 <div class="flex items-center justify-between gap-3">
@@ -3001,7 +3015,7 @@ watch(flight, () => {
                                                                                     <span class="text-xs font-medium text-gray-500">{{ trip?.From }} → {{ trip?.To }}</span>
                                                                                 </div>
                                                                                         <div class="grid max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                                                            <label v-for="ssr in segment?.SSR?.filter(s => s.Type === '2')"
+                                                                                            <label v-for="ssr in paidBaggageSsrs(segment)"
                                                                                                 :key="ssr.ID"
                                                                                                 class="relative flex cursor-pointer items-center gap-4 rounded-xl border bg-white p-4 transition-all hover:-translate-y-0.5 hover:shadow-md"
                                                                                                 :class="selectedExtras[tripIdx]?.baggage?.[journeyIdx]?.[segmentIdx]?.[index]?.ID === ssr.ID ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-slate-200'">

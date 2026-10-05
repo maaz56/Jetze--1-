@@ -78,6 +78,9 @@ class AtAncillaryTransformer
             'FUID' => $segment['FUID'] ?? null,
             'VAC' => $segment['VAC'] ?? null,
             'FlightNo' => $segment['FlightNo'] ?? null,
+            // The SSR endpoint can include a zero-price Type 2 line even in a
+            // paid-SSR response. It is an included allowance, not an extra
+            // baggage product, so never expose it as a selectable add-on.
             'SSR' => array_map(
                 fn (array $ssr) => [
                     'ID' => $ssr['ID'] ?? null,
@@ -91,9 +94,18 @@ class AtAncillaryTransformer
                     'IsFreeMeal' => (bool) ($ssr['IsFreeMeal'] ?? false),
                     ...$this->money($ssr['SSRNetAmount'] ?? $ssr['Charge'] ?? 0, $providerCurrency, $displayCurrency),
                 ],
-                $segment['SSR'] ?? [],
+                array_values(array_filter(
+                    $segment['SSR'] ?? [],
+                    fn (array $ssr): bool => (string) ($ssr['Type'] ?? '') !== '2'
+                        || $this->ssrAmount($ssr) > 0,
+                )),
             ),
         ];
+    }
+
+    private function ssrAmount(array $ssr): float
+    {
+        return (float) ($ssr['SSRNetAmount'] ?? $ssr['Charge'] ?? 0);
     }
 
     /**

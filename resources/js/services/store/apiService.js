@@ -239,6 +239,9 @@ export default {
              params
         );
     },
+    fetchFreeSsrBaggage(params, config = {}) {
+        return apiClient.post("/at/free-ssr-baggage", params, config);
+    },
     getQuoteAncillaries(quoteId) {
         return apiClient.get(`/flight-quotes/${quoteId}/ancillaries`);
     },

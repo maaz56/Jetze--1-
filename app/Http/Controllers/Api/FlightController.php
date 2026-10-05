@@ -11,6 +11,7 @@ use App\Services\SooperApiService;
 use App\Transformers\AtAncillaryTransformer;
 use App\Transformers\AtFareBreakdownTransformer;
 use App\Transformers\AtFlightTransformer;
+use App\Transformers\AtFreeSsrBaggageTransformer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
@@ -586,6 +587,92 @@ class FlightController extends Controller
     }
 
     /**
+     * Load free baggage SSR only after a user opens an AT result's side sheet.
+     * This deliberately stays out of the streamed search path.
+     */
+    public function fetchAtFreeSsrBaggage(Request $request, AtFreeSsrBaggageTransformer $transformer)
+    {
+        $validated = $request->validate([
+            'flight_ref_id' => ['required', 'string'],
+            'fare_references' => ['required', 'array', 'min:1'],
+            'fare_references.*' => ['required', 'string'],
+            'search_token' => ['required', 'uuid'],
+        ]);
+
+        Log::info('AT free SSR baggage request received', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+            'fare_reference_count' => count($validated['fare_references']),
+            'search_token' => $validated['search_token'],
+        ]);
+
+        $flight = Cache::get($this->quoteFlightCacheKey(
+            $validated['search_token'],
+            $validated['flight_ref_id'],
+        ));
+
+        if (!is_array($flight)) {
+            return response()->json(['message' => 'Your search has expired. Please search again.'], 422);
+        }
+
+        if (strtoupper((string) data_get($flight, 'provider.identifier')) !== 'AT') {
+            return response()->json(['message' => 'Free SSR baggage is only available for AT flights.'], 422);
+        }
+
+        $availableFareReferences = collect(data_get($flight, 'leg.flights', []))
+            ->flatMap(fn (array $leg) => collect($leg['fares'] ?? [])->pluck('ref_id'))
+            ->filter()
+            ->all();
+
+        if (array_diff($validated['fare_references'], $availableFareReferences)) {
+            return response()->json(['message' => 'One or more selected fares are no longer available in this search.'], 422);
+        }
+
+        $legs = [];
+        foreach (data_get($flight, 'leg.flights', []) as $flightLeg) {
+            $selectedFare = collect($flightLeg['fares'] ?? [])->first(
+                fn (array $fare) => in_array($fare['ref_id'] ?? null, $validated['fare_references'], true),
+            );
+
+            if (!$selectedFare) {
+                return response()->json(['message' => 'Free baggage details are unavailable for one selected fare.'], 422);
+            }
+
+            $legs[] = [
+                'Index' => $flightLeg['flight_index'] ?? null,
+                'selectedFare' => $selectedFare,
+            ];
+        }
+
+        // SSR is backed by AT's priced store, not the ExpressSearch store.
+        // SmartPricer -> GetSPricer gives us the store/TUI that the supplier
+        // can use to resolve free inclusions for this exact fare selection.
+        $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
+        $pricedTui = $providerPricing['tui'] ?? null;
+
+        if (!$pricedTui) {
+            return response()->json(['message' => 'AT could not price this fare for free baggage details.'], 422);
+        }
+
+        $rawResponse = $this->atApiService->getSSR([
+            'ref_id' => $pricedTui,
+            'priced_tui' => $pricedTui,
+            'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
+            'legs' => $legs,
+        ], false);
+
+        if (!is_array($rawResponse) || (string) ($rawResponse['Code'] ?? '') !== '200') {
+            return response()->json([
+                'message' => data_get($rawResponse, 'Msg.0', 'Unable to retrieve free baggage details.'),
+            ], 502);
+        }
+
+        return response()->json([
+            'message' => 'Free baggage details fetched successfully.',
+            'free_ssr_baggage' => $transformer->transform($rawResponse, $flight),
+        ]);
+    }
+
+    /**
      * Request raw AT FlightInfo for the fares selected in the active server-cached search.
      */
     public function fetchAtFareBreakdown(Request $request)
@@ -623,7 +710,13 @@ class FlightController extends Controller
         $response = $this->atApiService->fetchFlightInfo($trips, $tripType);
 
         if ($response === null) {
-            return response()->json(['message' => 'Unable to retrieve AT fare details.'], 422);
+            return response()->json(['message' => 'Unable to retrieve fare details. Please try again.'], 422);
+        }
+
+        if ((string) ($response['Code'] ?? '') !== '200' || !is_array($response['Trips'] ?? null)) {
+            return response()->json([
+                'message' => data_get($response, 'Msg.0', 'Fare details are unavailable for the selected flight.'),
+            ], 422);
         }
 
         return response()->json([

@@ -30,8 +30,8 @@ class AtFareBreakdownTransformer
         $breakdowns = [];
         $flightIndex = 0;
 
-        foreach (data_get($response, 'Trips', []) as $trip) {
-            foreach (data_get($trip, 'Journey', []) as $journey) {
+        foreach ((data_get($response, 'Trips') ?: []) as $trip) {
+            foreach ((data_get($trip, 'Journey') ?: []) as $journey) {
                 $selectedFare = $selectedFaresByLeg[$flightIndex] ?? [];
                 $fares = data_get($journey, 'Segments.0.Fares', []);
                 $netFareMoney = $this->money(

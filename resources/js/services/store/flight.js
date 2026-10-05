@@ -1,6 +1,7 @@
 import apiService from "./apiService";
 import {
     FETCH_FLIGHT,
+    FETCH_FREE_SSR_BAGGAGE,
     SAVE_BOOKING,
     FETCH_FLIGHTS,
     FILTER_FLIGHTS,
@@ -571,6 +572,17 @@ const actions = {
             return response.data;
         } catch (error) {
             context.commit(SET_API_ERROR, error);
+        }
+    },
+    async [FETCH_FREE_SSR_BAGGAGE](context, params) {
+        const { timeout = 70000, ...payload } = params;
+
+        try {
+            const response = await apiService.fetchFreeSsrBaggage(payload, { timeout });
+            return response.data;
+        } catch (error) {
+            context.commit(SET_API_ERROR, error);
+            throw error;
         }
     },
     async [PATCH_ANCILLARIES](context, params) {

@@ -104,6 +104,7 @@ export const FETCH_PROVIDERS = "fetchProviders";
 export const FETCH_FLIGHTS = "fetchFlights";
 export const FILTER_FLIGHTS = "filterFlights";
 export const FETCH_FLIGHT = "fetchFlight";
+export const FETCH_FREE_SSR_BAGGAGE = "fetchFreeSsrBaggage";
 export const FETCH_AIRPORTS = "fetchAirports";
 export const FETCH_BOOKINGS = "fetchBookings";
 export const SAVE_BOOKING = "saveBooking";
