@@ -30,30 +30,40 @@ class AtFreeSsrBaggageTransformer
                             continue;
                         }
 
-                        $description = trim((string) (
-                            $ssr['Description']
-                            ?? $ssr['PieceDescription']
-                            ?? $ssr['Code']
-                            ?? 'Included checked baggage'
-                        ));
+                        $description = trim((string) ($ssr['Description'] ?? ''));
+                        $pieceDescription = trim((string) ($ssr['PieceDescription'] ?? ''));
                         $weights = $this->weights($ssr);
-                        [$pieces, $weight] = $this->allowance($ssr);
+                        $checkedText = $pieceDescription ?: ($description ?: (string) ($ssr['Code'] ?? 'Included checked baggage'));
+                        [$pieces, $weight] = $this->allowanceFromText($checkedText);
+
+                        if (!$pieceDescription && isset($weights[0])) {
+                            $weight = $weights[0];
+                        }
 
                         $policies[] = [
                             'type' => 'checkIn',
                             'pieces' => $pieces,
-                            'weight' => $weights[0] ?? $weight,
-                            // AT returns combined free allowance as e.g.
-                            // "15 Kg, 07 Kg": checked first, cabin second.
-                            'description' => isset($weights[1])
-                                ? $this->weightDescription($weights[0])
-                                : $description,
+                            'weight' => $weight,
+                            'description' => $pieceDescription ?: (
+                                isset($weights[1]) ? $this->weightDescription($weights[0]) : $checkedText
+                            ),
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                             'segment_ref_id' => $segmentRefId,
                             'source' => 'free_ssr',
                         ];
 
-                        if (isset($weights[1])) {
+                        if ($pieceDescription && $description) {
+                            [$carryPieces, $carryWeight] = $this->allowanceFromText($description);
+                            $policies[] = [
+                                'type' => 'carry',
+                                'pieces' => $carryPieces,
+                                'weight' => $carryWeight,
+                                'description' => $description,
+                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
+                                'segment_ref_id' => $segmentRefId,
+                                'source' => 'free_ssr',
+                            ];
+                        } elseif (isset($weights[1])) {
                             $policies[] = [
                                 'type' => 'carry',
                                 'pieces' => 0,
@@ -72,23 +82,20 @@ class AtFreeSsrBaggageTransformer
         return ['baggage_policies' => $policies];
     }
 
-    private function allowance(array $ssr): array
+    private function allowanceFromText(string $text): array
     {
-        $text = implode(' ', array_filter([
-            $ssr['Description'] ?? null,
-            $ssr['PieceDescription'] ?? null,
-            $ssr['Code'] ?? null,
-        ]));
-
-        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram)/i', $text, $match)) {
-            return [0, (float) $match[1]];
-        }
+        $pieces = 0;
+        $weight = null;
 
         if (preg_match('/(\d+)\s*(?:pc|pcs|piece)/i', $text, $match)) {
-            return [(int) $match[1], null];
+            $pieces = (int) $match[1];
         }
 
-        return [0, null];
+        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram)/i', $text, $match)) {
+            $weight = (float) $match[1];
+        }
+
+        return [$pieces, $weight];
     }
 
     /** @return array<int, float> */
