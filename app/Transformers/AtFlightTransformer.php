@@ -158,6 +158,9 @@ class AtFlightTransformer
 
                     $baggagePolicies = [];
                     $baggageText = $fare['Inclusions']['Baggage'] ?? null;
+                    $hasKnownCheckedAllowance = is_string($baggageText)
+                        ? trim($baggageText) !== ''
+                        : $baggageText !== null;
                     $pieceDescription = strtolower($fare['Inclusions']['PieceDescription'] ?? '');
 
                     $pieces = 0;
@@ -190,6 +193,10 @@ class AtFlightTransformer
                                 "pieces" => $pieces,
                                 "weight" => $weight,
                                 "description" => $baggageText ? $fare['Inclusions']['Baggage'] . " allowed" : "check baggage section",
+                                // This is intentionally distinct from a zero
+                                // allowance (for example "0 Kg"), which is a
+                                // known result and must not trigger free SSR.
+                                "allowance_known" => $hasKnownCheckedAllowance,
                                 "traveler_type" => $travelerType,
                                 "segment_ref_id" => $segment['ref_id'],
                             ];

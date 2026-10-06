@@ -278,6 +278,7 @@ let lastAtFareRulesKey = "";
 const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
 const freeSsrBaggageLoadingByKey = ref({});
+const freeSsrBaggageRequestIdByKey = ref({});
 const savedAmount = ref(0);
 const isCreatingQuote = ref(false);
 const isCheckoutLoading = computed(
@@ -329,6 +330,9 @@ async function openSooperFlightDetails(flight) {
     // });
     flightDetailsActiveTab.value = "fare-options";
     isSooperFlihgtDetailsOpen.value = true;
+    // The selected-flight watcher also runs when the sheet mounts. Wait until
+    // it has settled selectedFares before deciding whether SSR is required.
+    await nextTick();
     fetchFreeSsrBaggage();
 }
 
@@ -1650,12 +1654,6 @@ async function fetchFreeSsrBaggage() {
 
     if (provider !== "at") return;
 
-    // ExpressSearch already supplied an allowance for every selected leg.
-    // Do not make the slow SmartPricer → GetSPricer → SSR chain just to
-    // replace identical baggage data. SSR is only the fallback for airlines
-    // that omit checked baggage from the search response.
-    if (!needsFreeSsrBaggage()) return;
-
     const flightRefId = selectedFlight.value?.leg?.ref_id;
     const searchToken = selectedFlight.value?.quote_search_token;
     const fareReferences = [...selectedFares].filter(Boolean);
@@ -1665,6 +1663,12 @@ async function fetchFreeSsrBaggage() {
     // Every View details, fare-select, and Book now action intentionally
     // sends a fresh SSR request. Count in-flight requests per selection so
     // one completion cannot hide another request's skeleton.
+    // Do not render an earlier response while this fare is being re-queried.
+    fareReferences.forEach((fareRef) => {
+        delete freeSsrBaggagePoliciesByFare.value[fareRef];
+    });
+    const requestId = (freeSsrBaggageRequestIdByKey.value[requestKey] ?? 0) + 1;
+    freeSsrBaggageRequestIdByKey.value[requestKey] = requestId;
     freeSsrBaggageLoadingByKey.value[requestKey] =
         (freeSsrBaggageLoadingByKey.value[requestKey] ?? 0) + 1;
     freeSsrBaggageError.value = "";
@@ -1679,7 +1683,7 @@ async function fetchFreeSsrBaggage() {
             timeout: 70000,
         });
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
-        if (currentKey !== requestKey) return;
+        if (currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
 
         const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
         fareReferences.forEach((fareRef) => {
@@ -1714,7 +1718,10 @@ function hasKnownCheckedBaggage(flightIndex) {
     const fare = getSelectedFare(flightIndex);
 
     return (fare?.baggage_policies ?? []).some((policy) =>
-        policy.type === "checkIn" && !isBaggageAllowancePlaceholder(policy),
+        policy.type === "checkIn" && (
+            policy.allowance_known === true
+            || (policy.allowance_known === undefined && !isBaggageAllowancePlaceholder(policy))
+        ),
     );
 }
 

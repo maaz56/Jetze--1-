@@ -646,19 +646,59 @@ class FlightController extends Controller
         // SSR is backed by AT's priced store, not the ExpressSearch store.
         // SmartPricer -> GetSPricer gives us the store/TUI that the supplier
         // can use to resolve free inclusions for this exact fare selection.
-        $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
+        Log::info('AT free SSR baggage pricing started', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+        ]);
+
+        try {
+            $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
+        } catch (\Throwable $exception) {
+            Log::error('AT free SSR baggage pricing failed', [
+                'flight_ref_id' => $validated['flight_ref_id'],
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Baggage allowance could not be retrieved right now. Please try again.',
+            ], 502);
+        }
+
+        Log::info('AT free SSR baggage pricing completed', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+            'has_priced_tui' => !empty($providerPricing['tui'] ?? null),
+        ]);
         $pricedTui = $providerPricing['tui'] ?? null;
 
         if (!$pricedTui) {
             return response()->json(['message' => 'AT could not price this fare for free baggage details.'], 422);
         }
 
-        $rawResponse = $this->atApiService->getSSR([
-            'ref_id' => $pricedTui,
-            'priced_tui' => $pricedTui,
-            'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
-            'legs' => $legs,
-        ], false);
+        Log::info('AT free SSR baggage supplier request started', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+        ]);
+
+        try {
+            $rawResponse = $this->atApiService->getSSR([
+                'ref_id' => $pricedTui,
+                'priced_tui' => $pricedTui,
+                'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
+                'legs' => $legs,
+            ], false);
+        } catch (\Throwable $exception) {
+            Log::error('AT free SSR baggage supplier request failed', [
+                'flight_ref_id' => $validated['flight_ref_id'],
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Baggage allowance could not be retrieved right now. Please try again.',
+            ], 502);
+        }
+
+        Log::info('AT free SSR baggage supplier response received', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+            'code' => data_get($rawResponse, 'Code'),
+        ]);
 
         if (!is_array($rawResponse) || (string) ($rawResponse['Code'] ?? '') !== '200') {
             return response()->json([
