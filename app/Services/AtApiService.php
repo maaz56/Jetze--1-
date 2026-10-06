@@ -1176,7 +1176,7 @@ private function extractTrips($tripsData): array
         Log::info($accessToken);
         $headers = [
             'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token'],
+            'Authorization' => "Bearer {$accessToken['Token']}",
         ];
 
         $priceRequestUrl = "{$this->flightBaseUrl}/Flights/SSR";
@@ -1215,30 +1215,45 @@ private function extractTrips($tripsData): array
         $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType, $isPaid);
 
         Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
+        Log::info($headers);
+        $maxAttempts = 3;
+        $attempt = 0;
 
-        try {
-            $req = new \GuzzleHttp\Psr7\Request(
-                'POST',
-                $priceRequestUrl,
-                $headers,
-                json_encode($payload)
-            );
+        while ($attempt < $maxAttempts) {
+            $attempt++;
+            try {
+                $req = new \GuzzleHttp\Psr7\Request(
+                    'POST',
+                    $priceRequestUrl,
+                    $headers,
+                    json_encode($payload)
+                );
 
-            $response = $this->client->send($req);
-            $responseBody = json_decode($response->getBody(), true);
+                $response = $this->client->send($req);
+                $responseBody = json_decode($response->getBody(), true);
 
-            Log::info('SSR request payload response: ' . json_encode($responseBody, JSON_PRETTY_PRINT));
-            return $responseBody;
+                Log::info("SSR request payload response (attempt {$attempt}): " . json_encode($responseBody, JSON_PRETTY_PRINT));
 
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            Log::error('Error sending SSR request: ' . $e->getMessage());
+                if (($responseBody['Code'] ?? null) === '1025' && $attempt < $maxAttempts) {
+                    Log::warning("AT SSR store not ready yet (Code 1025). Retrying in 1.5s (attempt {$attempt}/{$maxAttempts})...");
+                    usleep(1500000);
+                    continue;
+                }
 
-            if ($e->hasResponse()) {
-                Log::error('Response: ' . $e->getResponse()->getBody());
+                return $responseBody;
+
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                Log::error('Error sending SSR request: ' . $e->getMessage());
+
+                if ($e->hasResponse()) {
+                    Log::error('Response: ' . $e->getResponse()->getBody());
+                }
+
+                return null;
             }
-
-            return null;
         }
+
+        return null;
     }
     public function getSeatLayout($request)
     {
@@ -1247,7 +1262,7 @@ private function extractTrips($tripsData): array
         Log::info($accessToken);
         $headers = [
             'Content-Type' => 'application/json',
-            'Authorization' => $accessToken['Token'],
+            'Authorization' => "Bearer {$accessToken['Token']}",
         ];
 
         $priceRequestUrl = "{$this->flightBaseUrl}/Flights/SeatLayout";
@@ -1287,7 +1302,6 @@ private function extractTrips($tripsData): array
         $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType);
 
         Log::info('Seat request payload (final): ', $payload);
-
         try {
             $req = new \GuzzleHttp\Psr7\Request(
                 'POST',
@@ -1315,19 +1329,13 @@ private function extractTrips($tripsData): array
 
     private function buildAncillaryPayload(array $trips, $clientId, string $tripType, bool $isPaid = true): array
     {
-        $payload = [
+        return [
             'Trips' => $trips,
             'ClientID' => $clientId,
             'Source' => 'LV',
             'TripType' => $tripType,
+            'PaidSSR' => $isPaid ? 'true' : 'false',
         ];
-
-        // AT's paid SSR contract uses PaidSSR. The supplier's free-SSR
-        // contract explicitly requires IsPaid=false, so keep the two request
-        // variants distinct instead of mixing free inclusions with paid add-ons.
-        $payload[$isPaid ? 'PaidSSR' : 'IsPaid'] = $isPaid ? 'true' : 'false';
-
-        return $payload;
     }
 
     /**
@@ -1343,26 +1351,44 @@ private function extractTrips($tripsData): array
             $supplierTrip = array_merge($trip, ['OrderID' => 1]);
             $payload = $this->buildAncillaryPayload([$supplierTrip], $clientId, $tripType, $isPaid);
 
-            try {
-                Log::info("AT DM {$resource} request for trip " . ($index + 1), $payload);
-                $req = new Request('POST', $url, $headers, json_encode($payload));
-                $response = json_decode($this->client->send($req)->getBody(), true);
-                Log::info("AT DM {$resource} response for trip " . ($index + 1), $response ?? []);
+            $tripResponse = null;
+            $maxAttempts = 3;
 
-                if (!is_array($response)) {
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                try {
+                    Log::info("AT DM {$resource} request for trip " . ($index + 1) . " (attempt {$attempt})", $payload);
+                    $req = new Request('POST', $url, $headers, json_encode($payload));
+                    $response = json_decode($this->client->send($req)->getBody(), true);
+                    Log::info("AT DM {$resource} response for trip " . ($index + 1) . " (attempt {$attempt})", $response ?? []);
+
+                    if (!is_array($response)) {
+                        return null;
+                    }
+
+                    if (($response['Code'] ?? null) === '1025' && $attempt < $maxAttempts) {
+                        Log::warning("AT DM {$resource} store not ready yet (Code 1025). Retrying in 1.5s...");
+                        usleep(1500000);
+                        continue;
+                    }
+
+                    $tripResponse = $response;
+                    break;
+                } catch (RequestException $e) {
+                    Log::error("AT DM {$resource} failed for trip " . ($index + 1) . ': ' . $e->getMessage());
+                    if ($e->hasResponse()) {
+                        Log::error('Response: ' . $e->getResponse()->getBody());
+                    }
                     return null;
                 }
+            }
 
-                $combined ??= $response;
-                foreach (($response['Trips'] ?? []) as $responseTrip) {
-                    $combinedTrips[] = $responseTrip;
-                }
-            } catch (RequestException $e) {
-                Log::error("AT DM {$resource} failed for trip " . ($index + 1) . ': ' . $e->getMessage());
-                if ($e->hasResponse()) {
-                    Log::error('Response: ' . $e->getResponse()->getBody());
-                }
+            if ($tripResponse === null) {
                 return null;
+            }
+
+            $combined ??= $tripResponse;
+            foreach (($tripResponse['Trips'] ?? []) as $responseTrip) {
+                $combinedTrips[] = $responseTrip;
             }
         }
 
