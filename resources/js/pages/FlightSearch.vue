@@ -98,6 +98,7 @@ import {
     CircleEllipsis,
     Ellipsis,
     Moon,
+    MousePointerClick,
     Sun,
     Sunrise,
     Sunset,
@@ -1987,7 +1988,7 @@ const getFareBaggageSummaries = (baggagePolicies) => {
             { label: "Carry-on", description: "Not included" },
             {
                 label: "Checked",
-                description: "View allowance details in the Baggage tab",
+                description: "View baggage",
                 actionTab: "baggage-details",
             },
         ];
@@ -2004,6 +2005,13 @@ const getFareBaggageSummaries = (baggagePolicies) => {
                 ? "carry"
                 : "checked";
 
+        // Search responses use this placeholder when the checked allowance
+        // must be retrieved from SSR. Render a Baggage-tab action instead of
+        // exposing the technical placeholder to the traveller.
+        if (key === "checked" && isBaggageAllowancePlaceholder(policy)) {
+            return;
+        }
+
         if (!summaries[key]) {
             summaries[key] = description;
         }
@@ -2015,7 +2023,7 @@ const getFareBaggageSummaries = (baggagePolicies) => {
             ? { label: "Checked", description: summaries.checked }
             : {
                 label: "Checked",
-                description: "View allowance details in the Baggage tab",
+                description: "View baggage",
                 actionTab: "baggage-details",
             },
     ];
@@ -4405,10 +4413,11 @@ watch(isLoggedIn, (newVal) => {
                                                                     <button
                                                                         v-if="summary.actionTab"
                                                                         type="button"
-                                                                        class="text-left text-primary underline underline-offset-2 hover:text-primary/80"
+                                                                        class="group inline-flex items-center gap-1 text-left font-medium text-primary underline underline-offset-2 decoration-primary/70 transition hover:text-primary/80 hover:decoration-primary"
                                                                         @click.stop="flightDetailsActiveTab = summary.actionTab"
                                                                     >
-                                                                        {{ summary.description }}
+                                                                        <span>{{ summary.description }}</span>
+                                                                        <MousePointerClick class="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
                                                                     </button>
                                                                     <span v-else>{{ summary.description }}</span>
                                                                 </div>
