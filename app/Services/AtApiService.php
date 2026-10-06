@@ -20,6 +20,7 @@ class AtApiService
     private const DM_VALIDATION_CACHE_PREFIX = 'AT_DM_VALIDATION_';
     private const ACCESS_TOKEN_CACHE_KEY = 'AT_ACCESS_TOKEN';
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
+    private const WEB_SETTINGS_CACHE_TTL_MINUTES = 60;
     private const HTTP_TIMEOUT_SECONDS = 300;
     private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
     private const SIGNATURE_HTTP_TIMEOUT_SECONDS = 10;
@@ -39,7 +40,7 @@ class AtApiService
     protected $agentCode;
     protected $browserKey;
     protected $atFlightTransformer;
-    private bool $useMockApi = false;
+    private bool $useMockApi;
 
 
     public function __construct()
@@ -59,6 +60,7 @@ class AtApiService
         $this->password = config('at.password');
         $this->agentCode = config('at.agent_code');
         $this->browserKey = config('at.browser_key');
+        $this->useMockApi = (bool) config('at.use_mock_api', false);
         $this->atFlightTransformer = new AtFlightTransformer();
     }
 
@@ -396,9 +398,17 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
     if ($this->useMockApi) {
         Log::warning('Using MOCK GetExpSearch response.');
         $mockBody = json_decode(Storage::get('ATResponse.json'), true);
+
+        if (!is_array($mockBody)) {
+            Log::error('Invalid AT mock response JSON.');
+            return null;
+        }
+
+        $mockBody['Completed'] = (string) ($mockBody['Completed'] ?? 'true');
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
         Log::info("GetExpSearch page 1 response (Status: {$pageStatus}) before merging: ", is_array($mockBody) ? $mockBody : []);
+        $this->emitSearchBatch($onBatch, $mockBody, $mockBody, 1);
         return $mockBody;
     }
 
@@ -649,8 +659,31 @@ private function extractTrips($tripsData): array
 
     return $trips;
 }
-    public function getWebSettings($tui)
+    public static function webSettingsCacheKey(mixed $tui): ?string
     {
+        $normalizedTui = is_array($tui)
+            ? (string) ($tui[0] ?? '')
+            : (string) $tui;
+
+        $normalizedTui = trim($normalizedTui);
+
+        if ($normalizedTui === '') {
+            return null;
+        }
+
+        return 'AT_WEB_SETTINGS_' . sha1($normalizedTui);
+    }
+
+    public function getWebSettings($tui): ?array
+    {
+        $cacheKey = self::webSettingsCacheKey($tui);
+
+        if ($cacheKey) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
 
         $response = $this->client->post($this->signBaseUrl . '/Utils/WebSettings', [
             'json' => [
@@ -665,8 +698,11 @@ private function extractTrips($tripsData): array
         $responseBody = json_decode($response->getBody()->getContents(), true);
         Log::info('GetWebSettings response: ', $responseBody);
 
+        if (is_array($responseBody) && $cacheKey) {
+            Cache::put($cacheKey, $responseBody, now()->addMinutes(self::WEB_SETTINGS_CACHE_TTL_MINUTES));
+        }
 
-
+        return is_array($responseBody) ? $responseBody : null;
     }
     public function sendPriceRequest($request)
     {

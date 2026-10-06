@@ -399,7 +399,6 @@ class AtFlightTransformer
         $parts = [];
         foreach ($flights as $flight) {
             $parts[] = implode('|', [
-                (string) ($flight['Provider'] ?? ''),
                 (string) ($flight['JourneyKey'] ?? ''),
                 (string) ($flight['FBC'] ?? ''),
                 (string) ($flight['FareClass'] ?? ''),
@@ -742,7 +741,22 @@ class AtFlightTransformer
         $final = [];
 
         $tripCount = count($trips);
-        $flightType = str_replace('_', '-', strtolower((string) ($params['flight_type'] ?? $params['flightType'] ?? '')));
+        $rawFlightType = strtolower(trim((string) ($params['flight_type'] ?? $params['flightType'] ?? '')));
+        $rawFlightType = str_replace(['_', ' '], '-', $rawFlightType);
+
+        if (in_array($rawFlightType, ['multi-city', 'multicity', 'mc'], true)) {
+            $flightType = 'multi-city';
+        } elseif (in_array($rawFlightType, ['return', 'roundtrip', 'round-trip', 'rt'], true)) {
+            $flightType = 'return';
+        } elseif (in_array($rawFlightType, ['one-way', 'oneway', 'ow'], true)) {
+            $flightType = 'one-way';
+        } else {
+            $flightType = match ($tripCount) {
+                1 => 'one-way',
+                2 => 'return',
+                default => 'multi-city',
+            };
+        }
         
         if ($tripCount === 0) {
             return [
@@ -807,7 +821,6 @@ class AtFlightTransformer
                 // Check if airlines match for pairing
                 if (
                     $oFlight['VAC'] === $rFlight['VAC']
-                    && $oFlight['Provider'] === $rFlight['Provider']
                     && $this->airlineDisambiguationKey($oFlight) === $this->airlineDisambiguationKey($rFlight)
                 ) {
                     
@@ -845,10 +858,8 @@ class AtFlightTransformer
                         ->toArray();
 
                     $pairKey = implode('_', [
-                        $oFlight['Provider'] ?? '',
-                        $oFlight['FlightNo'] ?? '',
-                        $rFlight['FlightNo'] ?? '',
-                        $this->airlineDisambiguationKey($oFlight),
+                        $onward['index'] ?? ($oFlight['FlightNo'] ?? ''),
+                        $return['index'] ?? ($rFlight['FlightNo'] ?? ''),
                     ]);
 
                     if (isset($processedPairs[$pairKey])) {
@@ -1109,21 +1120,32 @@ class AtFlightTransformer
         return $final;
     }
 
+    private function physicalFlightKey(array $journey): string
+    {
+        $connections = [];
+        if (!empty($journey['Connections']) && is_array($journey['Connections'])) {
+            foreach ($journey['Connections'] as $conn) {
+                $connections[] = ($conn['Airport'] ?? '') . ':' . ($conn['FlightNo'] ?? '');
+            }
+        }
+
+        return implode('_', [
+            $journey['VAC'] ?? '',
+            $journey['OAC'] ?? '',
+            $journey['MAC'] ?? '',
+            $journey['FlightNo'] ?? '',
+            $journey['From'] ?? '',
+            $journey['To'] ?? '',
+            $journey['DepartureTime'] ?? '',
+            $journey['ArrivalTime'] ?? '',
+            implode('-', $connections),
+            $this->airlineDisambiguationKey($journey),
+        ]);
+    }
+
     private function multiCityPhysicalFlightKey(array $flight): string
     {
-        return hash('sha256', implode('|', [
-            (string) ($flight['Provider'] ?? ''),
-            (string) ($flight['VAC'] ?? ''),
-            (string) ($flight['OAC'] ?? ''),
-            (string) ($flight['MAC'] ?? ''),
-            (string) ($flight['FlightNo'] ?? ''),
-            (string) ($flight['From'] ?? ''),
-            (string) ($flight['To'] ?? ''),
-            (string) ($flight['DepartureTime'] ?? ''),
-            (string) ($flight['ArrivalTime'] ?? ''),
-            (string) ($flight['JourneyKey'] ?? ''),
-            $this->airlineDisambiguationKey($flight),
-        ]));
+        return hash('sha256', $this->physicalFlightKey($flight));
     }
 
     private function multiCityCombinationKey(array $flight, ?array $fare = null): ?string
@@ -1136,7 +1158,6 @@ class AtFlightTransformer
         }
 
         return implode('|', [
-            strtoupper(trim((string) ($flight['Provider'] ?? ''))),
             trim((string) $returnIdentifier),
             strtoupper(trim((string) ($flight['VAC'] ?? ''))),
             strtoupper(trim((string) $index)),
@@ -1151,14 +1172,7 @@ class AtFlightTransformer
         // Log::info('journey grouping : ' ,  $journeys);
 
         foreach ($journeys as $baseJourney) {
-            $flightKey = implode('_', [
-                $baseJourney['VAC'] ?? '',
-                $baseJourney['Provider'] ?? '',
-                $baseJourney['OAC'] ?? '',
-                $baseJourney['MAC'] ?? '',
-                $baseJourney['FlightNo'] ?? '',
-                $this->airlineDisambiguationKey($baseJourney),
-            ]);
+            $flightKey = $this->physicalFlightKey($baseJourney);
 
             if (isset($processedFlights[$flightKey])) {
                 continue;
@@ -1188,16 +1202,16 @@ class AtFlightTransformer
             $processedFares = [];
 
             foreach ($journeys as $fareJourney) {
-                if (
-                    ($fareJourney['VAC'] ?? '') === ($baseJourney['VAC'] ?? '') &&
-                    // ($fareJourney['Provider'] ?? '') === ($baseJourney['Provider'] ?? '') &&
-                    ($fareJourney['OAC'] ?? '') === ($baseJourney['OAC'] ?? '') &&
-                    ($fareJourney['MAC'] ?? '') === ($baseJourney['MAC'] ?? '') &&
-                    ($fareJourney['FlightNo'] ?? '') === ($baseJourney['FlightNo'] ?? '') &&
-                    $this->airlineDisambiguationKey($fareJourney) === $this->airlineDisambiguationKey($baseJourney)
-                ) {
+                if ($this->physicalFlightKey($fareJourney) === $flightKey) {
                     if (!$this->hasValidFare($fareJourney['NetFare'] ?? null)) {
                         continue;
+                    }
+
+                    if (empty($flight['DepartureTerminal']) && !empty($fareJourney['DepartureTerminal'])) {
+                        $flight['DepartureTerminal'] = $fareJourney['DepartureTerminal'];
+                    }
+                    if (empty($flight['ArrivalTerminal']) && !empty($fareJourney['ArrivalTerminal'])) {
+                        $flight['ArrivalTerminal'] = $fareJourney['ArrivalTerminal'];
                     }
 
                     $fareKey = implode('_', [
@@ -1240,6 +1254,7 @@ class AtFlightTransformer
             'FareClass' => $journey['FareClass'] ?? null,
             'ReturnIdentifier' => $journey['ReturnIdentifier'] ?? null,
             'index' => $journey['Index'] ?? null,
+            'Provider' => $journey['Provider'] ?? null,
             'RBD' => $journey['RBD'] ?? null,
             'FBC' => $journey['FBC'] ?? null,
             'FCType' => $journey['FCType'] ?? null,
