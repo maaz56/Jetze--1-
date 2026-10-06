@@ -15,3 +15,25 @@
 3. **PASSWORDS**:
    - NEVER input or execute passwords (database or system) on your own.
    - Always ask the user directly whenever credentials or passwords are required.
+
+   # Rules for this project (Laravel)
+
+## Scope
+- Only open and edit files I explicitly name or @-mention.
+- Do NOT read, search, or analyze other files unless I ask. If you think another file is needed, ask me first.
+- Do not explore the whole codebase. Do not summarize the project.
+- Make the smallest change that solves the task. No refactors, no cleanup, no renaming.
+
+## Never run
+- php artisan test, migrate:fresh, migrate:refresh, db:wipe, or any command that touches the database.
+- Do not run any command without asking me. Only edit code.
+
+## Never open
+- .env, storage/logs/*, vendor/, node_modules/, any *.sql dump
+
+## Large files
+- app/Services/AtApiService.php is ~2700 lines. Never read it whole.
+  Search for the function name, then view only that function.
+
+## Replies
+- Short answers. Show a diff or the changed function only, not whole files.

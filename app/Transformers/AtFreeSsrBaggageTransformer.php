@@ -30,23 +30,40 @@ class AtFreeSsrBaggageTransformer
                             continue;
                         }
 
-                        [$pieces, $weight] = $this->allowance($ssr);
                         $description = trim((string) (
                             $ssr['Description']
                             ?? $ssr['PieceDescription']
                             ?? $ssr['Code']
                             ?? 'Included checked baggage'
                         ));
+                        $weights = $this->weights($ssr);
+                        [$pieces, $weight] = $this->allowance($ssr);
 
                         $policies[] = [
                             'type' => 'checkIn',
                             'pieces' => $pieces,
-                            'weight' => $weight,
-                            'description' => $description,
+                            'weight' => $weights[0] ?? $weight,
+                            // AT returns combined free allowance as e.g.
+                            // "15 Kg, 07 Kg": checked first, cabin second.
+                            'description' => isset($weights[1])
+                                ? $this->weightDescription($weights[0])
+                                : $description,
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                             'segment_ref_id' => $segmentRefId,
                             'source' => 'free_ssr',
                         ];
+
+                        if (isset($weights[1])) {
+                            $policies[] = [
+                                'type' => 'carry',
+                                'pieces' => 0,
+                                'weight' => $weights[1],
+                                'description' => $this->weightDescription($weights[1]),
+                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
+                                'segment_ref_id' => $segmentRefId,
+                                'source' => 'free_ssr',
+                            ];
+                        }
                     }
                 }
             }
@@ -72,6 +89,24 @@ class AtFreeSsrBaggageTransformer
         }
 
         return [0, null];
+    }
+
+    /** @return array<int, float> */
+    private function weights(array $ssr): array
+    {
+        $text = implode(' ', array_filter([
+            $ssr['Description'] ?? null,
+            $ssr['PieceDescription'] ?? null,
+        ]));
+
+        preg_match_all('/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram)/i', $text, $matches);
+
+        return array_map('floatval', $matches[1] ?? []);
+    }
+
+    private function weightDescription(float $weight): string
+    {
+        return rtrim(rtrim(number_format($weight, 2, '.', ''), '0'), '.') . ' Kg included';
     }
 
     private function travelerType(mixed $ptc): string

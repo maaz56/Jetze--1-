@@ -102,6 +102,9 @@ import {
     Sun,
     Sunrise,
     Sunset,
+    Info,
+    ArrowRight,
+    RefreshCw,
 } from "lucide-vue-next";
 import moment from "moment";
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
@@ -280,6 +283,17 @@ const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
 const freeSsrBaggageLoadingByKey = ref({});
 const freeSsrBaggageRequestIdByKey = ref({});
+const isFareBaggageDialogOpen = ref(false);
+const fareBaggageDialogLoading = ref(false);
+const fareBaggageDialogError = ref("");
+const fareBaggageDialog = ref({
+    fare: null,
+    flight: null,
+    flightIndex: null,
+    policies: [],
+});
+let fareBaggageDialogRequestId = 0;
+const selectedBaggageLegTab = ref("all");
 const savedAmount = ref(0);
 const isCreatingQuote = ref(false);
 const isCheckoutLoading = computed(
@@ -331,10 +345,10 @@ async function openSooperFlightDetails(flight) {
     // });
     flightDetailsActiveTab.value = "fare-options";
     isSooperFlihgtDetailsOpen.value = true;
-    // The selected-flight watcher also runs when the sheet mounts. Wait until
-    // it has settled selectedFares before deciding whether SSR is required.
+    // Load free baggage once for the default fare selection as soon as the
+    // side sheet opens, so the Baggage tab is populated before a fare click.
     await nextTick();
-    fetchFreeSsrBaggage();
+    void fetchFreeSsrBaggage();
 }
 
 function fetchAgent() {
@@ -1614,9 +1628,6 @@ function goToCheckout() {
     }
 
     toCheckoutClicked.value = true;
-    // Keep baggage enrichment independent from checkout navigation. A user
-    // explicitly asked for SSR on every Book now action as well.
-    void fetchFreeSsrBaggage();
     if (user && user.value?.id) {
         continueToCheckout();
     } else {
@@ -1642,7 +1653,9 @@ function selectFares(flightIdx, ref_id) {
         selectedFares[flightIdx] = ref_id;
     }
 
-    fetchFreeSsrBaggage();
+    // Keep the Transition Baggage tab in sync with the fare the traveller
+    // selected. The modal remains independent and fetches only its clicked fare.
+    void fetchFreeSsrBaggage();
 }
 
 /** Load free baggage only while an AT result is open; never during search. */
@@ -1701,6 +1714,404 @@ async function fetchFreeSsrBaggage() {
             delete freeSsrBaggageLoadingByKey.value[requestKey];
         }
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
+    }
+}
+
+const fareBaggageDialogPolicies = computed(() => {
+    // The SSR request contains the clicked fare plus the active fare for each
+    // remaining leg. Keep every returned policy so round-trip return baggage
+    // is shown alongside the outbound allowance.
+    return fareBaggageDialog.value.policies ?? [];
+});
+
+function fareBaggageSegmentLabel(segmentRefId) {
+    for (const flight of selectedFlight.value?.leg?.flights ?? []) {
+        const segment = (flight?.segments ?? []).find(
+            (item) => item?.ref_id === segmentRefId,
+        );
+
+        if (segment) {
+            return `${segment?.from?.iata ?? ""} → ${segment?.to?.iata ?? ""}`.trim();
+        }
+    }
+
+    return "";
+}
+
+function formatTravelerType(type) {
+    if (!type) return "Adult";
+    const upper = String(type).toUpperCase().trim();
+    if (upper === "ADT") return "Adult";
+    if (upper === "CHD" || upper === "CNN") return "Child";
+    if (upper === "INF") return "Infant";
+    return type;
+}
+
+function parseBaggagePolicy(policy) {
+    const rawType = String(policy?.type || "").toLowerCase();
+    const rawDesc = String(policy?.description || "").trim();
+    const isCarry =
+        rawType.includes("carry") ||
+        rawType.includes("cabin") ||
+        rawType.includes("hand") ||
+        rawDesc.toLowerCase().includes("carry") ||
+        rawDesc.toLowerCase().includes("cabin");
+
+    const isZero =
+        /\b0\s*(?:kg|pieces?|pc)\b/i.test(rawDesc) ||
+        /\bno\s+(?:checked|cabin|baggage)\b/i.test(rawDesc) ||
+        /\bnot\s+included\b/i.test(rawDesc);
+    const isIncluded = !isZero && rawDesc.length > 0;
+
+    let headline = rawDesc;
+    if (policy?.weight && !rawDesc.toLowerCase().includes(String(policy.weight).toLowerCase())) {
+        headline = `${policy.weight} ${rawDesc}`.trim();
+    }
+
+    headline = headline
+        .replace(/\s+included\b/gi, "")
+        .replace(/\s+allowed\b/gi, "")
+        .trim();
+
+    if (!headline) {
+        headline = isIncluded ? "Included" : "0 Kg";
+    }
+
+    const label = isCarry ? "Cabin Baggage" : "Checked Baggage";
+    const sublabel = isCarry
+        ? "Hand luggage & personal item"
+        : "Check-in counter / Cargo hold";
+
+    return {
+        isCarry,
+        isIncluded,
+        label,
+        sublabel,
+        headline,
+        rawDescription: rawDesc || (isIncluded ? "Included in ticket" : "Not included"),
+        travelerType: formatTravelerType(policy?.traveler_type),
+        segmentLabel: fareBaggageSegmentLabel(policy?.segment_ref_id),
+    };
+}
+
+function prepareLegPolicies(legPolicies, flight) {
+    if (!legPolicies || legPolicies.length === 0) return [];
+
+    const segments = flight?.segments ?? [];
+    let processedPolicies = legPolicies;
+
+    if (segments.length > 1) {
+        const hasDiffPerSegment = {};
+        legPolicies.forEach((p) => {
+            const typeKey = `${p.type || ""}_${p.traveler_type || ""}`;
+            if (!hasDiffPerSegment[typeKey]) {
+                hasDiffPerSegment[typeKey] = p.description;
+            } else if (hasDiffPerSegment[typeKey] !== p.description) {
+                hasDiffPerSegment[typeKey] = "__DIFFERENT__";
+            }
+        });
+
+        const isAllSame = Object.values(hasDiffPerSegment).every(
+            (v) => v !== "__DIFFERENT__",
+        );
+
+        if (isAllSame && legPolicies.length > 2) {
+            const deduped = [];
+            const seen = new Set();
+            legPolicies.forEach((p) => {
+                const k = `${p.type || ""}_${p.traveler_type || ""}_${p.description || ""}`;
+                if (!seen.has(k)) {
+                    seen.add(k);
+                    deduped.push({
+                        ...p,
+                        _isMultiSegmentCovered: true,
+                    });
+                }
+            });
+            processedPolicies = deduped;
+        }
+    }
+
+    return processedPolicies.map((policy) => ({
+        ...policy,
+        _parsed: parseBaggagePolicy(policy),
+    }));
+}
+
+const fareBaggageDialogTripType = computed(() => {
+    const flights = selectedFlight.value?.leg?.flights ?? [];
+    if (route?.query?.flightType === "multi-city" || flights.length > 2) {
+        return "Multi-City";
+    }
+    if (route?.query?.flightType === "return" || flights.length === 2) {
+        return "Round Trip";
+    }
+    return "One Way";
+});
+
+const fareBaggageDialogRouteSummary = computed(() => {
+    const flights = selectedFlight.value?.leg?.flights ?? [];
+    if (!flights.length) {
+        const fl = fareBaggageDialog.value.flight;
+        if (!fl?.from?.iata || !fl?.to?.iata) return "";
+        const fromCity = fl.from.city?.name ? `${fl.from.city.name} (${fl.from.iata})` : fl.from.iata;
+        const toCity = fl.to.city?.name ? `${fl.to.city.name} (${fl.to.iata})` : fl.to.iata;
+        return `${fromCity} → ${toCity}`;
+    }
+    const first = flights[0];
+    const isReturnTrip = fareBaggageDialogTripType.value === "Round Trip";
+    if (isReturnTrip) {
+        const originCity = first?.from?.city?.name ? `${first.from.city.name} (${first.from?.iata})` : (first?.from?.iata || "");
+        const destCity = first?.to?.city?.name ? `${first.to.city.name} (${first.to?.iata})` : (first?.to?.iata || "");
+        return `${originCity} ⇄ ${destCity}`;
+    }
+    if (flights.length === 1) {
+        const originCity = first?.from?.city?.name ? `${first.from.city.name} (${first.from?.iata})` : (first?.from?.iata || "");
+        const destCity = first?.to?.city?.name ? `${first.to.city.name} (${first.to?.iata})` : (first?.to?.iata || "");
+        return `${originCity} → ${destCity}`;
+    }
+    return `${first?.from?.iata} → ${flights.map((f) => f?.to?.iata).filter(Boolean).join(" → ")}`;
+});
+
+const fareBaggageLegGroups = computed(() => {
+    const flights = selectedFlight.value?.leg?.flights ?? [];
+    const policies = fareBaggageDialogPolicies.value ?? [];
+    if (!policies.length) return [];
+
+    const hasSegmentRefs = policies.some((p) => Boolean(p?.segment_ref_id));
+
+    if (flights.length <= 1 || !hasSegmentRefs) {
+        const targetFlight =
+            fareBaggageDialog.value.flight ||
+            flights[fareBaggageDialog.value.flightIndex ?? 0] ||
+            flights[0];
+
+        const isReturn =
+            fareBaggageDialog.value.flightIndex === 1 ||
+            (flights.length === 2 && targetFlight === flights[1]);
+
+        const routeStr =
+            targetFlight?.from?.iata && targetFlight?.to?.iata
+                ? `${targetFlight.from.iata} → ${targetFlight.to.iata}`
+                : "";
+
+        const titleStr =
+            targetFlight?.from?.city?.name && targetFlight?.to?.city?.name
+                ? `${targetFlight.from.city.name} to ${targetFlight.to.city.name}`
+                : routeStr;
+
+        return [
+            {
+                flight: targetFlight,
+                flightIndex: fareBaggageDialog.value.flightIndex ?? 0,
+                legType: isReturn ? "return" : "departure",
+                badgeLabel: isReturn ? "Return Flight" : "Departure Flight",
+                title: titleStr,
+                route: routeStr,
+                date: targetFlight?.departure_at
+                    ? moment(targetFlight.departure_at).format("ddd, DD MMM YYYY")
+                    : "",
+                airlineName:
+                    targetFlight?.operating_carrier?.name ||
+                    targetFlight?.marketing_carrier?.name ||
+                    "",
+                flightNumber:
+                    formatFlightNumber(targetFlight?.flight_number) || "",
+                policies: prepareLegPolicies(policies, targetFlight),
+            },
+        ];
+    }
+
+    const groups = [];
+
+    flights.forEach((fl, idx) => {
+        const flightSegmentIds = new Set(
+            (fl?.segments ?? []).map((s) => s?.ref_id).filter(Boolean),
+        );
+
+        let legPolicies = policies.filter((p) =>
+            p?.segment_ref_id && flightSegmentIds.has(p.segment_ref_id),
+        );
+
+        if (!legPolicies.length && fareBaggageDialog.value.flightIndex === idx) {
+            legPolicies = policies;
+        }
+
+        if (legPolicies.length > 0) {
+            const isRoundTrip =
+                flights.length === 2 && route?.query?.flightType !== "multi-city";
+            const legType = isRoundTrip
+                ? (idx === 0 ? "departure" : "return")
+                : (route?.query?.flightType === "multi-city"
+                    ? `trip_${idx + 1}`
+                    : (idx === 0 ? "departure" : "return"));
+
+            const badgeLabel =
+                legType === "departure"
+                    ? "Departure Flight"
+                    : legType === "return"
+                    ? "Return Flight"
+                    : `Trip ${idx + 1}`;
+
+            const routeStr =
+                fl?.from?.iata && fl?.to?.iata
+                    ? `${fl.from.iata} → ${fl.to.iata}`
+                    : "";
+
+            const titleStr =
+                fl?.from?.city?.name && fl?.to?.city?.name
+                    ? `${fl.from.city.name} to ${fl.to.city.name}`
+                    : routeStr;
+
+            groups.push({
+                flight: fl,
+                flightIndex: idx,
+                legType,
+                badgeLabel,
+                title: titleStr,
+                route: routeStr,
+                date: fl?.departure_at
+                    ? moment(fl.departure_at).format("ddd, DD MMM YYYY")
+                    : "",
+                airlineName:
+                    fl?.operating_carrier?.name ||
+                    fl?.marketing_carrier?.name ||
+                    "",
+                flightNumber:
+                    formatFlightNumber(fl?.flight_number) || "",
+                policies: prepareLegPolicies(legPolicies, fl),
+            });
+        }
+    });
+
+    if (!groups.length) {
+        const targetFlight =
+            fareBaggageDialog.value.flight ||
+            flights[fareBaggageDialog.value.flightIndex ?? 0] ||
+            flights[0];
+
+        const routeStr =
+            targetFlight?.from?.iata && targetFlight?.to?.iata
+                ? `${targetFlight.from.iata} → ${targetFlight.to.iata}`
+                : "";
+
+        groups.push({
+            flight: targetFlight,
+            flightIndex: fareBaggageDialog.value.flightIndex ?? 0,
+            legType: "departure",
+            badgeLabel: "Departure Flight",
+            title: routeStr,
+            route: routeStr,
+            date: targetFlight?.departure_at
+                ? moment(targetFlight.departure_at).format("ddd, DD MMM YYYY")
+                : "",
+            airlineName:
+                targetFlight?.operating_carrier?.name ||
+                targetFlight?.marketing_carrier?.name ||
+                "",
+            flightNumber:
+                formatFlightNumber(targetFlight?.flight_number) || "",
+            policies: prepareLegPolicies(policies, targetFlight),
+        });
+    }
+
+    return groups;
+});
+
+const visibleFareBaggageLegGroups = computed(() => {
+    if (selectedBaggageLegTab.value === "all") {
+        return fareBaggageLegGroups.value;
+    }
+    return fareBaggageLegGroups.value.filter(
+        (_, idx) => String(idx) === selectedBaggageLegTab.value,
+    );
+});
+
+function retryFareBaggageDialog() {
+    if (fareBaggageDialog.value.fare) {
+        openFareBaggageDialog(
+            fareBaggageDialog.value.fare,
+            fareBaggageDialog.value.flight,
+            fareBaggageDialog.value.flightIndex ?? 0,
+        );
+    }
+}
+
+function selectedFareReferencesForBaggage(fare, flightIndex) {
+    return (selectedFlight.value?.leg?.flights ?? [])
+        .map((flight, index) =>
+            index === flightIndex
+                ? fare?.ref_id
+                : selectedFares[index] ?? flight?.fares?.[0]?.ref_id,
+        )
+        .filter(Boolean);
+}
+
+function fareBaggageTypeLabel(type) {
+    return String(type).toLowerCase().includes("carry")
+        ? "Carry-on"
+        : "Checked baggage";
+}
+
+async function openFareBaggageDialog(fare, flight, flightIndex) {
+    const requestId = ++fareBaggageDialogRequestId;
+    const fallbackPolicies = fare?.baggage_policies ?? [];
+
+    fareBaggageDialog.value = {
+        fare,
+        flight,
+        flightIndex,
+        policies: [],
+    };
+    selectedBaggageLegTab.value = "all";
+    fareBaggageDialogError.value = "";
+    fareBaggageDialogLoading.value = true;
+    isFareBaggageDialogOpen.value = true;
+
+    const provider = String(
+        selectedFlight.value?.provider?.name
+        ?? selectedFlight.value?.provider?.identifier
+        ?? "",
+    ).toLowerCase();
+    const flightRefId = selectedFlight.value?.leg?.ref_id;
+    const searchToken = selectedFlight.value?.quote_search_token;
+    const fareReferences = selectedFareReferencesForBaggage(fare, flightIndex);
+
+    if (provider !== "at") {
+        fareBaggageDialog.value.policies = fallbackPolicies;
+        fareBaggageDialogLoading.value = false;
+        return;
+    }
+
+    if (!flightRefId || !searchToken || fareReferences.length === 0) {
+        fareBaggageDialogError.value = "Baggage allowance is unavailable for this fare.";
+        fareBaggageDialogLoading.value = false;
+        return;
+    }
+
+    try {
+        const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+            flight_ref_id: flightRefId,
+            fare_references: fareReferences,
+            search_token: searchToken,
+            timeout: 70000,
+        });
+
+        if (requestId !== fareBaggageDialogRequestId) return;
+
+        fareBaggageDialog.value.policies =
+            response?.free_ssr_baggage?.baggage_policies ?? fallbackPolicies;
+    } catch (error) {
+        if (requestId !== fareBaggageDialogRequestId) return;
+
+        fareBaggageDialogError.value =
+            error.response?.data?.message
+            || "Unable to load baggage allowance. Please try again.";
+        fareBaggageDialog.value.policies = fallbackPolicies;
+    } finally {
+        if (requestId === fareBaggageDialogRequestId) {
+            fareBaggageDialogLoading.value = false;
+        }
     }
 }
 
@@ -4414,7 +4825,7 @@ watch(isLoggedIn, (newVal) => {
                                                                         v-if="summary.actionTab"
                                                                         type="button"
                                                                         class="group inline-flex items-center gap-1 text-left font-medium text-primary underline underline-offset-2 decoration-primary/70 transition hover:text-primary/80 hover:decoration-primary"
-                                                                        @click.stop="flightDetailsActiveTab = summary.actionTab"
+                                                                        @click.stop="openFareBaggageDialog(fare, flight, flightIndex)"
                                                                     >
                                                                         <span>{{ summary.description }}</span>
                                                                         <MousePointerClick class="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -5495,6 +5906,299 @@ watch(isLoggedIn, (newVal) => {
                 </div>
             </div>
         </Transition>
+
+        <Dialog v-model:open="isFareBaggageDialogOpen">
+            <DialogContent class="w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-2xl bg-white p-0 gap-0 shadow-2xl border border-slate-200/90 sm:w-full">
+                <!-- Header with airline feel -->
+                <div class="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/40 px-5 py-4 sm:px-6 sm:py-5 pr-12 sm:pr-14">
+                    <div class="flex items-start gap-3.5">
+                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-xs">
+                            <Luggage class="h-5 w-5" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <DialogTitle class="text-lg sm:text-xl font-bold tracking-tight text-slate-950">
+                                    Baggage Allowance
+                                </DialogTitle>
+                                <span class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                                    {{ fareBaggageDialog.fare?.name_class || fareBaggageDialog.fare?.name || "Selected Fare" }}
+                                </span>
+                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                                    {{ fareBaggageDialogTripType }}
+                                </span>
+                            </div>
+                            <DialogDescription class="mt-1 flex flex-wrap items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-500">
+                                <span>{{ fareBaggageDialogRouteSummary }}</span>
+                            </DialogDescription>
+                        </div>
+                    </div>
+
+                    <!-- Journey Tab Switcher (if multiple legs e.g. Round Trip or Multi-City) -->
+                    <div
+                        v-if="!fareBaggageDialogLoading && fareBaggageLegGroups.length > 1"
+                        class="mt-3.5 flex items-center gap-1.5 rounded-lg bg-slate-100 p-1 text-xs font-semibold"
+                    >
+                        <button
+                            type="button"
+                            @click="selectedBaggageLegTab = 'all'"
+                            class="flex-1 rounded-md px-3 py-1.5 transition-all text-center"
+                            :class="selectedBaggageLegTab === 'all'
+                                ? 'bg-white text-slate-950 shadow-xs font-bold'
+                                : 'text-slate-600 hover:text-slate-950'"
+                        >
+                            All Flights ({{ fareBaggageLegGroups.length }})
+                        </button>
+                        <button
+                            v-for="(leg, legIdx) in fareBaggageLegGroups"
+                            :key="legIdx"
+                            type="button"
+                            @click="selectedBaggageLegTab = String(legIdx)"
+                            class="flex-1 rounded-md px-3 py-1.5 transition-all text-center flex items-center justify-center gap-1.5"
+                            :class="selectedBaggageLegTab === String(legIdx)
+                                ? 'bg-white text-slate-950 shadow-xs font-bold'
+                                : 'text-slate-600 hover:text-slate-950'"
+                        >
+                            <PlaneTakeoff v-if="leg.legType === 'departure'" class="h-3 w-3 text-primary" />
+                            <PlaneLanding v-else-if="leg.legType === 'return'" class="h-3 w-3 text-indigo-600" />
+                            <Plane v-else class="h-3 w-3 text-slate-500" />
+                            <span>{{ leg.badgeLabel }}: {{ leg.route }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Body Scrollable Content -->
+                <div class="max-h-[62vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6 sm:max-h-[68vh]">
+                    <!-- Loading Skeleton -->
+                    <template v-if="fareBaggageDialogLoading">
+                        <div class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+                            <LoaderCircle class="h-4 w-4 animate-spin text-primary" />
+                            <span>Retrieving verified baggage rules from airline...</span>
+                        </div>
+                        <div v-for="skeletonLeg in (fareBaggageDialogTripType === 'Round Trip' ? 2 : 1)" :key="skeletonLeg" class="space-y-3">
+                            <div class="h-10 w-full animate-pulse rounded-lg bg-slate-100"></div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div v-for="skCard in 2" :key="skCard" class="rounded-xl border border-slate-200 p-4 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <div class="h-4 w-28 animate-pulse rounded bg-slate-200"></div>
+                                        <div class="h-5 w-16 animate-pulse rounded-full bg-slate-100"></div>
+                                    </div>
+                                    <div class="h-8 w-24 animate-pulse rounded bg-slate-200"></div>
+                                    <div class="h-3 w-36 animate-pulse rounded bg-slate-100"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Error Alert -->
+                    <div
+                        v-else-if="fareBaggageDialogError"
+                        class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900"
+                    >
+                        <div class="flex items-start gap-3">
+                            <AlertCircle class="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div class="flex-1">
+                                <div class="font-bold text-amber-950">Baggage Details Notice</div>
+                                <div class="mt-0.5 text-xs text-amber-800 leading-relaxed">
+                                    {{ fareBaggageDialogError }}
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="retryFareBaggageDialog"
+                                    class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-50"
+                                >
+                                    <RefreshCw class="h-3.5 w-3.5 text-amber-700" />
+                                    Try again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Groups List -->
+                    <template v-else-if="visibleFareBaggageLegGroups.length">
+                        <div
+                            v-for="(legGroup, groupIdx) in visibleFareBaggageLegGroups"
+                            :key="`${legGroup.legType}_${legGroup.flightIndex}_${groupIdx}`"
+                            class="space-y-3"
+                        >
+                            <!-- Leg Section Header Card -->
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border px-4 py-2.5 transition-colors"
+                                :class="legGroup.legType === 'departure'
+                                    ? 'border-blue-200/90 bg-gradient-to-r from-blue-50/80 via-white to-slate-50'
+                                    : 'border-indigo-200/90 bg-gradient-to-r from-indigo-50/80 via-white to-slate-50'"
+                            >
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold shadow-2xs"
+                                        :class="legGroup.legType === 'departure'
+                                            ? 'bg-primary text-white'
+                                            : 'bg-indigo-600 text-white'"
+                                    >
+                                        <PlaneTakeoff v-if="legGroup.legType === 'departure'" class="h-3.5 w-3.5" />
+                                        <PlaneLanding v-else-if="legGroup.legType === 'return'" class="h-3.5 w-3.5" />
+                                        <Plane v-else class="h-3.5 w-3.5" />
+                                        {{ legGroup.badgeLabel }}
+                                    </span>
+                                    <div class="flex items-center gap-2 truncate">
+                                        <span class="text-sm font-black text-slate-900">
+                                            {{ legGroup.route }}
+                                        </span>
+                                        <span v-if="legGroup.title && legGroup.title !== legGroup.route" class="hidden sm:inline text-xs text-slate-500 font-medium truncate">
+                                            · {{ legGroup.title }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2.5 text-xs text-slate-600">
+                                    <span v-if="legGroup.date" class="flex items-center gap-1 font-semibold text-slate-700">
+                                        <Calendar class="h-3.5 w-3.5 text-slate-400" />
+                                        {{ legGroup.date }}
+                                    </span>
+                                    <span v-if="legGroup.airlineName" class="hidden sm:inline-flex items-center gap-1 font-medium text-slate-500">
+                                        <span class="text-slate-300">•</span>
+                                        {{ legGroup.airlineName }}
+                                        <span v-if="legGroup.flightNumber" class="text-slate-400">({{ legGroup.flightNumber }})</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Baggage Cards Grid for this leg -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div
+                                    v-for="(policy, pIndex) in legGroup.policies"
+                                    :key="`${policy.segment_ref_id || 'seg'}:${policy.traveler_type || 'pax'}:${policy.type}:${pIndex}`"
+                                    class="group relative flex flex-col justify-between rounded-xl border p-4 shadow-2xs transition-all hover:shadow-md"
+                                    :class="policy._parsed?.isCarry
+                                        ? 'border-sky-200/90 bg-gradient-to-br from-sky-50/40 via-white to-white'
+                                        : 'border-blue-200/90 bg-gradient-to-br from-blue-50/40 via-white to-white'"
+                                >
+                                    <!-- Card Header: Type, icon and status badge -->
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex items-center gap-2.5">
+                                            <div
+                                                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-2xs"
+                                                :class="policy._parsed?.isCarry
+                                                    ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
+                                                    : 'bg-primary/10 text-primary ring-1 ring-primary/20'"
+                                            >
+                                                <Briefcase v-if="policy._parsed?.isCarry" class="h-4.5 w-4.5" />
+                                                <Luggage v-else class="h-4.5 w-4.5" />
+                                            </div>
+                                            <div>
+                                                <div class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                                    {{ policy._parsed?.label }}
+                                                </div>
+                                                <div class="text-[11px] font-medium text-slate-500">
+                                                    {{ policy._parsed?.sublabel }}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Status Badge -->
+                                        <span
+                                            v-if="policy._parsed?.isIncluded"
+                                            class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200/70 shadow-2xs"
+                                        >
+                                            <Check class="h-3 w-3 stroke-[3]" />
+                                            Included
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200/70"
+                                        >
+                                            <X class="h-3 w-3" />
+                                            Not included
+                                        </span>
+                                    </div>
+
+                                    <!-- Main Allowance Value -->
+                                    <div class="my-3.5">
+                                        <div class="flex items-baseline gap-2">
+                                            <span class="text-2xl font-black tracking-tight text-slate-900">
+                                                {{ policy._parsed?.headline }}
+                                            </span>
+                                            <span class="text-xs font-semibold text-slate-500">
+                                                {{ policy._parsed?.travelerType ? `per ${policy._parsed.travelerType.toLowerCase()}` : 'per passenger' }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            v-if="policy.pieces && policy.pieces > 1"
+                                            class="mt-0.5 text-xs font-medium text-slate-600"
+                                        >
+                                            {{ policy.pieces }} pieces allowed
+                                        </div>
+                                    </div>
+
+                                    <!-- Card Footer Details -->
+                                    <div class="flex items-center justify-between border-t border-slate-100 pt-2.5 text-[11px] font-medium text-slate-500">
+                                        <span class="inline-flex items-center gap-1">
+                                            <Users class="h-3 w-3 text-slate-400" />
+                                            {{ policy._parsed?.travelerType || 'Adult' }}
+                                        </span>
+                                        <span
+                                            v-if="policy._isMultiSegmentCovered"
+                                            class="inline-flex items-center gap-1 font-semibold text-primary"
+                                        >
+                                            All connecting flights
+                                        </span>
+                                        <span
+                                            v-else-if="policy._parsed?.segmentLabel"
+                                            class="font-semibold text-slate-600"
+                                        >
+                                            Leg: {{ policy._parsed.segmentLabel }}
+                                        </span>
+                                        <span v-else class="text-slate-400">
+                                            Standard policy
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Empty State -->
+                    <div
+                        v-else
+                        class="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center"
+                    >
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-3">
+                            <Luggage class="h-6 w-6" />
+                        </div>
+                        <h5 class="text-sm font-bold text-slate-800">No Baggage Allowance Available</h5>
+                        <p class="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+                            The airline did not return specific free baggage allowances for this fare. Standard airline baggage rules may apply.
+                        </p>
+                    </div>
+
+                    <!-- Helpful Airline Information Callout -->
+                    <!-- <div class="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5">
+                        <div class="flex items-start gap-2.5">
+                            <div class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Info class="h-3.5 w-3.5" />
+                            </div>
+                            <div class="text-xs text-slate-600 leading-relaxed">
+                                <span class="font-bold text-slate-800">Traveler baggage tip: </span>
+                                In addition to cabin baggage, airlines typically allow 1 small personal item (handbag or laptop bag) that fits under the seat. Checked bags must be dropped off at the airline counter prior to boarding.
+                            </div>
+                        </div>
+                    </div> -->
+                </div>
+
+                <!-- Dialog Footer with Action Button -->
+                <div class="flex items-center justify-between border-t border-slate-200/80 bg-slate-50/60 px-5 py-3.5 sm:px-6">
+                    <div class="text-xs font-medium text-slate-500">
+                        Allowances apply per passenger as confirmed by the airline.
+                    </div>
+                    <button
+                        type="button"
+                        @click="isFareBaggageDialogOpen = false"
+                        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-2xs transition hover:bg-primary/90 focus:outline-hidden"
+                    >
+                        Done
+                    </button>
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
 
