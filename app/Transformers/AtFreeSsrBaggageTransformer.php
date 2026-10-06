@@ -34,9 +34,16 @@ class AtFreeSsrBaggageTransformer
                         $pieceDescription = trim((string) ($ssr['PieceDescription'] ?? ''));
                         $weights = $this->weights($ssr);
                         $checkedText = $pieceDescription ?: ($description ?: (string) ($ssr['Code'] ?? 'Included checked baggage'));
-                        [$pieces, $weight] = $this->allowanceFromText($checkedText);
+                        [$descriptionPieces, $descriptionWeight] = $this->allowanceFromText($description);
+                        [$pieceDescriptionPieces, $pieceDescriptionWeight] = $this->allowanceFromText($pieceDescription);
+                        [$checkedTextPieces, $checkedTextWeight] = $this->allowanceFromText($checkedText);
 
-                        if (!$pieceDescription && isset($weights[0])) {
+                        $pieces = $descriptionPieces ?: ($pieceDescriptionPieces ?: $checkedTextPieces);
+                        $weight = $pieceDescriptionWeight ?: (
+                            $checkedTextWeight !== null && $checkedTextWeight > 7.0 ? $checkedTextWeight : null
+                        );
+
+                        if (!$pieceDescription && isset($weights[0]) && $weights[0] > 7.0) {
                             $weight = $weights[0];
                         }
 
@@ -44,7 +51,7 @@ class AtFreeSsrBaggageTransformer
                             'type' => 'checkIn',
                             'pieces' => $pieces,
                             'weight' => $weight,
-                            'description' => $pieceDescription ?: (
+                            'description' => $this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
                                 isset($weights[1]) ? $this->weightDescription($weights[0]) : $checkedText
                             ),
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
@@ -52,13 +59,13 @@ class AtFreeSsrBaggageTransformer
                             'source' => 'free_ssr',
                         ];
 
-                        if ($pieceDescription && $description) {
-                            [$carryPieces, $carryWeight] = $this->allowanceFromText($description);
+                        $carryWeight = $this->carryWeight($descriptionWeight, $weights);
+                        if ($carryWeight !== null) {
                             $policies[] = [
                                 'type' => 'carry',
-                                'pieces' => $carryPieces,
+                                'pieces' => 1,
                                 'weight' => $carryWeight,
-                                'description' => $description,
+                                'description' => $this->weightDescription($carryWeight),
                                 'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                                 'segment_ref_id' => $segmentRefId,
                                 'source' => 'free_ssr',
@@ -98,6 +105,31 @@ class AtFreeSsrBaggageTransformer
         return [$pieces, $weight];
     }
 
+    private function checkedDescription(int $pieces, ?float $weight, string $pieceDescription): ?string
+    {
+        if ($pieces > 0 && $weight !== null && ($pieceDescription === '' || stripos($pieceDescription, 'equals') !== false)) {
+            $label = $pieces === 1 ? 'piece' : 'pieces';
+            return "{$pieces} {$label} ({$this->formatWeight($weight)})";
+        }
+
+        return $pieceDescription ?: null;
+    }
+
+    private function carryWeight(?float $descriptionWeight, array $weights): ?float
+    {
+        if ($descriptionWeight !== null && $descriptionWeight <= 7.0) {
+            return $descriptionWeight;
+        }
+
+        foreach ($weights as $weight) {
+            if ($weight <= 7.0) {
+                return $weight;
+            }
+        }
+
+        return null;
+    }
+
     /** @return array<int, float> */
     private function weights(array $ssr): array
     {
@@ -113,7 +145,12 @@ class AtFreeSsrBaggageTransformer
 
     private function weightDescription(float $weight): string
     {
-        return rtrim(rtrim(number_format($weight, 2, '.', ''), '0'), '.') . ' Kg included';
+        return $this->formatWeight($weight) . ' included';
+    }
+
+    private function formatWeight(float $weight): string
+    {
+        return rtrim(rtrim(number_format($weight, 2, '.', ''), '0'), '.') . ' Kg';
     }
 
     private function travelerType(mixed $ptc): string
