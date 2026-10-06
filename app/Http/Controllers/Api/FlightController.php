@@ -675,9 +675,9 @@ class FlightController extends Controller
 
         Log::info('AT free SSR baggage waiting after pricing before SSR request', [
             'flight_ref_id' => $validated['flight_ref_id'],
-            'delay_seconds' => 2,
+            'delay_seconds' => 3,
         ]);
-        sleep(2);
+        sleep(3);
 
         Log::info('AT free SSR baggage supplier request started', [
             'flight_ref_id' => $validated['flight_ref_id'],
