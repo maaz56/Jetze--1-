@@ -807,6 +807,7 @@ class AtFlightTransformer
                 // Check if airlines match for pairing
                 if (
                     $oFlight['VAC'] === $rFlight['VAC']
+                    && $oFlight['Provider'] === $rFlight['Provider']
                     && $this->airlineDisambiguationKey($oFlight) === $this->airlineDisambiguationKey($rFlight)
                 ) {
                     
@@ -844,6 +845,7 @@ class AtFlightTransformer
                         ->toArray();
 
                     $pairKey = implode('_', [
+                        $oFlight['Provider'] ?? '',
                         $oFlight['FlightNo'] ?? '',
                         $rFlight['FlightNo'] ?? '',
                         $this->airlineDisambiguationKey($oFlight),
@@ -1110,6 +1112,7 @@ class AtFlightTransformer
     private function multiCityPhysicalFlightKey(array $flight): string
     {
         return hash('sha256', implode('|', [
+            (string) ($flight['Provider'] ?? ''),
             (string) ($flight['VAC'] ?? ''),
             (string) ($flight['OAC'] ?? ''),
             (string) ($flight['MAC'] ?? ''),
@@ -1133,6 +1136,7 @@ class AtFlightTransformer
         }
 
         return implode('|', [
+            strtoupper(trim((string) ($flight['Provider'] ?? ''))),
             trim((string) $returnIdentifier),
             strtoupper(trim((string) ($flight['VAC'] ?? ''))),
             strtoupper(trim((string) $index)),
@@ -1149,6 +1153,7 @@ class AtFlightTransformer
         foreach ($journeys as $baseJourney) {
             $flightKey = implode('_', [
                 $baseJourney['VAC'] ?? '',
+                $baseJourney['Provider'] ?? '',
                 $baseJourney['OAC'] ?? '',
                 $baseJourney['MAC'] ?? '',
                 $baseJourney['FlightNo'] ?? '',
@@ -1185,6 +1190,7 @@ class AtFlightTransformer
             foreach ($journeys as $fareJourney) {
                 if (
                     ($fareJourney['VAC'] ?? '') === ($baseJourney['VAC'] ?? '') &&
+                    // ($fareJourney['Provider'] ?? '') === ($baseJourney['Provider'] ?? '') &&
                     ($fareJourney['OAC'] ?? '') === ($baseJourney['OAC'] ?? '') &&
                     ($fareJourney['MAC'] ?? '') === ($baseJourney['MAC'] ?? '') &&
                     ($fareJourney['FlightNo'] ?? '') === ($baseJourney['FlightNo'] ?? '') &&
