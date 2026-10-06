@@ -689,7 +689,7 @@ class FlightController extends Controller
                 'priced_tui' => $pricedTui,
                 'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
                 'legs' => $legs,
-            ], false, 1);
+            ], false, 3, 3);
         } catch (\Throwable $exception) {
             Log::error('AT free SSR baggage supplier request failed', [
                 'flight_ref_id' => $validated['flight_ref_id'],
