@@ -673,6 +673,12 @@ class FlightController extends Controller
             return response()->json(['message' => 'AT could not price this fare for free baggage details.'], 422);
         }
 
+        Log::info('AT free SSR baggage waiting after pricing before SSR request', [
+            'flight_ref_id' => $validated['flight_ref_id'],
+            'delay_seconds' => 2,
+        ]);
+        sleep(2);
+
         Log::info('AT free SSR baggage supplier request started', [
             'flight_ref_id' => $validated['flight_ref_id'],
         ]);
@@ -683,7 +689,7 @@ class FlightController extends Controller
                 'priced_tui' => $pricedTui,
                 'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
                 'legs' => $legs,
-            ], false);
+            ], false, 1);
         } catch (\Throwable $exception) {
             Log::error('AT free SSR baggage supplier request failed', [
                 'flight_ref_id' => $validated['flight_ref_id'],

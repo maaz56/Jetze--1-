@@ -1205,7 +1205,7 @@ private function extractTrips($tripsData): array
 
 
     }
-    public function getSSR($request, bool $isPaid = true)
+    public function getSSR($request, bool $isPaid = true, int $maxAttempts = 3)
     {
         Log::info('Getting SSR with data: ', $request);
         $accessToken = $this->getAccessToken();
@@ -1252,7 +1252,7 @@ private function extractTrips($tripsData): array
 
         Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
         Log::info($headers);
-        $maxAttempts = 3;
+        $maxAttempts = max(1, $maxAttempts);
         $attempt = 0;
 
         while ($attempt < $maxAttempts) {
@@ -1268,7 +1268,8 @@ private function extractTrips($tripsData): array
                 $response = $this->client->send($req);
                 $responseBody = json_decode($response->getBody(), true);
 
-                Log::info("SSR request payload response (attempt {$attempt}): " . json_encode($responseBody, JSON_PRETTY_PRINT));
+                $attemptLabel = $maxAttempts > 1 ? " (attempt {$attempt})" : '';
+                Log::info("SSR request payload response{$attemptLabel}: " . json_encode($responseBody, JSON_PRETTY_PRINT));
 
                 if (($responseBody['Code'] ?? null) === '1025' && $attempt < $maxAttempts) {
                     Log::warning("AT SSR store not ready yet (Code 1025). Retrying in 1.5s (attempt {$attempt}/{$maxAttempts})...");
