@@ -1483,6 +1483,44 @@ function flightDisplayMoney(flight) {
     return { amount, currency };
 }
 
+function combinedFareLabel(flight) {
+    const leg = flight?.leg;
+    if (!hasFareCombinations(leg)) return null;
+
+    const [onwardFlight, returnFlight] = leg.flights;
+    const returnFaresByIdentifier = new Map(
+        (returnFlight?.fares ?? []).map((fare) => [
+            String(fare.return_identifier),
+            fare,
+        ]),
+    );
+    let cheapestPair = null;
+
+    for (const onwardFare of onwardFlight?.fares ?? []) {
+        const returnFare = returnFaresByIdentifier.get(
+            String(onwardFare.return_identifier),
+        );
+        if (!returnFare) continue;
+
+        const amount = fareSortAmount(onwardFare) + fareSortAmount(returnFare);
+        if (!cheapestPair || amount < cheapestPair.amount) {
+            cheapestPair = { amount, onwardFare, returnFare };
+        }
+    }
+
+    if (!cheapestPair) return null;
+
+    const tierName = (fare) => {
+        const name = String(fare?.name || fare?.name_class || fare?.class || "Standard")
+            .replace(/\s+fare$/i, "")
+            .trim();
+
+        return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    };
+
+    return `${tierName(cheapestPair.onwardFare)} + ${tierName(cheapestPair.returnFare)}`;
+}
+
 /** Format a flight-card total from backend-converted fare amounts. */
 function formatFlightDisplayMoney(flight) {
     const money = flightDisplayMoney(flight);
@@ -3834,11 +3872,17 @@ watch(isLoggedIn, (newVal) => {
 
         <!-- Footer -->
         <div
-            class="px-6 sm:px-7 py-4 bg-[#FBFBFD] border-t border-gray-100 flex items-center justify-between text-sm"
+            class="px-6 sm:px-7 py-4 bg-[#FBFBFD] border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-sm"
         >
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 <span class="px-3 py-1.5 rounded-md bg-violet-50 text-violet-700 font-semibold text-sm">
                     {{ item?.leg?.flights?.[0]?.cabin_class || "Economy" }}
+                </span>
+                <span
+                    v-if="combinedFareLabel(item)"
+                    class="px-3 py-1.5 rounded-md bg-sky-50 text-sky-700 font-semibold text-sm"
+                >
+                    {{ combinedFareLabel(item) }}
                 </span>
                 <span
                     class="px-3 py-1.5 rounded-md font-semibold text-sm"
