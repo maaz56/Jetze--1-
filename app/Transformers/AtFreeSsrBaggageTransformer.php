@@ -59,28 +59,6 @@ class AtFreeSsrBaggageTransformer
                             'source' => 'free_ssr',
                         ];
 
-                        $carryWeight = $this->carryWeight($descriptionWeight, $weights);
-                        if ($carryWeight !== null) {
-                            $policies[] = [
-                                'type' => 'carry',
-                                'pieces' => 1,
-                                'weight' => $carryWeight,
-                                'description' => $this->weightDescription($carryWeight),
-                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
-                                'segment_ref_id' => $segmentRefId,
-                                'source' => 'free_ssr',
-                            ];
-                        } elseif (isset($weights[1])) {
-                            $policies[] = [
-                                'type' => 'carry',
-                                'pieces' => 0,
-                                'weight' => $weights[1],
-                                'description' => $this->weightDescription($weights[1]),
-                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
-                                'segment_ref_id' => $segmentRefId,
-                                'source' => 'free_ssr',
-                            ];
-                        }
                     }
                 }
             }

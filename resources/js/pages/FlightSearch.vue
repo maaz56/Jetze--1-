@@ -283,6 +283,7 @@ const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
 const freeSsrBaggageLoadingByKey = ref({});
 const freeSsrBaggageRequestIdByKey = ref({});
+const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 3000, 5000];
 const isFareBaggageDialogOpen = ref(false);
 const fareBaggageDialogLoading = ref(false);
 const fareBaggageDialogError = ref("");
@@ -1659,6 +1660,30 @@ function selectFares(flightIdx, ref_id) {
 }
 
 /** Load free baggage only while an AT result is open; never during search. */
+const waitForFreeSsrBaggageRetry = (milliseconds) => new Promise(
+    (resolve) => setTimeout(resolve, milliseconds),
+);
+
+async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => true) {
+    let lastError;
+
+    for (const delay of FREE_SSR_BAGGAGE_RETRY_DELAYS) {
+        if (delay > 0) {
+            await waitForFreeSsrBaggageRetry(delay);
+        }
+
+        if (!shouldContinue()) return null;
+
+        try {
+            return await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, payload);
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    throw lastError;
+}
+
 async function fetchFreeSsrBaggage() {
     const provider = String(
         selectedFlight.value?.provider?.name
@@ -1688,14 +1713,15 @@ async function fetchFreeSsrBaggage() {
     freeSsrBaggageError.value = "";
 
     try {
-        const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+        const response = await requestFreeSsrBaggageWithRetry({
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
             // GetSPricer can be slow. Always release the skeleton rather than
             // leaving it pending forever when a request never reaches PHP.
             timeout: 70000,
-        });
+        }, () => freeSsrBaggageRequestIdByKey.value[requestKey] === requestId);
+        if (!response) return;
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
         if (currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
 
@@ -1721,7 +1747,25 @@ const fareBaggageDialogPolicies = computed(() => {
     // The SSR request contains the clicked fare plus the active fare for each
     // remaining leg. Keep every returned policy so round-trip return baggage
     // is shown alongside the outbound allowance.
-    return fareBaggageDialog.value.policies ?? [];
+    const policies = fareBaggageDialog.value.policies ?? [];
+    const fixedCabinPolicies = (selectedFlight.value?.leg?.flights ?? [])
+        .flatMap((flight) => flight?.segments ?? [])
+        .map((segment) => ({
+            type: "carry",
+            pieces: 1,
+            weight: 7,
+            description: "7 Kg included",
+            traveler_type: "ADT",
+            segment_ref_id: segment?.ref_id,
+            source: "fixed_cabin_allowance",
+        }));
+
+    // Checked baggage varies by fare and remains SSR-driven. Cabin baggage is
+    // always presented as the fixed 7 Kg allowance.
+    return [
+        ...policies.filter((policy) => String(policy?.type).toLowerCase() !== "carry"),
+        ...fixedCabinPolicies,
+    ];
 });
 
 function fareBaggageSegmentLabel(segmentRefId) {
@@ -2090,14 +2134,14 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
     }
 
     try {
-        const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+        const response = await requestFreeSsrBaggageWithRetry({
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
             timeout: 70000,
-        });
+        }, () => requestId === fareBaggageDialogRequestId);
 
-        if (requestId !== fareBaggageDialogRequestId) return;
+        if (!response || requestId !== fareBaggageDialogRequestId) return;
 
         fareBaggageDialog.value.policies =
             response?.free_ssr_baggage?.baggage_policies ?? fallbackPolicies;
