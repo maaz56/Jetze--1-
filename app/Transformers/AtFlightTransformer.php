@@ -1214,7 +1214,12 @@ class AtFlightTransformer
                         $flight['ArrivalTerminal'] = $fareJourney['ArrivalTerminal'];
                     }
 
-                    $fareKey = $this->fareGroupingKey($fareJourney);
+                    $fareKey = implode('_', [
+                        $fareJourney['FareClass'] ?? '',
+                        $fareJourney['RBD'] ?? '',
+                        $fareJourney['FBC'] ?? '',
+                        $fareJourney['NetFare'] ?? '',
+                    ]);
                     
                     if (!isset($processedFares[$fareKey])) {
                         $fares[] = $this->mapFare($fareJourney);
@@ -1275,21 +1280,6 @@ class AtFlightTransformer
             'IsBusStation' => $journey['IsBusStation'] ?? null,
             'Remarks' => $journey['Remarks'] ?? null,
         ];
-    }
-
-    private function fareGroupingKey(array $journey): string
-    {
-        return implode('_', [
-            $journey['ReturnIdentifier'] ?? '',
-            $journey['FareClass'] ?? '',
-            $journey['RBD'] ?? '',
-            $journey['FBC'] ?? '',
-            $journey['FCType'] ?? '',
-            $journey['FCGroup'] ?? '',
-            $journey['FareType'] ?? '',
-            $journey['NetFare'] ?? '',
-            $journey['GrossFare'] ?? '',
-        ]);
     }
 
     /**
