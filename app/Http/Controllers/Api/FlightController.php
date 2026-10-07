@@ -500,6 +500,12 @@ class FlightController extends Controller
                 $flight,
                 $validated['fare_references'],
             );
+            $this->cacheAtProviderPricing(
+                $validated['search_token'],
+                $validated['flight_ref_id'],
+                $validated['fare_references'],
+                $providerPricing,
+            );
             $quote = $this->priceQuoteService->createAt(
                 $request->user(),
                 $flight,
@@ -651,7 +657,21 @@ class FlightController extends Controller
         ]);
 
         try {
-            $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
+            $providerPricing = $this->cachedAtProviderPricing(
+                $validated['search_token'],
+                $validated['flight_ref_id'],
+                $validated['fare_references'],
+            );
+
+            if (!$providerPricing) {
+                $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
+                $this->cacheAtProviderPricing(
+                    $validated['search_token'],
+                    $validated['flight_ref_id'],
+                    $validated['fare_references'],
+                    $providerPricing,
+                );
+            }
         } catch (\Throwable $exception) {
             Log::error('AT free SSR baggage pricing failed', [
                 'flight_ref_id' => $validated['flight_ref_id'],
@@ -864,6 +884,35 @@ class FlightController extends Controller
     private function quoteFlightCacheKey(string $searchToken, string $flightReference): string
     {
         return 'flight_quote_' . $searchToken . '_' . $flightReference;
+    }
+
+    private function atProviderPricingCacheKey(string $searchToken, string $flightReference, array $fareReferences): string
+    {
+        return 'at_provider_pricing_' . sha1(implode('|', [
+            $searchToken,
+            $flightReference,
+            implode(',', $fareReferences),
+        ]));
+    }
+
+    private function cachedAtProviderPricing(string $searchToken, string $flightReference, array $fareReferences): ?array
+    {
+        $pricing = Cache::get($this->atProviderPricingCacheKey(
+            $searchToken,
+            $flightReference,
+            $fareReferences,
+        ));
+
+        return is_array($pricing) && !empty($pricing['tui']) ? $pricing : null;
+    }
+
+    private function cacheAtProviderPricing(string $searchToken, string $flightReference, array $fareReferences, array $pricing): void
+    {
+        Cache::put(
+            $this->atProviderPricingCacheKey($searchToken, $flightReference, $fareReferences),
+            $pricing,
+            now()->addMinutes(10),
+        );
     }
 
     /** Build AT FlightInfo trips from trusted cached fares, never browser prices or TUI values. */

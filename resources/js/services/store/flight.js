@@ -575,10 +575,10 @@ const actions = {
         }
     },
     async [FETCH_FREE_SSR_BAGGAGE](context, params) {
-        const { timeout = 70000, ...payload } = params;
+        const { timeout = 70000, signal, ...payload } = params;
 
         try {
-            const response = await apiService.fetchFreeSsrBaggage(payload, { timeout });
+            const response = await apiService.fetchFreeSsrBaggage(payload, { timeout, signal });
             return response.data;
         } catch (error) {
             context.commit(SET_API_ERROR, error);

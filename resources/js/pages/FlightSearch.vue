@@ -288,6 +288,8 @@ const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
 const freeSsrBaggageLoadingByKey = ref({});
 const freeSsrBaggageRequestIdByKey = ref({});
+const freeSsrBaggageRunId = ref(0);
+const freeSsrBaggageAbortControllers = new Set();
 // Exactly three attempts: immediate, then after 3 seconds, then after 5 seconds.
 const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 5000];
 const isFareBaggageDialogOpen = ref(false);
@@ -1645,6 +1647,7 @@ function goToCheckout() {
         return;
     }
 
+    cancelPendingFreeSsrBaggageRequests();
     toCheckoutClicked.value = true;
     if (user && user.value?.id) {
         continueToCheckout();
@@ -1693,10 +1696,18 @@ async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => tr
 
         if (!shouldContinue()) return null;
 
+        const controller = new AbortController();
+        freeSsrBaggageAbortControllers.add(controller);
+
         try {
-            return await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, payload);
+            return await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+                ...payload,
+                signal: controller.signal,
+            });
         } catch (error) {
             lastError = error;
+        } finally {
+            freeSsrBaggageAbortControllers.delete(controller);
         }
     }
 
@@ -1712,15 +1723,19 @@ async function fetchFreeSsrBaggage() {
 
     if (provider !== "at") return;
 
+    // Search results with a confirmed checked allowance do not need the slow
+    // pricing/SSR chain. Free SSR is only for fares where it is unknown.
+    if (!needsFreeSsrBaggage()) return;
+
     const flightRefId = selectedFlight.value?.leg?.ref_id;
     const searchToken = selectedFlight.value?.quote_search_token;
     const fareReferences = [...selectedFares].filter(Boolean);
     if (!flightRefId || !searchToken || fareReferences.length === 0) return;
 
     const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
-    // Every View details, fare-select, and Book now action intentionally
-    // sends a fresh SSR request. Count in-flight requests per selection so
-    // one completion cannot hide another request's skeleton.
+    const runId = freeSsrBaggageRunId.value;
+    // Count in-flight requests per selection so one completion cannot hide
+    // another request's skeleton.
     // Do not render an earlier response while this fare is being re-queried.
     fareReferences.forEach((fareRef) => {
         delete freeSsrBaggagePoliciesByFare.value[fareRef];
@@ -1739,7 +1754,10 @@ async function fetchFreeSsrBaggage() {
             // GetSPricer can be slow. Always release the skeleton rather than
             // leaving it pending forever when a request never reaches PHP.
             timeout: 70000,
-        }, () => freeSsrBaggageRequestIdByKey.value[requestKey] === requestId);
+        }, () => (
+            freeSsrBaggageRunId.value === runId
+            && freeSsrBaggageRequestIdByKey.value[requestKey] === requestId
+        ));
         if (!response) return;
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
         if (currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
@@ -1760,6 +1778,14 @@ async function fetchFreeSsrBaggage() {
         }
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
     }
+}
+
+function cancelPendingFreeSsrBaggageRequests() {
+    // Prevent queued retry attempts from creating a new pricing TUI while the
+    // checkout quote is being created. Abort active browser requests too.
+    freeSsrBaggageRunId.value += 1;
+    freeSsrBaggageAbortControllers.forEach((controller) => controller.abort());
+    freeSsrBaggageAbortControllers.clear();
 }
 
 const fareBaggageDialogPolicies = computed(() => {
@@ -2118,6 +2144,7 @@ function fareBaggageTypeLabel(type) {
 
 async function openFareBaggageDialog(fare, flight, flightIndex) {
     const requestId = ++fareBaggageDialogRequestId;
+    const runId = freeSsrBaggageRunId.value;
     const fallbackPolicies = fare?.baggage_policies ?? [];
 
     fareBaggageDialog.value = {
@@ -2158,7 +2185,10 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
             fare_references: fareReferences,
             search_token: searchToken,
             timeout: 70000,
-        }, () => requestId === fareBaggageDialogRequestId);
+        }, () => (
+            freeSsrBaggageRunId.value === runId
+            && requestId === fareBaggageDialogRequestId
+        ));
 
         if (!response || requestId !== fareBaggageDialogRequestId) return;
 
