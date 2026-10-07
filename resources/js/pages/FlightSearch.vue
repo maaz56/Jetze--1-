@@ -343,7 +343,7 @@ const formatTime = (milliseconds) => {
     const seconds = totalSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
-async function openSooperFlightDetails(flight) {
+async function openSooperFlightDetails(flight, { fetchBaggage = true } = {}) {
     initializeSelectedFares(flight);
     selectedFlight.value = flight;
     // store.dispatch("flight/" + FETCH_FLIGHT, {
@@ -352,10 +352,12 @@ async function openSooperFlightDetails(flight) {
     // });
     flightDetailsActiveTab.value = "fare-options";
     isSooperFlihgtDetailsOpen.value = true;
-    // Load free baggage once for the default fare selection as soon as the
-    // side sheet opens, so the Baggage tab is populated before a fare click.
+    // View-details opens may enrich the default fare. Card Book Now opens
+    // intentionally skip SSR so booking is not delayed by baggage retries.
     await nextTick();
-    void fetchFreeSsrBaggage();
+    if (fetchBaggage) {
+        void fetchFreeSsrBaggage();
+    }
 }
 
 function fetchAgent() {
@@ -3642,7 +3644,7 @@ watch(isLoggedIn, (newVal) => {
                         {{ formatFlightDisplayMoney(item) }}
                     </div>
                     <button
-                        @click="openSooperFlightDetails(item)"
+                        @click="openSooperFlightDetails(item, { fetchBaggage: false })"
                         class="bg-primary hover:bg-primary/90 transition-colors text-primary-foreground px-7 py-3 rounded-xl font-semibold text-base"
                     >
                         Book now
@@ -3689,7 +3691,7 @@ watch(isLoggedIn, (newVal) => {
                         {{ formatFlightDisplayMoney(item) }}
                     </p>
                     <button
-                        @click="openSooperFlightDetails(item)"
+                        @click="openSooperFlightDetails(item, { fetchBaggage: false })"
                         class="mt-2 bg-primary hover:bg-primary/90 transition-colors text-primary-foreground px-6 py-2.5 rounded-xl font-semibold text-sm"
                     >
                         Book now
