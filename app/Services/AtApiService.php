@@ -442,7 +442,8 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
-        Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($body) ? $body : ['raw' => (string) $response->getBody()]);
+        Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging:");
+        Log::info(json_encode($body));
 
         $body = $this->removePreviouslySeenJourneys($body, $emittedJourneyKeys);
 
