@@ -60,11 +60,7 @@ class AtApiService
         $this->password = config('at.password');
         $this->agentCode = config('at.agent_code');
         $this->browserKey = config('at.browser_key');
-        $searchMode = config('at.search_mode', 'production');
-        if (!in_array($searchMode, ['test', 'production'], true)) {
-            throw new \InvalidArgumentException('AT_SEARCH_MODE must be "test" or "production".');
-        }
-        $this->useMockApi = $searchMode === 'test';
+        $this->useMockApi = (bool) config('at.use_mock_api', false);
         $this->atFlightTransformer = new AtFlightTransformer();
     }
 
@@ -408,7 +404,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             return null;
         }
 
-        $mockBody['Completed'] = 'true';
+        $mockBody['Completed'] = (string) ($mockBody['Completed'] ?? 'true');
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
         Log::info("GetExpSearch page 1 response (Status: {$pageStatus}) before merging: ", is_array($mockBody) ? $mockBody : []);

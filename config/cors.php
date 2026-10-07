@@ -44,9 +44,7 @@ return [
     ]),
     
 
-    'allowed_origins_patterns' => [
-        '#^https?://(localhost|127\.0\.0\.1)(:\d+)?$#',
-    ],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 

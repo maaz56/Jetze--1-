@@ -13,9 +13,5 @@ return [
     'browser_key' => env('AT_BROWSER_KEY'),
     'ca_bundle'   => env('AT_CA_BUNDLE', storage_path('certs/server_chain.pem')),
     'use_mock_api' => env('AT_USE_MOCK_API', false),
-    'search_mode' => strtolower((string) env(
-        'AT_SEARCH_MODE',
-        env('AT_USE_MOCK_API', false) ? 'test' : 'production',
-    )),
 
 ];
