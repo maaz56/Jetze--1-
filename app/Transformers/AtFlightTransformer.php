@@ -207,6 +207,7 @@ class AtFlightTransformer
                         "ref_id" => (string) \Str::uuid(),
                         'index' => $fare['index'] ?? null,
                         'return_identifier' => $fare['ReturnIdentifier'] ?? null,
+                        'fare_key' => $fare['FareKey'] ?? null,
                         "name" => $fare['FareClass'] ?? 'Economy',
                         "name_class" => $fare['FCType'] ?? 'Economy',
                         "brand_tier" => $fare['FCGroup'] ?? 'Economy',
@@ -810,8 +811,8 @@ class AtFlightTransformer
         $final = [];
         $processedPairs = [];
         
-        $onwardFlights = $this->groupAllFares($onwardJourneys);
-        $returnFlights = $this->groupAllFares($returnJourneys);
+        $onwardFlights = $this->groupAllFares($onwardJourneys, true);
+        $returnFlights = $this->groupAllFares($returnJourneys, true);
 
         foreach ($onwardFlights as $onward) {
             foreach ($returnFlights as $return) {
@@ -837,22 +838,43 @@ class AtFlightTransformer
 
                     $commonIdentifiers = $onwardIdentifiers
                         ->intersect($returnIdentifiers)
+                        ->unique()
                         ->values();
 
                     if ($commonIdentifiers->isEmpty()) {
                         continue;
                     }
 
+                    // Every ReturnIdentifier is one valid onward/return fare pairing.
+                    // Keep one identifier per distinct fare combination so the
+                    // frontend can filter return fares by the selected onward fare.
+                    $onwardByIdentifier = collect($onwardFares)->keyBy('ReturnIdentifier');
+                    $returnByIdentifier = collect($returnFares)->keyBy('ReturnIdentifier');
+                    $validIdentifiers = [];
+                    $seenCombinations = [];
+
+                    foreach ($commonIdentifiers as $identifier) {
+                        $combinationKey = $onwardByIdentifier[$identifier]['FareKey']
+                            . '|' . $returnByIdentifier[$identifier]['FareKey'];
+
+                        if (isset($seenCombinations[$combinationKey])) {
+                            continue;
+                        }
+
+                        $seenCombinations[$combinationKey] = true;
+                        $validIdentifiers[] = $identifier;
+                    }
+
                     $filteredOnwardFares = collect($onwardFares)
-                        ->filter(function ($fare) use ($commonIdentifiers) {
-                            return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
+                        ->filter(function ($fare) use ($validIdentifiers) {
+                            return in_array($fare['ReturnIdentifier'], $validIdentifiers);
                         })
                         ->values()
                         ->toArray();
 
                     $filteredReturnFares = collect($returnFares)
-                        ->filter(function ($fare) use ($commonIdentifiers) {
-                            return in_array($fare['ReturnIdentifier'], $commonIdentifiers->toArray());
+                        ->filter(function ($fare) use ($validIdentifiers) {
+                            return in_array($fare['ReturnIdentifier'], $validIdentifiers);
                         })
                         ->values()
                         ->toArray();
@@ -1164,7 +1186,7 @@ class AtFlightTransformer
         ]);
     }
 
-    private function groupAllFares(array $journeys): array
+    private function groupAllFares(array $journeys, bool $preserveReturnIdentifiers = false): array
     {
         $final = [];
         $processedFlights = [];
@@ -1214,12 +1236,11 @@ class AtFlightTransformer
                         $flight['ArrivalTerminal'] = $fareJourney['ArrivalTerminal'];
                     }
 
-                    $fareKey = implode('_', [
-                        $fareJourney['FareClass'] ?? '',
-                        $fareJourney['RBD'] ?? '',
-                        $fareJourney['FBC'] ?? '',
-                        $fareJourney['NetFare'] ?? '',
-                    ]);
+                    $fareKey = $this->fareGroupKey($fareJourney);
+
+                    if ($preserveReturnIdentifiers) {
+                        $fareKey .= '_' . ($fareJourney['ReturnIdentifier'] ?? '');
+                    }
                     
                     if (!isset($processedFares[$fareKey])) {
                         $fares[] = $this->mapFare($fareJourney);
@@ -1247,12 +1268,24 @@ class AtFlightTransformer
         return $final;
     }
     
+    /** Identifies the same sellable fare regardless of its ReturnIdentifier. */
+    private function fareGroupKey(array $journey): string
+    {
+        return implode('_', [
+            $journey['FareClass'] ?? '',
+            $journey['RBD'] ?? '',
+            $journey['FBC'] ?? '',
+            $journey['NetFare'] ?? '',
+        ]);
+    }
+
     private function mapFare(array $journey): array
     {
         // Log::info('map journey : ', $journey);
         return [
             'FareClass' => $journey['FareClass'] ?? null,
             'ReturnIdentifier' => $journey['ReturnIdentifier'] ?? null,
+            'FareKey' => $this->fareGroupKey($journey),
             'index' => $journey['Index'] ?? null,
             'Provider' => $journey['Provider'] ?? null,
             'RBD' => $journey['RBD'] ?? null,

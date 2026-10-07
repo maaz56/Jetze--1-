@@ -115,6 +115,11 @@ const activeTab = ref("flights");
 import { SlidersHorizontal } from "lucide-vue-next";
 import Login from "./Login.vue";
 import LoginMini from "./LoginMini.vue";
+import {
+    combinationFareOptions,
+    hasFareCombinations,
+    selectFareCombination,
+} from "../lib/atFareCombinations";
 
 const isFilterOpen = ref(false);
 const tabs = [
@@ -1380,14 +1385,19 @@ function isZeroPriceFare(fare) {
     return Number.isFinite(billablePrice) && billablePrice === 0;
 }
 
-function visibleSortedFlightFares(flight) {
-    return sortedFlightFares(flight).filter((fare) => !isZeroPriceFare(fare));
+function visibleSortedFlightFares(flight, flightIndex) {
+    const fares = sortedFlightFares(flight).filter((fare) => !isZeroPriceFare(fare));
+    const leg = selectedFlight.value?.leg;
+
+    return hasFareCombinations(leg)
+        ? combinationFareOptions(leg, flightIndex, fares, selectedFares)
+        : fares;
 }
 
 const visibleFareOptionFlights = computed(() =>
     (selectedFlight.value?.leg?.flights ?? [])
         .map((flight, flightIndex) => ({ flight, flightIndex }))
-        .filter(({ flight }) => visibleSortedFlightFares(flight).length > 0),
+        .filter(({ flight, flightIndex }) => visibleSortedFlightFares(flight, flightIndex).length > 0),
 );
 
 function initializeSelectedFares(flight) {
@@ -1397,6 +1407,10 @@ function initializeSelectedFares(flight) {
         const lowestFare = sortedFlightFares(leg)[0];
         if (lowestFare) selectedFares[index] = lowestFare.ref_id;
     });
+
+    if (hasFareCombinations(flight?.leg) && selectedFares[0]) {
+        selectFareCombination(flight.leg, selectedFares, 0, selectedFares[0], fareSortAmount);
+    }
 }
 
 function formatFareDisplayMoney(fare) {
@@ -1650,6 +1664,8 @@ function selectFares(flightIdx, ref_id) {
         selectedFlight?.value?.leg?.flights.forEach((flight, index) => {
             selectedFares[index] = ref_id;
         });
+    } else if (hasFareCombinations(selectedFlight.value?.leg)) {
+        selectFareCombination(selectedFlight.value.leg, selectedFares, flightIdx, ref_id, fareSortAmount);
     } else {
         selectedFares[flightIdx] = ref_id;
     }
@@ -4816,7 +4832,7 @@ watch(isLoggedIn, (newVal) => {
                                                     <div
                                                         v-for="(
                                                             fare, fareIndex
-                                                        ) in visibleSortedFlightFares(flight)"
+                                                        ) in visibleSortedFlightFares(flight, flightIndex)"
                                                         :key="fare.ref_id || fareIndex"
                                                         @click="
                                                             selectFares(

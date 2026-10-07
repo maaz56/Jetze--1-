@@ -65,6 +65,11 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
 import { fetchRate } from "../../lib/utils";
+import {
+    combinationFareOptions,
+    hasFareCombinations,
+    selectFareCombination,
+} from "../../lib/atFareCombinations";
 
 const activeTab = ref("flights");
 
@@ -898,10 +903,33 @@ watch(
                 selectedFares[index] = flight.fares[0].ref_id;
             }
         });
+
+        const leg = selectedFlight.value?.leg;
+        if (hasFareCombinations(leg) && selectedFares[0]) {
+            selectFareCombination(leg, selectedFares, 0, selectedFares[0]);
+        }
         loadingDetails.value = false;
     },
     { immediate: true, deep: true },
 );
+function fareOptions(flight, flightIndex) {
+    const leg = selectedFlight.value?.leg;
+
+    return hasFareCombinations(leg)
+        ? combinationFareOptions(leg, flightIndex, flight?.fares ?? [], selectedFares)
+        : flight?.fares;
+}
+
+function selectFare(flightIndex, refId) {
+    const leg = selectedFlight.value?.leg;
+
+    if (hasFareCombinations(leg)) {
+        selectFareCombination(leg, selectedFares, flightIndex, refId);
+    } else {
+        selectedFares[flightIndex] = refId;
+    }
+}
+
 const modelValue = ref({
     flightType: 'one-way',
     countdownFor: 0,
@@ -2419,8 +2447,8 @@ passenger, index
                                     <h4 class="text-xl font-bold text-white">Fare & Baggage Information</h4>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex"
-                                        @click="selectedFares[flightIndex] = fare.ref_id"
+                                    <div v-for="(fare, fareIndex) in fareOptions(flight, flightIndex)" :key="fareIndex"
+                                        @click="selectFare(flightIndex, fare.ref_id)"
                                         class="bg-white border-2 rounded-md p-6 cursor-pointer transition-all duration-200 hover:border-primary hover:shadow-md"
                                         :class="selectedFares[flightIndex] === fare.ref_id ? 'border-primary bg-primary/5' : 'border-gray-200'">
                                         <div class="flex flex-col gap-4">
