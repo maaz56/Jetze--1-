@@ -498,6 +498,7 @@ watch(() => route.fullPath, loadHotelDetails);
                           v-if="roomImage(room) && !isImageFailed(roomImage(room))"
                           :src="roomImage(room)"
                           :alt="roomDetails(room)?.name || formatRoomName(room)"
+                          referrerpolicy="no-referrer"
                           class="h-full w-full object-cover"
                           :class="{ 'opacity-0': !isImageLoaded(roomImage(room)) }"
                           @load="markImageLoaded(roomImage(room))"

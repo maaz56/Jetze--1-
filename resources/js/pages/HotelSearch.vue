@@ -98,6 +98,11 @@ const roomChoices = ref({});
 const hotelImageIndexes = ref({});
 const loadedHotelImageKeys = ref(new Set());
 const failedHotelImageKeys = ref(new Set());
+const roomDetailsByHotel = ref({});
+const propertyImagesByHotel = ref({});
+const loadingRoomDetailsHotelCodes = ref(new Set());
+const loadedRoomImageUrls = ref(new Set());
+const failedRoomImageUrls = ref(new Set());
 const hotelPriceLimit = ref(null);
 const selectedRatings = ref([]);
 const selectedMeals = ref([]);
@@ -306,6 +311,11 @@ const searchHotels = async () => {
     expandedHotelCodes.value = new Set();
     selectedBookingCode.value = "";
     roomChoices.value = {};
+    roomDetailsByHotel.value = {};
+    propertyImagesByHotel.value = {};
+    loadingRoomDetailsHotelCodes.value = new Set();
+    loadedRoomImageUrls.value = new Set();
+    failedRoomImageUrls.value = new Set();
     await hotelStore.searchHotels({
       destination: selectedDestination.value,
       check_in: checkIn.value,
@@ -323,6 +333,10 @@ const searchHotels = async () => {
       },
       currency_code: getSelectedCurrencyCode(),
     });
+
+    void Promise.all(hotelResults.value
+      .filter((hotelItem) => !hotelImages(hotelItem).length)
+      .map((hotelItem) => loadHotelRoomDetails(hotelItem)));
   } catch (error) {
     formErrorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Hotel search failed. Please try again.";
   }
@@ -355,7 +369,50 @@ const roomTaxMoney = (room, hotelItem) => room?.display_tax_money || {
 
 const isHotelExpanded = (hotelItem) => expandedHotelCodes.value.has(String(hotelItem.hotel_code));
 
-const toggleHotelRooms = (hotelItem) => {
+const roomDetails = (hotelItem, room) => roomDetailsByHotel.value[String(hotelItem.hotel_code)]?.[room.booking_code] || null;
+const roomImage = (hotelItem, room) => roomDetails(hotelItem, room)?.primary_image || null;
+const isRoomDetailsLoading = (hotelItem) => loadingRoomDetailsHotelCodes.value.has(String(hotelItem.hotel_code));
+const isRoomImageLoaded = (imageUrl) => loadedRoomImageUrls.value.has(imageUrl);
+const isRoomImageFailed = (imageUrl) => failedRoomImageUrls.value.has(imageUrl);
+const markRoomImageLoaded = (imageUrl) => {
+  loadedRoomImageUrls.value = new Set([...loadedRoomImageUrls.value, imageUrl]);
+};
+const markRoomImageFailed = (imageUrl) => {
+  failedRoomImageUrls.value = new Set([...failedRoomImageUrls.value, imageUrl]);
+};
+
+const loadHotelRoomDetails = async (hotelItem) => {
+  const hotelCode = String(hotelItem.hotel_code);
+
+  if (!searchSessionId.value || roomDetailsByHotel.value[hotelCode] || isRoomDetailsLoading(hotelItem)) {
+    return;
+  }
+
+  loadingRoomDetailsHotelCodes.value = new Set([...loadingRoomDetailsHotelCodes.value, hotelCode]);
+
+  try {
+    const response = await hotelStore.fetchHotelDetails({
+      search_session_id: searchSessionId.value,
+      hotel_code: hotelCode,
+      currency_code: getSelectedCurrencyCode(),
+    });
+    const detailsByBookingCode = Object.fromEntries((response.data?.rooms || [])
+      .filter((room) => room.booking_code && room.room_details)
+      .map((room) => [room.booking_code, room.room_details]));
+    const propertyImages = (response.data?.images || []).filter(Boolean);
+
+    roomDetailsByHotel.value = { ...roomDetailsByHotel.value, [hotelCode]: detailsByBookingCode };
+    propertyImagesByHotel.value = { ...propertyImagesByHotel.value, [hotelCode]: propertyImages };
+  } catch {
+    roomDetailsByHotel.value = { ...roomDetailsByHotel.value, [hotelCode]: {} };
+  } finally {
+    const nextLoadingHotelCodes = new Set(loadingRoomDetailsHotelCodes.value);
+    nextLoadingHotelCodes.delete(hotelCode);
+    loadingRoomDetailsHotelCodes.value = nextLoadingHotelCodes;
+  }
+};
+
+const toggleHotelRooms = async (hotelItem) => {
   const hotelCode = String(hotelItem.hotel_code);
   const nextExpandedHotelCodes = new Set(expandedHotelCodes.value);
 
@@ -363,6 +420,9 @@ const toggleHotelRooms = (hotelItem) => {
     nextExpandedHotelCodes.delete(hotelCode);
   } else {
     nextExpandedHotelCodes.add(hotelCode);
+    expandedHotelCodes.value = nextExpandedHotelCodes;
+    await loadHotelRoomDetails(hotelItem);
+    return;
   }
 
   expandedHotelCodes.value = nextExpandedHotelCodes;
@@ -458,9 +518,13 @@ const formatLocation = (hotelItem) => {
 };
 
 /** Return the cached property images that are safe to render on one search card. */
-const hotelImages = (hotelItem) => Array.isArray(hotelItem?.images)
-  ? hotelItem.images.filter(Boolean)
-  : [];
+const hotelImages = (hotelItem) => {
+  const searchImages = Array.isArray(hotelItem?.images) ? hotelItem.images.filter(Boolean) : [];
+
+  return searchImages.length
+    ? searchImages
+    : (propertyImagesByHotel.value[String(hotelItem?.hotel_code)] || []);
+};
 
 /** Return the selected gallery image for one hotel card. */
 const activeHotelImage = (hotelItem) => {
@@ -903,6 +967,7 @@ watch(
                       <img
                         :src="activeHotelImage(hotelItem)"
                         :alt="hotelItem.name"
+                        referrerpolicy="no-referrer"
                         class="h-full w-full object-cover"
                         :class="{ 'opacity-0': !isHotelImageLoaded(hotelItem) }"
                         @load="markHotelImageLoaded(hotelItem)"
@@ -1006,7 +1071,7 @@ watch(
                     role="radio"
                     :aria-checked="isChosenRoom(hotelItem, room)"
                     tabindex="0"
-                    class="grid cursor-pointer items-center gap-3 px-1 py-4 outline-none transition hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-primary/30 lg:grid-cols-[auto_minmax(0,2fr)_minmax(150px,1fr)_auto]"
+                    class="grid cursor-pointer items-center gap-3 px-1 py-4 outline-none transition hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-primary/30 lg:grid-cols-[auto_112px_minmax(0,2fr)_minmax(150px,1fr)_auto]"
                     @click="chooseRoom(hotelItem, room)"
                     @keydown.enter.prevent="chooseRoom(hotelItem, room)"
                     @keydown.space.prevent="chooseRoom(hotelItem, room)"
@@ -1018,6 +1083,21 @@ watch(
                   >
                     <Check v-if="isChosenRoom(hotelItem, room)" class="h-3.5 w-3.5" />
                   </span>
+                  <div class="relative h-20 w-28 overflow-hidden rounded-md bg-slate-100">
+                    <div v-if="isRoomDetailsLoading(hotelItem)" class="h-full w-full animate-pulse bg-slate-200" />
+                    <img
+                      v-else-if="roomImage(hotelItem, room) && !isRoomImageFailed(roomImage(hotelItem, room))"
+                      :src="roomImage(hotelItem, room)"
+                      :alt="roomDetails(hotelItem, room)?.name || formatRoomName(room)"
+                      referrerpolicy="no-referrer"
+                      class="h-full w-full object-cover"
+                      :class="{ 'opacity-0': !isRoomImageLoaded(roomImage(hotelItem, room)) }"
+                      @load="markRoomImageLoaded(roomImage(hotelItem, room))"
+                      @error="markRoomImageFailed(roomImage(hotelItem, room))"
+                    >
+                    <div v-else class="flex h-full items-center justify-center text-xs font-medium text-slate-400">Image unavailable</div>
+                    <div v-if="roomImage(hotelItem, room) && !isRoomImageLoaded(roomImage(hotelItem, room)) && !isRoomImageFailed(roomImage(hotelItem, room))" class="absolute inset-0 animate-pulse bg-slate-200" />
+                  </div>
                   <div class="min-w-auto">
                     <p class="truncate w-64 text-sm font-bold">{{ formatRoomName(room) }}</p>
                     <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 w-64 text-xs text-gray-600">

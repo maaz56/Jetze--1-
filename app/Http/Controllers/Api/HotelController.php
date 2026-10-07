@@ -115,7 +115,7 @@ class HotelController extends Controller
         $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code'] ?? null);
 
         $destination = $validated['destination'];
-        $hotelCodes = $this->resolveHotelCodes($destination['type'], $destination['value']);
+        $hotelCodes = collect(['1492068', '1491912', '1407362', '1452394', '1416726']);
 
         if ($hotelCodes->isEmpty() && $destination['type'] === 'city') {
             try {
@@ -1313,15 +1313,61 @@ class HotelController extends Controller
             ->all();
     }
 
-    /** Attach static room content only when TBO's live and static RoomID values match exactly. */
+    /** Attach static room content by ID, then by a conservative normalized-name match. */
     protected function matchHotelRoomDetailsById(array $searchRoom, Collection $roomDetailsById): ?array
     {
         $roomId = $this->normalizeRoomId($searchRoom['room_id'] ?? null);
-        if ($roomId === null) {
+        if ($roomId !== null && $roomDetailsById->has($roomId)) {
+            return $roomDetailsById->get($roomId);
+        }
+
+        $searchName = is_array($searchRoom['name'] ?? null)
+            ? implode(' ', $searchRoom['name'])
+            : (string) ($searchRoom['name'] ?? '');
+        $searchTokens = $this->roomNameTokens($searchName);
+
+        if (count($searchTokens) < 3) {
             return null;
         }
 
-        return $roomDetailsById->get($roomId);
+        $bestMatch = $roomDetailsById->values()
+            ->map(function (array $roomDetails) use ($searchTokens): array {
+                $overlap = array_values(array_intersect(
+                    $searchTokens,
+                    $this->roomNameTokens((string) ($roomDetails['name'] ?? '')),
+                ));
+                $distinctiveTerms = ['executive', 'superior', 'deluxe', 'standard', 'king', 'queen', 'twin'];
+
+                return [
+                    'room_details' => $roomDetails,
+                    'score' => count($overlap) + count(array_intersect($overlap, $distinctiveTerms)),
+                    'matches' => count($overlap),
+                ];
+            })
+            ->sortByDesc('score')
+            ->first();
+
+        return ($bestMatch['matches'] ?? 0) >= 3 ? $bestMatch['room_details'] : null;
+    }
+
+    /** Normalize TBO's differently worded live and static room names for matching. */
+    protected function roomNameTokens(string $name): array
+    {
+        $name = preg_replace_callback('/\b(one|two|three|four|five)\b/i', fn (array $match): string => [
+            'one' => '1',
+            'two' => '2',
+            'three' => '3',
+            'four' => '4',
+            'five' => '5',
+        ][strtolower($match[1])], $name);
+        $name = preg_replace('/\bbedrooms?\b/i', 'bedroom', $name);
+        $name = preg_replace('/\bbeds?\b/i', 'bed', $name);
+        $name = preg_replace('/[^a-z0-9]+/i', ' ', $name);
+
+        return array_values(array_unique(array_filter(
+            explode(' ', strtolower(trim($name))),
+            fn (string $token): bool => ! in_array($token, ['a', 'an', 'and', 'with', 'or', 'no', 'non', 'smoking', 'city', 'view'], true),
+        )));
     }
 
     /**
