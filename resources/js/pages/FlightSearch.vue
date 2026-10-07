@@ -288,7 +288,8 @@ const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
 const freeSsrBaggageLoadingByKey = ref({});
 const freeSsrBaggageRequestIdByKey = ref({});
-const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 3000, 5000];
+// Exactly three attempts: immediate, then after 3 seconds, then after 5 seconds.
+const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 5000];
 const isFareBaggageDialogOpen = ref(false);
 const fareBaggageDialogLoading = ref(false);
 const fareBaggageDialogError = ref("");
