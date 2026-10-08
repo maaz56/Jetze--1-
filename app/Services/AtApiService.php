@@ -435,10 +435,25 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
-        Log::info("GetExpSearch page {$page} processed.", [
+        $pageLogContext = [
             'status' => $pageStatus,
-            'trip_count' => count($body['Trips'][0]['Journey'] ?? []),
-        ]);
+            'trip_count1' => count($body['Trips'][0]['Journey'] ?? []),
+        ];
+
+        if (isset($body['Trips'][1])) {
+            $secondTripJourneys = $body['Trips'][1]['Journey'] ?? [];
+            $pageLogContext['trip_count2'] = count($secondTripJourneys);
+            $pageLogContext['trip_2_fare_count'] = count(array_filter(
+                $secondTripJourneys,
+                static fn ($journey): bool => is_array($journey) && (
+                    array_key_exists('FareKey', $journey)
+                    || array_key_exists('NetFare', $journey)
+                    || array_key_exists('GrossFare', $journey)
+                ),
+            ));
+        }
+
+        Log::info("GetExpSearch page {$page} processed.", $pageLogContext);
 
         $body = $this->removePreviouslySeenJourneys($body, $emittedJourneyKeys);
 
@@ -477,10 +492,25 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
-            Log::info("GetExpSearch page {$page} processed.", [
+            $pageLogContext = [
                 'status' => $pageStatus,
-                'trip_count' => count($newBody['Trips'] ?? []),
-            ]);
+                'trip_count1' => count($newBody['Trips'][0]['Journey'] ?? []),
+            ];
+
+            if (isset($newBody['Trips'][1])) {
+                $secondTripJourneys = $newBody['Trips'][1]['Journey'] ?? [];
+                $pageLogContext['trip_count2'] = count($secondTripJourneys);
+                $pageLogContext['trip_2_fare_count'] = count(array_filter(
+                    $secondTripJourneys,
+                    static fn ($journey): bool => is_array($journey) && (
+                        array_key_exists('FareKey', $journey)
+                        || array_key_exists('NetFare', $journey)
+                        || array_key_exists('GrossFare', $journey)
+                    ),
+                ));
+            }
+
+            Log::info("GetExpSearch page {$page} processed.", $pageLogContext);
 
             $newBody = $this->removePreviouslySeenJourneys($newBody, $emittedJourneyKeys);
 
