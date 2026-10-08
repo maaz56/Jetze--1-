@@ -357,13 +357,7 @@ class FlightController extends Controller
             $params['return_date'] = $request->input('return_date');
         }
 
-        $cacheKeyPrefix = $this->flightCacheKey($request);
-        $searchToken = (string) Str::uuid();
-        Cache::forget($cacheKeyPrefix . '_sooper_flights');
-        Cache::put($cacheKeyPrefix . '_previous_search', $params, now()->addHour());
-        Cache::put($cacheKeyPrefix . '_currency_code', $params['currency_code'], now()->addHour());
-
-        return response()->stream(function () use ($params, $cacheKeyPrefix, $searchToken) {
+        return response()->stream(function () use ($params) {
             $emit = static function (string $event, array $payload): void {
                 echo "event: {$event}\n";
                 echo 'data: ' . json_encode($payload) . "\n\n";
@@ -375,14 +369,13 @@ class FlightController extends Controller
             };
             $atTransformer = new AtFlightTransformer();
             $emittedFlightKeys = [];
-            $emittedFlights = [];
 
             try {
                 $emit('search.started', ['provider' => 'AT']);
 
                 $result = $this->atApiService->searchFlights(
                     $params,
-                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, $searchToken, &$emittedFlightKeys, &$emittedFlights): void {
+                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, &$emittedFlightKeys): void {
                         if (!empty($newBatch['Heartbeat'])) {
                             $emit('search.heartbeat', ['page' => $page]);
                             return;
@@ -405,13 +398,7 @@ class FlightController extends Controller
                                 continue;
                             }
 
-                            $flight['quote_search_token'] = $searchToken;
                             $emittedFlightKeys[$streamKey] = true;
-                            $emittedFlights[$streamKey] = $flight;
-                            $flightReference = data_get($flight, 'leg.ref_id');
-                            if ($flightReference) {
-                                Cache::put('flight_quote_' . $searchToken . '_' . $flightReference, $flight, now()->addMinutes(15));
-                            }
                             $newFlights[] = $flight;
                         }
 
@@ -441,19 +428,10 @@ class FlightController extends Controller
                     return;
                 }
 
-                foreach ($emittedFlights as $flight) {
-                    $flightReference = data_get($flight, 'leg.ref_id');
-                    if ($flightReference) {
-                        Cache::put($this->quoteFlightCacheKey($searchToken, $flightReference), $flight, now()->addMinutes(15));
-                    }
-                }
-                Cache::put($cacheKeyPrefix . '_sooper_flights', array_values($emittedFlights), now()->addMinutes(15));
-
                 $emit('search.complete', [
                     'completed' => true,
                     'trip_count' => count($result['Trips'] ?? []),
                     'flight_count' => count($emittedFlightKeys),
-                    'search_token' => $searchToken,
                 ]);
             } catch (\Throwable $exception) {
                 Log::error('AT streamed search failed.', ['message' => $exception->getMessage()]);
