@@ -268,9 +268,6 @@ class AtApiService
             Log::info("express search REquest:".json_encode($payload));
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
-            Log::info('Express search response: ', $responseBody);
-
-
 
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 $this->getWebSettings($responseBody['TUI']);
@@ -283,9 +280,6 @@ class AtApiService
 
         } catch (RequestException $e) {
             Log::error('Error searching flights: ' . $e->getMessage());
-            if ($e->hasResponse()) {
-                Log::error('Response: ' . $e->getResponse()->getBody());
-            }
             return null;
         }
     }
@@ -407,7 +401,10 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $mockBody['Completed'] = (string) ($mockBody['Completed'] ?? 'true');
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
-        Log::info("GetExpSearch page 1 response (Status: {$pageStatus}) before merging: ", is_array($mockBody) ? $mockBody : []);
+        Log::info("Mock GetExpSearch page 1 processed.", [
+            'status' => $pageStatus,
+            'trip_count' => count($mockBody['Trips'] ?? []),
+        ]);
         $this->emitSearchBatch($onBatch, $mockBody, $mockBody, 1);
         return $mockBody;
     }
@@ -442,8 +439,10 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
-        Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging:");
-        Log::info(json_encode($body));
+        Log::info("GetExpSearch page {$page} processed.", [
+            'status' => $pageStatus,
+            'trip_count' => count($body['Trips'] ?? []),
+        ]);
 
         $body = $this->removePreviouslySeenJourneys($body, $emittedJourneyKeys);
 
@@ -482,7 +481,10 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
 
-            Log::info("GetExpSearch page {$page} response (Status: {$pageStatus}) before merging: ", is_array($newBody) ? $newBody : ['raw' => (string) $response->getBody()]);
+            Log::info("GetExpSearch page {$page} processed.", [
+                'status' => $pageStatus,
+                'trip_count' => count($newBody['Trips'] ?? []),
+            ]);
 
             $newBody = $this->removePreviouslySeenJourneys($newBody, $emittedJourneyKeys);
 
@@ -565,10 +567,6 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 
     } catch (RequestException $e) {
         Log::error('Error getting search flights result: ' . $e->getMessage());
-
-        if ($e->hasResponse()) {
-            Log::error('Response: ' . $e->getResponse()->getBody());
-        }
 
         return null;
     }
@@ -1765,7 +1763,10 @@ private function extractTrips($tripsData): array
 
                 $response = $this->client->send($request);
                 $responseBody = json_decode($response->getBody(), true);
-                Log::info('DM flight search response for trip ' . ($index + 1) . ': ', $responseBody);
+                Log::info('DM flight search response received.', [
+                    'trip_number' => $index + 1,
+                    'success' => isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === 'Success',
+                ]);
 
                 if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
                     Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
@@ -1789,9 +1790,6 @@ private function extractTrips($tripsData): array
                 }
             } catch (RequestException $e) {
                 Log::error('Error searching DM flight trip ' . ($index + 1) . ': ' . $e->getMessage());
-                if ($e->hasResponse()) {
-                    Log::error('Response: ' . $e->getResponse()->getBody());
-                }
                 return null;
             }
         }
@@ -1804,7 +1802,10 @@ private function extractTrips($tripsData): array
         $combinedResponse['TUI'] = $tuis[0] ?? ($combinedResponse['TUI'] ?? null);
         $combinedResponse['TUIList'] = $tuis;
 
-        Log::info('Combined DM flight search response: ', $combinedResponse);
+        Log::info('Combined DM flight search response prepared.', [
+            'trip_count' => count($combinedTrips),
+            'tui_count' => count($tuis),
+        ]);
 
         // A DM multi-city search is performed one trip at a time. Emit only once
         // all trip results have been combined, so the frontend receives complete

@@ -921,7 +921,10 @@ class AtFlightTransformer
             $allTripLegs[$tripIndex] = $this->groupAllFares($trip['Journey'] ?? []);
         }
 
-        Log::info('Extracted legs for all trips: ' . json_encode($allTripLegs));
+        Log::info('Extracted AT legs for domestic multi-city search.', [
+            'trip_count' => count($allTripLegs),
+            'leg_counts' => array_map('count', $allTripLegs),
+        ]);
 
         if (empty($allTripLegs) || in_array(0, array_map('count', $allTripLegs), true)) {
             Log::info('No flights found in one or more multi-city trips.');

@@ -156,7 +156,9 @@ class FlightAggregationService
             //     // $atFlights = $this->utilityService->applyExchangeRateToFlights($atFlights, $exchangeRate);
             // }
             $transformedFlights = array_merge($transformedFlights, $atFlights);
-            Log::info(json_encode($transformedFlights));
+            Log::info('AT flight search transformed.', [
+                'flight_count' => count($transformedFlights),
+            ]);
         }
 
 
