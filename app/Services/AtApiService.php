@@ -401,8 +401,10 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         }
 
         $mockBody['Completed'] = (string) ($mockBody['Completed'] ?? 'true');
+        $page = 1;
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+        $this->logGetExpSearchRawPage($page, $mockBody, $pageStatus);
         Log::info("Mock GetExpSearch page 1 processed.", [
             'status' => $pageStatus,
             'trip_count' => count($mockBody['Trips'] ?? []),
@@ -442,6 +444,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $body = json_decode($response->getBody(), true);
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+        $this->logGetExpSearchRawPage($page, $body, $pageStatus);
 
         $pageLogContext = [
             'status' => $pageStatus,
@@ -503,6 +506,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $newBody = json_decode($response->getBody(), true);
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
+            $this->logGetExpSearchRawPage($page, $newBody, $pageStatus);
 
             $pageLogContext = [
                 'status' => $pageStatus,
@@ -610,6 +614,48 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 
         return null;
     }
+}
+
+private function logGetExpSearchRawPage(int $page, array $response, string $pageStatus): void
+{
+    $trips = $this->extractTrips($response['Trips'] ?? []);
+    $tripCounts = [];
+
+    foreach ($trips as $index => $trip) {
+        $journeys = $trip['Journey'] ?? [];
+
+        if (empty($journeys)) {
+            $journeys = [];
+        } elseif (!is_array($journeys) || !isset($journeys[0])) {
+            $journeys = [$journeys];
+        }
+
+        $fareCount = count(array_filter(
+            $journeys,
+            static fn ($journey): bool => is_array($journey) && (
+                array_key_exists('FareKey', $journey)
+                || array_key_exists('NetFare', $journey)
+                || array_key_exists('GrossFare', $journey)
+            ),
+        ));
+
+        $tripCounts[] = [
+            'trip_index' => $index + 1,
+            'from' => $trip['From'] ?? null,
+            'to' => $trip['To'] ?? null,
+            'journey_count' => count($journeys),
+            'fare_count' => $fareCount,
+        ];
+    }
+
+    Log::info("GetExpSearch raw page {$page} response.", [
+        'page' => $page,
+        'status' => $pageStatus,
+        'completed' => $response['Completed'] ?? null,
+        'code' => $response['Code'] ?? null,
+        'trip_counts' => $tripCounts,
+        'raw_response' => $response,
+    ]);
 }
 
 private function emitSearchBatch(?callable $onBatch, array $newBatch, array $mergedResponse, int $page): void
