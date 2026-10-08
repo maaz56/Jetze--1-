@@ -3329,17 +3329,15 @@ watch(isLoggedIn, (newVal) => {
                             <div class="text-sm font-medium text-gray-700">
                                 Showing
                                 <span class="font-bold text-primary">{{
-                                    visibleFlights.length
-                                }}</span>
-                                of
-                                <span class="font-bold">{{
                                     filteredFlights?.length || 0
                                 }}</span>
                                 results
-                                <span class="text-gray-400">from</span>
-                                <span class="font-bold">{{
-                                    allFlights.length
-                                }}</span>
+                                <template v-if="(filteredFlights?.length || 0) !== allFlights.length">
+                                    of
+                                    <span class="font-bold">{{
+                                        allFlights.length
+                                    }}</span>
+                                </template>
                             </div>
 
                             <!-- Cheapest | Fastest | Best Value Tabs -->

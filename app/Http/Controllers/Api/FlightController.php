@@ -434,7 +434,7 @@ class FlightController extends Controller
                         $flightEmitMs = 0.0;
                         if ($newFlights !== []) {
                             $flightEmitStartedAt = microtime(true);
-                            $flightChunks = array_chunk($newFlights, 10);
+                            $flightChunks = array_chunk($newFlights, 30);
                             $flightChunkCount = count($flightChunks);
 
                             foreach ($flightChunks as $chunkIndex => $flightChunk) {
