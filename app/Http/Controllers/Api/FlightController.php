@@ -430,7 +430,6 @@ class FlightController extends Controller
                                 'flights' => $newFlights,
                             ];
 
-                            Log::info('AT mapped flight batch forwarded to frontend.', $frontendPayload);
                             $emit('flights', $frontendPayload);
                         }
                     },
