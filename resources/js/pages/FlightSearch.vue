@@ -50,6 +50,7 @@ import {
 } from "@/lib/utils";
 import { calculateFinalPrice } from "@/lib/utils.js";
 import apiService from "@/config/axios";
+import atApiService from "@/config/atApi";
 import {
     FETCH_AGENT_DATA,
     FETCH_AIRPORT_MARGINS,
@@ -70,6 +71,7 @@ import {
     BadgeDollarSign,
     CheckSquare,
     ChevronDown,
+    ChevronRight,
     ClockIcon,
     GitCommitHorizontal,
     LoaderCircle,
@@ -2353,7 +2355,7 @@ async function fetchAtFareRules() {
     atFareRulesError.value = "";
 
     try {
-        const response = await apiService.post("/at/fare-rules", {
+        const response = await atApiService.post("/at/fare-rules", {
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
@@ -4903,7 +4905,6 @@ watch(isLoggedIn, (newVal) => {
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <!-- Fare Options Rows for Current Flight -->
                                                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-4">
                                                     <div

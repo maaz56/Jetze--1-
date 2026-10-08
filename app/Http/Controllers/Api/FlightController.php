@@ -357,8 +357,11 @@ class FlightController extends Controller
             $params['return_date'] = $request->input('return_date');
         }
 
-        return response()->stream(function () use ($params) {
+        $debugId = (string) ($request->header('X-Search-Debug-ID') ?: Str::uuid());
+
+        return response()->stream(function () use ($params, $debugId) {
             $streamStartedAt = microtime(true);
+            Log::withContext(['at_search_id' => $debugId]);
             $emit = static function (string $event, array $payload): void {
                 echo "event: {$event}\n";
                 echo 'data: ' . json_encode($payload) . "\n\n";
