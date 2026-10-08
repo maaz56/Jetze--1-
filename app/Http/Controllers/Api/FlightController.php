@@ -433,14 +433,20 @@ class FlightController extends Controller
 
                         $flightEmitMs = 0.0;
                         if ($newFlights !== []) {
-                            $frontendPayload = [
-                                'page' => $page,
-                                'completed' => $completed,
-                                'flights' => $newFlights,
-                            ];
-
                             $flightEmitStartedAt = microtime(true);
-                            $emit('flights', $frontendPayload);
+                            $flightChunks = array_chunk($newFlights, 10);
+                            $flightChunkCount = count($flightChunks);
+
+                            foreach ($flightChunks as $chunkIndex => $flightChunk) {
+                                $emit('flights', [
+                                    'page' => $page,
+                                    'completed' => $completed,
+                                    'chunk_index' => $chunkIndex + 1,
+                                    'chunk_count' => $flightChunkCount,
+                                    'flights' => $flightChunk,
+                                ]);
+                            }
+
                             $flightEmitMs = round((microtime(true) - $flightEmitStartedAt) * 1000, 2);
                         }
 
