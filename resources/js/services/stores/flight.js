@@ -97,18 +97,8 @@ export const useFlightStore = defineStore("flight", {
             this.sooperFlights = [];
             this.validationErrors = [];
 
-            const clientStartedAt = performance.now();
             const debugId = globalThis.crypto?.randomUUID?.()
                 ?? `at-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            const logClientTiming = (step, details = {}) => {
-                console.info("[AT SSE client timing]", {
-                    debug_id: debugId,
-                    step,
-                    timestamp: new Date().toISOString(),
-                    elapsed_ms: Number((performance.now() - clientStartedAt).toFixed(2)),
-                    ...details,
-                });
-            };
 
             const previousSearch = { ...params, timestamp: Date.now() };
             localStorage.setItem("previous_search", JSON.stringify(previousSearch));
@@ -123,19 +113,11 @@ export const useFlightStore = defineStore("flight", {
                     "X-Search-Debug-ID": debugId,
                 };
 
-                logClientTiming("request.started", { url: streamUrl.toString() });
-
                 const response = await fetch(streamUrl, {
                     method: "POST",
                     headers,
                     credentials: "omit",
                     body: JSON.stringify(params),
-                });
-
-                logClientTiming("response.headers_received", {
-                    status: response.status,
-                    content_type: response.headers.get("content-type"),
-                    content_encoding: response.headers.get("content-encoding"),
                 });
 
                 if (!response.ok || !response.body) {
@@ -146,10 +128,8 @@ export const useFlightStore = defineStore("flight", {
                 const decoder = new TextDecoder();
                 let buffer = "";
                 let streamError = null;
-                let chunkNumber = 0;
 
                 const handleEvent = (rawEvent) => {
-                    const eventStartedAt = performance.now();
                     const lines = rawEvent.split("\n");
                     const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
                     const data = lines
@@ -159,17 +139,8 @@ export const useFlightStore = defineStore("flight", {
 
                     if (!event || !data) return;
 
-                    logClientTiming("event.received", {
-                        event,
-                        data_characters: data.length,
-                    });
-
-                    const parseStartedAt = performance.now();
                     const payload = JSON.parse(data);
-                    const parseMs = performance.now() - parseStartedAt;
                     if (event === "flights") {
-                        const previousFlightCount = this.sooperFlights?.length || 0;
-                        const mergeStartedAt = performance.now();
                         const existing = new Map(
                             (this.sooperFlights || []).map((flight) => [flight.stream_key, flight]),
                         );
@@ -177,38 +148,6 @@ export const useFlightStore = defineStore("flight", {
                             if (flight.stream_key) existing.set(flight.stream_key, flight);
                         });
                         this.sooperFlights = Array.from(existing.values());
-
-                        logClientTiming("flights.state_updated", {
-                            page: payload.page,
-                            received_flight_count: payload.flights?.length || 0,
-                            previous_flight_count: previousFlightCount,
-                            total_flight_count: this.sooperFlights.length,
-                            parse_ms: Number(parseMs.toFixed(2)),
-                            merge_and_assign_ms: Number((performance.now() - mergeStartedAt).toFixed(2)),
-                            event_handler_ms: Number((performance.now() - eventStartedAt).toFixed(2)),
-                        });
-
-                        queueMicrotask(() => {
-                            logClientTiming("flights.vue_microtask_completed", {
-                                page: payload.page,
-                                total_flight_count: this.sooperFlights?.length || 0,
-                                since_event_ms: Number((performance.now() - eventStartedAt).toFixed(2)),
-                            });
-                        });
-
-                        requestAnimationFrame(() => {
-                            logClientTiming("flights.next_paint", {
-                                page: payload.page,
-                                total_flight_count: this.sooperFlights?.length || 0,
-                                since_event_ms: Number((performance.now() - eventStartedAt).toFixed(2)),
-                            });
-                        });
-                    } else {
-                        logClientTiming("event.parsed", {
-                            event,
-                            page: payload.page,
-                            parse_ms: Number(parseMs.toFixed(2)),
-                        });
                     }
 
                     if (event === "search.error") {
@@ -217,15 +156,7 @@ export const useFlightStore = defineStore("flight", {
                 };
 
                 while (true) {
-                    const readStartedAt = performance.now();
                     const { value, done } = await reader.read();
-                    chunkNumber++;
-                    logClientTiming("chunk.received", {
-                        chunk_number: chunkNumber,
-                        byte_count: value?.byteLength || 0,
-                        read_wait_ms: Number((performance.now() - readStartedAt).toFixed(2)),
-                        done,
-                    });
                     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
 
                     let boundary;
@@ -239,12 +170,7 @@ export const useFlightStore = defineStore("flight", {
 
                 if (buffer.trim()) handleEvent(buffer);
                 if (streamError) throw streamError;
-                logClientTiming("stream.completed", {
-                    chunk_count: chunkNumber,
-                    total_flight_count: this.sooperFlights?.length || 0,
-                });
             } catch (error) {
-                logClientTiming("stream.failed", { message: error.message });
                 console.error("Error streaming AT flights:", error);
                 toast(error.message || "AT flight search failed. Please try again.", { type: "error" });
                 this.validationErrors = [{ message: error.message || "AT flight search failed." }];

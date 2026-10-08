@@ -109,7 +109,15 @@ import {
     RefreshCw,
 } from "lucide-vue-next";
 import moment from "moment";
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    reactive,
+    ref,
+    watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
 import { toast } from "vue3-toastify";
@@ -259,6 +267,9 @@ const completedProviders = ref(0); // Track completed providers
 const progress = ref(0);
 const isSearching = ref(false);
 const filteredFlights = ref([]);
+const INITIAL_VISIBLE_FLIGHTS = 30;
+const VISIBLE_FLIGHTS_INCREMENT = 20;
+const visibleFlightCount = ref(INITIAL_VISIBLE_FLIGHTS);
 const classType = ref("Y");
 let activeProviderSearchFingerprint = null;
 let providerSearchInFlight = false;
@@ -310,6 +321,87 @@ const isCreatingQuote = ref(false);
 const isCheckoutLoading = computed(
     () => toCheckoutClicked.value || isCreatingQuote.value,
 );
+const visibleFlights = computed(() => {
+    if (!Array.isArray(filteredFlights.value)) return [];
+
+    return filteredFlights.value.slice(0, visibleFlightCount.value);
+});
+const hasMoreVisibleFlights = computed(() => {
+    return (
+        Array.isArray(filteredFlights.value) &&
+        visibleFlightCount.value < filteredFlights.value.length
+    );
+});
+
+function resetVisibleFlights() {
+    visibleFlightCount.value = INITIAL_VISIBLE_FLIGHTS;
+}
+
+function loadMoreVisibleFlights() {
+    if (!Array.isArray(filteredFlights.value)) return;
+
+    visibleFlightCount.value = Math.min(
+        visibleFlightCount.value + VISIBLE_FLIGHTS_INCREMENT,
+        filteredFlights.value.length,
+    );
+}
+
+function sortFlightList(flights) {
+    const direction = priceSortDirection.value === "high" ? -1 : 1;
+    const list = Array.isArray(flights) ? [...flights] : [];
+
+    if (activeSortTab.value === "fastest") {
+        return list.sort(
+            (a, b) =>
+                getFlightTotalDurationMinutes(a) -
+                getFlightTotalDurationMinutes(b),
+        );
+    }
+
+    return list.sort(
+        (a, b) => direction * (displayFlightPrice(a) - displayFlightPrice(b)),
+    );
+}
+
+function setFilteredFlights(flights, { resetVisible = true } = {}) {
+    filteredFlights.value = sortFlightList(flights);
+
+    if (resetVisible) {
+        resetVisibleFlights();
+    }
+}
+
+function refreshFilteredFlights(options = {}) {
+    setFilteredFlights(getFilteredFlights(), options);
+}
+
+function setSortMode(tab, direction = priceSortDirection.value) {
+    activeSortTab.value = tab;
+    priceSortDirection.value = direction;
+    refreshFilteredFlights();
+}
+
+let flightScrollTicking = false;
+function handleFlightResultsScroll() {
+    if (flightScrollTicking) return;
+
+    flightScrollTicking = true;
+    requestAnimationFrame(() => {
+        flightScrollTicking = false;
+
+        if (!hasMoreVisibleFlights.value || showFlightResultsSkeleton.value) {
+            return;
+        }
+
+        const distanceFromBottom =
+            document.documentElement.scrollHeight -
+            (window.scrollY + window.innerHeight);
+
+        if (distanceFromBottom < 700) {
+            loadMoreVisibleFlights();
+        }
+    });
+}
 
 function fetchCustomerSettings() {
     store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
@@ -557,15 +649,7 @@ watch(
                     flight,
                 ]),
             ).values());
-            filteredFlights.value = getFilteredFlights();
-
-            filteredFlights.value = [...filteredFlights.value].sort((a, b) => {
-                const priceA = displayFlightPrice(a);
-                const priceB = displayFlightPrice(b);
-
-
-                return priceA - priceB;
-            });
+            refreshFilteredFlights({ resetVisible: false });
             // Also update filteredFlights
 
             const totalProviders = providers.value.length;
@@ -640,11 +724,7 @@ function sortFlights() {
 }
 
 function filterByAirline() {
-    const direction = priceSortDirection.value === "high" ? -1 : 1;
-
-    filteredFlights.value = getFilteredFlights().sort(
-        (a, b) => direction * (displayFlightPrice(a) - displayFlightPrice(b)),
-    );
+    refreshFilteredFlights();
 }
 
 function filterByCarouselAirline(airlineId) {
@@ -790,11 +870,11 @@ function filterByStops() {
     //   }, 0);
     //   return String(stopsCount) === String(selectedStops.value);
     // });
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 watch(sortedSooperFlights, () => {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 });
 
 const fetchFlights = () => {
@@ -802,7 +882,8 @@ const fetchFlights = () => {
     allFlights.value = [];
     sooperFlights.value = null;
     sortedSooperFlights.value = null;
-    filteredFlights.value = null;
+    filteredFlights.value = [];
+    resetVisibleFlights();
     completedProviders.value = 0;
     progress.value = 0;
     isSearching.value = true; // Start showing the progress bar
@@ -991,11 +1072,11 @@ const maxDuration = computed(() => {
 });
 
 function filterByDuration() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 function filterByRefundable() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 function applyMoreFilters() {
@@ -1011,11 +1092,11 @@ function resetAllFilters() {
     maxDurationFilter.value = null;
     refundableFilter.value = "all";
     activeFilter.value = null;
-    filteredFlights.value = [...allFlights.value];
     departureTimes.value = [];
     arrivalTimes.value = [];
     selectedStopsArray.value = [];
     onlyRefundable.value = false;
+    setFilteredFlights(allFlights.value);
 }
 
 const getLayoverInfo = (stops) => {
@@ -1146,20 +1227,20 @@ function scrollToSearchTop() {
 }
 
 function applyAllFilters() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 // New filtering functions
 function filterByStopsModal() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 function filterByDepartureTime() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 function filterByArrivalTime() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 function searchFlights() {
     const now = Date.now();
@@ -1621,7 +1702,7 @@ const maxPriceLimit = computed(() => {
 });
 
 function filterByPrice() {
-    filteredFlights.value = getFilteredFlights();
+    refreshFilteredFlights();
 }
 
 const isButtonDisabled = computed(() => {
@@ -2710,6 +2791,9 @@ const resetFlightParams = () => {
 };
 
 onMounted(() => {
+    window.addEventListener("scroll", handleFlightResultsScroll, {
+        passive: true,
+    });
     initializeSearchParams();
     resetFlightParams();
     fetchCustomerSettings();
@@ -2731,6 +2815,9 @@ onMounted(() => {
         // fetchFlights();
         fetchProviders();
     }
+});
+onBeforeUnmount(() => {
+    window.removeEventListener("scroll", handleFlightResultsScroll);
 });
 watch(isLoggedIn, (newVal) => {
     if (newVal == true) {
@@ -3242,9 +3329,14 @@ watch(isLoggedIn, (newVal) => {
                             <div class="text-sm font-medium text-gray-700">
                                 Showing
                                 <span class="font-bold text-primary">{{
+                                    visibleFlights.length
+                                }}</span>
+                                of
+                                <span class="font-bold">{{
                                     filteredFlights?.length || 0
                                 }}</span>
-                                results of
+                                results
+                                <span class="text-gray-400">from</span>
                                 <span class="font-bold">{{
                                     allFlights.length
                                 }}</span>
@@ -3256,17 +3348,7 @@ watch(isLoggedIn, (newVal) => {
                             >
                                 <div class="flex gap-1">
                                     <button
-                                        @click="
-                                            activeSortTab = 'cheapest';
-                                            priceSortDirection = 'low';
-                                            filteredFlights = [
-                                                ...allFlights,
-                                            ].sort(
-                                                (a, b) =>
-                                                    displayFlightPrice(a) -
-                                                    displayFlightPrice(b),
-                                            )
-                                        "
+                                        @click="setSortMode('cheapest', 'low')"
                                         :class="[
                                             'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
                                             activeSortTab === 'cheapest'
@@ -3278,17 +3360,7 @@ watch(isLoggedIn, (newVal) => {
                                         <span>Cheapest</span>
                                     </button>
                                     <button
-                                        @click="
-                                            activeSortTab = 'fastest';
-                                            filteredFlights = [
-                                                ...allFlights,
-                                            ].sort((a, b) => {
-                                                return (
-                                                    getFlightTotalDurationMinutes(a) -
-                                                    getFlightTotalDurationMinutes(b)
-                                                );
-                                            })
-                                        "
+                                        @click="setSortMode('fastest')"
                                         :class="[
                                             'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
                                             activeSortTab === 'fastest'
@@ -3300,17 +3372,7 @@ watch(isLoggedIn, (newVal) => {
                                         <span>Fastest</span>
                                     </button>
                                     <button
-                                        @click="
-                                            activeSortTab = 'best';
-                                            priceSortDirection = 'low';
-                                            filteredFlights = [
-                                                ...allFlights,
-                                            ].sort(
-                                                (a, b) =>
-                                                    displayFlightPrice(a) -
-                                                    displayFlightPrice(b),
-                                            )
-                                        "
+                                        @click="setSortMode('best', 'low')"
                                         :class="[
                                             'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
                                             activeSortTab === 'best'
@@ -3330,24 +3392,7 @@ watch(isLoggedIn, (newVal) => {
                                 <span class="text-gray-600">Sort by:</span>
                                 <select
                                     @change="
-                                        priceSortDirection = $event.target.value;
-                                        if ($event.target.value === 'low') {
-                                            filteredFlights = [
-                                                ...allFlights,
-                                            ].sort(
-                                                (a, b) =>
-                                                    displayFlightPrice(a) -
-                                                    displayFlightPrice(b),
-                                            );
-                                        } else {
-                                            filteredFlights = [
-                                                ...allFlights,
-                                            ].sort(
-                                                (a, b) =>
-                                                    displayFlightPrice(b) -
-                                                    displayFlightPrice(a),
-                                            );
-                                        }
+                                        setSortMode('cheapest', $event.target.value)
                                     "
                                     class="font-medium text-gray-900 bg-transparent border-none outline-none cursor-pointer"
                                 >
@@ -3571,7 +3616,7 @@ watch(isLoggedIn, (newVal) => {
     class="space-y-4"
 >
     <div
-        v-for="item in filteredFlights"
+        v-for="item in visibleFlights"
         :key="item?.leg?.ref_id"
         class="relative bg-white border border-gray-200 rounded shadow-md shadow-slate-200/80 overflow-hidden transition-all hover:shadow-xl hover:-translate-y-0.5"
     >
@@ -3905,6 +3950,19 @@ watch(isLoggedIn, (newVal) => {
                 <ChevronRight class="h-3.5 w-3.5" />
             </button>
         </div>
+    </div>
+
+    <div
+        v-if="hasMoreVisibleFlights"
+        class="flex justify-center py-3"
+    >
+        <button
+            type="button"
+            @click="loadMoreVisibleFlights"
+            class="rounded border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+        >
+            Show more flights
+        </button>
     </div>
 </div>
 
