@@ -123,13 +123,12 @@ import { useStore } from "vuex";
 import { toast } from "vue3-toastify";
 const activeTab = ref("flights");
 import { SlidersHorizontal } from "lucide-vue-next";
-import Login from "./Login.vue";
-import LoginMini from "./LoginMini.vue";
+import LoginMini from "../LoginMini.vue";
 import {
     combinationFareOptions,
     hasFareCombinations,
     selectFareCombination,
-} from "../lib/atFareCombinations";
+} from "@/lib/atFareCombinations";
 
 const isFilterOpen = ref(false);
 const tabs = [
