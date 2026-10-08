@@ -736,7 +736,6 @@ class AtFlightTransformer
 
     public function atFlightProcessor(array $apiResponse, array $params = []): array
     {
-        Log::info('AT Flights Raw API Response: ' . json_encode($apiResponse));
 
         $trips = $apiResponse['Trips'] ?? [];
         $final = [];

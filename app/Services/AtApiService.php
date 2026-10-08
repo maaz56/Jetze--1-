@@ -560,7 +560,6 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $body = $newBody;
         }
 
-        Log::info('GetExpSearch completed successfully. Merged response: ', $mergedResponse);
         return $mergedResponse;
 
 
@@ -578,12 +577,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 private function emitSearchBatch(?callable $onBatch, array $newBatch, array $mergedResponse, int $page): void
 {
     if ($onBatch !== null) {
-        Log::info('AT stream batch received and ready for frontend mapping.', [
-            'page' => $page,
-            'completed' => strtolower((string) ($mergedResponse['Completed'] ?? 'false')) === 'true',
-            'heartbeat' => !empty($newBatch['Heartbeat']),
-            'supplier_response' => $newBatch,
-        ]);
+        
 
         $onBatch($newBatch, $mergedResponse, $page);
     }
