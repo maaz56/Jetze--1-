@@ -91,8 +91,6 @@ class AtApiService
                 'AgentCode' => $this->agentCode,
                 'BrowserKey' => $this->browserKey,
             ];
-            Log::info($signBaseUrl);
-            Log::info(json_encode($signaturePayload));
             $request = new Request(
                 'POST',
                 $signBaseUrl,
@@ -155,7 +153,6 @@ class AtApiService
         try {
             $cachedAccessToken = Cache::get(self::ACCESS_TOKEN_CACHE_KEY);
 
-            Log::info( $cachedAccessToken);
             if (is_array($cachedAccessToken) && !empty($cachedAccessToken['Token'])) {
                 return $cachedAccessToken;
             }
@@ -205,7 +202,6 @@ class AtApiService
 
         // 🔴 REAL API CODE
         $accessToken = $this->getAccessToken();
-        Log::info($accessToken);
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -441,7 +437,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 
         Log::info("GetExpSearch page {$page} processed.", [
             'status' => $pageStatus,
-            'trip_count' => count($body['Trips'] ?? []),
+            'trip_count' => count($body['Trips'][0]['Journey'] ?? []),
         ]);
 
         $body = $this->removePreviouslySeenJourneys($body, $emittedJourneyKeys);
