@@ -1531,6 +1531,72 @@ function fareDisplayMoneyParts(fare) {
     };
 }
 
+function normalizedFareMoney(fare) {
+    const money = fare?.selling_display_money ?? fare?.display_money;
+
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return {
+            currency: money.currency,
+            amount: Number(money.amount),
+        };
+    }
+
+    return {
+        currency: "",
+        amount: calculateFare(fare),
+    };
+}
+
+function pairedReturnFareMoney(fare, flightIndex) {
+    const leg = selectedFlight.value?.leg;
+    if (!hasFareCombinations(leg)) {
+        return normalizedFareMoney(fare);
+    }
+
+    const [onwardFlight, returnFlight] = leg.flights;
+    const otherFlight = flightIndex === 0 ? returnFlight : onwardFlight;
+    const pairedFare = (otherFlight?.fares ?? []).find(
+        (candidate) =>
+            String(candidate?.return_identifier) ===
+            String(fare?.return_identifier),
+    );
+
+    if (!pairedFare) {
+        return normalizedFareMoney(fare);
+    }
+
+    const currentMoney = normalizedFareMoney(fare);
+    const pairedMoney = normalizedFareMoney(pairedFare);
+
+    if (
+        currentMoney.currency &&
+        pairedMoney.currency &&
+        currentMoney.currency === pairedMoney.currency
+    ) {
+        return {
+            currency: currentMoney.currency,
+            amount: currentMoney.amount + pairedMoney.amount,
+        };
+    }
+
+    return {
+        currency: "",
+        amount: fareSortAmount(fare) + fareSortAmount(pairedFare),
+    };
+}
+
+function fareOptionDisplayMoneyParts(fare, flightIndex) {
+    const money = pairedReturnFareMoney(fare, flightIndex);
+
+    return {
+        currency: money.currency,
+        amount: Number(money.amount).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }),
+    };
+}
+
 /** Build the converted total for the cheapest fare of each flight leg. */
 function flightDisplayMoney(flight) {
     const legs = flight?.leg?.flights;
@@ -5001,8 +5067,8 @@ watch(isLoggedIn, (newVal) => {
                                                                         </div>
                                                                     </div>
                                                                     <p class="flex shrink-0 items-baseline gap-1 text-right text-base font-bold leading-none text-primary sm:text-lg">
-                                                                        <span class="text-[0.70em] font-semibold">{{ fareDisplayMoneyParts(fare).currency }}</span>
-                                                                        <span class="text-[1em] font-bold">{{ fareDisplayMoneyParts(fare).amount }}</span>
+                                                                        <span class="text-[0.70em] font-semibold">{{ fareOptionDisplayMoneyParts(fare, flightIndex).currency }}</span>
+                                                                        <span class="text-[1em] font-bold">{{ fareOptionDisplayMoneyParts(fare, flightIndex).amount }}</span>
                                                                     </p>
                                                                 </div>
                                                             </div>
