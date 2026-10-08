@@ -358,6 +358,7 @@ class FlightController extends Controller
         }
 
         return response()->stream(function () use ($params) {
+            $streamStartedAt = microtime(true);
             $emit = static function (string $event, array $payload): void {
                 echo "event: {$event}\n";
                 echo 'data: ' . json_encode($payload) . "\n\n";
@@ -372,12 +373,23 @@ class FlightController extends Controller
 
             try {
                 $emit('search.started', ['provider' => 'AT']);
+                Log::info('AT SSE stream started.', [
+                    'flight_type' => $params['flight_type'] ?? 'one-way',
+                ]);
 
                 $result = $this->atApiService->searchFlights(
                     $params,
-                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, &$emittedFlightKeys): void {
+                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, $streamStartedAt, &$emittedFlightKeys): void {
+                        $batchStartedAt = microtime(true);
+
                         if (!empty($newBatch['Heartbeat'])) {
+                            $emitStartedAt = microtime(true);
                             $emit('search.heartbeat', ['page' => $page]);
+                            Log::info('AT SSE heartbeat emitted.', [
+                                'page' => $page,
+                                'emit_ms' => round((microtime(true) - $emitStartedAt) * 1000, 2),
+                                'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
+                            ]);
                             return;
                         }
 
@@ -387,9 +399,12 @@ class FlightController extends Controller
                             default => 1,
                         };
                         $availableTripCount = count(array_filter($mergedResponse['Trips'] ?? [], static fn (array $trip): bool => !empty($trip['Journey'])));
+                        $transformStartedAt = microtime(true);
                         $mappedFlights = $availableTripCount >= $requiredTripCount
                             ? $atTransformer->fromAT($mergedResponse, $params)
                             : [];
+                        $transformMs = round((microtime(true) - $transformStartedAt) * 1000, 2);
+                        $deduplicationStartedAt = microtime(true);
                         $newFlights = [];
 
                         foreach ($mappedFlights as $flight) {
@@ -401,15 +416,19 @@ class FlightController extends Controller
                             $emittedFlightKeys[$streamKey] = true;
                             $newFlights[] = $flight;
                         }
+                        $deduplicationMs = round((microtime(true) - $deduplicationStartedAt) * 1000, 2);
 
                         $completed = strtolower((string) ($mergedResponse['Completed'] ?? 'false')) === 'true';
+                        $progressEmitStartedAt = microtime(true);
                         $emit('search.progress', [
                             'page' => $page,
                             'completed' => $completed,
                             'new_trip_count' => count($newBatch['Trips'] ?? []),
                             'total_trip_count' => count($mergedResponse['Trips'] ?? []),
                         ]);
+                        $progressEmitMs = round((microtime(true) - $progressEmitStartedAt) * 1000, 2);
 
+                        $flightEmitMs = 0.0;
                         if ($newFlights !== []) {
                             $frontendPayload = [
                                 'page' => $page,
@@ -417,8 +436,24 @@ class FlightController extends Controller
                                 'flights' => $newFlights,
                             ];
 
+                            $flightEmitStartedAt = microtime(true);
                             $emit('flights', $frontendPayload);
+                            $flightEmitMs = round((microtime(true) - $flightEmitStartedAt) * 1000, 2);
                         }
+
+                        Log::info('AT SSE batch timing.', [
+                            'page' => $page,
+                            'available_trip_count' => $availableTripCount,
+                            'required_trip_count' => $requiredTripCount,
+                            'mapped_flight_count' => count($mappedFlights),
+                            'new_flight_count' => count($newFlights),
+                            'transform_ms' => $transformMs,
+                            'deduplication_ms' => $deduplicationMs,
+                            'progress_emit_ms' => $progressEmitMs,
+                            'flight_emit_ms' => $flightEmitMs,
+                            'batch_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
+                            'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
+                        ]);
                     },
                 );
 
@@ -433,8 +468,15 @@ class FlightController extends Controller
                     'trip_count' => count($result['Trips'] ?? []),
                     'flight_count' => count($emittedFlightKeys),
                 ]);
+                Log::info('AT SSE stream completed.', [
+                    'flight_count' => count($emittedFlightKeys),
+                    'total_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
+                ]);
             } catch (\Throwable $exception) {
-                Log::error('AT streamed search failed.', ['message' => $exception->getMessage()]);
+                Log::error('AT streamed search failed.', [
+                    'message' => $exception->getMessage(),
+                    'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
+                ]);
                 $emit('search.error', ['message' => 'Unable to complete the AT flight search. Please try again.']);
             }
         }, 200, [

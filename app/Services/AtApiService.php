@@ -262,8 +262,12 @@ class AtApiService
             );
 
             Log::info("express search REquest:".json_encode($payload));
+            $expressSearchStartedAt = microtime(true);
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
+            Log::info('AT ExpressSearch supplier timing.', [
+                'supplier_ms' => round((microtime(true) - $expressSearchStartedAt) * 1000, 2),
+            ]);
 
             if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
                 $this->getWebSettings($responseBody['TUI']);
@@ -384,6 +388,8 @@ class AtApiService
 
 public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 {
+    $pollingStartedAt = microtime(true);
+
     // ✅ MOCK MODE
     if ($this->useMockApi) {
         Log::warning('Using MOCK GetExpSearch response.');
@@ -430,7 +436,9 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 
         $emittedJourneyKeys = [];
         $page = 1;
+        $supplierRequestStartedAt = microtime(true);
         $response = $this->client->send($request);
+        $supplierMs = round((microtime(true) - $supplierRequestStartedAt) * 1000, 2);
         $body = json_decode($response->getBody(), true);
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
@@ -438,6 +446,8 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $pageLogContext = [
             'status' => $pageStatus,
             'trip_count1' => count($body['Trips'][0]['Journey'] ?? []),
+            'supplier_ms' => $supplierMs,
+            'elapsed_ms' => round((microtime(true) - $pollingStartedAt) * 1000, 2),
         ];
 
         if (isset($body['Trips'][1])) {
@@ -487,7 +497,9 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             sleep(self::SEARCH_POLL_INTERVAL_SECONDS);
 
             $page++;
+            $supplierRequestStartedAt = microtime(true);
             $response = $this->client->send($request);
+            $supplierMs = round((microtime(true) - $supplierRequestStartedAt) * 1000, 2);
             $newBody = json_decode($response->getBody(), true);
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
@@ -495,6 +507,8 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $pageLogContext = [
                 'status' => $pageStatus,
                 'trip_count1' => count($newBody['Trips'][0]['Journey'] ?? []),
+                'supplier_ms' => $supplierMs,
+                'elapsed_ms' => round((microtime(true) - $pollingStartedAt) * 1000, 2),
             ];
 
             if (isset($newBody['Trips'][1])) {
