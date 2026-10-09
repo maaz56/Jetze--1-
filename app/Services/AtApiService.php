@@ -1172,11 +1172,12 @@ private function extractTrips($tripsData): array
         |--------------------------------------------------------------------------
         */
         $travellers = [];
+        $ageReferenceDate = $this->bookingAgeReferenceDate($params);
 
         foreach ($params['travellers'] as $i => $traveller) {
 
             $dob = $traveller['dob'];
-            $age = \Carbon\Carbon::parse($dob)->age;
+            $age = (int) \Carbon\Carbon::parse($dob)->diffInYears($ageReferenceDate);
 
             $travellers[] = [
                 'ID' => $i + 1,
@@ -2171,6 +2172,42 @@ private function extractTrips($tripsData): array
         $normalized = $normalized === '' || $normalized === '-0' ? '0' : $normalized;
 
         return str_contains($normalized, '.') ? (float) $normalized : (int) $normalized;
+    }
+
+    /**
+     * AT validates a traveller's age against the itinerary. For a round trip,
+     * use the final travel leg so a birthday between the onward and return
+     * flights does not produce an age rejected by CreateItinerary.
+     */
+    private function bookingAgeReferenceDate(array $params): \Carbon\Carbon
+    {
+        $latestDeparture = null;
+
+        foreach (data_get($params, 'flight.leg.flights', []) as $flight) {
+            $departureValues = [$flight['departure_at'] ?? null];
+
+            foreach ($flight['segments'] ?? [] as $segment) {
+                $departureValues[] = $segment['departure_at'] ?? null;
+            }
+
+            foreach ($departureValues as $departureValue) {
+                if (!$departureValue) {
+                    continue;
+                }
+
+                try {
+                    $departure = \Carbon\Carbon::parse($departureValue);
+                } catch (\Throwable) {
+                    continue;
+                }
+
+                if ($latestDeparture === null || $departure->greaterThan($latestDeparture)) {
+                    $latestDeparture = $departure;
+                }
+            }
+        }
+
+        return $latestDeparture ?? now();
     }
 
     private function resolveContactCountryCode(array $contact): string
