@@ -358,8 +358,9 @@ class FlightController extends Controller
         }
 
         $debugId = (string) ($request->header('X-Search-Debug-ID') ?: Str::uuid());
+        $searchToken = (string) Str::uuid();
 
-        return response()->stream(function () use ($params, $debugId) {
+        return response()->stream(function () use ($params, $debugId, $searchToken) {
             $streamStartedAt = microtime(true);
             Log::withContext(['at_search_id' => $debugId]);
             $emit = static function (string $event, array $payload): void {
@@ -382,7 +383,7 @@ class FlightController extends Controller
 
                 $result = $this->atApiService->searchFlights(
                     $params,
-                    static function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, $streamStartedAt, &$emittedFlightKeys): void {
+                    function (array $newBatch, array $mergedResponse, int $page) use ($emit, $atTransformer, $params, $searchToken, $streamStartedAt, &$emittedFlightKeys): void {
                         $batchStartedAt = microtime(true);
 
                         if (!empty($newBatch['Heartbeat'])) {
@@ -416,7 +417,19 @@ class FlightController extends Controller
                                 continue;
                             }
 
+                            $flightReference = data_get($flight, 'leg.ref_id');
+
+                            if (!$flightReference) {
+                                continue;
+                            }
+
                             $emittedFlightKeys[$streamKey] = true;
+                            $flight['quote_search_token'] = $searchToken;
+                            Cache::put(
+                                $this->quoteFlightCacheKey($searchToken, $flightReference),
+                                $flight,
+                                now()->addMinutes(15),
+                            );
                             $newFlights[] = $flight;
                         }
                         $deduplicationMs = round((microtime(true) - $deduplicationStartedAt) * 1000, 2);
