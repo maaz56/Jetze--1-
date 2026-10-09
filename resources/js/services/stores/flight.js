@@ -1,4 +1,4 @@
-import apiService from "@/config/axios";
+import apiService, { ensureCsrfCookie } from "@/config/axios";
 import { resolveAtApiBaseUrl } from "@/config/atApi";
 import { defineStore } from "pinia";
 import { toast } from "vue3-toastify";
@@ -104,19 +104,31 @@ export const useFlightStore = defineStore("flight", {
             localStorage.setItem("previous_search", JSON.stringify(previousSearch));
 
             try {
+                await ensureCsrfCookie();
+
                 const baseUrl = resolveAtApiBaseUrl();
                 const apiUrl = new URL(baseUrl.endsWith("/") ? baseUrl : baseUrl + "/", window.location.origin);
                 const streamUrl = new URL("flights/at/stream", apiUrl);
+                const xsrfToken = document.cookie
+                    .split("; ")
+                    .find((cookie) => cookie.startsWith("XSRF-TOKEN="))
+                    ?.split("=")
+                    .slice(1)
+                    .join("=");
                 const headers = {
                     Accept: "text/event-stream",
                     "Content-Type": "application/json",
                     "X-Search-Debug-ID": debugId,
                 };
 
+                if (xsrfToken) {
+                    headers["X-XSRF-TOKEN"] = decodeURIComponent(xsrfToken);
+                }
+
                 const response = await fetch(streamUrl, {
                     method: "POST",
                     headers,
-                    credentials: "omit",
+                    credentials: "include",
                     body: JSON.stringify(params),
                 });
 

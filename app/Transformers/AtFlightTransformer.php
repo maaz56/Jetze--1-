@@ -937,25 +937,10 @@ class AtFlightTransformer
                         continue;
                     }
 
-                    // Every ReturnIdentifier is one valid onward/return fare pairing.
-                    // Keep one identifier per distinct fare combination so the
-                    // frontend can filter return fares by the selected onward fare.
-                    $onwardByIdentifier = collect($onwardFares)->keyBy('ReturnIdentifier');
-                    $returnByIdentifier = collect($returnFares)->keyBy('ReturnIdentifier');
-                    $validIdentifiers = [];
-                    $seenCombinations = [];
-
-                    foreach ($commonIdentifiers as $identifier) {
-                        $combinationKey = $onwardByIdentifier[$identifier]['FareKey']
-                            . '|' . $returnByIdentifier[$identifier]['FareKey'];
-
-                        if (isset($seenCombinations[$combinationKey])) {
-                            continue;
-                        }
-
-                        $seenCombinations[$combinationKey] = true;
-                        $validIdentifiers[] = $identifier;
-                    }
+                    // Every provider-supplied ReturnIdentifier is a valid pairing.
+                    // Preserve it even when another identifier has the same fare
+                    // keys; AT may use those identifiers for different combinations.
+                    $validIdentifiers = $commonIdentifiers->all();
 
                     $filteredOnwardFares = collect($onwardFares)
                         ->filter(function ($fare) use ($validIdentifiers) {

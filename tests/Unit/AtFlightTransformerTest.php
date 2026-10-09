@@ -133,6 +133,52 @@ it('keeps repeated international multi-city fares under the same physical flight
         ->and(array_column($flight['legs'][1]['fares'], 'index'))->toBe(['1G|1', '1G|2']);
 });
 
+it('keeps every return identifier when round-trip fare keys are identical', function () {
+    $transformer = new AtFlightTransformer();
+
+    $processed = $transformer->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [
+            [
+                'Journey' => [
+                    atJourney(['Index' => 'OV|1', 'ReturnIdentifier' => 177]),
+                    atJourney(['Index' => 'OV|2', 'ReturnIdentifier' => 465]),
+                ],
+            ],
+            [
+                'Journey' => [
+                    atJourney([
+                        'Index' => 'OV|3',
+                        'ReturnIdentifier' => 177,
+                        'FlightNo' => '286',
+                        'From' => 'JED',
+                        'To' => 'KHI',
+                        'JourneyKey' => 'OV,286,JED,KHI,2027-01-06T17:00:00,2027-01-07T06:10:00,M,4,10h 10m ,',
+                        'GrossFare' => 0,
+                        'NetFare' => 0,
+                    ]),
+                    atJourney([
+                        'Index' => 'OV|4',
+                        'ReturnIdentifier' => 465,
+                        'FlightNo' => '286',
+                        'From' => 'JED',
+                        'To' => 'KHI',
+                        'JourneyKey' => 'OV,286,JED,KHI,2027-01-06T17:00:00,2027-01-07T06:10:00,M,4,10h 10m ,',
+                        'GrossFare' => 0,
+                        'NetFare' => 0,
+                    ]),
+                ],
+            ],
+        ],
+    ], ['flight_type' => 'return', 'fare_type' => 'RS']);
+
+    expect($processed['flights'])->toHaveCount(1)
+        ->and($processed['flights'][0]['onward']['fares'])->toHaveCount(2)
+        ->and($processed['flights'][0]['return']['fares'])->toHaveCount(2)
+        ->and(array_column($processed['flights'][0]['onward']['fares'], 'ReturnIdentifier'))
+        ->toBe([177, 465]);
+});
+
 function atJourney(array $overrides = []): array
 {
     return array_merge([
