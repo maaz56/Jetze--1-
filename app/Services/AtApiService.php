@@ -2179,8 +2179,9 @@ private function extractTrips($tripsData): array
      * use the final travel leg so a birthday between the onward and return
      * flights does not produce an age rejected by CreateItinerary.
      */
-    private function bookingAgeReferenceDate(array $params): \Carbon\Carbon
+    private function bookingAgeReferenceDate(array|\Illuminate\Http\Request $params): \Carbon\Carbon
     {
+        $params = $params instanceof \Illuminate\Http\Request ? $params->all() : $params;
         $latestDeparture = null;
 
         foreach (data_get($params, 'flight.leg.flights', []) as $flight) {
