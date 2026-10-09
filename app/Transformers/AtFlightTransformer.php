@@ -369,6 +369,19 @@ class AtFlightTransformer
 
             $seenStreamKeys[$streamKey] = true;
 
+            $fareCombinations = $item['type'] === 'return'
+                ? $this->buildReturnFareCombinations($transformedLegs)
+                : [];
+            $transformedResultLeg = [
+                "ref_id" => (string) \Str::uuid(),
+                "flights" => $transformedLegs,
+                "trip_nature" => $this->detectTripNature($transformedLegs),
+            ];
+
+            if ($fareCombinations !== []) {
+                $transformedResultLeg['fare_combinations'] = $fareCombinations;
+            }
+
             $results[] = [
                 "stream_key" => $streamKey,
                 "provider" => array_merge($provider, [
@@ -377,15 +390,94 @@ class AtFlightTransformer
                 ]),
                 "currencyCode" => $currency,
                 "displayCurrencyCode" => $displayCurrency,
-                "leg" => [
-                    "ref_id" => (string) \Str::uuid(),
-                    "flights" => $transformedLegs,
-                    "trip_nature" => $this->detectTripNature($transformedLegs)
-                ]
+                "leg" => $transformedResultLeg,
             ];
         }
         
         return $results;
+    }
+
+    /**
+     * Build one RSF card for each provider-approved onward/return pairing.
+     * ReturnIdentifier is the pairing key; the two fare indexes may differ.
+     */
+    private function buildReturnFareCombinations(array $legs): array
+    {
+        if (count($legs) !== 2) {
+            return [];
+        }
+
+        [$onwardLeg, $returnLeg] = $legs;
+        $returnFaresByIdentifier = collect($returnLeg['fares'] ?? [])
+            ->filter(fn (array $fare): bool => $fare['return_identifier'] !== null)
+            ->keyBy(fn (array $fare): string => (string) $fare['return_identifier']);
+
+        return collect($onwardLeg['fares'] ?? [])
+            ->filter(fn (array $fare): bool => $fare['return_identifier'] !== null)
+            ->map(function (array $onwardFare) use ($returnFaresByIdentifier): ?array {
+                $returnFare = $returnFaresByIdentifier->get(
+                    (string) $onwardFare['return_identifier'],
+                );
+
+                if (!$returnFare) {
+                    return null;
+                }
+
+                $onwardName = $this->combinedFareName($onwardFare);
+                $returnName = $this->combinedFareName($returnFare);
+                $displayCurrency = data_get($onwardFare, 'display_money.currency');
+                $returnDisplayCurrency = data_get($returnFare, 'display_money.currency');
+                $combinedDisplayMoney = null;
+
+                if ($displayCurrency && $displayCurrency === $returnDisplayCurrency) {
+                    $combinedDisplayMoney = [
+                        'currency' => $displayCurrency,
+                        'amount' => bcadd(
+                            (string) data_get($onwardFare, 'display_money.amount', 0),
+                            (string) data_get($returnFare, 'display_money.amount', 0),
+                            8,
+                        ),
+                    ];
+                }
+
+                return [
+                    'ref_id' => implode('|', [
+                        $onwardFare['ref_id'],
+                        $returnFare['ref_id'],
+                    ]),
+                    'return_identifier' => $onwardFare['return_identifier'],
+                    'name_class' => $onwardName . ' + ' . $returnName,
+                    'fare_references' => [
+                        $onwardFare['ref_id'],
+                        $returnFare['ref_id'],
+                    ],
+                    'combined_amount' => bcadd(
+                        (string) ($onwardFare['billable_price'] ?? 0),
+                        (string) ($returnFare['billable_price'] ?? 0),
+                        8,
+                    ),
+                    'combined_display_money' => $combinedDisplayMoney,
+                    'is_refundable' => ($onwardFare['is_refundable'] ?? false)
+                        && ($returnFare['is_refundable'] ?? false),
+                    'baggage_policies' => $onwardFare['baggage_policies'] ?? [],
+                    'return_baggage_policies' => $returnFare['baggage_policies'] ?? [],
+                ];
+            })
+            ->filter()
+            ->sortBy(fn (array $combination): float => (float) $combination['combined_amount'])
+            ->values()
+            ->all();
+    }
+
+    private function combinedFareName(array $fare): string
+    {
+        $name = trim((string) (
+            $fare['name_class']
+            ?? $fare['name']
+            ?? 'Standard fare'
+        ));
+
+        return preg_replace('/\s+fare$/i', '', $name) ?: 'Standard';
     }
 
     /** Deterministic identity used when AT results arrive in multiple batches. */
@@ -821,6 +913,7 @@ class AtFlightTransformer
                 // Check if airlines match for pairing
                 if (
                     $oFlight['VAC'] === $rFlight['VAC']
+                    && ($oFlight['Provider'] ?? null) === ($rFlight['Provider'] ?? null)
                     && $this->airlineDisambiguationKey($oFlight) === $this->airlineDisambiguationKey($rFlight)
                 ) {
                     

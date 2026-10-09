@@ -5,17 +5,16 @@
 const defaultFareAmount = (fare) => Number(fare?.billable_price) || 0;
 
 export function hasFareCombinations(leg) {
-    const flights = leg?.flights ?? [];
+    return Array.isArray(leg?.fare_combinations) && leg.fare_combinations.length > 0;
+}
 
-    return (
-        leg?.trip_nature === "return" &&
-        flights.length === 2 &&
-        flights.every((flight) =>
-            (flight?.fares ?? []).every(
-                (fare) => fare?.fare_key && fare?.return_identifier != null,
-            ),
-        )
-    );
+/**
+ * Build the single list of sellable round-trip cards used by RSF results.
+ * A card always owns both original fare references; ReturnIdentifier is the
+ * provider's pairing key and Index is intentionally ignored.
+ */
+export function combinationFareCards(leg) {
+    return hasFareCombinations(leg) ? leg.fare_combinations : [];
 }
 
 /** Show each fare once, preferring the copy that is currently selected. */

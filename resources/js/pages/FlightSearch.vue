@@ -126,6 +126,7 @@ import { SlidersHorizontal } from "lucide-vue-next";
 import Login from "./Login.vue";
 import LoginMini from "./LoginMini.vue";
 import {
+    combinationFareCards,
     combinationFareOptions,
     hasFareCombinations,
     selectFareCombination,
@@ -1474,12 +1475,15 @@ function isZeroPriceFare(fare) {
 }
 
 function visibleSortedFlightFares(flight, flightIndex) {
-    const fares = sortedFlightFares(flight).filter((fare) => !isZeroPriceFare(fare));
     const leg = selectedFlight.value?.leg;
 
-    return hasFareCombinations(leg)
-        ? combinationFareOptions(leg, flightIndex, fares, selectedFares)
-        : fares;
+    if (hasFareCombinations(leg)) {
+        return flightIndex === 0
+            ? combinationFareCards(leg, fareSortAmount)
+            : [];
+    }
+
+    return sortedFlightFares(flight).filter((fare) => !isZeroPriceFare(fare));
 }
 
 const visibleFareOptionFlights = computed(() =>
@@ -1491,14 +1495,22 @@ const visibleFareOptionFlights = computed(() =>
 function initializeSelectedFares(flight) {
     selectedFares.splice(0, selectedFares.length);
 
+    if (hasFareCombinations(flight?.leg)) {
+        const cheapestPair = combinationFareCards(
+            flight.leg,
+            fareSortAmount,
+        )[0];
+        if (cheapestPair) {
+            selectedFares.splice(0, 2, ...cheapestPair.fare_references);
+        }
+        return;
+    }
+
     flight?.leg?.flights?.forEach((leg, index) => {
         const lowestFare = sortedFlightFares(leg)[0];
         if (lowestFare) selectedFares[index] = lowestFare.ref_id;
     });
 
-    if (hasFareCombinations(flight?.leg) && selectedFares[0]) {
-        selectFareCombination(flight.leg, selectedFares, 0, selectedFares[0], fareSortAmount);
-    }
 }
 
 function formatFareDisplayMoney(fare) {
@@ -1532,6 +1544,14 @@ function fareDisplayMoneyParts(fare) {
 }
 
 function normalizedFareMoney(fare) {
+    if (fare?.combined_display_money) {
+        return fare.combined_display_money;
+    }
+
+    if (Number.isFinite(Number(fare?.combined_amount))) {
+        return { currency: "", amount: Number(fare.combined_amount) };
+    }
+
     const money = fare?.selling_display_money ?? fare?.display_money;
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
@@ -1548,6 +1568,10 @@ function normalizedFareMoney(fare) {
 }
 
 function pairedReturnFareMoney(fare, flightIndex) {
+    if (fare?.fare_references?.length === 2) {
+        return normalizedFareMoney(fare);
+    }
+
     const leg = selectedFlight.value?.leg;
     if (!hasFareCombinations(leg)) {
         return normalizedFareMoney(fare);
@@ -1866,6 +1890,26 @@ function selectFares(flightIdx, ref_id) {
     // Keep the Transition Baggage tab in sync with the fare the traveller
     // selected. The modal remains independent and fetches only its clicked fare.
     void fetchFreeSsrBaggage();
+}
+
+function selectFareOption(flightIdx, fare) {
+    if (fare?.fare_references?.length === 2) {
+        selectedFares.splice(0, 2, ...fare.fare_references);
+        void fetchFreeSsrBaggage();
+        return;
+    }
+
+    selectFares(flightIdx, fare.ref_id);
+}
+
+function isFareOptionSelected(flightIdx, fare) {
+    if (fare?.fare_references?.length === 2) {
+        return fare.fare_references.every(
+            (reference, index) => selectedFares[index] === reference,
+        );
+    }
+
+    return selectedFares[flightIdx] === fare.ref_id;
 }
 
 /** Load free baggage only while an AT result is open; never during search. */
@@ -5035,16 +5079,17 @@ watch(isLoggedIn, (newVal) => {
                                                         ) in visibleSortedFlightFares(flight, flightIndex)"
                                                         :key="fare.ref_id || fareIndex"
                                                         @click="
-                                                            selectFares(
+                                                            selectFareOption(
                                                                 flightIndex,
-                                                                fare.ref_id,
+                                                                fare,
                                                             )
                                                         "
                                                         class="flex min-h-[270px] cursor-pointer flex-col rounded border border-gray-200 bg-white p-4 shadow-sm transition-all duration-200 hover:border-primary hover:shadow-md sm:p-5"
                                                         :class="
-                                                            selectedFares[
-                                                                flightIndex
-                                                            ] === fare.ref_id
+                                                            isFareOptionSelected(
+                                                                flightIndex,
+                                                                fare,
+                                                            )
                                                                 ? 'border-primary bg-primary/10 ring-1 ring-primary'
                                                                 : ''
                                                         "
