@@ -654,8 +654,12 @@ private function logGetExpSearchRawPage(int $page, array $response, string $page
         'completed' => $response['Completed'] ?? null,
         'code' => $response['Code'] ?? null,
         'trip_counts' => $tripCounts,
-        'raw_response' => $response,
     ]);
+
+    // Full pages can be several MB; encoding them on every poll delays the stream.
+    if (config('app.debug') && env('AT_LOG_RAW_SEARCH_PAGES', false)) {
+        Log::debug("GetExpSearch raw page {$page} body.", ['raw_response' => $response]);
+    }
 }
 
 private function emitSearchBatch(?callable $onBatch, array $newBatch, array $mergedResponse, int $page): void
@@ -674,7 +678,11 @@ private function removePreviouslySeenJourneys(array $response, array &$seenJourn
 
     foreach ($trips as $trip) {
         $journeys = $trip['Journey'] ?? [];
-        $journeys = is_array($journeys) && isset($journeys[0]) ? $journeys : [$journeys];
+        if (empty($journeys)) {
+            $journeys = [];
+        } elseif (!is_array($journeys) || !isset($journeys[0])) {
+            $journeys = [$journeys];
+        }
         $uniqueJourneys = [];
 
         foreach ($journeys as $journey) {

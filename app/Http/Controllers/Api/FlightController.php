@@ -411,26 +411,31 @@ class FlightController extends Controller
                         $deduplicationStartedAt = microtime(true);
                         $newFlights = [];
 
+                        $quoteCacheEntries = [];
+
                         foreach ($mappedFlights as $flight) {
                             $streamKey = $flight['stream_key'] ?? null;
-                            if (!$streamKey || isset($emittedFlightKeys[$streamKey])) {
-                                continue;
-                            }
-
                             $flightReference = data_get($flight, 'leg.ref_id');
 
-                            if (!$flightReference) {
+                            if (!$streamKey || !$flightReference) {
                                 continue;
                             }
 
-                            $emittedFlightKeys[$streamKey] = true;
+                            // Later AT pages add fares/return pairings to itineraries that were
+                            // already sent; re-send the itinerary whenever its fare set changes.
+                            $fingerprint = $this->atStreamFlightFingerprint($flight);
+                            if (($emittedFlightKeys[$streamKey] ?? null) === $fingerprint) {
+                                continue;
+                            }
+
+                            $emittedFlightKeys[$streamKey] = $fingerprint;
                             $flight['quote_search_token'] = $searchToken;
-                            Cache::put(
-                                $this->quoteFlightCacheKey($searchToken, $flightReference),
-                                $flight,
-                                now()->addMinutes(15),
-                            );
+                            $quoteCacheEntries[$this->quoteFlightCacheKey($searchToken, $flightReference)] = $flight;
                             $newFlights[] = $flight;
+                        }
+
+                        if ($quoteCacheEntries !== []) {
+                            Cache::putMany($quoteCacheEntries, now()->addMinutes(15));
                         }
                         $deduplicationMs = round((microtime(true) - $deduplicationStartedAt) * 1000, 2);
 
@@ -508,6 +513,28 @@ class FlightController extends Controller
             'X-Accel-Buffering' => 'no',
         ]);
     }
+    /** Identify an AT stream itinerary's fare set, ignoring per-transform UUIDs. */
+    private function atStreamFlightFingerprint(array $flight): string
+    {
+        $parts = [];
+
+        foreach (data_get($flight, 'leg.flights', []) as $leg) {
+            foreach ($leg['fares'] ?? [] as $fare) {
+                $parts[] = implode('|', [
+                    $fare['fare_key'] ?? '',
+                    $fare['return_identifier'] ?? '',
+                    $fare['fare_basis_code'] ?? '',
+                    $fare['billable_price'] ?? '',
+                ]);
+            }
+            $parts[] = '#';
+        }
+
+        $parts[] = (string) count(data_get($flight, 'leg.fare_combinations', []));
+
+        return hash('sha256', implode('~', $parts));
+    }
+
     /**
      * Create a server-side quote from selected fares in the current search result.
      */

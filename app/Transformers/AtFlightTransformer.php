@@ -20,6 +20,35 @@ class AtFlightTransformer
             ?? app(CurrencyConversionService::class);
     }
 
+    /** Lookups memoized per instance; the stream re-transforms every AT page. */
+    private array $airportsByIata = [];
+    private array $airlinesByIataCache = [];
+    private $namedAirlines = null;
+
+    private function airportByIata(?string $iataCode): ?Airport
+    {
+        $iataCode = (string) $iataCode;
+
+        if (!array_key_exists($iataCode, $this->airportsByIata)) {
+            $this->airportsByIata[$iataCode] = Airport::where('iata_code', $iataCode)->first();
+        }
+
+        return $this->airportsByIata[$iataCode];
+    }
+
+    private function airlinesByIata(?string $iataCode)
+    {
+        $iataCode = (string) $iataCode;
+
+        return $this->airlinesByIataCache[$iataCode]
+            ??= Airline::where('iata_code', $iataCode)->get();
+    }
+
+    private function allNamedAirlines()
+    {
+        return $this->namedAirlines ??= Airline::query()->whereNotNull('name')->get();
+    }
+
     public function fromAT($flightData, $params)
     {
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
@@ -69,8 +98,8 @@ class AtFlightTransformer
                     foreach ($segmentStrings as $segmentIndex => $segStr) {
                         $fields = array_map('trim', explode(',', $segStr));
 
-                        $fromAirport = Airport::where('iata_code', $fields[2] ?? '')->first();
-                        $toAirport = Airport::where('iata_code', $fields[3] ?? '')->first();
+                        $fromAirport = $this->airportByIata($fields[2] ?? '');
+                        $toAirport = $this->airportByIata($fields[3] ?? '');
                         $carrierCode = $fields[0] ?? $flight['VAC'] ?? null;
                         $carrierName = $this->airlineNameForSegment($flight, (int) $segmentIndex);
                         
@@ -92,8 +121,8 @@ class AtFlightTransformer
                 } else {
                     // fallback to existing Connections array
                     foreach ($flight['Connections'] ?? [] as $connectionIndex => $seg) {
-                        $fromAirport = Airport::where('iata_code', $deptAirport)->first();
-                        $toAirport = Airport::where('iata_code', $seg['Airport'])->first();
+                        $fromAirport = $this->airportByIata($deptAirport);
+                        $toAirport = $this->airportByIata($seg['Airport']);
                         $connectionDeparture = $flight['DepartureTime'];
                         $connectionDuration = $seg['Duration'];
                         $connectionArrival = $this->addDuration($connectionDeparture, $connectionDuration);
@@ -121,8 +150,8 @@ class AtFlightTransformer
                     // Push main flight as last segment
                     $segments[] = [
                         "ref_id" => (string) \Str::uuid(),
-                        "from" => $this->buildAirportData(Airport::where('iata_code', $deptAirport)->first()),
-                        "to" => $this->buildAirportData(Airport::where('iata_code', $flight['To'])->first()),
+                        "from" => $this->buildAirportData($this->airportByIata($deptAirport)),
+                        "to" => $this->buildAirportData($this->airportByIata($flight['To'])),
                         "aircraft" => $flight['Equipment'] ?? null,
                         "arrival_at" => $flight['ArrivalTime'] ?? null,
                         "departure_at" => $flight['DepartureTime'] ?? null,
@@ -134,7 +163,7 @@ class AtFlightTransformer
                 }
 
                 $connections = max(count($segments) - 1, 0);
-                $airline = Airline::where('iata_code', $segments[0]['operating_carrier']['iata'] ?? null)->first();
+                $airline = $this->airlinesByIata($segments[0]['operating_carrier']['iata'] ?? null)->first();
 
                 // Process fares
                 $fares = [];
@@ -530,7 +559,7 @@ class AtFlightTransformer
             return null;
         }
 
-        $airlinesByIata = Airline::where('iata_code', $iataCode)->get();
+        $airlinesByIata = $this->airlinesByIata($iataCode);
 
         if ($iataCode === 'PF' && $airlineName) {
             $airlineByName = $this->firstAirlineMatchingName($airlinesByIata, $airlineName);
@@ -540,7 +569,7 @@ class AtFlightTransformer
             }
 
             $airlineByName = $this->firstAirlineMatchingName(
-                Airline::query()->whereNotNull('name')->get(),
+                $this->allNamedAirlines(),
                 $airlineName
             );
 
