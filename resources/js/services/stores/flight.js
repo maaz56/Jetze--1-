@@ -1,6 +1,7 @@
 import apiService, { ensureCsrfCookie } from "@/config/axios";
 import { resolveAtApiBaseUrl } from "@/config/atApi";
 import { defineStore } from "pinia";
+import { markRaw } from "vue";
 import { toast } from "vue3-toastify";
 
 export const useFlightStore = defineStore("flight", {
@@ -140,6 +141,18 @@ export const useFlightStore = defineStore("flight", {
                 const decoder = new TextDecoder();
                 let buffer = "";
                 let streamError = null;
+                const pendingFlights = new Map();
+
+                const flushPendingFlights = () => {
+                    if (pendingFlights.size === 0) return;
+
+                    const existing = new Map(
+                        (this.sooperFlights || []).map((flight) => [flight.stream_key, flight]),
+                    );
+                    pendingFlights.forEach((flight, streamKey) => existing.set(streamKey, flight));
+                    pendingFlights.clear();
+                    this.sooperFlights = Array.from(existing.values());
+                };
 
                 const handleEvent = (rawEvent) => {
                     const lines = rawEvent.split("\n");
@@ -153,13 +166,16 @@ export const useFlightStore = defineStore("flight", {
 
                     const payload = JSON.parse(data);
                     if (event === "flights") {
-                        const existing = new Map(
-                            (this.sooperFlights || []).map((flight) => [flight.stream_key, flight]),
-                        );
+                        // markRaw: flights are read-only display data; deep reactive
+                        // proxies over hundreds of fare objects freeze the page.
                         (payload.flights || []).forEach((flight) => {
-                            if (flight.stream_key) existing.set(flight.stream_key, flight);
+                            if (flight.stream_key) pendingFlights.set(flight.stream_key, markRaw(flight));
                         });
-                        this.sooperFlights = Array.from(existing.values());
+
+                        // Apply a page once all its chunks arrive, not once per chunk.
+                        if (!payload.chunk_count || payload.chunk_index >= payload.chunk_count) {
+                            flushPendingFlights();
+                        }
                     }
 
                     if (event === "search.error") {
@@ -181,6 +197,7 @@ export const useFlightStore = defineStore("flight", {
                 }
 
                 if (buffer.trim()) handleEvent(buffer);
+                flushPendingFlights();
                 if (streamError) throw streamError;
             } catch (error) {
                 console.error("Error streaming AT flights:", error);

@@ -660,7 +660,6 @@ watch(
             ));
         }
     },
-    { deep: true },
 );
 
 const cheapestFlightsByAirline = computed(() => {

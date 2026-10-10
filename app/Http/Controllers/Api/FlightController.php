@@ -434,9 +434,6 @@ class FlightController extends Controller
                             $newFlights[] = $flight;
                         }
 
-                        if ($quoteCacheEntries !== []) {
-                            Cache::putMany($quoteCacheEntries, now()->addMinutes(15));
-                        }
                         $deduplicationMs = round((microtime(true) - $deduplicationStartedAt) * 1000, 2);
 
                         $completed = strtolower((string) ($mergedResponse['Completed'] ?? 'false')) === 'true';
@@ -468,6 +465,15 @@ class FlightController extends Controller
                             $flightEmitMs = round((microtime(true) - $flightEmitStartedAt) * 1000, 2);
                         }
 
+                        // Store quote copies only after the flights are on their way to the
+                        // browser; serializing hundreds of itineraries takes seconds.
+                        $cacheWriteMs = 0.0;
+                        if ($quoteCacheEntries !== []) {
+                            $cacheWriteStartedAt = microtime(true);
+                            Cache::putMany($quoteCacheEntries, now()->addMinutes(15));
+                            $cacheWriteMs = round((microtime(true) - $cacheWriteStartedAt) * 1000, 2);
+                        }
+
                         Log::info('AT SSE batch timing.', [
                             'page' => $page,
                             'available_trip_count' => $availableTripCount,
@@ -478,6 +484,7 @@ class FlightController extends Controller
                             'deduplication_ms' => $deduplicationMs,
                             'progress_emit_ms' => $progressEmitMs,
                             'flight_emit_ms' => $flightEmitMs,
+                            'cache_write_ms' => $cacheWriteMs,
                             'batch_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
                             'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
                         ]);
