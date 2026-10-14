@@ -235,6 +235,7 @@ class AtFlightTransformer
                     $fares[] = [
                         "ref_id" => (string) \Str::uuid(),
                         'index' => $fare['index'] ?? null,
+                        'provider' => $fare['Provider'] ?? null,
                         'return_identifier' => $fare['ReturnIdentifier'] ?? null,
                         'fare_key' => $fare['FareKey'] ?? null,
                         "name" => $fare['FareClass'] ?? 'Economy',
@@ -428,7 +429,7 @@ class AtFlightTransformer
 
     /**
      * Build one RSF card for each provider-approved onward/return pairing.
-     * ReturnIdentifier is the pairing key; the two fare indexes may differ.
+     * Provider + ReturnIdentifier is the pairing key; fare indexes may differ.
      */
     private function buildReturnFareCombinations(array $legs): array
     {
@@ -437,15 +438,15 @@ class AtFlightTransformer
         }
 
         [$onwardLeg, $returnLeg] = $legs;
-        $returnFaresByIdentifier = collect($returnLeg['fares'] ?? [])
-            ->filter(fn (array $fare): bool => $fare['return_identifier'] !== null)
-            ->keyBy(fn (array $fare): string => (string) $fare['return_identifier']);
+        $returnFaresByCombinationKey = collect($returnLeg['fares'] ?? [])
+            ->filter(fn (array $fare): bool => $this->returnFareCombinationKey($fare) !== null)
+            ->keyBy(fn (array $fare): string => $this->returnFareCombinationKey($fare));
 
         return collect($onwardLeg['fares'] ?? [])
-            ->filter(fn (array $fare): bool => $fare['return_identifier'] !== null)
-            ->map(function (array $onwardFare) use ($returnFaresByIdentifier): ?array {
-                $returnFare = $returnFaresByIdentifier->get(
-                    (string) $onwardFare['return_identifier'],
+            ->filter(fn (array $fare): bool => $this->returnFareCombinationKey($fare) !== null)
+            ->map(function (array $onwardFare) use ($returnFaresByCombinationKey): ?array {
+                $returnFare = $returnFaresByCombinationKey->get(
+                    $this->returnFareCombinationKey($onwardFare),
                 );
 
                 if (!$returnFare) {
@@ -496,6 +497,26 @@ class AtFlightTransformer
             ->sortBy(fn (array $combination): float => (float) $combination['combined_amount'])
             ->values()
             ->all();
+    }
+
+    /**
+     * ReturnIdentifier values are reused by different AT fare providers.
+     * Both values are required to identify one provider-approved pairing.
+     */
+    private function returnFareCombinationKey(array $fare): ?string
+    {
+        $returnIdentifier = $fare['return_identifier'] ?? $fare['ReturnIdentifier'] ?? null;
+        if ($returnIdentifier === null || $returnIdentifier === '') {
+            return null;
+        }
+
+        $provider = $fare['provider'] ?? $fare['Provider'] ?? null;
+        if ($provider === null || $provider === '') {
+            $index = (string) ($fare['index'] ?? $fare['Index'] ?? '');
+            $provider = explode('|', $index, 2)[0] ?? '';
+        }
+
+        return strtoupper(trim((string) $provider)) . '|' . trim((string) $returnIdentifier);
     }
 
     private function combinedFareName(array $fare): string
@@ -944,8 +965,8 @@ class AtFlightTransformer
         foreach ($onwardFlights as $onward) {
             $oFlight = $onward['legs']['flight'];
             $onwardFares = $onward['legs']['fares'];
-            $onwardIdentifiers = collect($onwardFares)
-                ->pluck('ReturnIdentifier')
+            $onwardCombinationKeys = collect($onwardFares)
+                ->map(fn (array $fare): ?string => $this->returnFareCombinationKey($fare))
                 ->filter();
 
             foreach ($returnFlightsByAirline[$this->returnPairingKey($oFlight)] ?? [] as $return) {
@@ -953,34 +974,41 @@ class AtFlightTransformer
 
                 $returnFares = $return['legs']['fares'];
 
-                $returnIdentifiers = collect($returnFares)
-                    ->pluck('ReturnIdentifier')
+                $returnCombinationKeys = collect($returnFares)
+                    ->map(fn (array $fare): ?string => $this->returnFareCombinationKey($fare))
                     ->filter();
 
-                $commonIdentifiers = $onwardIdentifiers
-                    ->intersect($returnIdentifiers)
+                $commonCombinationKeys = $onwardCombinationKeys
+                    ->intersect($returnCombinationKeys)
                     ->unique()
                     ->values();
 
-                if ($commonIdentifiers->isEmpty()) {
+                if ($commonCombinationKeys->isEmpty()) {
                     continue;
                 }
 
-                // Every provider-supplied ReturnIdentifier is a valid pairing.
-                // Preserve it even when another identifier has the same fare
-                // keys; AT may use those identifiers for different combinations.
-                $validIdentifiers = $commonIdentifiers->all();
+                // The provider namespace is required because numeric return
+                // identifiers are reused by FZ, SB, 1G, AM, and other sources.
+                $validCombinationKeys = $commonCombinationKeys->all();
 
                 $filteredOnwardFares = collect($onwardFares)
-                    ->filter(function ($fare) use ($validIdentifiers) {
-                        return in_array($fare['ReturnIdentifier'], $validIdentifiers);
+                    ->filter(function (array $fare) use ($validCombinationKeys): bool {
+                        return in_array(
+                            $this->returnFareCombinationKey($fare),
+                            $validCombinationKeys,
+                            true,
+                        );
                     })
                     ->values()
                     ->toArray();
 
                 $filteredReturnFares = collect($returnFares)
-                    ->filter(function ($fare) use ($validIdentifiers) {
-                        return in_array($fare['ReturnIdentifier'], $validIdentifiers);
+                    ->filter(function (array $fare) use ($validCombinationKeys): bool {
+                        return in_array(
+                            $this->returnFareCombinationKey($fare),
+                            $validCombinationKeys,
+                            true,
+                        );
                     })
                     ->values()
                     ->toArray();
