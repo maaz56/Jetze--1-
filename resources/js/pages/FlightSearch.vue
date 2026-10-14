@@ -176,6 +176,29 @@ const formatFlightNumber = (flightNumber) => {
     return String(flightNumber);
 };
 
+const operatingCarrierLabel = (flights) => {
+    const operatingCarriers = new Map();
+
+    (flights ?? []).forEach((flight) => {
+        const marketingCarrier = flight?.marketing_carrier;
+        const operatingCarrier = flight?.operating_carrier;
+        const marketingCode = String(marketingCarrier?.iata ?? "").trim().toUpperCase();
+        const operatingCode = String(operatingCarrier?.iata ?? "").trim().toUpperCase();
+        const marketingName = String(marketingCarrier?.name ?? "").trim().toLowerCase();
+        const operatingName = String(operatingCarrier?.name ?? "").trim().toLowerCase();
+
+        if (!operatingCarrier || (!operatingCode && !operatingName)) return;
+        if (!marketingCode && !marketingName) return;
+        if (marketingCode && operatingCode && marketingCode === operatingCode) return;
+        if (marketingName && operatingName && marketingName === operatingName) return;
+
+        const label = operatingCarrier.name || operatingCarrier.iata;
+        operatingCarriers.set(operatingCode || operatingName, label);
+    });
+
+    return [...operatingCarriers.values()].join(", ");
+};
+
 const formatSegmentDuration = (segment) => {
     const raw = segment?.flight_time ?? segment?.flightTime ?? null;
     if (raw === null || raw === undefined) return "";
@@ -3741,6 +3764,12 @@ watch(isLoggedIn, (newVal) => {
                             {{ item?.leg?.flights[0]?.marketing_carrier?.iata }}
                             {{ formatFlightNumber(item?.leg?.flights[0]?.flight_number) }}
                         </p>
+                        <p
+                            v-if="operatingCarrierLabel(item?.leg?.flights)"
+                            class="mt-1 text-[11px] font-medium text-gray-500 whitespace-nowrap"
+                        >
+                            Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
+                        </p>
                     </div>
                 </div>
 
@@ -3893,6 +3922,12 @@ watch(isLoggedIn, (newVal) => {
                                     )
                                     .join(", ")
                             }}
+                        </p>
+                        <p
+                            v-if="operatingCarrierLabel(item?.leg?.flights)"
+                            class="mt-1 text-[11px] font-medium text-gray-500 whitespace-nowrap"
+                        >
+                            Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
                         </p>
                     </div>
                 </div>
