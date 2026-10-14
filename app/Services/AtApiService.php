@@ -339,8 +339,8 @@ class AtApiService
         // Handle return flights
         if ($flightType === 'return') {
             $trips[] = [
-                'From' => $params['origin'],
-                'To' => $params['destination'],
+                'From' => $this->normalizeAirportCode($params['origin'] ?? ''),
+                'To' => $this->normalizeAirportCode($params['destination'] ?? ''),
                 'ReturnDate' => $params['return_date'] ?? '',
                 'OnwardDate' => $params['departure_date'],
                 'TUI' => $params['TUI'] ?? ''
@@ -350,14 +350,20 @@ class AtApiService
 
         // Handle one-way flights
         $trips[] = [
-            'From' => $params['origin'],
-            'To' => $params['destination'],
+            'From' => $this->normalizeAirportCode($params['origin'] ?? ''),
+            'To' => $this->normalizeAirportCode($params['destination'] ?? ''),
             'ReturnDate' => '',
             'OnwardDate' => $params['departure_date'],
             'TUI' => $params['TUI'] ?? ''
         ];
 
         return $trips;
+    }
+
+    /** Normalize airport IATA codes before sending them to AT. */
+    private function normalizeAirportCode(mixed $airportCode): string
+    {
+        return strtoupper(trim((string) $airportCode));
     }
 
 /**
@@ -1827,8 +1833,8 @@ private function extractTrips($tripsData): array
 
         foreach ($params['trips'] as $trip) {
             $trips[] = [
-                'From' => $trip['origin'],
-                'To' => $trip['destination'],
+                'From' => $this->normalizeAirportCode($trip['origin'] ?? ''),
+                'To' => $this->normalizeAirportCode($trip['destination'] ?? ''),
                 'ReturnDate' => '',
                 'OnwardDate' => $trip['date'],
                 'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
