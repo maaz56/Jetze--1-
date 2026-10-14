@@ -655,6 +655,7 @@ private function logGetExpSearchRawPage(int $page, array $response, string $page
         'code' => $response['Code'] ?? null,
         'trip_counts' => $tripCounts,
     ]);
+    Log::info(json_encode($response));
 
     // Full pages can be several MB; encoding them on every poll delays the stream.
     if (config('app.debug') && env('AT_LOG_RAW_SEARCH_PAGES', false)) {
