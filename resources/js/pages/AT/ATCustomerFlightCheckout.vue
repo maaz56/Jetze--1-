@@ -117,6 +117,9 @@ const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const providerPricing = computed(
     () => lockedPriceQuote.value?.provider_pricing ?? null,
 );
+const fareBreakdownPriceDetails = computed(
+    () => lockedPriceQuote.value?.fare_breakdown?.price_details ?? null,
+);
 const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const qouteError = computed(() => store.getters["flight/qouteError"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
@@ -1352,8 +1355,6 @@ function fetchFlight() {
     initializeSelectedSeat();
 
 }
-
-
 
 /** Load the trusted quote created from the selected search fare. */
 async function fetchLockedPriceQuote() {
@@ -3398,6 +3399,41 @@ watch(flight, () => {
                                 <div class="flex p-4 items-center justify-between ">
                                     <h3 class="text-lg sm:text-xl font-semibold  text-gray-900">Price Details
                                     </h3>
+                                    <div class="flex items-center gap-2">
+                                    <Dialog v-if="lockedPriceQuote?.fare_breakdown?.trips?.length">
+                                        <DialogTrigger as-child>
+                                            <button class="px-3 py-1 text-xs font-medium text-white bg-primary rounded hover:bg-primary-dark">
+                                                View Fare Breakdown
+                                            </button>
+                                        </DialogTrigger>
+                                        <DialogContent class="max-h-[85vh] max-w-5xl overflow-y-auto bg-white">
+                                            <DialogHeader>
+                                                <DialogTitle class="text-lg font-semibold text-gray-900">Fare Breakdown</DialogTitle>
+                                                <DialogDescription class="text-sm text-gray-600">Fare details saved with this quote.</DialogDescription>
+                                            </DialogHeader>
+                                            <div class="divide-y divide-gray-200">
+                                                <div v-for="(trip, tripIndex) in lockedPriceQuote.fare_breakdown.trips" :key="trip.flight_index" class="py-4">
+                                                    <div class="mb-3 flex justify-between gap-3 text-sm font-semibold text-gray-900">
+                                                        <span>{{ tripIndex === 0 ? 'Outbound' : 'Return' }}: {{ trip.fare?.name_class || 'Selected Fare' }}</span>
+                                                        <span class="text-primary">{{ formatConvertedMoney(trip.fare?.display_money) }}</span>
+                                                    </div>
+                                                    <div class="overflow-x-auto">
+                                                        <table class="w-full min-w-[680px] text-xs">
+                                                            <thead class="border-y border-gray-200 bg-gray-50 text-left text-gray-600"><tr>
+                                                                <th class="px-2 py-2">Passenger</th><th class="px-2 py-2">Base Fare</th><th class="px-2 py-2">Taxes</th><th class="px-2 py-2">Fees</th><th class="px-2 py-2">Service Charges</th><th class="px-2 py-2">Surcharge</th><th class="px-2 py-2">Discount</th><th class="px-2 py-2 text-right">Total</th>
+                                                            </tr></thead>
+                                                            <tbody class="divide-y divide-gray-100 text-gray-800">
+                                                                <tr v-for="passengerFare in trip.fare?.passenger_fares || []" :key="passengerFare.traveler_type">
+                                                                    <td class="px-2 py-2 font-medium">{{ passengerFare.traveler_type }} x{{ passengerFare.total_passenger }}</td>
+                                                                    <td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.base_price) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.taxes) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.fees) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.service_charges) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.surchage) }}</td><td class="px-2 py-2">-{{ formatConvertedMoney(passengerFare.display_money?.discount) }}</td><td class="px-2 py-2 text-right font-semibold text-primary">{{ formatConvertedMoney(passengerFare.display_money?.total_price) }}</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
                                     <Dialog>
                                         <DialogTrigger as-child>
                                             <button
@@ -3480,8 +3516,41 @@ watch(flight, () => {
                                             </DialogFooter>
                                         </DialogContent>
                                     </Dialog>
+                                    </div>
                                 </div>
-                                <div class="">
+                                <div v-if="fareBreakdownPriceDetails" class="bg-gray-50 p-3 space-y-2">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Base Fare</span>
+                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.base_fare) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Taxes</span>
+                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.taxes) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Fees</span>
+                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.fees) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Service Charges</span>
+                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.service_charges) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Surcharge</span>
+                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.surcharge) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500">Discount</span>
+                                        <span class="text-xs font-medium">-{{ formatConvertedMoney(fareBreakdownPriceDetails.discount) }}</span>
+                                    </div>
+                                    <div class="border-t border-gray-200 pt-2">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-sm font-medium text-gray-900">Subtotal</span>
+                                            <span class="text-sm font-semibold text-primary">{{ formatConvertedMoney(fareBreakdownPriceDetails.total_price) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else>
                                     <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
                                             <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
                                                 <div v-if="selectedFares?.includes(fare.ref_id)"

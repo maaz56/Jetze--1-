@@ -581,12 +581,14 @@ class FlightController extends Controller
                 $validated['fare_references'],
                 $providerPricing,
             );
+            $fareBreakdown = $this->atFareBreakdownForQuote($flight, $validated['fare_references']);
             $quote = $this->priceQuoteService->createAt(
                 $request->user(),
                 $flight,
                 $validated['fare_references'],
                 $displayCurrency,
                 $providerPricing,
+                $fareBreakdown,
             );
         } else {
             $quote = $this->priceQuoteService->create(
@@ -868,6 +870,73 @@ class FlightController extends Controller
                 $validated['fare_references'],
             ),
         ]);
+    }
+
+    /** Capture selected AT FlightInfo details with the quote; never block quote creation on a display-only failure. */
+    private function atFareBreakdownForQuote(array $flight, array $fareReferences): ?array
+    {
+        try {
+            $trips = $this->atFlightInfoTrips($flight, $fareReferences);
+            if (count($trips) !== count($fareReferences)) {
+                return null;
+            }
+
+            $tripType = strtoupper((string) data_get($flight, 'provider.fare_type', 'ON'));
+            $response = $this->atApiService->fetchFlightInfo($trips, $tripType);
+
+            if (!is_array($response) || (string) ($response['Code'] ?? '') !== '200' || !is_array($response['Trips'] ?? null)) {
+                return null;
+            }
+
+            return $this->withAtFareBreakdownPriceDetails(
+                $this->atFareBreakdownTransformer->transform($response, $flight, $fareReferences),
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to snapshot AT fare breakdown for quote.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /** Sum each selected trip's display-currency fare components for checkout Price Details. */
+    private function withAtFareBreakdownPriceDetails(array $fareBreakdown): array
+    {
+        $fields = [
+            'base_fare',
+            'taxes',
+            'fees',
+            'service_charges',
+            'surcharge',
+            'discount',
+            'total_price',
+        ];
+        $summary = [];
+
+        foreach ($fields as $field) {
+            $amount = '0';
+            $currency = $fareBreakdown['display_currency'] ?? null;
+
+            foreach ($fareBreakdown['trips'] ?? [] as $trip) {
+                $money = data_get($trip, "provider_money.{$field}.display_money");
+                if (!is_array($money) || !isset($money['amount'])) {
+                    continue;
+                }
+
+                $amount = bcadd($amount, (string) $money['amount'], 8);
+                $currency ??= $money['currency'] ?? null;
+            }
+
+            $summary[$field] = [
+                'amount' => $amount,
+                'currency' => $currency,
+            ];
+        }
+
+        $fareBreakdown['price_details'] = $summary;
+
+        return $fareBreakdown;
     }
 
     /**
@@ -1182,6 +1251,7 @@ class FlightController extends Controller
                 ])
                 ->values(),
             'provider_pricing' => $quote->provider_pricing_data,
+            'fare_breakdown' => $quote->fare_breakdown_data,
             'expires_at' => $quote->expires_at->toIso8601String(),
             'server_now' => now()->toIso8601String(),
         ];

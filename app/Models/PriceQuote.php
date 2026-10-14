@@ -26,6 +26,7 @@ class PriceQuote extends Model
             'flight_data' => 'array',
             'selected_fare_references' => 'array',
             'provider_pricing_data' => 'array',
+            'fare_breakdown_data' => 'array',
             'expires_at' => 'datetime',
             'retain_until' => 'datetime',
         ];

@@ -66,6 +66,7 @@ class PriceQuoteService
         array $fareReferences,
         string $displayCurrency,
         array $providerPricing,
+        ?array $fareBreakdownData = null,
     ): PriceQuote {
         $providerCurrency = strtoupper((string) $providerPricing['currency']);
         $providerAmount = (string) $providerPricing['net_amount'];
@@ -79,7 +80,7 @@ class PriceQuoteService
             $displayCurrency,
         );
 
-        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
+        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $fareBreakdownData, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
             $quote = PriceQuote::create([
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $user->id,
@@ -97,6 +98,7 @@ class PriceQuoteService
                 'flight_data' => $flight,
                 'selected_fare_references' => array_values($fareReferences),
                 'provider_pricing_data' => $providerPricing,
+                'fare_breakdown_data' => $fareBreakdownData,
                 'expires_at' => now()->addMinutes(self::QUOTE_TTL_MINUTES),
                 'retain_until' => now()->addDays(self::QUOTE_RETENTION_DAYS),
             ]);
