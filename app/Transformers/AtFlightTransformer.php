@@ -961,7 +961,13 @@ class AtFlightTransformer
                 : $this->groupAllFares($trips[0]['Journey']);
         }
         elseif ($flightType === 'one-way') {
-            $final = $this->groupAllFares($trips[0]['Journey']);
+            // Direct one-way inventory must belong to the validating carrier.
+            // AT can also return GDS-published fares (for example Provider=SB,
+            // VAC=OV) for the same airline and schedule. Those are a separate
+            // source and must not be exposed as direct-carrier fare groups.
+            // Return processing intentionally does not use this restriction;
+            // its provider + ReturnIdentifier combinability rules remain intact.
+            $final = $this->groupAllFares($trips[0]['Journey'], false, true);
         }
 
         // Log::info('Final here' , $final);
@@ -1355,7 +1361,11 @@ class AtFlightTransformer
         ]);
     }
 
-    private function groupAllFares(array $journeys, bool $preserveReturnIdentifiers = false): array
+    private function groupAllFares(
+        array $journeys,
+        bool $preserveReturnIdentifiers = false,
+        bool $requireProviderMatchesVac = false,
+    ): array
     {
         $final = [];
 
@@ -1363,6 +1373,10 @@ class AtFlightTransformer
         // comparing every journey with every other one was O(n^2) on large pages.
         $journeysByFlight = [];
         foreach ($journeys as $journey) {
+            if ($requireProviderMatchesVac && !$this->providerMatchesValidatingCarrier($journey)) {
+                continue;
+            }
+
             $journeysByFlight[$this->physicalFlightKey($journey)][] = $journey;
         }
 
@@ -1429,6 +1443,16 @@ class AtFlightTransformer
         }
 
         return $final;
+    }
+
+    private function providerMatchesValidatingCarrier(array $journey): bool
+    {
+        $provider = strtoupper(trim((string) ($journey['Provider'] ?? '')));
+        $validatingCarrier = strtoupper(trim((string) ($journey['VAC'] ?? '')));
+
+        return $provider !== ''
+            && $validatingCarrier !== ''
+            && $provider === $validatingCarrier;
     }
     
     /** Identifies the same sellable fare regardless of its ReturnIdentifier. */

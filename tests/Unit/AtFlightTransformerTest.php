@@ -283,7 +283,7 @@ it('rejects non-positive return identifiers and fares without a provider', funct
         ->and($missingProvider['flights'])->toBe([]);
 });
 
-it('groups fares by validating carrier provider and schedule without MAC or OAC', function () {
+it('keeps only direct provider fares for one-way flights without matching MAC or OAC', function () {
     $transformer = new AtFlightTransformer();
 
     $processed = $transformer->atFlightProcessor([
@@ -297,10 +297,9 @@ it('groups fares by validating carrier provider and schedule without MAC or OAC'
         ]],
     ], ['flight_type' => 'one-way', 'fare_type' => 'OW']);
 
-    expect($processed['flights'])->toHaveCount(2)
+    expect($processed['flights'])->toHaveCount(1)
         ->and($processed['flights'][0]['legs']['fares'])->toHaveCount(2)
-        ->and(array_column($processed['flights'][0]['legs']['fares'], 'Provider'))->toBe(['FZ', 'FZ'])
-        ->and(array_column($processed['flights'][1]['legs']['fares'], 'Provider'))->toBe(['SB']);
+        ->and(array_column($processed['flights'][0]['legs']['fares'], 'Provider'))->toBe(['FZ', 'FZ']);
 });
 
 function atJourney(array $overrides = []): array

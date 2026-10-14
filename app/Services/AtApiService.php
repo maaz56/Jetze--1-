@@ -244,6 +244,7 @@ class AtApiService
                 'GroupType' => $params['group_type'] ?? '',
                 "IsGDSSearch" => $params['is_gds_search'] ?? true,
                 "IsLCCSearch" => $params['is_lcc_search'] ?? true,
+                "IsNDCSearch" => $params['is_ndc_search'] ?? true,
                 'Refundable' => $params['refundable'] ?? '',
                 'IsExtendedSearch' => $params['is_extended_search'] ?? false,
             ],
