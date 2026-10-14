@@ -125,6 +125,7 @@ const activeTab = ref("flights");
 import { SlidersHorizontal } from "lucide-vue-next";
 import LoginMini from "../LoginMini.vue";
 import {
+    cheapestCombination,
     combinationFareCards,
     combinationFareOptions,
     hasFareCombinations,
@@ -1350,6 +1351,21 @@ function calculateFareMargin(basePrice, marginAmount, marginType, amountType) {
 
 // 🧾 Correct Total Fare Calculation
 function calculateTotalFare(item) {
+    const leg = item?.leg;
+    const pair = hasFareCombinations(leg)
+        ? cheapestCombination(leg, fareSortAmount)
+        : null;
+
+    if (pair) {
+        const fares = (leg?.flights ?? []).flatMap((flight) => flight?.fares ?? []);
+
+        return pair.fare_references.reduce((total, refId) => {
+            const fare = fares.find((candidate) => candidate?.ref_id === refId);
+
+            return total + (fare ? calculateFare(fare) : 0);
+        }, 0);
+    }
+
     let total = 0;
     let totalWithoutTypeMarginsLocal = 0;
 
@@ -1358,7 +1374,7 @@ function calculateTotalFare(item) {
             const minPrice = parseFloat(minFare?.total_price || Infinity);
             const currentPrice = parseFloat(current?.total_price || Infinity);
             return currentPrice < minPrice ? current : minFare;
-        });
+        }, null);
         if (!fare) return;
 
         const basePrice = parseFloat(fare.base_price || 0);
@@ -1494,10 +1510,7 @@ function initializeSelectedFares(flight) {
     selectedFares.splice(0, selectedFares.length);
 
     if (hasFareCombinations(flight?.leg)) {
-        const cheapestPair = combinationFareCards(
-            flight.leg,
-            fareSortAmount,
-        )[0];
+        const cheapestPair = cheapestCombination(flight.leg, fareSortAmount);
         if (cheapestPair) {
             selectedFares.splice(0, 2, ...cheapestPair.fare_references);
         }
@@ -1547,7 +1560,22 @@ function fareDisplayMoneyParts(fare) {
 
 /** Build the converted total for the cheapest fare of each flight leg. */
 function flightDisplayMoney(flight) {
-    const legs = flight?.leg?.flights;
+    const leg = flight?.leg;
+    const pair = hasFareCombinations(leg)
+        ? cheapestCombination(leg, fareSortAmount)
+        : null;
+
+    if (pair) {
+        const money = pair.combined_display_money;
+
+        if (money?.currency && Number.isFinite(Number(money.amount))) {
+            return { amount: Number(money.amount), currency: money.currency };
+        }
+
+        return null;
+    }
+
+    const legs = leg?.flights;
 
     if (!Array.isArray(legs) || legs.length === 0) {
         return null;
@@ -1582,40 +1610,7 @@ function flightDisplayMoney(flight) {
 
 function combinedFareLabel(flight) {
     const leg = flight?.leg;
-    if (!hasFareCombinations(leg)) return null;
-
-    const [onwardFlight, returnFlight] = leg.flights;
-    const returnFaresByIdentifier = new Map(
-        (returnFlight?.fares ?? []).map((fare) => [
-            String(fare.return_identifier),
-            fare,
-        ]),
-    );
-    let cheapestPair = null;
-
-    for (const onwardFare of onwardFlight?.fares ?? []) {
-        const returnFare = returnFaresByIdentifier.get(
-            String(onwardFare.return_identifier),
-        );
-        if (!returnFare) continue;
-
-        const amount = fareSortAmount(onwardFare) + fareSortAmount(returnFare);
-        if (!cheapestPair || amount < cheapestPair.amount) {
-            cheapestPair = { amount, onwardFare, returnFare };
-        }
-    }
-
-    if (!cheapestPair) return null;
-
-    const tierName = (fare) => {
-        const name = String(fare?.name || fare?.name_class || fare?.class || "Standard")
-            .replace(/\s+fare$/i, "")
-            .trim();
-
-        return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-    };
-
-    return `${tierName(cheapestPair.onwardFare)} + ${tierName(cheapestPair.returnFare)}`;
+    return cheapestCombination(leg, fareSortAmount)?.name_class ?? null;
 }
 
 /** Format a flight-card total from backend-converted fare amounts. */

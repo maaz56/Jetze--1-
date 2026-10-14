@@ -63,10 +63,54 @@ class CommercialPricingService
                 unset($fare);
             }
             unset($flight);
+
+            if (!empty($itinerary['leg']['fare_combinations'])) {
+                $itinerary['leg']['fare_combinations'] = $this->refreshCombinationMoney(
+                    $itinerary['leg']['fare_combinations'],
+                    $itinerary['leg']['flights'],
+                );
+            }
         }
         unset($itinerary);
 
         return $itineraries;
+    }
+
+    /** Recalculate paired fare selling money and keep the cheapest pair first. */
+    private function refreshCombinationMoney(array $combinations, array $flights): array
+    {
+        $faresByReference = collect($flights)
+            ->flatMap(fn (array $flight) => $flight['fares'] ?? [])
+            ->keyBy('ref_id');
+
+        return collect($combinations)
+            ->map(function (array $combination) use ($faresByReference): array {
+                $fareReferences = array_values($combination['fare_references'] ?? []);
+                $onwardReference = $fareReferences[0] ?? null;
+                $returnReference = $fareReferences[1] ?? null;
+                $onwardMoney = data_get($faresByReference->get($onwardReference), 'selling_display_money')
+                    ?? data_get($faresByReference->get($onwardReference), 'display_money');
+                $returnMoney = data_get($faresByReference->get($returnReference), 'selling_display_money')
+                    ?? data_get($faresByReference->get($returnReference), 'display_money');
+
+                if (is_array($onwardMoney) && is_array($returnMoney)
+                    && isset($onwardMoney['amount'], $onwardMoney['currency'], $returnMoney['amount'], $returnMoney['currency'])
+                    && $onwardMoney['currency'] === $returnMoney['currency']) {
+                    $combination['combined_display_money'] = [
+                        'currency' => $onwardMoney['currency'],
+                        'amount' => bcadd((string) $onwardMoney['amount'], (string) $returnMoney['amount'], 8),
+                    ];
+                }
+
+                return $combination;
+            })
+            ->sortBy(fn (array $combination): float => (float) (
+                data_get($combination, 'combined_display_money.amount')
+                    ?? $combination['combined_amount']
+                    ?? INF
+            ))
+            ->values()
+            ->all();
     }
 
     /** Calculate locked Net Fare selling totals from AT's fresh provider price for the selected fares. */

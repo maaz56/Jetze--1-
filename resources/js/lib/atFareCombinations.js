@@ -13,8 +13,36 @@ export function hasFareCombinations(leg) {
  * A card always owns both original fare references; ReturnIdentifier is the
  * provider's pairing key and Index is intentionally ignored.
  */
-export function combinationFareCards(leg) {
-    return hasFareCombinations(leg) ? leg.fare_combinations : [];
+export function combinationAmount(
+    combination,
+    leg,
+    fareAmount = defaultFareAmount,
+) {
+    const amount = Number(combination?.combined_display_money?.amount);
+    if (Number.isFinite(amount)) return amount;
+
+    const fares = (leg?.flights ?? []).flatMap((flight) => flight?.fares ?? []);
+
+    return (combination?.fare_references ?? []).reduce((total, refId) => {
+        const fare = fares.find((candidate) => candidate?.ref_id === refId);
+
+        return total + (fare ? fareAmount(fare) : 0);
+    }, 0);
+}
+
+export function combinationFareCards(leg, fareAmount = defaultFareAmount) {
+    if (!hasFareCombinations(leg)) return [];
+
+    return [...leg.fare_combinations].sort(
+        (first, second) =>
+            combinationAmount(first, leg, fareAmount) -
+            combinationAmount(second, leg, fareAmount),
+    );
+}
+
+/** The cheapest provider-approved onward/return pair at its selling price. */
+export function cheapestCombination(leg, fareAmount = defaultFareAmount) {
+    return combinationFareCards(leg, fareAmount)[0] ?? null;
 }
 
 /** Show each fare once, preferring the copy that is currently selected. */
