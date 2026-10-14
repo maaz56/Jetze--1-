@@ -179,6 +179,81 @@ it('keeps every return identifier when round-trip fare keys are identical', func
         ->toBe([177, 465]);
 });
 
+it('scopes round-trip return identifiers to their fare provider', function () {
+    $transformer = new AtFlightTransformer();
+
+    $processed = $transformer->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [
+            [
+                'Journey' => [
+                    atJourney([
+                        'Provider' => 'SB',
+                        'Index' => 'SB|1',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '391',
+                        'GrossFare' => 1900,
+                        'NetFare' => 1900,
+                    ]),
+                    atJourney([
+                        'Provider' => 'FZ',
+                        'Index' => 'FZ|1',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '391',
+                        'GrossFare' => 880,
+                        'NetFare' => 880,
+                    ]),
+                ],
+            ],
+            [
+                'Journey' => [
+                    atJourney([
+                        'Provider' => 'SB',
+                        'Index' => 'SB|99',
+                        'ReturnIdentifier' => 99,
+                        'FlightNo' => '392',
+                        'From' => 'JED',
+                        'To' => 'LHE',
+                        'GrossFare' => 0,
+                        'NetFare' => 0,
+                    ]),
+                    atJourney([
+                        'Provider' => 'FZ',
+                        'Index' => 'FZ|2',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '392',
+                        'From' => 'JED',
+                        'To' => 'LHE',
+                        'GrossFare' => 885,
+                        'NetFare' => 885,
+                    ]),
+                    atJourney([
+                        'Provider' => 'SB',
+                        'Index' => 'SB|1',
+                        'ReturnIdentifier' => 1,
+                        'FlightNo' => '356',
+                        'From' => 'JED',
+                        'To' => 'LHE',
+                        'GrossFare' => 0,
+                        'NetFare' => 0,
+                    ]),
+                ],
+            ],
+        ],
+    ], ['flight_type' => 'return', 'fare_type' => 'RS']);
+
+    expect($processed['flights'])->toHaveCount(2);
+
+    $byReturnFlight = collect($processed['flights'])->keyBy(
+        fn (array $flight): string => $flight['return']['flight']['FlightNo'],
+    );
+
+    expect(array_column($byReturnFlight['392']['onward']['fares'], 'Provider'))->toBe(['FZ'])
+        ->and(array_column($byReturnFlight['392']['return']['fares'], 'Provider'))->toBe(['FZ'])
+        ->and(array_column($byReturnFlight['356']['onward']['fares'], 'Provider'))->toBe(['SB'])
+        ->and(array_column($byReturnFlight['356']['return']['fares'], 'Provider'))->toBe(['SB']);
+});
+
 function atJourney(array $overrides = []): array
 {
     return array_merge([
