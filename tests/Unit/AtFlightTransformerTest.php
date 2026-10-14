@@ -254,6 +254,55 @@ it('scopes round-trip return identifiers to their fare provider', function () {
         ->and(array_column($byReturnFlight['356']['return']['fares'], 'Provider'))->toBe(['SB']);
 });
 
+it('rejects non-positive return identifiers and fares without a provider', function () {
+    $transformer = new AtFlightTransformer();
+
+    $processPair = fn (array $onwardOverrides, array $returnOverrides): array =>
+        $transformer->atFlightProcessor([
+            'CurrencyCode' => 'AED',
+            'Trips' => [
+                ['Journey' => [atJourney($onwardOverrides)]],
+                ['Journey' => [atJourney(array_merge([
+                    'FlightNo' => '201',
+                    'From' => 'JED',
+                    'To' => 'LHE',
+                ], $returnOverrides))]],
+            ],
+        ], ['flight_type' => 'return', 'fare_type' => 'RS']);
+
+    $zeroIdentifier = $processPair(
+        ['Provider' => 'FZ', 'Index' => 'FZ|0', 'ReturnIdentifier' => 0],
+        ['Provider' => 'FZ', 'Index' => 'FZ|0', 'ReturnIdentifier' => 0],
+    );
+    $missingProvider = $processPair(
+        ['Provider' => null, 'Index' => 'FZ|1', 'ReturnIdentifier' => 1],
+        ['Provider' => null, 'Index' => 'FZ|2', 'ReturnIdentifier' => 1],
+    );
+
+    expect($zeroIdentifier['flights'])->toBe([])
+        ->and($missingProvider['flights'])->toBe([]);
+});
+
+it('groups fares by validating carrier provider and schedule without MAC or OAC', function () {
+    $transformer = new AtFlightTransformer();
+
+    $processed = $transformer->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [[
+            'Journey' => [
+                atJourney(['Provider' => 'FZ', 'VAC' => 'FZ', 'MAC' => 'EK', 'OAC' => 'FZ', 'NetFare' => 880]),
+                atJourney(['Provider' => 'FZ', 'VAC' => 'FZ', 'MAC' => 'FZ', 'OAC' => 'EK', 'NetFare' => 920]),
+                atJourney(['Provider' => 'SB', 'VAC' => 'FZ', 'MAC' => 'EK', 'OAC' => 'FZ', 'NetFare' => 1900]),
+            ],
+        ]],
+    ], ['flight_type' => 'one-way', 'fare_type' => 'OW']);
+
+    expect($processed['flights'])->toHaveCount(2)
+        ->and($processed['flights'][0]['legs']['fares'])->toHaveCount(2)
+        ->and(array_column($processed['flights'][0]['legs']['fares'], 'Provider'))->toBe(['FZ', 'FZ'])
+        ->and(array_column($processed['flights'][1]['legs']['fares'], 'Provider'))->toBe(['SB']);
+});
+
 function atJourney(array $overrides = []): array
 {
     return array_merge([

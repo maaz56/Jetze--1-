@@ -1683,11 +1683,6 @@ function flightDisplayMoney(flight) {
     return { amount, currency };
 }
 
-function combinedFareLabel(flight) {
-    const leg = flight?.leg;
-    return cheapestCombination(leg, fareSortAmount)?.name_class ?? null;
-}
-
 /** Format a flight-card total from backend-converted fare amounts. */
 function formatFlightDisplayMoney(flight) {
     const money = flightDisplayMoney(flight);
@@ -4026,12 +4021,6 @@ watch(isLoggedIn, (newVal) => {
             <div class="flex flex-wrap items-center gap-2">
                 <span class="px-3 py-1.5 rounded-md bg-violet-50 text-violet-700 font-semibold text-sm">
                     {{ item?.leg?.flights?.[0]?.cabin_class || "Economy" }}
-                </span>
-                <span
-                    v-if="combinedFareLabel(item)"
-                    class="px-3 py-1.5 rounded-md bg-sky-50 text-sky-700 font-semibold text-sm"
-                >
-                    {{ combinedFareLabel(item) }}
                 </span>
                 <span
                     class="px-3 py-1.5 rounded-md font-semibold text-sm"

@@ -100,8 +100,17 @@ class AtFlightTransformer
 
                         $fromAirport = $this->airportByIata($fields[2] ?? '');
                         $toAirport = $this->airportByIata($fields[3] ?? '');
-                        $carrierCode = $fields[0] ?? $flight['VAC'] ?? null;
                         $carrierName = $this->airlineNameForSegment($flight, (int) $segmentIndex);
+                        $marketingCarrierCode = $this->carrierCodeForSegment(
+                            $flight['MAC'] ?? null,
+                            (int) $segmentIndex,
+                            $fields[0] ?? $flight['VAC'] ?? null,
+                        );
+                        $operatingCarrierCode = $this->carrierCodeForSegment(
+                            $flight['OAC'] ?? null,
+                            (int) $segmentIndex,
+                            $marketingCarrierCode,
+                        );
                         
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
@@ -113,7 +122,8 @@ class AtFlightTransformer
                             "flight_number" =>  ($fields[1] ?? ''),
                             "flight_time" => $fields[8] ?? null,
                             "cabin_class" => $flight['Cabin'] ?? 'E',
-                            "operating_carrier" => $this->buildOperatingCarrier($carrierCode, $carrierName),
+                            "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
+                            "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
                         ];
 
                         $deptAirport = $fields[3] ?? $deptAirport;
@@ -126,8 +136,17 @@ class AtFlightTransformer
                         $connectionDeparture = $flight['DepartureTime'];
                         $connectionDuration = $seg['Duration'];
                         $connectionArrival = $this->addDuration($connectionDeparture, $connectionDuration);
-                        $carrierCode = $seg['VAC'] ?? null;
                         $carrierName = $seg['AirlineName'] ?? $this->airlineNameForSegment($flight, (int) $connectionIndex);
+                        $marketingCarrierCode = $this->carrierCodeForSegment(
+                            $seg['MAC'] ?? $seg['VAC'] ?? null,
+                            0,
+                            $this->carrierCodeForSegment($flight['MAC'] ?? null, (int) $connectionIndex, $flight['VAC'] ?? null),
+                        );
+                        $operatingCarrierCode = $this->carrierCodeForSegment(
+                            $seg['OAC'] ?? null,
+                            0,
+                            $this->carrierCodeForSegment($flight['OAC'] ?? null, (int) $connectionIndex, $marketingCarrierCode),
+                        );
                         
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
@@ -139,13 +158,24 @@ class AtFlightTransformer
                             "flight_number" => $seg['FlightNo'],
                             "flight_time" => $connectionDuration,
                             "cabin_class" => $seg['Cabin'] ?? 'E',
-                            "operating_carrier" => $this->buildOperatingCarrier($carrierCode, $carrierName),
+                            "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
+                            "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
                         ];
                         $deptAirport = $seg['Airport'];
                     }
                     
                     $mainSegmentIndex = count($flight['Connections'] ?? []);
                     $carrierName = $this->airlineNameForSegment($flight, $mainSegmentIndex);
+                    $marketingCarrierCode = $this->carrierCodeForSegment(
+                        $flight['MAC'] ?? null,
+                        $mainSegmentIndex,
+                        $flight['VAC'] ?? null,
+                    );
+                    $operatingCarrierCode = $this->carrierCodeForSegment(
+                        $flight['OAC'] ?? null,
+                        $mainSegmentIndex,
+                        $marketingCarrierCode,
+                    );
 
                     // Push main flight as last segment
                     $segments[] = [
@@ -158,13 +188,12 @@ class AtFlightTransformer
                         "flight_number" => $flight['VAC'] . $flight['FlightNo'],
                         "flight_time" => $flight['Duration'] ?? 0,
                         "cabin_class" => $flight['Cabin'] ?? 'E',
-                        "operating_carrier" => $this->buildOperatingCarrier($flight['VAC'] ?? null, $carrierName),
+                        "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
+                        "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
                     ];
                 }
 
                 $connections = max(count($segments) - 1, 0);
-                $airline = $this->airlinesByIata($segments[0]['operating_carrier']['iata'] ?? null)->first();
-
                 // Process fares
                 $fares = [];
                 foreach ($legData['fares'] as $fare) {
@@ -371,7 +400,8 @@ class AtFlightTransformer
                     "has_layovers" => $connections > 0,
                     "layovers_count" => $connections,
                     "change_of_plane" => $connections > 0,
-                    "marketing_carrier" => $segments[0]['operating_carrier'],
+                    "marketing_carrier" => $segments[0]['marketing_carrier'],
+                    "operating_carrier" => $segments[0]['operating_carrier'],
                     "is_refundable" => $fares[0]['is_refundable'],
                     "flight_number" => $segments[0]['flight_number']
                 ];
@@ -506,14 +536,13 @@ class AtFlightTransformer
     private function returnFareCombinationKey(array $fare): ?string
     {
         $returnIdentifier = $fare['return_identifier'] ?? $fare['ReturnIdentifier'] ?? null;
-        if ($returnIdentifier === null || $returnIdentifier === '') {
+        if (!is_numeric($returnIdentifier) || bccomp((string) $returnIdentifier, '0', 8) <= 0) {
             return null;
         }
 
         $provider = $fare['provider'] ?? $fare['Provider'] ?? null;
         if ($provider === null || $provider === '') {
-            $index = (string) ($fare['index'] ?? $fare['Index'] ?? '');
-            $provider = explode('|', $index, 2)[0] ?? '';
+            return null;
         }
 
         return strtoupper(trim((string) $provider)) . '|' . trim((string) $returnIdentifier);
@@ -561,7 +590,7 @@ class AtFlightTransformer
         ];
     }
 
-    private function buildOperatingCarrier(?string $iataCode, $airlineName = null): array
+    private function buildCarrier(?string $iataCode, $airlineName = null): array
     {
         $iataCode = $this->normalizeCarrierCode($iataCode);
         $airlineName = $this->normalizeAtAirlineName($airlineName);
@@ -572,6 +601,20 @@ class AtFlightTransformer
             "name" => $this->carrierDisplayName($iataCode, $airlineName, $airline),
             "logo" => $airline?->logo_url ?: $this->duffelLogoUrl($iataCode),
         ];
+    }
+
+    /** Select a segment-specific carrier code from an AT scalar or pipe-delimited value. */
+    private function carrierCodeForSegment($carrierCodes, int $segmentIndex, ?string $fallback = null): ?string
+    {
+        $codes = is_array($carrierCodes)
+            ? array_values($carrierCodes)
+            : explode('|', (string) $carrierCodes);
+        $codes = array_values(array_filter(array_map(
+            fn ($code): ?string => $this->normalizeCarrierCode($code),
+            $codes,
+        )));
+
+        return $codes[$segmentIndex] ?? $codes[0] ?? $this->normalizeCarrierCode($fallback);
     }
 
     private function resolveAirline(?string $iataCode, ?string $airlineName = null): ?Airline
@@ -654,15 +697,6 @@ class AtFlightTransformer
         )));
 
         return $names[$segmentIndex] ?? $names[0] ?? null;
-    }
-
-    private function airlineDisambiguationKey(array $journey): string
-    {
-        if ($this->normalizeCarrierCode($journey['VAC'] ?? null) !== 'PF') {
-            return '';
-        }
-
-        return $this->normalizeNameForComparison($this->airlineNameForSegment($journey));
     }
 
     private function normalizeCarrierCode(?string $iataCode): ?string
@@ -1048,7 +1082,6 @@ class AtFlightTransformer
         return json_encode([
             $flight['VAC'] ?? null,
             $flight['Provider'] ?? null,
-            $this->airlineDisambiguationKey($flight),
         ]);
     }
 
@@ -1290,24 +1323,14 @@ class AtFlightTransformer
 
     private function physicalFlightKey(array $journey): string
     {
-        $connections = [];
-        if (!empty($journey['Connections']) && is_array($journey['Connections'])) {
-            foreach ($journey['Connections'] as $conn) {
-                $connections[] = ($conn['Airport'] ?? '') . ':' . ($conn['FlightNo'] ?? '');
-            }
-        }
-
         return implode('_', [
             $journey['VAC'] ?? '',
-            $journey['OAC'] ?? '',
-            $journey['MAC'] ?? '',
             $journey['FlightNo'] ?? '',
+            $journey['Provider'] ?? '',
             $journey['From'] ?? '',
             $journey['To'] ?? '',
             $journey['DepartureTime'] ?? '',
             $journey['ArrivalTime'] ?? '',
-            implode('-', $connections),
-            $this->airlineDisambiguationKey($journey),
         ]);
     }
 
