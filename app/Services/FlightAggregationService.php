@@ -10,6 +10,7 @@ use App\Transformers\AirsialFlightTransformer;
 use App\Transformers\AtFlightTransformer;
 use App\Transformers\FlightTransformer;
 use App\Transformers\FlydubaiFlightTransformer;
+use App\Transformers\HakimiFlightTransformer;
 use App\Transformers\OneApiFlightTransformer;
 use App\Transformers\PIAFlightTransformer;
 use App\Transformers\TravelPortFlightNormalization;
@@ -40,10 +41,12 @@ class FlightAggregationService
     protected $segmentMarginService;
     protected $promotionService;
     protected $commercialPricingService;
+    protected $hakimiApiService;
+    protected $hakimiFlightTransformer;
 
 
 
-    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService,SegmentMarginService $segmentMarginService, PromotionService $promotionService, CommercialPricingService $commercialPricingService)
+    public function __construct(SabreApiService $sabreApiService, SooperApiService $sooperApiService, AirsialFlightTransformer $airsialFlightTransformer, FlydubaiFlightTransformer $flyDubaiFlightTransformer, PIAFlightTransformer $piaFlightTransformer, OneApiFlightTransformer $oneApiFlightTransformer, AtApiService $atApiService, HakimiApiService $hakimiApiService, HakimiFlightTransformer $hakimiFlightTransformer, SegmentMarginService $segmentMarginService, PromotionService $promotionService, CommercialPricingService $commercialPricingService)
     {
         $this->sabreApiService = $sabreApiService;
         $this->sooperApiService = $sooperApiService;
@@ -54,6 +57,8 @@ class FlightAggregationService
         $this->piaFlightTransformer = $piaFlightTransformer;
         $this->oneApiFlightTransformer = $oneApiFlightTransformer;
         $this->atApiService = $atApiService;
+        $this->hakimiApiService = $hakimiApiService;
+        $this->hakimiFlightTransformer = $hakimiFlightTransformer;
         $this->segmentMarginService = $segmentMarginService;
         $this->promotionService = $promotionService;
         $this->commercialPricingService = $commercialPricingService;
@@ -146,7 +151,17 @@ class FlightAggregationService
             $transformedFlights = $this->piaFlightTransformer->fromPIA($response, $params);
             Log::info(json_encode($transformedFlights));
         }
-         if ($params['airline'] == 'AT') {
+        if ($params['airline'] === 'HAKIMI') {
+            if (($params['flight_type'] ?? 'one-way') !== 'one-way') {
+                throw new \InvalidArgumentException('Hakimi test inventory currently supports one-way searches only.');
+            }
+
+            $transformedFlights = $this->hakimiFlightTransformer->transform(
+                $this->hakimiApiService->searchFlights($params),
+                $params,
+            );
+        }
+         /* if ($params['airline'] == 'AT') {
             $atFlights = $this->atApiService->searchFlights($params);
             // $ndcCurrency = $atFlights['cheapest']['priceDetails']['totalAmount']['currency'];
             // $exchangeRate = $this->utilityService->getExchangeRate('INR', $params['currency_code']);
@@ -156,7 +171,7 @@ class FlightAggregationService
             //     // $atFlights = $this->utilityService->applyExchangeRateToFlights($atFlights, $exchangeRate);
             // }
             $transformedFlights = array_merge($transformedFlights, $atFlights);
-        }
+        } */
 
 
         if ($sabreFlights != null && $params['airline'] == 'Sabre') {

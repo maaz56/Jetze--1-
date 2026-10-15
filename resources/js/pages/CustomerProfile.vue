@@ -798,7 +798,7 @@ watch(activeTab, (tab) => {
                                                                 booking.pnr,
                                                             booking_source:
                                                                 booking?.booking_source,
-                                                            flight_provider: parseFlightData(booking.flight_data,)?.provider?.name,
+                                                             flight_provider: booking?.flight_provider,
                                                             flight_mode: 'B2C',
                                                         },
                                                     })

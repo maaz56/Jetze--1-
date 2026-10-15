@@ -56,7 +56,7 @@ class PromotionService
 
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
-            if (strtolower((string) data_get($provider, 'name')) === 'at') {
+            if (in_array(strtoupper((string) data_get($provider, 'identifier')), ['AT', 'HAKIMI'], true)) {
                 continue;
             }
             $channels = $this->buildProviderChannels($provider);

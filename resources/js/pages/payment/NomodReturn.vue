@@ -88,7 +88,7 @@ const loadStatus = async () => {
                         query: {
                             booking_id: response.data.booking_id,
                             booking_source: "1",
-                            flight_provider: "at",
+                            flight_provider: response.data.flight_provider || "at",
                             flight_mode: "B2C",
                         },
                     });

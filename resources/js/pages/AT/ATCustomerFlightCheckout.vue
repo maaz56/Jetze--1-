@@ -117,6 +117,7 @@ const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const providerPricing = computed(
     () => lockedPriceQuote.value?.provider_pricing ?? null,
 );
+const isHakimiCheckout = computed(() => String(route.query.flight_provider || '').toLowerCase() === 'hakimi');
 const fareBreakdownPriceDetails = computed(
     () => lockedPriceQuote.value?.fare_breakdown?.price_details ?? null,
 );
@@ -1265,6 +1266,12 @@ function fetchBookingStatus() {
 
 /** Load AT ancillary options once for each locked quote and provider TUI. */
 async function fetchAncillaries({ force = false } = {}) {
+    // Hakimi supports Search → Reprice → Book only; it has no SSR/seat/baggage
+    // ancillary endpoint in the test API.
+    if (isHakimiCheckout.value) {
+        return;
+    }
+
     const quoteId = route?.query?.quote_id;
     const providerTui = providerPricing.value?.tui;
     const fetchKey = quoteId && providerTui ? `${quoteId}:${providerTui}` : null;

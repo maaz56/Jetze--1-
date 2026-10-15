@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\AtApiService;
 use App\Services\AncillaryPricingService;
 use App\Services\FlightAggregationService;
+use App\Services\HakimiApiService;
 use App\Services\PriceQuoteService;
 use App\Services\SooperApiService;
 use App\Transformers\AtAncillaryTransformer;
@@ -30,6 +31,7 @@ class FlightController extends Controller
     protected $ancillaryPricingService;
     protected $atAncillaryTransformer;
     protected $atFareBreakdownTransformer;
+    protected $hakimiApiService;
 
     public function __construct(
         FlightAggregationService $flightAggregationService,
@@ -39,6 +41,7 @@ class FlightController extends Controller
         AncillaryPricingService $ancillaryPricingService,
         AtAncillaryTransformer $atAncillaryTransformer,
         AtFareBreakdownTransformer $atFareBreakdownTransformer,
+        HakimiApiService $hakimiApiService,
     )
     {
         $this->flightAggregator = $flightAggregationService;
@@ -48,6 +51,7 @@ class FlightController extends Controller
         $this->ancillaryPricingService = $ancillaryPricingService;
         $this->atAncillaryTransformer = $atAncillaryTransformer;
         $this->atFareBreakdownTransformer = $atFareBreakdownTransformer;
+        $this->hakimiApiService = $hakimiApiService;
     }
     public function fetchProviders()
     {
@@ -56,6 +60,7 @@ class FlightController extends Controller
 
         $apiProviders = [
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
+            // ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
             ['identifier' => 'AT', 'name' => 'Akbar Travels'],
 
             // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
@@ -69,6 +74,13 @@ class FlightController extends Controller
     {
         // Determine the flight type
         $flightType = $request->flightType;
+
+        if (strtoupper((string) $request->airline) === 'HAKIMI' && $flightType !== 'one-way') {
+            return response()->json([
+                'message' => 'Hakimi test inventory currently supports one-way searches only.',
+            ], 422);
+        }
+
         $currencyCode = $this->currencyCodeForRequest($request);
         // Log::info($request->airline);
         // Initialize params array
@@ -590,6 +602,23 @@ class FlightController extends Controller
                 $providerPricing,
                 $fareBreakdown,
             );
+        } elseif (strtoupper((string) data_get($flight, 'provider.identifier')) === 'HAKIMI') {
+            $fare = $this->hakimiSelectedFare($flight, $validated['fare_references']);
+            $providerPricing = $this->hakimiApiService->reprice(
+                (string) $fare['inventory_id'],
+                $fare['passenger_counts'] ?? [],
+            );
+            $this->validateHakimiReprice($fare, $providerPricing);
+            $flight = $this->applyHakimiReprice($flight, (string) $fare['ref_id'], $providerPricing);
+            $quote = $this->priceQuoteService->create(
+                $request->user(),
+                $flight,
+                $validated['fare_references'],
+                // Hakimi checkout displays its confirmed INR total directly.
+                // Do not apply portal currency conversion, promotions, or margins.
+                strtoupper((string) $providerPricing['currency']),
+            );
+            $quote->update(['provider_pricing_data' => $providerPricing]);
         } else {
             $quote = $this->priceQuoteService->create(
                 $request->user(),
@@ -600,6 +629,72 @@ class FlightController extends Controller
         }
 
         return response()->json($this->quoteResponse($quote), 201);
+    }
+
+    /** Hakimi's one-way search contains exactly one selectable inventory fare. */
+    private function hakimiSelectedFare(array $flight, array $fareReferences): array
+    {
+        $fares = collect(data_get($flight, 'leg.flights', []))
+            ->flatMap(fn (array $flightLeg) => $flightLeg['fares'] ?? [])
+            ->filter(fn (array $fare) => in_array($fare['ref_id'] ?? null, $fareReferences, true))
+            ->values();
+
+        if ($fares->count() !== 1 || blank($fares[0]['inventory_id'] ?? null)) {
+            abort(422, 'Select one valid Hakimi fare before continuing to checkout.');
+        }
+
+        return $fares[0];
+    }
+
+    /** Replace client-search estimates with Hakimi's authoritative Reprice totalFare. */
+    private function applyHakimiReprice(array $flight, string $fareReference, array $providerPricing): array
+    {
+        $amount = (float) $providerPricing['totalFare'];
+        $currency = strtoupper((string) ($providerPricing['currency'] ?? data_get($flight, 'currencyCode', 'INR')));
+
+        foreach (data_get($flight, 'leg.flights', []) as $flightIndex => $flightLeg) {
+            foreach ($flightLeg['fares'] ?? [] as $fareIndex => $fare) {
+                if (($fare['ref_id'] ?? null) !== $fareReference) {
+                    continue;
+                }
+
+                $flight['leg']['flights'][$flightIndex]['fares'][$fareIndex] = array_merge($fare, [
+                    'base_price' => $amount,
+                    'total_price' => $amount,
+                    'billable_price' => $amount,
+                    'display_money' => ['currency' => $currency, 'amount' => $amount],
+                    'provider_booking_money' => ['currency' => $currency, 'amount' => $amount],
+                    'provider_gross_money' => ['currency' => $currency, 'amount' => $amount],
+                    'reprice' => $providerPricing,
+                ]);
+
+                return $flight;
+            }
+        }
+
+        abort(422, 'The selected Hakimi fare is no longer available. Please search again.');
+    }
+
+    /**
+     * Compare Hakimi's fresh payable total with the unadjusted provider amount
+     * captured at Search. A changed amount is valid but is explicitly logged;
+     * the locked checkout quote will always use the fresh totalFare instead.
+     */
+    private function validateHakimiReprice(array $fare, array $providerPricing): void
+    {
+        $searchAmount = (string) data_get($fare, 'provider_booking_money.amount', '0');
+        $repriceAmount = (string) $providerPricing['totalFare'];
+        $currency = strtoupper((string) ($providerPricing['currency'] ?? data_get($fare, 'provider_booking_money.currency', 'INR')));
+        $priceChanged = bccomp($searchAmount, $repriceAmount, 2) !== 0;
+
+        Log::info('Hakimi checkout fare validation.', [
+            'inventory_id' => $fare['inventory_id'] ?? null,
+            'search_provider_total' => $searchAmount,
+            'reprice_total_fare' => $repriceAmount,
+            'currency' => $currency,
+            'price_changed' => $priceChanged,
+            'portal_adjustments_applied' => false,
+        ]);
     }
 
     /** Request and normalize AT fare rules from the active server-cached search. */

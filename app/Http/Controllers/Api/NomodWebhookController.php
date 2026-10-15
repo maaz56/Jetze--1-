@@ -158,6 +158,34 @@ class NomodWebhookController extends Controller
                     );
                 }
 
+                // Hakimi is booked with the supplier before hosted checkout
+                // begins. Once Nomod confirms payment, only the local booking
+                // needs to be ticketed; AT's supplier fulfilment job must not
+                // be invoked for it.
+                $isHakimi = strtolower((string) $lockedBooking->flight_provider) === 'hakimi';
+                if (! $wasAlreadyPaid && ! $hasAnotherPaidAttempt && ! $isLatePayment && $isHakimi) {
+                    $lockedBooking->update([
+                        'status' => 'ticketed',
+                        'issuance_date' => $lockedBooking->issuance_date ?? now(),
+                    ]);
+                    $lockedAttempt->update([
+                        'fulfilment_status' => PaymentAttempt::FULFILMENT_COMPLETED,
+                        'fulfilment_completed_at' => now(),
+                        'fulfilment_error' => null,
+                    ]);
+                    $this->providerBookingEventService->record(
+                        $lockedBooking,
+                        'hakimi',
+                        'payment_confirmed',
+                        [
+                            'payment_attempt_uuid' => $lockedAttempt->uuid,
+                            'amount' => $lockedAttempt->amount,
+                            'currency' => $lockedAttempt->currency,
+                        ],
+                        $lockedBooking->itinerary_ref,
+                    );
+                }
+
                 return ! $wasAlreadyPaid
                     && ! $hasAnotherPaidAttempt
                     && ! $isLatePayment

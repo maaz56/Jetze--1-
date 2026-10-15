@@ -61,6 +61,7 @@ Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::post('/login/request-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'requestLoginOtp']);
 Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'verifyLoginOtp']);
+Route::middleware('auth:sanctum')->get('hakimi-booking-details', [BookingController::class, 'hakimiBookingDetails']);
 
 Route::prefix('hotels')->group(function () {
     Route::get('suggestions', [HotelController::class, 'suggestions']);

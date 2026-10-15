@@ -172,6 +172,7 @@ class NomodCheckoutController extends Controller
         return response()->json([
             'payment_attempt' => $attempt->uuid,
             'booking_id' => $attempt->booking_id,
+            'flight_provider' => $attempt->booking->flight_provider,
             'status' => $attempt->status,
             'amount' => $attempt->amount,
             'base_amount' => $attempt->base_amount,
@@ -199,9 +200,9 @@ class NomodCheckoutController extends Controller
             ]);
         }
 
-        if (strtolower((string) $booking->flight_provider) !== 'at') {
+        if (! in_array(strtolower((string) $booking->flight_provider), ['at', 'hakimi'], true)) {
             throw ValidationException::withMessages([
-                'booking_id' => 'Nomod Hosted Checkout is currently configured for AT B2C bookings only.',
+                'booking_id' => 'Nomod Hosted Checkout is currently configured for AT and Hakimi B2C bookings only.',
             ]);
         }
 

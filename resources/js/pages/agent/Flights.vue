@@ -1774,7 +1774,7 @@ async function continueToCheckout() {
                 flight_id: selectedFlight.value?.leg?.ref_id,
                 fares: JSON.stringify(selectedFares),
                 quote_id: response.data.quote_id,
-                flight_provider: selectedFlight.value?.provider?.name || "N/A",
+                flight_provider: String(selectedFlight.value?.provider?.identifier || selectedFlight.value?.provider?.name || "N/A").toLowerCase(),
                 flight_mode: "B2C",
                 flight_source: 1,
                 passenger_count: passengerCount.value,

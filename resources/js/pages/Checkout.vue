@@ -24,5 +24,6 @@ watch(provider,()=>{
     <FlydubaiCustomerFlightCheckout v-if="provider === 'flydubai' && flight_mode === 'B2C'" />
     <TravelPortCustomerFlightCheckout v-if="provider === 'travelport' && flight_mode === 'B2C'" />
     <OneApiCustomerFlightCheckout v-if="provider === 'OneApi' && flight_mode === 'B2C'" />
-    <ATCustomerFlightCheckout v-if="provider === 'at' && flight_mode === 'B2C'" />
+    <!-- Hakimi currently shares the AT checkout form, but has no ancillary flow. -->
+    <ATCustomerFlightCheckout v-if="(provider === 'at' || provider === 'hakimi') && flight_mode === 'B2C'" />
 </template>

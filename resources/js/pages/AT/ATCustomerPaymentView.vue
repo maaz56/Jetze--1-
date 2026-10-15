@@ -1923,6 +1923,11 @@ const getPassengerExtraBaggage = (pIdx, travelerType) => {
 }
 
 function fetchAncillaries() {
+  // Hakimi test bookings do not expose AT-style ancillary services.
+  if (String(flight_provider || '').toLowerCase() === 'hakimi') {
+    return;
+  }
+
   store.dispatch("flight/" + FETCH_ANCILLARIES, {
     bookingId: bookingDetails?.value?.[0]?.id || booking_id,
     flight_provider: flight_provider,

@@ -80,7 +80,7 @@ class SegmentMarginService
         // 4. Iterate through each itinerary in the search results
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
-            if (strtolower((string) data_get($provider, 'name')) === 'at') {
+            if (in_array(strtoupper((string) data_get($provider, 'identifier')), ['AT', 'HAKIMI'], true)) {
                 continue;
             }
             

@@ -23,6 +23,7 @@ use App\Services\OneApiService;
 use App\Services\PIAApiService;
 use App\Services\SabreApiService;
 use App\Services\AtApiService;
+use App\Services\HakimiApiService;
 use App\Services\AtPreBookingSsrLimitService;
 use App\Services\AgentWalletBalanceService;
 use App\Services\BookingPricingService;
@@ -65,6 +66,7 @@ class BookingController extends Controller
     protected $bookingVoidSettlementService;
     protected $providerBookingEventService;
     protected $atPreBookingSsrLimitService;
+    protected $hakimiApiService;
 
     public function __construct(
         SabreApiService $sabreApiService,
@@ -81,6 +83,7 @@ class BookingController extends Controller
         BookingVoidSettlementService $bookingVoidSettlementService,
         ProviderBookingEventService $providerBookingEventService,
         AtPreBookingSsrLimitService $atPreBookingSsrLimitService,
+        HakimiApiService $hakimiApiService,
     ) {
         $this->sabreApiService = $sabreApiService;
         // $this->safepayService = $safepayService;
@@ -97,6 +100,7 @@ class BookingController extends Controller
         $this->bookingVoidSettlementService = $bookingVoidSettlementService;
         $this->providerBookingEventService = $providerBookingEventService;
         $this->atPreBookingSsrLimitService = $atPreBookingSsrLimitService;
+        $this->hakimiApiService = $hakimiApiService;
     }
 
     public function index(Request $request)
@@ -222,6 +226,28 @@ class BookingController extends Controller
         return $bookingDetail;
     }
 
+    /** Return a Hakimi booking only to its owner or an administrator. */
+    public function hakimiBookingDetails(Request $request)
+    {
+        $validated = $request->validate(['booking_id' => ['required', 'integer']]);
+        $booking = FlightBookings::with(['pessangers', 'priceSnapshot', 'providerEvents'])
+            ->findOrFail($validated['booking_id']);
+        $user = $request->user();
+
+        if (($user->role ?? null) !== 'admin' && (int) $booking->agent_id !== (int) $user->id) {
+            abort(403, 'You are not allowed to view this booking.');
+        }
+        if (strtolower((string) $booking->flight_provider) !== 'hakimi') {
+            abort(404, 'Hakimi booking not found.');
+        }
+
+        return response()->json([
+            'booking' => $booking,
+            'flight' => json_decode((string) $booking->flight_data, true) ?: [],
+            'hakimi' => json_decode((string) $booking->pnr_response, true) ?: [],
+        ]);
+    }
+
     public function initiatePayment(Request $request)
     {
         Log::info($request);
@@ -296,6 +322,10 @@ class BookingController extends Controller
 
         $priceQuote = $this->loadBookingQuote($request);
 
+        if (strtolower((string) $request->input('flight_provider')) === 'hakimi') {
+            $this->validateHakimiBookingRequest($request);
+        }
+
         $pnrResponse = null;
         $airlinePnr = null;
         $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
@@ -350,7 +380,7 @@ class BookingController extends Controller
         Log::info('proceeding with booking');
 
         $customer = $request;
-        if ($request->booking_status_setting == 1) {
+        if ($request->booking_status_setting == 1 && strtolower((string) $request->flight_provider) !== 'hakimi') {
             $pnr = json_encode(['local_pnr' => strtoupper(Str::random(6))]);
             $itineraryRef = json_decode($pnr, true)['local_pnr'];
             $pnrArray = json_decode($pnr, true);
@@ -488,6 +518,44 @@ class BookingController extends Controller
                     $pnrResponse = json_encode($response);
                     $flightData = json_encode($flightData);
                     break;
+                case 'hakimi':
+                    $localPnr = 'null';
+                    $pnr = null;
+                    $fare = $this->hakimiBookingFare($flightData, (array) $fareRefernce);
+                    $passengerCounts = $fare['passenger_counts'] ?? [];
+                    $finalReprice = $this->hakimiApiService->reprice(
+                        (string) $fare['inventory_id'],
+                        $passengerCounts,
+                    );
+
+                    if (!$priceQuote || bccomp((string) $priceQuote->provider_amount, (string) $finalReprice['totalFare'], 2) !== 0) {
+                        Log::warning('Hakimi booking blocked because Reprice changed after checkout.', [
+                            'inventory_id' => $fare['inventory_id'],
+                            'quoted_total' => $priceQuote?->provider_amount,
+                            'reprice_total' => $finalReprice['totalFare'] ?? null,
+                        ]);
+                        return response()->json([
+                            'message' => 'The Hakimi fare changed. Please return to the flight results and continue with the latest price.',
+                        ], 422);
+                    }
+
+                    $passengers = $this->hakimiPassengers($request->input('travellers', []));
+                    if (!$this->hakimiPassengerCountsMatch($passengers, $passengerCounts)) {
+                        return response()->json([
+                            'message' => 'Passenger details no longer match the Hakimi repriced fare. Please return to checkout and try again.',
+                        ], 422);
+                    }
+
+                    $response = $this->hakimiApiService->book(
+                        (string) $fare['inventory_id'],
+                        $passengers,
+                        $this->hakimiContact($request->input('main_contact', []), $request->input('travellers', [])),
+                    );
+                    $itineraryRef = (string) $response['hakimiBookingNo'];
+                    $airlinePnr = $response['airlinePnr'] ?? null;
+                    $pnrResponse = json_encode($response);
+                    $flightData = json_encode($flightData);
+                    break;
                 case 'OneApi':
                     $localPnr = "null";
                     $pnr = null;
@@ -579,7 +647,7 @@ class BookingController extends Controller
             'flight_data' => $flightData ?? '{}', // must never be null
             'pnr_response' => $pnrResponse, // must never be null
             'pnr' => $localPnr ?? null,
-            // 'airline_pnr' => $airlinePnr ?? null,
+            'airline_pnr' => $airlinePnr ?? null,
             'sector' => $sector,
             'travel_date' => $travelDate,
             'content_source' => $contentSource,
@@ -680,8 +748,8 @@ class BookingController extends Controller
         $requestedProvider = strtolower((string) $request->input('flight_provider'));
 
         if (!$request->filled('quote_id')) {
-            if ($requestedProvider === 'at') {
-                abort(422, 'A valid price quote is required before booking an AT flight.');
+            if (in_array($requestedProvider, ['at', 'hakimi'], true)) {
+                abort(422, 'A valid price quote is required before booking this flight.');
             }
 
             return null;
@@ -690,6 +758,9 @@ class BookingController extends Controller
         $quote = $this->priceQuoteService->findActive($request->string('quote_id')->toString(), $request->user());
         $flight = $quote->flight_data;
         $providerPricing = $quote->provider_pricing_data ?? [];
+        // AT provides this explicitly; non-AT providers (including Hakimi)
+        // do not use a NetAmount field in their booking payload.
+        $fareNetAmount = null;
         $quoteAncillaryItems = $quote->items()
             ->active()
             ->orderBy('trip_index')
@@ -738,6 +809,86 @@ class BookingController extends Controller
         ]);
 
         return $quote;
+    }
+
+    private function hakimiBookingFare(array $flight, array $fareReferences): array
+    {
+        $fare = collect(data_get($flight, 'leg.flights', []))
+            ->flatMap(fn (array $flightLeg) => $flightLeg['fares'] ?? [])
+            ->first(fn (array $candidate) => in_array($candidate['ref_id'] ?? null, $fareReferences, true));
+
+        if (!is_array($fare) || blank($fare['inventory_id'] ?? null)) {
+            abort(422, 'The Hakimi inventory is no longer available. Please search again.');
+        }
+
+        return $fare;
+    }
+
+    private function hakimiPassengers(array $travellers): array
+    {
+        return array_map(function (array $traveller): array {
+            $type = match (strtoupper((string) ($traveller['type'] ?? 'ADT'))) {
+                'ADT', 'ADULT' => 'adult',
+                'CNN', 'CHD', 'CHILD', 'CHILDREN' => 'child',
+                'INF', 'INFANT' => 'infant',
+                default => abort(422, 'A Hakimi passenger has an unsupported traveller type.'),
+            };
+            $passenger = [
+                'title' => $traveller['title'] ?? null,
+                'firstName' => $traveller['firstName'] ?? null,
+                'lastName' => $traveller['lastName'] ?? null,
+                'type' => $type,
+                'gender' => strtoupper((string) ($traveller['gender'] ?? '')),
+                'dob' => $traveller['dob'] ?? null,
+                'passportNo' => $traveller['documentNo'] ?? null,
+                'passportExpiry' => $traveller['expiryDate'] ?? null,
+                'nationality' => strtoupper((string) ($traveller['nationality'] ?? '')),
+            ];
+
+            return array_filter($passenger, static fn ($value) => $value !== null && $value !== '');
+        }, $travellers);
+    }
+
+    private function hakimiPassengerCountsMatch(array $passengers, array $counts): bool
+    {
+        $actual = ['adult' => 0, 'child' => 0, 'infant' => 0];
+        foreach ($passengers as $passenger) {
+            if (isset($actual[$passenger['type'] ?? ''])) {
+                $actual[$passenger['type']]++;
+            }
+        }
+
+        return $actual['adult'] === (int) ($counts['ADT'] ?? 0)
+            && $actual['child'] === (int) ($counts['CHD'] ?? 0)
+            && $actual['infant'] === (int) ($counts['INF'] ?? 0);
+    }
+
+    private function validateHakimiBookingRequest(Request $request): void
+    {
+        Validator::make($request->all(), [
+            'main_contact.email' => ['required', 'email'],
+            'main_contact.phone' => ['required', 'string'],
+            'travellers' => ['required', 'array', 'min:1'],
+            'travellers.*.title' => ['required', 'string'],
+            'travellers.*.firstName' => ['required', 'string'],
+            'travellers.*.lastName' => ['required', 'string'],
+            'travellers.*.type' => ['required', 'string'],
+            'travellers.*.gender' => ['required', 'in:M,F'],
+            'travellers.*.dob' => ['required', 'date'],
+            'travellers.*.nationality' => ['required', 'string'],
+            'travellers.*.documentNo' => ['nullable', 'string'],
+            'travellers.*.expiryDate' => ['nullable', 'date'],
+        ])->validate();
+    }
+
+    private function hakimiContact(array $contact, array $travellers): array
+    {
+        $lead = $travellers[0] ?? [];
+        return [
+            'name' => trim((string) (($lead['firstName'] ?? '') . ' ' . ($lead['lastName'] ?? ''))),
+            'email' => $contact['email'] ?? null,
+            'mobile' => $contact['phone'] ?? null,
+        ];
     }
 
     /**
@@ -999,7 +1150,7 @@ class BookingController extends Controller
                     'message' => 'Booking Canceled successfully',
                     'booking' => $booking,
                 ]);
-        } else if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "at") {
+        } else if (in_array(strtolower((string) ($request->booking_source ?? $request->flight_provider)), ["at", "hakimi"], true)) {
             $validated = $request->validate(["bookingId" => ["required", "integer"]]);
             $booking = FlightBookings::find($validated["bookingId"]);
 
@@ -1009,7 +1160,7 @@ class BookingController extends Controller
 
             if (in_array(strtolower((string) $booking->status), ["ticketed", "issued"], true)) {
                 return response()->json([
-                    "message" => "A ticketed AT booking must be voided before a cancellation email can be sent.",
+                    "message" => "A ticketed booking must be voided before a cancellation email can be sent.",
                 ], 422);
             }
 
@@ -1017,10 +1168,11 @@ class BookingController extends Controller
                 return response()->json(["message" => "This booking has already been cancelled."], 409);
             }
 
+            $providerName = strtolower((string) ($booking->flight_provider ?: "hakimi"));
             $booking->update(["status" => "canceled"]);
             $this->providerBookingEventService->record(
                 $booking,
-                "at",
+                $providerName,
                 "cancel",
                 ["source" => "local_hold_release"],
                 $request->pnr ?: $booking->itinerary_ref,
@@ -1028,7 +1180,7 @@ class BookingController extends Controller
             $this->sendBookingCanceledMail($booking);
 
             return response()->json([
-                "message" => "AT booking cancelled and notification queued successfully.",
+                "message" => "Booking cancelled and notification queued successfully.",
                 "booking" => $booking->fresh(),
             ]);
         }
@@ -1107,7 +1259,7 @@ class BookingController extends Controller
         $walletPaymentLock = null;
         $flightProvider = strtolower((string) ($request->input('flight_provider') ?? $request->input('booking_source')));
 
-        if ($flightProvider === 'at') {
+        if (in_array($flightProvider, ['at', 'hakimi'], true)) {
             $booking = FlightBookings::with('priceSnapshot')->find($request->bookingId);
 
             if (!$booking) {
@@ -1263,6 +1415,33 @@ class BookingController extends Controller
                     'provider_response' => $res,
                 ], 400);
             }
+        } elseif ($flightProvider === 'hakimi') {
+            // Hakimi has already accepted the supplier booking before this
+            // payment screen is reached. Wallet payment only confirms the
+            // locally held booking; it must never call the AT payment API.
+            $booking = FlightBookings::with('priceSnapshot')->find($request->bookingId);
+            if (! $booking || ! $booking->priceSnapshot) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
+
+                return response()->json([
+                    'message' => 'The locked Hakimi booking is unavailable for payment.',
+                ], 422);
+            }
+
+            $request->merge([
+                'pnr' => $booking->itinerary_ref,
+            ]);
+            $res = [
+                'success' => true,
+                'payment' => 'wallet',
+                'hakimiBookingNo' => $booking->itinerary_ref,
+            ];
+
+            Log::info('Hakimi wallet payment confirmed using locked booking values.', [
+                'booking_id' => $booking->id,
+                'price_snapshot_id' => $booking->price_snapshot_id,
+                'provider_amount' => $booking->priceSnapshot->provider_amount,
+            ]);
         }
         $request->validate([
             'booking_status' => 'required|string', // Example statuses
@@ -1645,9 +1824,9 @@ class BookingController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
-        // AT currently confirms a void locally until its provider endpoint is available.
+        // AT & Hakimi currently confirm a void locally until a supplier endpoint is available.
         // Financial settlement is created only after this local confirmation succeeds.
-        if (strtolower((string) $request->flight_provider) === 'at') {
+        if (in_array(strtolower((string) $request->flight_provider), ['at', 'hakimi'], true)) {
             $validated = $request->validate([
                 'void_charge_aed' => 'required|numeric|min:0',
                 'void_date' => 'required|date',
