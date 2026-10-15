@@ -85,7 +85,7 @@ class AirlineController extends Controller
     {
        // Log::info($request);
         $request->validate([
-            'iata_code' => 'required|unique:airlines',
+            'iata_code' => 'required|string|max:255',
             'name' => 'required',
         ]);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Airline;
 use App\Transformers\AtFlightTransformer;
 use Tests\TestCase;
 
@@ -302,6 +303,45 @@ it('keeps one-way fares supplied by a provider different from the validating car
         ->and(array_column($processed['flights'][0]['legs']['fares'], 'Provider'))->toBe(['FZ', 'FZ'])
         ->and($processed['flights'][1]['legs']['fares'])->toHaveCount(1)
         ->and(array_column($processed['flights'][1]['legs']['fares'], 'Provider'))->toBe(['SB']);
+});
+
+it('uses AT airline names to distinguish airlines that share an IATA code', function () {
+    $transformer = new AtFlightTransformer();
+    $reflection = new ReflectionClass($transformer);
+    $airlineCache = $reflection->getProperty('airlinesByIataCache');
+    $airlineCache->setValue($transformer, [
+        'TR' => collect([
+            new Airline(['iata_code' => 'TR', 'name' => 'Scoot', 'logo_url' => 'https://example.test/scoot.png']),
+            new Airline(['iata_code' => 'TR', 'name' => 'Tigerair', 'logo_url' => 'https://example.test/tigerair.png']),
+        ]),
+        'OD' => collect([
+            new Airline(['iata_code' => 'OD', 'name' => 'Batik Air', 'logo_url' => 'https://example.test/batik.png']),
+            new Airline(['iata_code' => 'OD', 'name' => 'Malindo Air', 'logo_url' => 'https://example.test/malindo.png']),
+        ]),
+    ]);
+
+    $buildCarrier = $reflection->getMethod('buildCarrier');
+
+    expect($buildCarrier->invoke($transformer, 'TR', 'Scoot'))->toMatchArray([
+        'iata' => 'TR',
+        'name' => 'Scoot',
+        'logo' => 'https://example.test/scoot.png',
+    ])
+        ->and($buildCarrier->invoke($transformer, 'TR', 'Tigerair'))->toMatchArray([
+            'iata' => 'TR',
+            'name' => 'Tigerair',
+            'logo' => 'https://example.test/tigerair.png',
+        ])
+        ->and($buildCarrier->invoke($transformer, 'OD', 'Batik Air Malaysia'))->toMatchArray([
+            'iata' => 'OD',
+            'name' => 'Batik Air',
+            'logo' => 'https://example.test/batik.png',
+        ])
+        ->and($buildCarrier->invoke($transformer, 'OD', 'Malindo Air'))->toMatchArray([
+            'iata' => 'OD',
+            'name' => 'Malindo Air',
+            'logo' => 'https://example.test/malindo.png',
+        ]);
 });
 
 function atJourney(array $overrides = []): array

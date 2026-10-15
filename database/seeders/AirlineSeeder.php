@@ -47,11 +47,17 @@ class AirlineSeeder extends Seeder
                         'iata_code' => $airline['iata_code'],
                         'name' => $airline['name'],
                         'logo_url' => $airline['logo_symbol_url'],
-                        'carrier_condition_url' => $airline['conditions_of_carriage_url'],
+                        // Duffel can return condition URLs longer than this
+                        // legacy varchar column supports. These links are not
+                        // needed for airline lookup, so leave them unset.
+                        'carrier_condition_url' => null,
                     ];
 
-                    // Use 'iata_code' as the unique identifier for updateOrCreate
-                    Airline::updateOrCreate(['iata_code' => $airlineToSave['iata_code']], $airlineToSave);
+                    // IATA codes are not globally unique in AT's carrier data.
+                    Airline::updateOrCreate([
+                        'iata_code' => $airlineToSave['iata_code'],
+                        'name' => $airlineToSave['name'],
+                    ], $airlineToSave);
                 }
 
                 $after = $data['meta']['after'] ?? null; // Update pagination cursor

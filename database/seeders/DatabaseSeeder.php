@@ -34,23 +34,23 @@ class DatabaseSeeder extends Seeder
         //     ]
         // );
         
-        User::updateOrCreate(
-            ['email' => 'admin@gmail.com'],
-            [
-                'role' => 'admin',
-                'is_approved' => true,
-                'name' => 'admin',
-                'password' => bcrypt('Admin@1234'),
-                'email_verified_at' => now()
-            ]
-        );
+        // User::updateOrCreate(
+        //     ['email' => 'admin@gmail.com'],
+        //     [
+        //         'role' => 'admin',
+        //         'is_approved' => true,
+        //         'name' => 'admin',
+        //         'password' => bcrypt('Admin@1234'),
+        //         'email_verified_at' => now()
+        //     ]
+        // );
 
 
 
         $this->call([
             // AirportSeeder::class,
             // AircraftSeeder::class,
-            // AirlineSeeder::class,
+            AirlineSeeder::class,
             // airportMarginSeeder::class,
             // CountryStateCityTableSeeder::class,
             // CustomerMarginSeeder::class,

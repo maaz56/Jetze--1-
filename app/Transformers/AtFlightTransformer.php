@@ -625,7 +625,11 @@ class AtFlightTransformer
 
         $airlinesByIata = $this->airlinesByIata($iataCode);
 
-        if ($iataCode === 'PF' && $airlineName) {
+        // AT includes the carrier's display name in AirlineName. IATA alone is
+        // not enough when the airline table contains more than one record for
+        // a code (for example, Scoot and Tigerair), so prefer that name for
+        // every carrier code rather than maintaining code-specific exceptions.
+        if ($airlineName) {
             $airlineByName = $this->firstAirlineMatchingName($airlinesByIata, $airlineName);
 
             if ($airlineByName) {
@@ -659,7 +663,7 @@ class AtFlightTransformer
 
     private function carrierDisplayName(?string $iataCode, ?string $airlineName, ?Airline $airline): ?string
     {
-        if ($iataCode === 'PF' && $airlineName) {
+        if ($airlineName) {
             return $this->airlineMatchesName($airline, $airlineName)
                 ? $airline->name
                 : $airlineName;
