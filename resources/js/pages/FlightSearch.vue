@@ -1633,9 +1633,43 @@ function normalizedFareMoney(fare) {
     return { currency: "", amount: Number(fare?.combined_amount) || calculateFare(fare) };
 }
 
+/**
+ * Build one return-pair total from each fare's AED base value.
+ *
+ * This deliberately does not rely on the backend's combined display amount:
+ * changing the navigation currency must immediately update both legs of a
+ * return flight without another search request.
+ */
+function combinationDisplayMoney(combination, leg = selectedFlight.value?.leg) {
+    const fareReferences = combination?.fare_references ?? [];
+    const fares = (leg?.flights ?? []).flatMap((flight) => flight?.fares ?? []);
+    let baseAmount = 0;
+
+    for (const reference of fareReferences) {
+        const fare = fares.find((candidate) => candidate?.ref_id === reference);
+        const baseMoney = fare?.selling_base_money ?? fare?.base_money;
+        const amount = Number(baseMoney?.amount);
+
+        if (String(baseMoney?.currency || "").toUpperCase() !== "AED" || !Number.isFinite(amount)) {
+            return normalizedFareMoney(combination);
+        }
+
+        baseAmount += amount;
+    }
+
+    const money = displayMoneyFromBase(
+        { amount: baseAmount, currency: "AED" },
+        null,
+    );
+
+    return fareReferences.length > 0 && money?.currency
+        ? money
+        : normalizedFareMoney(combination);
+}
+
 function pairedReturnFareMoney(fare, flightIndex) {
     if (fare?.fare_references?.length === 2) {
-        return normalizedFareMoney(fare);
+        return combinationDisplayMoney(fare);
     }
 
     const leg = selectedFlight.value?.leg;
@@ -1655,18 +1689,25 @@ function pairedReturnFareMoney(fare, flightIndex) {
         return normalizedFareMoney(fare);
     }
 
-    const currentMoney = normalizedFareMoney(fare);
-    const pairedMoney = normalizedFareMoney(pairedFare);
+    const currentBaseMoney = fare?.selling_base_money ?? fare?.base_money;
+    const pairedBaseMoney = pairedFare?.selling_base_money ?? pairedFare?.base_money;
+    const currentBaseAmount = Number(currentBaseMoney?.amount);
+    const pairedBaseAmount = Number(pairedBaseMoney?.amount);
 
     if (
-        currentMoney.currency &&
-        pairedMoney.currency &&
-        currentMoney.currency === pairedMoney.currency
+        String(currentBaseMoney?.currency || "").toUpperCase() === "AED"
+        && String(pairedBaseMoney?.currency || "").toUpperCase() === "AED"
+        && Number.isFinite(currentBaseAmount)
+        && Number.isFinite(pairedBaseAmount)
     ) {
-        return {
-            currency: currentMoney.currency,
-            amount: currentMoney.amount + pairedMoney.amount,
-        };
+        const money = displayMoneyFromBase(
+            { amount: currentBaseAmount + pairedBaseAmount, currency: "AED" },
+            null,
+        );
+
+        if (money?.currency) {
+            return money;
+        }
     }
 
     return {
@@ -1695,7 +1736,7 @@ function flightDisplayMoney(flight) {
         : null;
 
     if (pair) {
-        const money = normalizedFareMoney(pair);
+        const money = combinationDisplayMoney(pair, leg);
         return money.currency ? money : null;
     }
 
@@ -1773,31 +1814,34 @@ function getFareBreakdownFare(flightIndex) {
 
 /** Sum selected fare display amounts for the side-sheet checkout total. */
 function grandTotalDisplayMoney() {
-    let currency = null;
-    let amount = 0;
+    let baseAmount = 0;
     let isValid = true;
+    let hasSelectedFare = false;
 
     selectedFlight?.value?.leg?.flights?.forEach((flight) => {
         flight?.fares?.forEach((fare) => {
             if (!selectedFares.includes(fare.ref_id)) return;
 
-            const money = fareDisplayMoney(fare);
-            if (!money?.currency || !Number.isFinite(Number(money.amount))) {
+            hasSelectedFare = true;
+
+            const baseMoney = fare?.selling_base_money ?? fare?.base_money;
+            const amount = Number(baseMoney?.amount);
+
+            if (
+                String(baseMoney?.currency || "").toUpperCase() !== "AED"
+                || !Number.isFinite(amount)
+            ) {
                 isValid = false;
                 return;
             }
 
-            if (currency && currency !== money.currency) {
-                isValid = false;
-                return;
-            }
-
-            currency = money.currency;
-            amount += Number(money.amount);
+            baseAmount += amount;
         });
     });
 
-    return isValid && currency ? { amount, currency } : null;
+    return isValid && hasSelectedFare
+        ? displayMoneyFromBase({ amount: baseAmount, currency: "AED" }, null)
+        : null;
 }
 
 /** Format the selected side-sheet total from trusted converted fare values. */
