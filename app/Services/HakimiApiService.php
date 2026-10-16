@@ -223,18 +223,78 @@ class HakimiApiService
         }
 
         $data = $this->decodeResponse((string) $response->getBody());
-        Log::info('Hakimi test booking response.', [
+        Log::info($data);
+
+        if (!is_array($data) || !($data['success'] ?? false) || blank($data['hakimiBookingNo'] ?? null)) {
+            throw new RuntimeException('Hakimi returned an invalid booking response.');
+        }
+
+        return $data;
+    }
+
+    /** Fetch the current status and details for an existing Hakimi booking. */
+    public function bookingDetails(string $hakimiBookingNo): array
+    {
+        $apiKey = config('hakimi.api_key');
+
+        if (blank($apiKey)) {
+            throw new RuntimeException('Hakimi test API is not configured.');
+        }
+
+        $bookingNumber = trim($hakimiBookingNo);
+        if ($bookingNumber === '') {
+            throw new RuntimeException('A Hakimi booking number is required.');
+        }
+
+        $url = config('hakimi.base_url').'/bookings/'.rawurlencode($bookingNumber);
+
+        Log::info('Hakimi test booking-details request.', [
+            'url' => $url,
+            'headers' => ['Accept' => 'application/json', 'x-api-key' => '[redacted]'],
+            'hakimi_booking_no' => $bookingNumber,
+        ]);
+
+        try {
+            $response = $this->client->get($url, [
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'x-api-key' => $apiKey,
+                ],
+            ]);
+        } catch (RequestException $exception) {
+            $errorResponse = $exception->getResponse();
+
+            Log::warning('Hakimi test booking-details request failed.', [
+                'status' => $errorResponse?->getStatusCode(),
+                'hakimi_booking_no' => $bookingNumber,
+                'response' => $this->decodeResponse($errorResponse ? (string) $errorResponse->getBody() : null),
+            ]);
+
+            throw $exception;
+        } catch (GuzzleException $exception) {
+            Log::warning('Hakimi test booking-details connection failed.', [
+                'hakimi_booking_no' => $bookingNumber,
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+
+        $data = $this->decodeResponse((string) $response->getBody());
+
+        // Do not log traveller/contact records returned by this endpoint.
+        Log::info('Hakimi test booking-details response.', [
             'status' => $response->getStatusCode(),
             'success' => $data['success'] ?? false,
-            'hakimi_booking_no' => $data['hakimiBookingNo'] ?? null,
+            'hakimi_booking_no' => $data['hakimiBookingNo'] ?? $bookingNumber,
             'booking_status' => $data['status'] ?? null,
             'total_fare' => $data['totalFare'] ?? null,
             'currency' => $data['currency'] ?? null,
             'test_booking' => $data['testBooking'] ?? null,
         ]);
 
-        if (!is_array($data) || !($data['success'] ?? false) || blank($data['hakimiBookingNo'] ?? null)) {
-            throw new RuntimeException('Hakimi returned an invalid booking response.');
+        if (! is_array($data) || ! ($data['success'] ?? false)) {
+            throw new RuntimeException('Hakimi returned an invalid booking-details response.');
         }
 
         return $data;

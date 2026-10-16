@@ -81,6 +81,7 @@ const isAdmin = computed(() => user.value?.role === "admin" || props.audience ==
 const agentData = computed(() => store.getters["user/agentData"]);
 const storeBookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const livePnrData = computed(() => store.getters["flight/pnrData"]);
 
 const booking = computed(() => {
     if (Array.isArray(storeBookingDetails.value) && storeBookingDetails.value.length > 0) {
@@ -98,6 +99,9 @@ const totalTicketPrice = ref(0);
 
 const pnrData = computed(() => {
     try {
+        if (livePnrData.value?.success) {
+            return livePnrData.value;
+        }
         if (localDetails.value?.hakimi) {
             return localDetails.value.hakimi;
         }
@@ -314,6 +318,17 @@ async function fetchBookingDetails() {
     } finally {
         isBookingDetailsLoading.value = false;
     }
+}
+
+async function fetchPnrDetails() {
+    const hakimiBookingNo = booking.value?.itinerary_ref || hakimi.value?.hakimiBookingNo || pnr;
+    if (!hakimiBookingNo || !booking.value?.id) return;
+
+    await store.dispatch(`flight/${FETCH_PNR_DETAILS}`, {
+        booking_id: booking.value.id,
+        pnr: hakimiBookingNo,
+        flight_provider: "hakimi",
+    });
 }
 
 function openChargesDialog() {
@@ -566,6 +581,7 @@ onMounted(async () => {
     fetchAgent();
     fetchAgentLedger();
     await fetchBookingDetails();
+    await fetchPnrDetails();
 });
 </script>
 

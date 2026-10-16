@@ -1025,6 +1025,15 @@ class BookingController extends Controller
         } else if( $request->flight_provider == 'at') {
             $atApiService = new AtApiService();
             $pnrData = $atApiService->getBookingDetails($request);
+        } else if (strtolower((string) $request->flight_provider) === 'hakimi') {
+            $booking = $this->findBookingForProviderEvent($request);
+            if (! $booking || strtolower((string) $booking->flight_provider) !== 'hakimi') {
+                return response()->json(['message' => 'Hakimi booking not found.'], 404);
+            }
+
+            // The server always uses the stored provider reference, never a
+            // booking number supplied by the browser.
+            $pnrData = $this->hakimiApiService->bookingDetails((string) $booking->itinerary_ref);
         }
 
         $booking = $this->findBookingForProviderEvent($request);

@@ -38,6 +38,7 @@ import {
     FETCH_BOOKING_DATA,
     FETCH_AGENT_DATA,
     FETCH_BOOKING_DETAILS,
+    FETCH_PNR_DETAILS,
     CANCEL_BOOKING,
     FETCH_CUSTOMER_BOOKING_DETAILS,
     FETCH_CUSTOMER_MARGIN,
@@ -69,6 +70,7 @@ const isLoading = computed(() => isBookingDetailsLoading.value);
 const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
 const customerBooking = computed(() => store.getters["flight/customerBooking"]);
+const livePnrData = computed(() => store.getters["flight/pnrData"]);
 
 const booking = computed(() => {
     if (Array.isArray(customerBooking.value) && customerBooking.value.length > 0) {
@@ -85,6 +87,9 @@ const isDetailsInfoVisible = ref(true);
 
 const pnrData = computed(() => {
     try {
+        if (livePnrData.value?.success) {
+            return livePnrData.value;
+        }
         if (localDetails.value?.hakimi) {
             return localDetails.value.hakimi;
         }
@@ -298,6 +303,17 @@ async function fetchBookingDetails() {
     }
 }
 
+async function fetchPnrDetails() {
+    const hakimiBookingNo = booking.value?.itinerary_ref || hakimi.value?.hakimiBookingNo || pnr;
+    if (!hakimiBookingNo || !booking.value?.id) return;
+
+    await store.dispatch(`flight/${FETCH_PNR_DETAILS}`, {
+        booking_id: booking.value.id,
+        pnr: hakimiBookingNo,
+        flight_provider: "hakimi",
+    });
+}
+
 async function handleCancelBooking() {
     error.value = "";
     actionLoading.value = true;
@@ -415,7 +431,7 @@ function calculateTaxes(fare) {
     );
 }
 
-onMounted(() => {
+onMounted(async () => {
     if (user.value == null) {
         authStore.fetchUser();
     }
@@ -423,7 +439,8 @@ onMounted(() => {
         now.value = Date.now();
     }, 1000);
     fetchModifyRequestData();
-    fetchBookingDetails();
+    await fetchBookingDetails();
+    await fetchPnrDetails();
 });
 </script>
 
