@@ -18,16 +18,26 @@ export function combinationAmount(
     leg,
     fareAmount = defaultFareAmount,
 ) {
-    const amount = Number(combination?.combined_display_money?.amount);
-    if (Number.isFinite(amount)) return amount;
-
     const fares = (leg?.flights ?? []).flatMap((flight) => flight?.fares ?? []);
+    let allFaresFound = true;
 
-    return (combination?.fare_references ?? []).reduce((total, refId) => {
+    const calculatedAmount = (combination?.fare_references ?? []).reduce((total, refId) => {
         const fare = fares.find((candidate) => candidate?.ref_id === refId);
 
-        return total + (fare ? fareAmount(fare) : 0);
+        if (!fare) {
+            allFaresFound = false;
+            return total;
+        }
+
+        return total + fareAmount(fare);
     }, 0);
+
+    if (allFaresFound && (combination?.fare_references ?? []).length > 0) {
+        return calculatedAmount;
+    }
+
+    const amount = Number(combination?.combined_display_money?.amount);
+    return Number.isFinite(amount) ? amount : 0;
 }
 
 export function combinationFareCards(leg, fareAmount = defaultFareAmount) {

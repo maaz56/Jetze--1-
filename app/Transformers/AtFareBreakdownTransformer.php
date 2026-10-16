@@ -108,6 +108,15 @@ class AtFareBreakdownTransformer
                         $displayCurrency,
                     ),
                 ],
+                'base_money' => [
+                    'base_price' => $this->baseMoney(data_get($passengerFare, 'Fare', 0), $providerCurrency),
+                    'taxes' => $this->baseMoney(data_get($passengerFare, 'Tax', 0), $providerCurrency),
+                    'fees' => $this->baseMoney(data_get($passengerFare, 'TransactionFee', 0), $providerCurrency),
+                    'service_charges' => $this->baseMoney($this->serviceCharges($passengerFare), $providerCurrency),
+                    'surchage' => $this->baseMoney(0, $providerCurrency),
+                    'discount' => $this->baseMoney(data_get($passengerFare, 'Discount', 0), $providerCurrency),
+                    'total_price' => $this->baseMoney(data_get($passengerFare, 'NetFare', 0), $providerCurrency),
+                ],
             ];
         }, $passengerFares);
     }
@@ -138,5 +147,11 @@ class AtFareBreakdownTransformer
     private function displayMoney(mixed $amount, string $providerCurrency, string $displayCurrency): array
     {
         return $this->money($amount, $providerCurrency, $displayCurrency)['display_money'];
+    }
+
+    /** Return AED base money for instant search-page display conversion. */
+    private function baseMoney(mixed $amount, string $providerCurrency): array
+    {
+        return $this->money($amount, $providerCurrency, 'AED')['base_money'];
     }
 }

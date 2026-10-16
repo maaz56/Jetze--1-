@@ -95,6 +95,19 @@ const isSearchResultsPage = computed(() =>
     ["FlightSearch", "HotelSearch"].includes(String(route.name)),
 );
 const isHomePage = computed(() => String(route.name) === 'Home');
+const isLockedPriceRoute = computed(() => {
+    const lockedPriceRoutes = new Set([
+        'Checkout',
+        'FlightCheckout',
+        'AgentCheckout',
+        'AgentFlightCheckout',
+        'CustomerPaymentView',
+        'PaymentView',
+    ]);
+
+    return lockedPriceRoutes.has(String(route.name))
+        && Boolean(route.query.quote_id || route.query.booking_id);
+});
 const isTransparent = computed(() => {
     if (isSearchResultsPage.value) return false;
     return (props.isNavTransparent || isHomePage.value) && !isScrolled.value;
@@ -344,7 +357,7 @@ onUnmounted(() => {
                             </component>
                         </div>
 
-                        <!-- Balance & Currency for Logged-in User -->
+                        <!-- Balance controls remain available only to logged-in users. -->
                         <div v-if="user" :class="['hidden md:flex items-center px-4 gap-4 shrink-0 whitespace-nowrap border-l', isTransparent ? 'border-white/20' : 'border-slate-200']">
                             <button
                                 @click="goToDashboard('bookings')"
@@ -376,24 +389,30 @@ onUnmounted(() => {
                                 </button>
                             </div>
 
-                            <div class="flex items-center gap-2 border-l pl-4" :class="isTransparent ? 'border-white/20' : 'border-slate-200'">
-                                <span :class="['text-[11px] uppercase tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
-                                <Select v-model="selectedCurrencyCode">
-                                    <SelectTrigger :class="['h-8.5 w-[84px] rounded-lg border px-2.5 text-xs font-bold shadow-xs focus:ring-0', isTransparent ? 'border-white/60 bg-white/10 text-white backdrop-blur-md' : 'border-slate-200 bg-white text-slate-700']">
-                                        <SelectValue placeholder="Currency" />
-                                    </SelectTrigger>
-                                    <SelectContent :body-lock="false" class="rounded-lg border border-slate-200 bg-white shadow-xl">
-                                        <SelectItem
-                                            v-for="currency in currencyOptions"
-                                            :key="currency.code"
-                                            :value="currency.code"
-                                            class="text-xs font-medium cursor-pointer"
-                                        >
-                                            {{ currency.code }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        </div>
+
+                        <!-- Guests can choose their search display currency; quotes lock it after Book Now. -->
+                        <div
+                            v-if="!isLockedPriceRoute"
+                            class="hidden md:flex items-center gap-2 border-l px-4 shrink-0 whitespace-nowrap"
+                            :class="isTransparent ? 'border-white/20' : 'border-slate-200'"
+                        >
+                            <span :class="['text-[11px] uppercase tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
+                            <Select v-model="selectedCurrencyCode">
+                                <SelectTrigger :class="['h-8.5 w-[84px] rounded-lg border px-2.5 text-xs font-bold shadow-xs focus:ring-0', isTransparent ? 'border-white/60 bg-white/10 text-white backdrop-blur-md' : 'border-slate-200 bg-white text-slate-700']">
+                                    <SelectValue placeholder="Currency" />
+                                </SelectTrigger>
+                                <SelectContent :body-lock="false" class="rounded-lg border border-slate-200 bg-white shadow-xl">
+                                    <SelectItem
+                                        v-for="currency in currencyOptions"
+                                        :key="currency.code"
+                                        :value="currency.code"
+                                        class="text-xs font-medium cursor-pointer"
+                                    >
+                                        {{ currency.code }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <!-- Login Button / User Dropdown -->
@@ -478,6 +497,24 @@ onUnmounted(() => {
                                                 <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
                                             </component>
                                         </nav>
+                                        <div v-if="!isLockedPriceRoute" class="mt-8 pt-6 border-t border-white/10">
+                                            <label class="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-300">Currency</label>
+                                            <Select v-model="selectedCurrencyCode">
+                                                <SelectTrigger class="h-10 w-full border-white/20 bg-white/10 text-sm font-bold text-white">
+                                                    <SelectValue placeholder="Currency" />
+                                                </SelectTrigger>
+                                                <SelectContent :body-lock="false" class="rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                    <SelectItem
+                                                        v-for="currency in currencyOptions"
+                                                        :key="currency.code"
+                                                        :value="currency.code"
+                                                        class="cursor-pointer text-xs font-medium"
+                                                    >
+                                                        {{ currency.code }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                         <div class="mt-8 pt-8 border-t border-white/10">
                                             <Button v-if="!isAuthenticated" @click="handleLogin" class="w-full bg-blue-600">Login</Button>
                                             <Button v-else @click="handleLogout" variant="outline" class="w-full border-white/20 text-white hover:bg-white/10">Logout</Button>

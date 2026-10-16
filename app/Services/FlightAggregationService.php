@@ -151,7 +151,7 @@ class FlightAggregationService
             $transformedFlights = $this->piaFlightTransformer->fromPIA($response, $params);
             Log::info(json_encode($transformedFlights));
         }
-        if ($params['airline'] === 'HAKIMI') {
+        if (strtoupper((string) $params['airline']) === 'HAKIMI') {
             if (($params['flight_type'] ?? 'one-way') !== 'one-way') {
                 throw new \InvalidArgumentException('Hakimi test inventory currently supports one-way searches only.');
             }
@@ -269,7 +269,7 @@ class FlightAggregationService
         // }
         $transformedFlights = $this->segmentMarginService->applySegmentMargins($transformedFlights, $params);
         $transformedFlights = $this->promotionService->applyPromotions($transformedFlights, $params);
-        $transformedFlights = $this->commercialPricingService->applyToAtFlights($transformedFlights);
+        $transformedFlights = $this->commercialPricingService->applyToProviderFlights($transformedFlights);
         return [ 
             // 'sooperFlights' => $sooperFlights,
             'results' => $transformedFlights,

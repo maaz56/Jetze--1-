@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-/** Build AT Net Fare selling prices in AED while preserving Gross Fare for audit. */
+/** Build provider selling prices in AED while preserving source amounts for audit. */
 class CommercialPricingService
 {
     public function __construct(
@@ -12,11 +12,13 @@ class CommercialPricingService
     ) {
     }
 
-    /** Add AED selling and selected-display money to AT search fares. */
-    public function applyToAtFlights(array $itineraries): array
+    /** Add AED selling and selected-display money to AT and Hakimi search fares. */
+    public function applyToProviderFlights(array $itineraries): array
     {
         foreach ($itineraries as &$itinerary) {
-            if (strtolower((string) data_get($itinerary, 'provider.name')) !== 'at') {
+            $providerIdentifier = strtoupper((string) data_get($itinerary, 'provider.identifier'));
+
+            if (!in_array($providerIdentifier, ['AT', 'HAKIMI'], true)) {
                 continue;
             }
 
@@ -88,10 +90,24 @@ class CommercialPricingService
                 $fareReferences = array_values($combination['fare_references'] ?? []);
                 $onwardReference = $fareReferences[0] ?? null;
                 $returnReference = $fareReferences[1] ?? null;
-                $onwardMoney = data_get($faresByReference->get($onwardReference), 'selling_display_money')
-                    ?? data_get($faresByReference->get($onwardReference), 'display_money');
-                $returnMoney = data_get($faresByReference->get($returnReference), 'selling_display_money')
-                    ?? data_get($faresByReference->get($returnReference), 'display_money');
+                $onwardFare = $faresByReference->get($onwardReference);
+                $returnFare = $faresByReference->get($returnReference);
+                $onwardMoney = data_get($onwardFare, 'selling_display_money')
+                    ?? data_get($onwardFare, 'display_money');
+                $returnMoney = data_get($returnFare, 'selling_display_money')
+                    ?? data_get($returnFare, 'display_money');
+                $onwardBaseMoney = data_get($onwardFare, 'selling_base_money')
+                    ?? data_get($onwardFare, 'base_money');
+                $returnBaseMoney = data_get($returnFare, 'selling_base_money')
+                    ?? data_get($returnFare, 'base_money');
+
+                if (is_array($onwardBaseMoney) && is_array($returnBaseMoney)
+                    && isset($onwardBaseMoney['amount'], $returnBaseMoney['amount'])) {
+                    $combination['combined_base_money'] = [
+                        'currency' => 'AED',
+                        'amount' => bcadd((string) $onwardBaseMoney['amount'], (string) $returnBaseMoney['amount'], 8),
+                    ];
+                }
 
                 if (is_array($onwardMoney) && is_array($returnMoney)
                     && isset($onwardMoney['amount'], $onwardMoney['currency'], $returnMoney['amount'], $returnMoney['currency'])
@@ -113,7 +129,7 @@ class CommercialPricingService
             ->all();
     }
 
-    /** Calculate locked Net Fare selling totals from AT's fresh provider price for the selected fares. */
+    /** Calculate locked selling totals from a fresh provider price for the selected fares. */
     public function quoteTotals(
         array $flight,
         array $fareReferences,
@@ -232,7 +248,7 @@ class CommercialPricingService
         }
 
         if (count($selected) !== count($fareReferences)) {
-            throw new \InvalidArgumentException('Selected AT fare pricing data is incomplete.');
+            throw new \InvalidArgumentException('Selected provider fare pricing data is incomplete.');
         }
 
         return $selected;

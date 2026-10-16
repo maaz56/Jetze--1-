@@ -741,7 +741,7 @@ class BookingController extends Controller
     // Helper functions
 
     /**
-     * Replace AT checkout price data with the active server-side quote values.
+     * Replace AT or Hakimi checkout price data with active server-side quote values.
      */
     private function loadBookingQuote(Request $request)
     {
@@ -756,6 +756,11 @@ class BookingController extends Controller
         }
 
         $quote = $this->priceQuoteService->findActive($request->string('quote_id')->toString(), $request->user());
+
+        if ($requestedProvider !== '' && $requestedProvider !== strtolower((string) $quote->provider)) {
+            abort(422, 'The selected flight provider does not match this price quote. Please start a new booking.');
+        }
+
         $flight = $quote->flight_data;
         $providerPricing = $quote->provider_pricing_data ?? [];
         // AT provides this explicitly; non-AT providers (including Hakimi)

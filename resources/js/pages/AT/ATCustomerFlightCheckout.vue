@@ -1416,9 +1416,25 @@ function formatConvertedMoney(money, fallbackAmount = 0) {
     return formatAmount(fallbackAmount);
 }
 
-/** Format a selected fare using the converted amount returned by the transformer. */
+/** Format a selected fare with Hakimi's locked quote after its authoritative Reprice call. */
 function formatSelectedFareMoney(fare) {
-    return formatConvertedMoney(fare?.display_money, calculateTotalFare(fare));
+    if (isHakimiCheckout.value && lockedPriceQuote.value?.display_money) {
+        return formatConvertedMoney(lockedPriceQuote.value.display_money);
+    }
+
+    return formatConvertedMoney(
+        fare?.selling_display_money ?? fare?.display_money,
+        calculateTotalFare(fare),
+    );
+}
+
+/** Reprice guarantees Hakimi's total, not an itemized tax split. */
+function formatSelectedFareTaxes(fare) {
+    if (isHakimiCheckout.value) {
+        return "Included in total";
+    }
+
+    return formatAmount(calculateTaxes(fare));
 }
 
 /** Return the provider amount used only for the later AT booking request. */
@@ -3570,8 +3586,7 @@ watch(flight, () => {
                                                     </div>
                                                     <div class="flex justify-between items-center">
                                                         <span class="text-xs text-gray-500">Taxes & Fees</span>
-                                                        <span class="text-xs font-medium">{{
-                                                            formatAmount(calculateTaxes(fare)) }}</span>
+                                                        <span class="text-xs font-medium">{{ formatSelectedFareTaxes(fare) }}</span>
                                                     </div>
 
                                                     <div class="border-t border-gray-200 pt-2">
@@ -4144,7 +4159,7 @@ watch(flight, () => {
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">Taxes & Fees</span>
-                                            <span class="text-xs font-medium">{{ formatAmount(calculateTaxes(fare)) }}</span>
+                                            <span class="text-xs font-medium">{{ formatSelectedFareTaxes(fare) }}</span>
                                         </div>
                                         <div v-if="ancillaries" class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">Add-ons</span>

@@ -16,7 +16,7 @@ use Log;
  */
 class SegmentMarginService
 {
-    /** Resolve the matching AT margin rule without changing provider fare amounts. */
+    /** Resolve the matching provider margin rule without changing provider fare amounts. */
     public function commercialRuleForFare(array $provider, array $flight): ?array
     {
         $margin = $this->resolveBestMargin(

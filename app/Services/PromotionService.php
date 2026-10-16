@@ -9,7 +9,7 @@ use Log;
 
 class PromotionService
 {
-    /** Resolve the matching AT promotion rule without changing provider fare amounts. */
+    /** Resolve the matching provider promotion rule without changing provider fare amounts. */
     public function commercialRuleForFare(array $provider, array $flight): ?array
     {
         $promotion = $this->resolveBestPromotion(

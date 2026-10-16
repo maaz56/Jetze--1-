@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Currency;
 use App\Services\AtApiService;
 use App\Services\AncillaryPricingService;
 use App\Services\FlightAggregationService;
@@ -60,7 +61,7 @@ class FlightController extends Controller
 
         $apiProviders = [
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            // ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
+            ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
             ['identifier' => 'AT', 'name' => 'Akbar Travels'],
 
             // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
@@ -593,7 +594,11 @@ class FlightController extends Controller
                 $validated['fare_references'],
                 $providerPricing,
             );
-            $fareBreakdown = $this->atFareBreakdownForQuote($flight, $validated['fare_references']);
+            $fareBreakdown = $this->atFareBreakdownForQuote(
+                $flight,
+                $validated['fare_references'],
+                $displayCurrency,
+            );
             $quote = $this->priceQuoteService->createAt(
                 $request->user(),
                 $flight,
@@ -610,15 +615,13 @@ class FlightController extends Controller
             );
             $this->validateHakimiReprice($fare, $providerPricing);
             $flight = $this->applyHakimiReprice($flight, (string) $fare['ref_id'], $providerPricing);
-            $quote = $this->priceQuoteService->create(
+            $quote = $this->priceQuoteService->createHakimi(
                 $request->user(),
                 $flight,
                 $validated['fare_references'],
-                // Hakimi checkout displays its confirmed INR total directly.
-                // Do not apply portal currency conversion, promotions, or margins.
-                strtoupper((string) $providerPricing['currency']),
+                $displayCurrency,
+                $providerPricing,
             );
-            $quote->update(['provider_pricing_data' => $providerPricing]);
         } else {
             $quote = $this->priceQuoteService->create(
                 $request->user(),
@@ -651,6 +654,14 @@ class FlightController extends Controller
     {
         $amount = (float) $providerPricing['totalFare'];
         $currency = strtoupper((string) ($providerPricing['currency'] ?? data_get($flight, 'currencyCode', 'INR')));
+
+        // The reprice response is authoritative. Preserve Hakimi as the source
+        // in the quote payload even when a browser sent stale provider data.
+        $flight['provider'] = array_merge((array) ($flight['provider'] ?? []), [
+            'identifier' => 'HAKIMI',
+            'name' => 'Travel With Hakimi (Test)',
+            'contentSource' => 'HAKIMI_TEST',
+        ]);
 
         foreach (data_get($flight, 'leg.flights', []) as $flightIndex => $flightLeg) {
             foreach ($flightLeg['fares'] ?? [] as $fareIndex => $fare) {
@@ -693,7 +704,7 @@ class FlightController extends Controller
             'reprice_total_fare' => $repriceAmount,
             'currency' => $currency,
             'price_changed' => $priceChanged,
-            'portal_adjustments_applied' => false,
+            'portal_adjustments_are_recalculated_on_quote' => true,
         ]);
     }
 
@@ -967,8 +978,12 @@ class FlightController extends Controller
         ]);
     }
 
-    /** Capture selected AT FlightInfo details with the quote; never block quote creation on a display-only failure. */
-    private function atFareBreakdownForQuote(array $flight, array $fareReferences): ?array
+    /** Capture selected AT FlightInfo details in the same display currency that will be locked on the quote. */
+    private function atFareBreakdownForQuote(
+        array $flight,
+        array $fareReferences,
+        string $displayCurrency,
+    ): ?array
     {
         try {
             $trips = $this->atFlightInfoTrips($flight, $fareReferences);
@@ -982,6 +997,10 @@ class FlightController extends Controller
             if (!is_array($response) || (string) ($response['Code'] ?? '') !== '200' || !is_array($response['Trips'] ?? null)) {
                 return null;
             }
+
+            // Search may have started in another currency. The quote must retain
+            // FlightInfo display details in the currency selected at Book Now.
+            $flight['displayCurrencyCode'] = $displayCurrency;
 
             return $this->withAtFareBreakdownPriceDetails(
                 $this->atFareBreakdownTransformer->transform($response, $flight, $fareReferences),
@@ -1099,9 +1118,32 @@ class FlightController extends Controller
             : 'flights_' . session()->getId();
     }
 
-    /** Resolve public-domain currency, with the frontend Origin taking priority for a shared API host. */
+    /** Resolve an enabled browser-selected currency, with a domain default only when none was selected. */
     private function currencyCodeForRequest(Request $request, ?string $fallback = null): string
     {
+        $requestedCode = strtoupper(trim((string) (
+            $fallback
+            ?? $request->input('currency_code')
+            ?? $request->input('currencyCode')
+            ?? ''
+        )));
+
+        if ($requestedCode !== '') {
+            if (!preg_match('/^[A-Z]{3}$/', $requestedCode)) {
+                abort(422, 'A valid display currency is required.');
+            }
+
+            $currencyIsAvailable = $requestedCode === 'AED'
+                || Currency::query()
+                    ->where('code', $requestedCode)
+                    ->where('is_enabled', true)
+                    ->exists();
+
+            abort_unless($currencyIsAvailable, 422, 'The selected display currency is unavailable.');
+
+            return $requestedCode;
+        }
+
         $originHost = parse_url((string) $request->header('Origin'), PHP_URL_HOST);
         $host = strtolower((string) ($originHost ?: $request->getHost()));
         $host = preg_replace('/^www\./', '', $host);
@@ -1114,7 +1156,7 @@ class FlightController extends Controller
             return 'PKR';
         }
 
-        return strtoupper($fallback ?: $request->input('currencyCode', 'AED'));
+        return 'AED';
     }
 
     /**

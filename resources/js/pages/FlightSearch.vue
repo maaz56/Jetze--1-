@@ -57,6 +57,7 @@ import {
     FETCH_AIRPORTS,
     FETCH_CUSTOMER_MARGIN,
     FETCH_CUSTOMER_SETTINGS,
+    FETCH_CURRENCIES,
     FETCH_FLIGHT,
     FETCH_FREE_SSR_BAGGAGE,
     FETCH_PROVIDERS,
@@ -247,6 +248,8 @@ const isLoggedIn = computed(() => authStore.isLoggedIn);
 const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
 const agentData = computed(() => store.getters["user/agentData"]);
+const currencies = computed(() => store.getters["currency/currencies"] || []);
+const selectedDisplayCurrencyCode = computed(() => getSelectedCurrencyCode());
 const isFlightLoading = computed(() => flightStore.isFlightLoading);
 const isLoading = computed(() => store.getters["flight/isLoading"]);
 const customerSettings = computed(
@@ -1483,18 +1486,54 @@ function calculateFare(fare) {
     return total;
 }
 
-/** Format one fare using the converted backend amount when it is available. */
+/**
+ * Convert trusted AED base money for search-page display only.
+ *
+ * Booking never receives this browser-calculated amount. Book Now sends fare
+ * references and the selected currency, then the backend creates the locked quote.
+ */
+function displayMoneyFromBase(baseMoney, fallbackMoney = null) {
+    const amount = Number(baseMoney?.amount);
+    const baseCurrency = String(baseMoney?.currency || "").toUpperCase();
+    const targetCode = selectedDisplayCurrencyCode.value;
+
+    if (baseCurrency === "AED" && Number.isFinite(amount)) {
+        const target = targetCode === "AED"
+            ? { code: "AED", exchange_rate: 1, decimal_places: 2 }
+            : currencies.value.find((currency) => (
+                String(currency?.code || "").toUpperCase() === targetCode
+                && currency?.is_enabled !== false
+            ));
+        const rateToAed = Number(target?.exchange_rate);
+
+        if (target && Number.isFinite(rateToAed) && rateToAed > 0) {
+            return {
+                amount: amount / rateToAed,
+                currency: targetCode,
+                decimal_places: Number(target.decimal_places ?? 2),
+            };
+        }
+    }
+
+    return fallbackMoney;
+}
+
+/** Return the current selected-currency money for a fare without another flight search. */
+function fareDisplayMoney(fare) {
+    return displayMoneyFromBase(
+        fare?.selling_base_money ?? fare?.base_money,
+        fare?.selling_display_money ?? fare?.display_money,
+    );
+}
+
+/** Format one fare using AED base money and the currently selected currency rate. */
 function fareSortAmount(fare) {
-    const sellingAmount = Number(fare?.selling_display_money?.amount);
-    if (Number.isFinite(sellingAmount)) return sellingAmount;
+    const money = fareDisplayMoney(fare);
+    const amount = Number(money?.amount);
+    if (Number.isFinite(amount)) return amount;
 
     const totalPrice = Number(fare?.total_price);
-    if (Number.isFinite(totalPrice)) return totalPrice;
-
-    const displayAmount = Number(fare?.display_money?.amount);
-    if (Number.isFinite(displayAmount)) return displayAmount;
-
-    return calculateFare(fare);
+    return Number.isFinite(totalPrice) ? totalPrice : calculateFare(fare);
 }
 
 function sortedFlightFares(flight) {
@@ -1549,7 +1588,7 @@ function initializeSelectedFares(flight) {
 }
 
 function formatFareDisplayMoney(fare) {
-    const money = fare?.selling_display_money ?? fare?.display_money;
+    const money = fareDisplayMoney(fare);
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
         return formatAmountWithCurrency(money.amount, money.currency);
@@ -1560,7 +1599,7 @@ function formatFareDisplayMoney(fare) {
 
 /** Keep currency and value separate so the fare-card header can size them independently. */
 function fareDisplayMoneyParts(fare) {
-    const money = fare?.selling_display_money ?? fare?.display_money;
+    const money = fareDisplayMoney(fare);
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
         return {
@@ -1579,15 +1618,10 @@ function fareDisplayMoneyParts(fare) {
 }
 
 function normalizedFareMoney(fare) {
-    if (fare?.combined_display_money) {
-        return fare.combined_display_money;
-    }
-
-    if (Number.isFinite(Number(fare?.combined_amount))) {
-        return { currency: "", amount: Number(fare.combined_amount) };
-    }
-
-    const money = fare?.selling_display_money ?? fare?.display_money;
+    const money = displayMoneyFromBase(
+        fare?.combined_base_money ?? fare?.selling_base_money ?? fare?.base_money,
+        fare?.combined_display_money ?? fare?.selling_display_money ?? fare?.display_money,
+    );
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
         return {
@@ -1596,10 +1630,7 @@ function normalizedFareMoney(fare) {
         };
     }
 
-    return {
-        currency: "",
-        amount: calculateFare(fare),
-    };
+    return { currency: "", amount: Number(fare?.combined_amount) || calculateFare(fare) };
 }
 
 function pairedReturnFareMoney(fare, flightIndex) {
@@ -1664,13 +1695,8 @@ function flightDisplayMoney(flight) {
         : null;
 
     if (pair) {
-        const money = pair.combined_display_money;
-
-        if (money?.currency && Number.isFinite(Number(money.amount))) {
-            return { amount: Number(money.amount), currency: money.currency };
-        }
-
-        return null;
+        const money = normalizedFareMoney(pair);
+        return money.currency ? money : null;
     }
 
     const legs = leg?.flights;
@@ -1689,7 +1715,7 @@ function flightDisplayMoney(flight) {
 
             return currentPrice < lowestPrice ? currentFare : lowestFare;
         }, null);
-        const money = fare?.selling_display_money ?? fare?.display_money;
+        const money = fareDisplayMoney(fare);
 
         if (!money?.currency || !Number.isFinite(Number(money.amount))) {
             return null;
@@ -1724,9 +1750,12 @@ function displayFlightPrice(flight) {
     return flightDisplayMoney(flight)?.amount ?? calculateTotalFare(flight);
 }
 
-/** Format one passenger-fare component from its backend-converted money object. */
+/** Format a FlightInfo component with the currently selected currency rate. */
 function formatPassengerFareMoney(passengerFare, field) {
-    const money = passengerFare?.display_money?.[field];
+    const money = displayMoneyFromBase(
+        passengerFare?.base_money?.[field],
+        passengerFare?.display_money?.[field],
+    );
 
     if (money?.currency && Number.isFinite(Number(money.amount))) {
         return formatAmountWithCurrency(money.amount, money.currency);
@@ -1752,7 +1781,7 @@ function grandTotalDisplayMoney() {
         flight?.fares?.forEach((fare) => {
             if (!selectedFares.includes(fare.ref_id)) return;
 
-            const money = fare?.selling_display_money ?? fare?.display_money;
+            const money = fareDisplayMoney(fare);
             if (!money?.currency || !Number.isFinite(Number(money.amount))) {
                 isValid = false;
                 return;
@@ -2926,6 +2955,9 @@ onMounted(() => {
     if (user.value?.id) {
         fetchAgent();
     }
+    // Rates are loaded once with search results. Currency changes below only
+    // recalculate the already trusted AED base amounts in the browser.
+    store.dispatch("currency/" + FETCH_CURRENCIES);
     store.dispatch("airport/" + FETCH_AIRPORTS);
     if (
         (flightType.value === "multi-city" &&

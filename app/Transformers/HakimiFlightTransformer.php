@@ -68,7 +68,8 @@ class HakimiFlightTransformer
 
                 return [
                     'provider' => ['name' => 'Travel With Hakimi (Test)', 'identifier' => 'HAKIMI', 'contentSource' => 'HAKIMI_TEST', 'sector' => $origin . '-' . $destination, 'travel_date' => $date],
-                    'currencyCode' => $currency, 'displayCurrencyCode' => $currency,
+                    'currencyCode' => $currency,
+                    'displayCurrencyCode' => strtoupper((string) ($params['currency_code'] ?? 'AED')),
                     'leg' => ['ref_id' => (string) Str::uuid(), 'flights' => [$flight], 'trip_nature' => 'one-way'],
                 ];
             })->values()->all();

@@ -71,6 +71,58 @@ class PriceQuoteService
         $providerCurrency = strtoupper((string) $providerPricing['currency']);
         $providerAmount = (string) $providerPricing['net_amount'];
         $providerGrossAmount = (string) $providerPricing['gross_amount'];
+
+        return $this->createCommercialQuote(
+            $user,
+            $flight,
+            $fareReferences,
+            $displayCurrency,
+            $providerPricing,
+            strtoupper((string) (data_get($flight, 'provider.identifier') ?? 'AT')),
+            $providerAmount,
+            $providerGrossAmount,
+            $providerCurrency,
+            $fareBreakdownData,
+        );
+    }
+
+    /** Create a Hakimi quote from its authoritative Reprice total. */
+    public function createHakimi(
+        User $user,
+        array $flight,
+        array $fareReferences,
+        string $displayCurrency,
+        array $providerPricing,
+    ): PriceQuote {
+        $providerCurrency = strtoupper((string) ($providerPricing['currency'] ?? 'INR'));
+        $providerAmount = (string) $providerPricing['totalFare'];
+
+        return $this->createCommercialQuote(
+            $user,
+            $flight,
+            $fareReferences,
+            $displayCurrency,
+            $providerPricing,
+            'HAKIMI',
+            $providerAmount,
+            $providerAmount,
+            $providerCurrency,
+        );
+    }
+
+    /** Persist a fresh provider amount, its AED selling total, and immutable commercial adjustments. */
+    private function createCommercialQuote(
+        User $user,
+        array $flight,
+        array $fareReferences,
+        string $displayCurrency,
+        array $providerPricing,
+        string $provider,
+        string $providerAmount,
+        string $providerGrossAmount,
+        string $providerCurrency,
+        ?array $fareBreakdownData = null,
+    ): PriceQuote {
         $commercial = $this->commercialPricingService->quoteTotals(
             $flight,
             $fareReferences,
@@ -80,11 +132,11 @@ class PriceQuoteService
             $displayCurrency,
         );
 
-        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $fareBreakdownData, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
+        return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $fareBreakdownData, $provider, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
             $quote = PriceQuote::create([
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $user->id,
-                'provider' => data_get($flight, 'provider.identifier') ?? data_get($flight, 'provider.name') ?? 'AT',
+                'provider' => $provider,
                 'provider_amount' => $providerAmount,
                 'provider_currency' => $providerCurrency,
                 'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
