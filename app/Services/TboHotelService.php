@@ -106,6 +106,7 @@ class TboHotelService
         $this->ensureConfigured();
 
         $requestId = (string) Str::uuid();
+        $operation = $this->logOperation($endpoint);
         $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
         $options = [
             'auth' => [$this->username, $this->password],
@@ -124,8 +125,9 @@ class TboHotelService
         $startedAt = microtime(true);
 
         try {
-            Log::info('TBO Hotel API Request', [
+            Log::info("TBO Hotel {$operation} Request", [
                 'request_id' => $requestId,
+                'operation' => $operation,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'url' => $url,
@@ -137,8 +139,9 @@ class TboHotelService
             $body = (string) $response->getBody();
             $decoded = json_decode($body, true);
 
-            Log::info('TBO Hotel API Response', [
+            Log::info("TBO Hotel {$operation} Response", [
                 'request_id' => $requestId,
+                'operation' => $operation,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'url' => $url,
@@ -148,8 +151,9 @@ class TboHotelService
             ]);
 
             if (!is_array($decoded)) {
-                Log::warning('TBO Hotel API returned non-JSON response', [
+                Log::warning("TBO Hotel {$operation} Non-JSON Response", [
                     'request_id' => $requestId,
+                    'operation' => $operation,
                     'endpoint' => $endpoint,
                     'status' => $response->getStatusCode(),
                     'duration_ms' => $this->requestDurationMs($startedAt),
@@ -164,8 +168,9 @@ class TboHotelService
                 ];
             }
 
-            Log::info('TBO Hotel API Response Body', [
+            Log::info("TBO Hotel {$operation} Response Body", [
                 'request_id' => $requestId,
+                'operation' => $operation,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'status' => $response->getStatusCode(),
@@ -175,8 +180,9 @@ class TboHotelService
 
             return $decoded;
         } catch (RequestException $e) {
-            Log::error('TBO Hotel API request failed', [
+            Log::error("TBO Hotel {$operation} Request Failed", [
                 'request_id' => $requestId,
+                'operation' => $operation,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'url' => $url,
@@ -189,8 +195,9 @@ class TboHotelService
 
             throw $e;
         } catch (GuzzleException $e) {
-            Log::error('TBO Hotel API guzzle error', [
+            Log::error("TBO Hotel {$operation} Transport Error", [
                 'request_id' => $requestId,
+                'operation' => $operation,
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'url' => $url,
@@ -200,6 +207,19 @@ class TboHotelService
 
             throw $e;
         }
+    }
+
+    /** Use consistent, searchable names for hotel booking lifecycle log entries. */
+    protected function logOperation(string $endpoint): string
+    {
+        return match ($endpoint) {
+            'Search' => 'Search',
+            'PreBook' => 'Prebook',
+            'Book' => 'Book',
+            'BookingDetail' => 'BookingDetails',
+            'Cancel' => 'Cancel',
+            default => $endpoint,
+        };
     }
 
     /** Redact traveller and payment fields while retaining a useful provider payload trace. */

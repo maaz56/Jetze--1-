@@ -71,9 +71,9 @@ Route::prefix('hotels')->group(function () {
     Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->whereUuid('prebookUuid');
     Route::post('book', [HotelController::class, 'book']);
     Route::get('bookings', [HotelController::class, 'bookings'])->middleware('auth:sanctum');
-    Route::get('bookings/{bookingUuid}', [HotelController::class, 'showBooking'])->whereUuid('bookingUuid');
-    Route::post('bookings/{bookingUuid}/details', [HotelController::class, 'refreshBookingDetails'])->whereUuid('bookingUuid');
-    Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'cancelBooking'])->whereUuid('bookingUuid');
+    Route::get('bookings/{bookingUuid}', [HotelController::class, 'showBooking'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/details', [HotelController::class, 'refreshBookingDetails'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'cancelBooking'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
 });
 
 Route::prefix('admin/hotels')->middleware('auth:sanctum')->group(function () {

@@ -468,16 +468,39 @@ class HotelController extends Controller
 
     public function book(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'prebook_id' => 'required|uuid',
-            'email' => 'required|email:rfc,dns|max:255',
-            'phone_number' => 'required|string|max:64',
-            'customer_details' => 'required|array|min:1|max:8',
-            'customer_details.*.customer_names' => 'required|array|min:1|max:12',
-            'customer_details.*.customer_names.*.title' => 'required|string|in:Mr,Mrs,Ms',
-            'customer_details.*.customer_names.*.first_name' => 'required|string|max:100',
-            'customer_details.*.customer_names.*.last_name' => 'required|string|max:100',
-            'customer_details.*.customer_names.*.type' => 'required|string|in:Adult,Child',
+        Log::info('TBO Hotel Book Endpoint Received', [
+            'prebook_id' => $request->input('prebook_id'),
+            'has_email' => $request->filled('email'),
+            'has_phone_number' => $request->filled('phone_number'),
+            'customer_room_count' => is_array($request->input('customer_details'))
+                ? count($request->input('customer_details'))
+                : null,
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'prebook_id' => 'required|uuid',
+                'email' => 'required|email:rfc,dns|max:255',
+                'phone_number' => 'required|string|max:64',
+                'customer_details' => 'required|array|min:1|max:8',
+                'customer_details.*.customer_names' => 'required|array|min:1|max:12',
+                'customer_details.*.customer_names.*.title' => 'required|string|in:Mr,Mrs,Ms',
+                'customer_details.*.customer_names.*.first_name' => 'required|string|max:100',
+                'customer_details.*.customer_names.*.last_name' => 'required|string|max:100',
+                'customer_details.*.customer_names.*.type' => 'required|string|in:Adult,Child',
+            ]);
+        } catch (ValidationException $e) {
+            Log::warning('TBO Hotel Book Validation Failed', [
+                'prebook_id' => $request->input('prebook_id'),
+                'invalid_fields' => array_keys($e->errors()),
+            ]);
+
+            throw $e;
+        }
+
+        Log::info('TBO Hotel Book Validation Passed', [
+            'prebook_id' => $validated['prebook_id'],
+            'customer_room_count' => count($validated['customer_details']),
         ]);
 
         $prebook = HotelPrebook::with(['searchSession', 'priceQuote'])
@@ -689,6 +712,10 @@ class HotelController extends Controller
             ], $this->httpStatusForProviderStatus($statusCode));
         }
 
+        // A confirmed booking must be immediately reconciled with TBO's BookingDetail response.
+        // A lookup failure is recorded but must not turn an already confirmed booking into a failed one.
+        $this->fetchAndStoreBookingDetailsAfterBooking($booking->fresh(['prebook']));
+
         return response()->json([
             'message' => 'Hotel booking confirmed successfully.',
             'provider_status' => data_get($tboResponse, 'Status'),
@@ -794,17 +821,40 @@ class HotelController extends Controller
 
     public function showBooking(Request $request, string $bookingUuid): JsonResponse
     {
+        Log::info('Hotel booking detail requested', [
+            'hotel_booking_id' => $bookingUuid,
+            'user_id' => $request->user()?->id,
+        ]);
+
         $booking = HotelBooking::with(['prebook.searchSession', 'priceSnapshot', 'guests'])
             ->where('uuid', $bookingUuid)
             ->first();
 
         if (! $booking) {
+            Log::warning('Hotel booking detail not found', [
+                'hotel_booking_id' => $bookingUuid,
+                'user_id' => $request->user()?->id,
+            ]);
+
             return response()->json(['message' => 'Hotel booking was not found.'], 404);
         }
 
         if ($booking->user_id && $booking->user_id !== optional($request->user())->id && ! $this->canViewHotelBookings($request)) {
+            Log::warning('Hotel booking detail access denied', [
+                'hotel_booking_id' => $bookingUuid,
+                'booking_user_id' => $booking->user_id,
+                'user_id' => $request->user()?->id,
+            ]);
+
             return response()->json(['message' => 'This hotel booking belongs to another user.'], 403);
         }
+
+        Log::info('Hotel booking detail retrieved', [
+            'hotel_booking_id' => $booking->uuid,
+            'booking_user_id' => $booking->user_id,
+            'user_id' => $request->user()?->id,
+            'status' => $booking->status,
+        ]);
 
         return response()->json(['data' => $this->normalizeBooking($booking, true)]);
     }
@@ -1029,6 +1079,104 @@ class HotelController extends Controller
             'message' => 'Hotel booking cancelled successfully.',
             'provider_status' => data_get($tboResponse, 'Status'),
             'data' => $this->normalizeBooking($booking->fresh(), true),
+        ]);
+    }
+
+    /** Fetch and persist the authoritative TBO details immediately after a confirmed booking. */
+    protected function fetchAndStoreBookingDetailsAfterBooking(HotelBooking $booking): void
+    {
+        $booking->loadMissing('prebook');
+
+        if (! $booking->prebook) {
+            Log::error('TBO Hotel BookingDetails After Book Skipped', [
+                'hotel_booking_id' => $booking->uuid,
+                'reason' => 'The booking prebook record is unavailable.',
+            ]);
+
+            return;
+        }
+
+        $payload = [
+            'PaymentMode' => $booking->prebook->payment_mode,
+            'ConfirmationNumber' => $booking->confirmation_number,
+        ];
+
+        HotelBookingEvent::create([
+            'hotel_prebook_id' => $booking->hotel_prebook_id,
+            'hotel_booking_id' => $booking->id,
+            'provider' => 'tbo',
+            'stage' => 'detail_request',
+            'provider_reference' => $booking->confirmation_number,
+            'request_data' => $payload,
+            'occurred_at' => now(),
+        ]);
+
+        try {
+            $tboResponse = $this->tboHotelService->bookingDetail($payload);
+        } catch (Throwable $e) {
+            HotelBookingEvent::create([
+                'hotel_prebook_id' => $booking->hotel_prebook_id,
+                'hotel_booking_id' => $booking->id,
+                'provider' => 'tbo',
+                'stage' => 'detail_transport_error',
+                'provider_reference' => $booking->confirmation_number,
+                'response_data' => [
+                    'trigger' => 'after_book',
+                    'message' => 'No response was received from the provider.',
+                ],
+                'occurred_at' => now(),
+            ]);
+
+            Log::error('TBO Hotel BookingDetails After Book Failed', [
+                'hotel_booking_id' => $booking->uuid,
+                'confirmation_number' => $booking->confirmation_number,
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
+
+        DB::transaction(function () use ($booking, $statusCode, $tboResponse) {
+            $booking->update([
+                'tbo_booking_detail_response' => $tboResponse,
+                'booking_details_checked_at' => now(),
+            ]);
+
+            HotelBookingEvent::create([
+                'hotel_prebook_id' => $booking->hotel_prebook_id,
+                'hotel_booking_id' => $booking->id,
+                'provider' => 'tbo',
+                'stage' => 'detail',
+                'provider_status_code' => $statusCode,
+                'provider_reference' => $booking->confirmation_number,
+                'response_data' => $tboResponse,
+                'occurred_at' => now(),
+            ]);
+        });
+
+        if ($statusCode !== 200) {
+            Log::warning('TBO Hotel BookingDetails After Book Returned Error', [
+                'hotel_booking_id' => $booking->uuid,
+                'confirmation_number' => $booking->confirmation_number,
+                'provider_status' => data_get($tboResponse, 'Status'),
+            ]);
+
+            return;
+        }
+
+        $details = data_get($tboResponse, 'BookingDetail', []);
+        $booking->update([
+            'status' => $this->localStatusForProviderBooking(data_get($details, 'BookingStatus'), $booking->status),
+            'confirmation_number' => data_get($details, 'ConfirmationNumber') ?? $booking->confirmation_number,
+            'hotel_confirmation_number' => data_get($details, 'HotelConfirmationNumber') ?? $booking->hotel_confirmation_number,
+        ]);
+
+        Log::info('TBO Hotel BookingDetails After Book Saved', [
+            'hotel_booking_id' => $booking->uuid,
+            'confirmation_number' => $booking->confirmation_number,
+            'provider_status' => data_get($tboResponse, 'Status'),
         ]);
     }
 
