@@ -642,6 +642,12 @@ class BookingController extends Controller
         //     'travellers' => $validated['travellers']
         // ]);
 
+        $isAtBooking = strtolower((string) $request->flight_provider) === 'at';
+        $paymentExpiryTime = now()->addMinutes($isAtBooking ? 40 : 20);
+        if ($isAtBooking) {
+            $expiryTime = $paymentExpiryTime;
+        }
+
         $flightBooking = FlightBookings::create([
             'main_email' => $validated['main_contact']['email'] ?? 'unknown@example.com',
             'main_phone' => $validated['main_contact']['phone'] ?? 'N/A',
@@ -675,7 +681,7 @@ class BookingController extends Controller
                 : null,
             'itinerary_ref' => $itineraryRef ?? null,
             'expiry_time' => $expiryTime ?? null,
-            'payment_expires_at' => now()->addMinutes(20),
+            'payment_expires_at' => $paymentExpiryTime,
             'status' => $request->booking_status ?? 'booked', // falls back to safe default
         ]);
 

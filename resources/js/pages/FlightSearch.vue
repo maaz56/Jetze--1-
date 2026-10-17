@@ -951,7 +951,15 @@ const fetchFlights = () => {
         //     ...providers.value.filter(p => prioritizedProviders.includes(p.identifier))
         // ];
 
-        providers.value.forEach((provider) => {
+        const searchProviders = providers.value.filter(
+            (provider) => provider.identifier?.toUpperCase() !== "HAKIMI" || searchParams.flightType === "one-way",
+        );
+        if (searchProviders.length === 0) {
+            isSearching.value = false;
+            progress.value = 100;
+        }
+
+        searchProviders.forEach((provider) => {
             const paramsWithProvider = {
                 ...searchParams,
                 airline: provider.identifier,
@@ -970,14 +978,14 @@ const fetchFlights = () => {
                 .finally(() => {
                     completedProviders.value = Math.min(
                         completedProviders.value + 1,
-                        Math.max(providers?.value?.length || 0, 1),
+                        Math.max(searchProviders.length, 1),
                     );
 
                     progress.value = Math.min(100, Math.round(
-                        (completedProviders.value / Math.max(providers?.value?.length || 0, 1)) * 100,
+                        (completedProviders.value / Math.max(searchProviders.length, 1)) * 100,
                     ));
 
-                    if (completedProviders.value >= Math.max(providers?.value?.length || 0, 1)) {
+                    if (completedProviders.value >= Math.max(searchProviders.length, 1)) {
                         setTimeout(() => {
                             isSearching.value = false;
                         }, 1000);
