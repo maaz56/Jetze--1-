@@ -121,6 +121,28 @@ const isHakimiCheckout = computed(() => String(route.query.flight_provider || ''
 const fareBreakdownPriceDetails = computed(
     () => lockedPriceQuote.value?.fare_breakdown?.price_details ?? null,
 );
+// Older quotes have no reliability flag: reconcile their saved trip and
+// passenger tax values before presenting either as an itemized tax amount.
+function isTripTaxBreakdownAvailable(trip) {
+    if (typeof trip?.tax_breakdown_available === 'boolean') return trip.tax_breakdown_available;
+    const total = trip?.provider_money?.taxes?.display_money;
+    const rows = trip?.fare?.passenger_fares;
+    if (!total?.currency || total.amount == null || !Array.isArray(rows) || !rows.length) return false;
+    let sum = 0;
+    let weightedSum = 0;
+    for (const row of rows) {
+        const tax = row?.display_money?.taxes;
+        if (!tax?.currency || tax.currency !== total.currency || tax.amount == null || !Number.isFinite(Number(tax.amount))) return false;
+        sum += Number(tax.amount);
+        weightedSum += Number(tax.amount) * Math.max(Number(row.total_passenger) || 1, 1);
+    }
+    return Number.isFinite(Number(total.amount)) && (Math.abs(Number(total.amount) - sum) < 0.03 || Math.abs(Number(total.amount) - weightedSum) < 0.03);
+}
+const quoteTaxBreakdownAvailable = computed(() => {
+    const breakdown = lockedPriceQuote.value?.fare_breakdown;
+    return Array.isArray(breakdown?.trips) && breakdown.trips.length > 0
+        && breakdown.trips.every(isTripTaxBreakdownAvailable);
+});
 const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const qouteError = computed(() => store.getters["flight/qouteError"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
@@ -3448,12 +3470,17 @@ watch(flight, () => {
                                                             <tbody class="divide-y divide-gray-100 text-gray-800">
                                                                 <tr v-for="passengerFare in trip.fare?.passenger_fares || []" :key="passengerFare.traveler_type">
                                                                     <td class="px-2 py-2 font-medium">{{ passengerFare.traveler_type }} x{{ passengerFare.total_passenger }}</td>
-                                                                    <td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.base_price) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.taxes) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.fees) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.service_charges) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.surchage) }}</td><td class="px-2 py-2">-{{ formatConvertedMoney(passengerFare.display_money?.discount) }}</td><td class="px-2 py-2 text-right font-semibold text-primary">{{ formatConvertedMoney(passengerFare.display_money?.total_price) }}</td>
+                                                                    <td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.base_price) }}</td><td class="px-2 py-2">{{ isTripTaxBreakdownAvailable(trip) ? formatConvertedMoney(passengerFare.display_money?.taxes) : 'Unavailable' }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.fees) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.service_charges) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.surchage) }}</td><td class="px-2 py-2">-{{ formatConvertedMoney(passengerFare.display_money?.discount) }}</td><td class="px-2 py-2 text-right font-semibold text-primary">{{ formatConvertedMoney(passengerFare.display_money?.total_price) }}</td>
                                                                 </tr>
                                                             </tbody>
                                                         </table>
                                                     </div>
                                                 </div>
+                                            </div>
+                                            <p v-if="!quoteTaxBreakdownAvailable" class="text-xs text-amber-700">Tax breakdown is unavailable because the provider's tax details do not reconcile. The quoted fare remains unchanged.</p>
+                                            <div class="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-3">
+                                                <span class="text-sm font-semibold text-gray-800">Total Fare</span>
+                                                <span class="text-base font-bold text-primary">{{ fareBreakdownPriceDetails?.total_price?.currency && fareBreakdownPriceDetails?.total_price?.amount != null ? formatConvertedMoney(fareBreakdownPriceDetails.total_price) : 'Price unavailable' }}</span>
                                             </div>
                                         </DialogContent>
                                     </Dialog>
@@ -3548,7 +3575,7 @@ watch(flight, () => {
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-xs text-gray-500">Taxes</span>
-                                        <span class="text-xs font-medium">{{ formatConvertedMoney(fareBreakdownPriceDetails.taxes) }}</span>
+                                        <span class="text-xs font-medium">{{ quoteTaxBreakdownAvailable ? formatConvertedMoney(fareBreakdownPriceDetails.taxes) : 'Unavailable' }}</span>
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-xs text-gray-500">Fees</span>

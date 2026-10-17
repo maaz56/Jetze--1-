@@ -1826,6 +1826,9 @@ function displayFlightPrice(flight) {
 
 /** Format a FlightInfo component with the currently selected currency rate. */
 function formatPassengerFareMoney(passengerFare, field) {
+    if (field === "taxes" && passengerFare?.tax_breakdown_available === false) {
+        return "Unavailable";
+    }
     const money = displayMoneyFromBase(
         passengerFare?.base_money?.[field],
         passengerFare?.display_money?.[field],
@@ -1883,6 +1886,29 @@ function formatGrandTotalDisplayMoney() {
 
     return money
         ? formatAmountWithCurrency(money.amount, money.currency)
+        : formatAmount(calculateGrandTotal());
+}
+
+/** Use the selected return-pair price when available; it may not equal two independent fares. */
+function formatFareBreakdownTotal() {
+    const leg = selectedFlight.value?.leg;
+    const flights = leg?.flights ?? [];
+    const references = selectedFares.filter(Boolean);
+    if (!flights.length || references.length !== flights.length) return "Price unavailable";
+
+    const combination = (leg?.fare_combinations ?? []).find((candidate) => {
+        const pairReferences = candidate?.fare_references ?? [];
+        return pairReferences.length === references.length
+            && pairReferences.every((reference, index) => reference === references[index]);
+    });
+    const money = combination ? combinationDisplayMoney(combination, leg) : grandTotalDisplayMoney();
+    if (money?.currency && Number.isFinite(Number(money.amount))) {
+        return formatAmountWithCurrency(money.amount, money.currency);
+    }
+
+    const provider = String(selectedFlight.value?.provider?.identifier || "").toUpperCase();
+    return ["AT", "HAKIMI"].includes(provider)
+        ? "Price unavailable"
         : formatAmount(calculateGrandTotal());
 }
 
@@ -5759,6 +5785,11 @@ watch(isLoggedIn, (newVal) => {
                                                     the fare options tab
                                                 </p>
                                             </div>
+                                        </div>
+                                        <p v-if="atFareBreakdown?.tax_breakdown_available === false" class="mb-3 text-xs text-amber-700">Tax breakdown is unavailable because the provider's tax details do not reconcile. The fare total remains unchanged.</p>
+                                        <div class="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-3">
+                                            <span class="text-sm font-semibold text-gray-800">Total Fare</span>
+                                            <span class="text-base font-bold text-primary">{{ formatFareBreakdownTotal() }}</span>
                                         </div>
                                     </div>
 

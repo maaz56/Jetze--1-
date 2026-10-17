@@ -51,6 +51,8 @@ class FareBreakdownPricingService
         }
 
         $fareBreakdown['price_details'] = $summary;
+        $fareBreakdown['tax_breakdown_available'] = !empty($fareBreakdown['trips'])
+            && collect($fareBreakdown['trips'])->every(fn ($trip) => ($trip['tax_breakdown_available'] ?? false) === true);
 
         return $fareBreakdown;
     }

@@ -38,6 +38,7 @@ class AtFareBreakdownTransformer
             foreach ((data_get($trip, 'Journey') ?: []) as $journey) {
                 $selectedFare = $selectedFaresByLeg[$flightIndex] ?? [];
                 $fares = data_get($journey, 'Segments.0.Fares', []);
+                $taxReliable = $this->taxBreakdownIsReliable($fares, $response);
                 $netFareMoney = $this->money(
                     data_get($journey, 'NetFare', 0),
                     $providerCurrency,
@@ -65,8 +66,10 @@ class AtFareBreakdownTransformer
                             $response,
                             $providerCurrency,
                             $displayCurrency,
+                            $taxReliable,
                         ),
                     ],
+                    'tax_breakdown_available' => $taxReliable,
                     'provider_money' => [
                         'base_fare' => $this->money(data_get($fares, 'TotalBaseFare', 0), $providerCurrency, $displayCurrency),
                         'taxes' => $this->money(data_get($fares, 'TotalTax', 0), $providerCurrency, $displayCurrency),
@@ -91,14 +94,16 @@ class AtFareBreakdownTransformer
     }
 
     /** Map each AT passenger type with money fields in provider, AED, and selected display currencies. */
-    private function passengerFares(array $passengerFares, array $response, string $providerCurrency, string $displayCurrency): array
+    private function passengerFares(array $passengerFares, array $response, string $providerCurrency, string $displayCurrency, bool $taxReliable): array
     {
-        return array_map(function (array $passengerFare) use ($response, $providerCurrency, $displayCurrency): array {
+        return array_map(function (array $passengerFare) use ($response, $providerCurrency, $displayCurrency, $taxReliable): array {
             $travelerType = strtoupper((string) data_get($passengerFare, 'PTC', 'ADT'));
 
             return [
                 'traveler_type' => $travelerType,
                 'total_passenger' => (int) data_get($response, $travelerType, 0),
+                'tax_breakdown_available' => $taxReliable,
+                'provider_tax_money' => $this->currencyConversionService->makeMoney(data_get($passengerFare, 'Tax', 0), $providerCurrency),
                 'display_money' => [
                     'base_price' => $this->displayMoney(data_get($passengerFare, 'Fare', 0), $providerCurrency, $displayCurrency),
                     'taxes' => $this->displayMoney(data_get($passengerFare, 'Tax', 0), $providerCurrency, $displayCurrency),
@@ -123,6 +128,28 @@ class AtFareBreakdownTransformer
                 ],
             ];
         }, $passengerFares);
+    }
+
+    /** Do not present inconsistent provider tax fields as a reliable breakdown. */
+    private function taxBreakdownIsReliable(array $fares, array $response): bool
+    {
+        $total = data_get($fares, 'TotalTax');
+        $passengerFares = data_get($fares, 'PTCFare', []);
+        if (!is_numeric($total) || !is_array($passengerFares) || $passengerFares === []) return false;
+
+        $sum = 0.0;
+        $weightedSum = 0.0;
+        foreach ($passengerFares as $passengerFare) {
+            $tax = data_get($passengerFare, 'Tax');
+            if (!is_numeric($tax) || (float) $tax < 0) return false;
+            $count = max((int) data_get($response, strtoupper((string) data_get($passengerFare, 'PTC', 'ADT')), 0), 1);
+            $sum += (float) $tax;
+            $weightedSum += (float) $tax * $count;
+        }
+
+        // Suppliers may report passenger values per traveller or per type.
+        // Accept either interpretation only when it reconciles with TotalTax.
+        return abs((float) $total - $sum) < 0.02 || abs((float) $total - $weightedSum) < 0.02;
     }
 
     /** Combine AT service-tax fields without double-counting taxes or transaction fees. */
