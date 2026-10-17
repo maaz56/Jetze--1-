@@ -1800,6 +1800,11 @@ function formatFlightDisplayMoney(flight) {
         return formatAmountWithCurrency(money.amount, money.currency);
     }
 
+    const provider = String(flight?.provider?.identifier || "").toUpperCase();
+    if (["AT", "HAKIMI"].includes(provider)) {
+        return "Price unavailable";
+    }
+
     return formatAmount(calculateTotalFare(flight));
 }
 
@@ -1807,7 +1812,13 @@ function formatFlightDisplayMoney(flight) {
  * Return the converted total used by the price filter and price sorting.
  */
 function displayFlightPrice(flight) {
-    return flightDisplayMoney(flight)?.amount ?? calculateTotalFare(flight);
+    const money = flightDisplayMoney(flight);
+    if (money) return money.amount;
+
+    const provider = String(flight?.provider?.identifier || "").toUpperCase();
+    return ["AT", "HAKIMI"].includes(provider)
+        ? Number.POSITIVE_INFINITY
+        : calculateTotalFare(flight);
 }
 
 /** Format a FlightInfo component with the currently selected currency rate. */

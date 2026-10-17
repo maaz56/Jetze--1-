@@ -85,7 +85,7 @@ onMounted(() => {
                             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
                                 <div>{{ promo.title }}</div>
                                 <div class="text-xs font-normal" :class="promo.is_active ? 'text-emerald-600' : 'text-gray-400'">
-                                    {{ promo.is_active ? 'Active' : 'Inactive' }} · Priority {{ promo.priority ?? 0 }}
+                                    {{ promo.is_active ? 'Active' : 'Inactive' }} · {{ promo.airline_id ? 'Airline override' : 'All-airlines default' }}
                                 </div>
                             </td>
                             <td class="px-6 py-4">

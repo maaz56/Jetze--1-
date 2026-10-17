@@ -69,7 +69,7 @@ class FlightController extends Controller
 
        $apiProviders = [
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            // ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
+            ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
             ['identifier' => 'AT', 'name' => 'Akbar Travels'],
 
             // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
@@ -662,7 +662,7 @@ class FlightController extends Controller
     private function applyHakimiReprice(array $flight, string $fareReference, array $providerPricing): array
     {
         $amount = (float) $providerPricing['totalFare'];
-        $currency = strtoupper((string) ($providerPricing['currency'] ?? data_get($flight, 'currencyCode', 'INR')));
+        $currency = strtoupper((string) config('hakimi.provider_currency', 'INR'));
 
         // The reprice response is authoritative. Preserve Hakimi as the source
         // in the quote payload even when a browser sent stale provider data.
@@ -704,7 +704,7 @@ class FlightController extends Controller
     {
         $searchAmount = (string) data_get($fare, 'provider_booking_money.amount', '0');
         $repriceAmount = (string) $providerPricing['totalFare'];
-        $currency = strtoupper((string) ($providerPricing['currency'] ?? data_get($fare, 'provider_booking_money.currency', 'INR')));
+        $currency = strtoupper((string) config('hakimi.provider_currency', 'INR'));
         $priceChanged = bccomp($searchAmount, $repriceAmount, 2) !== 0;
 
         Log::info('Hakimi checkout fare validation.', [

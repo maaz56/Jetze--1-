@@ -23,35 +23,23 @@ const isLoading = computed(() => store.getters["segmentMargin/isLoading"] || sto
 const isDeleteDialogOpen = ref(false);
 const marginToDelete = ref(null);
 
-function getAirlineTags(margin) {
+function getAirlineTag(airlineId, relation = null) {
     const airlineById = new Map(airlines.value.map((airline) => [Number(airline.id), airline]));
-    const blockedAirlines = Array.isArray(margin?.excluded_airline_ids) ? margin.excluded_airline_ids : [];
+    const matched = relation && Number(relation.id) === Number(airlineId)
+        ? relation
+        : airlineById.get(Number(airlineId));
 
-    if (blockedAirlines.length) {
-        return blockedAirlines.map((id) => {
-            const matched = margin?.airline && Number(margin.airline.id) === Number(id)
-                ? margin.airline
-                : airlineById.get(Number(id));
+    return {
+        id: airlineId,
+        code: matched?.iata_code || `ID:${airlineId}`,
+        name: matched?.name || "",
+        logo: matched?.logo_url || null,
+    };
+}
 
-            return {
-                id,
-                code: matched?.iata_code || `ID:${id}`,
-                name: matched?.name || "",
-                logo: matched?.logo_url || null,
-            };
-        });
-    }
-
-    if (margin?.airline_id && margin?.airline) {
-        return [{
-            id: margin.airline.id,
-            code: margin.airline.iata_code,
-            name: margin.airline.name,
-            logo: margin.airline.logo_url,
-        }];
-    }
-
-    return [];
+function getExcludedAirlineTags(margin) {
+    return (Array.isArray(margin?.excluded_airline_ids) ? margin.excluded_airline_ids : [])
+        .map((id) => getAirlineTag(id, margin?.airline));
 }
 
 async function fetchMargins() {
@@ -110,7 +98,7 @@ onMounted(() => {
                     <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300 uppercase text-xs font-semibold">
                         <tr>
                             <th class="px-6 py-4">Title</th>
-                            <th class="px-6 py-4">Excluded Airlines</th>
+                            <th class="px-6 py-4">Airline Scope</th>
                             <th class="px-6 py-4">Margin Rule</th>
                             <th class="px-6 py-4 text-right">Actions</th>
                         </tr>
@@ -128,23 +116,27 @@ onMounted(() => {
                             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
                                 <div>{{ margin.title }}</div>
                                 <div class="text-xs font-normal" :class="margin.is_active ? 'text-emerald-600' : 'text-gray-400'">
-                                    {{ margin.is_active ? 'Active' : 'Inactive' }} · Priority {{ margin.priority ?? 0 }}
+                                    {{ margin.is_active ? 'Active' : 'Inactive' }} · {{ margin.airline_id ? 'Airline override' : 'All-airlines default' }}
                                 </div>
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex flex-col gap-1">
                                     <span class="text-xs text-blue-600 font-bold uppercase">{{ margin.sale_channel }}</span>
-                                    <div v-if="getAirlineTags(margin).length" class="flex flex-wrap gap-1">
+                                    <div v-if="margin.airline_id" class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-medium">
+                                        <img v-if="getAirlineTag(margin.airline_id, margin.airline).logo" :src="getAirlineTag(margin.airline_id, margin.airline).logo" class="w-3 h-3 object-contain" />
+                                        {{ getAirlineTag(margin.airline_id, margin.airline).code }}
+                                    </div>
+                                    <span v-else class="text-[10px] text-gray-400 italic">ALL AIRLINES</span>
+                                    <div v-if="getExcludedAirlineTags(margin).length" class="flex flex-wrap gap-1 mt-1">
                                         <span
-                                            v-for="airlineTag in getAirlineTags(margin)"
-                                            :key="`margin-${margin.id}-airline-${airlineTag.id}`"
-                                            class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-medium"
+                                            v-for="airlineTag in getExcludedAirlineTags(margin)"
+                                            :key="`margin-${margin.id}-excluded-airline-${airlineTag.id}`"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-medium"
                                         >
                                             <img v-if="airlineTag.logo" :src="airlineTag.logo" class="w-3 h-3 object-contain" />
-                                            {{ airlineTag.code }}
+                                            Excludes {{ airlineTag.code }}
                                         </span>
                                     </div>
-                                    <span v-else class="text-[10px] text-gray-400 italic">NO EXCLUSIONS</span>
                                 </div>
                             </td>
                             <td class="px-6 py-4">

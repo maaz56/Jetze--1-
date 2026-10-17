@@ -21,10 +21,25 @@ class CommercialPricingService
             $provider = data_get($itinerary, 'provider', []);
             $displayCurrency = strtoupper((string) data_get($itinerary, 'displayCurrencyCode', 'AED'));
             $flights = data_get($itinerary, 'leg.flights', []);
+            $requiresCommercialMoney = $this->requiresCommercialMoney($provider);
 
             foreach ($flights as &$flight) {
-                foreach ($flight['fares'] ?? [] as &$fare) {
-                    $this->initializeFareMoney($fare, $displayCurrency);
+                if (!isset($flight['fares']) || !is_array($flight['fares'])) {
+                    continue;
+                }
+
+                foreach ($flight['fares'] as &$fare) {
+                    $initialized = $this->initializeFareMoney($fare, $displayCurrency);
+
+                    if (!$initialized && $requiresCommercialMoney) {
+                        throw new \UnexpectedValueException(
+                            sprintf(
+                                '%s fare %s is missing normalized provider money.',
+                                strtoupper((string) data_get($provider, 'identifier', 'Provider')),
+                                (string) ($fare['ref_id'] ?? 'unknown'),
+                            ),
+                        );
+                    }
                 }
                 unset($fare);
             }
@@ -38,11 +53,16 @@ class CommercialPricingService
                     $provider,
                     $displayCurrency,
                 );
+                $this->assertCommercialMoney($itinerary, $displayCurrency, $requiresCommercialMoney);
                 continue;
             }
 
             foreach ($flights as &$flight) {
-                foreach ($flight['fares'] ?? [] as &$fare) {
+                if (!isset($flight['fares']) || !is_array($flight['fares'])) {
+                    continue;
+                }
+
+                foreach ($flight['fares'] as &$fare) {
                     $fareReference = (string) ($fare['ref_id'] ?? '');
                     $costAed = (string) data_get($fare, 'provider_cost_base_money.amount', '0');
 
@@ -80,11 +100,13 @@ class CommercialPricingService
                         [$fareReference],
                         [(string) ($flight['ref_id'] ?? '')],
                     );
+                    $this->syncLegacySellingMoney($fare);
                 }
                 unset($fare);
             }
             unset($flight);
             data_set($itinerary, 'leg.flights', $flights);
+            $this->assertCommercialMoney($itinerary, $displayCurrency, $requiresCommercialMoney);
         }
         unset($itinerary);
 
@@ -92,14 +114,14 @@ class CommercialPricingService
     }
 
     /** Preserve provider cost money on a fare before pricing its complete selection. */
-    private function initializeFareMoney(array &$fare, string $displayCurrency): void
+    private function initializeFareMoney(array &$fare, string $displayCurrency): bool
     {
         $providerMoney = $fare['provider_booking_money'] ?? null;
         $providerGrossMoney = $fare['provider_gross_money'] ?? $providerMoney;
 
         if (!is_array($providerMoney) || !isset($providerMoney['amount'], $providerMoney['currency'])
             || !is_array($providerGrossMoney) || !isset($providerGrossMoney['amount'], $providerGrossMoney['currency'])) {
-            return;
+            return false;
         }
 
         $costBaseMoney = $this->currencyConversionService->toBaseMoney(
@@ -120,6 +142,53 @@ class CommercialPricingService
             $displayCurrency,
         );
         $fare['commercial_adjustments'] = [];
+        $this->syncLegacySellingMoney($fare);
+
+        return true;
+    }
+
+    /** Keep old UI consumers on the same selling price without losing source money. */
+    private function syncLegacySellingMoney(array &$fare): void
+    {
+        $fare['base_money'] = $fare['selling_base_money'];
+        $fare['display_money'] = $fare['selling_display_money'];
+    }
+
+    /** AT and Hakimi both participate in the locked commercial-pricing flow. */
+    private function requiresCommercialMoney(array $provider): bool
+    {
+        return in_array(
+            strtoupper((string) data_get($provider, 'identifier')),
+            ['AT', 'HAKIMI'],
+            true,
+        );
+    }
+
+    /** Prevent a normalized provider from silently leaking raw source currency to the UI. */
+    private function assertCommercialMoney(
+        array $itinerary,
+        string $displayCurrency,
+        bool $required,
+    ): void {
+        if (!$required) {
+            return;
+        }
+
+        foreach (data_get($itinerary, 'leg.flights', []) as $flight) {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                $baseCurrency = strtoupper((string) data_get($fare, 'selling_base_money.currency'));
+                $fareDisplayCurrency = strtoupper((string) data_get($fare, 'selling_display_money.currency'));
+
+                if ($baseCurrency !== 'AED' || $fareDisplayCurrency !== $displayCurrency) {
+                    throw new \UnexpectedValueException(
+                        sprintf(
+                            'Fare %s is missing reliable AED/display currency pricing.',
+                            (string) ($fare['ref_id'] ?? 'unknown'),
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     /** Price each provider-approved return pair as one commercial quote. */

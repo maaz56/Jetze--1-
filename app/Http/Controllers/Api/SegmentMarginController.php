@@ -61,33 +61,35 @@ class SegmentMarginController extends Controller
         ]);
     }
 
-    /** Validate the canonical excluded-airline payload and normalize legacy columns. */
+    /** Validate scope/exclusions and normalize the legacy multi-airline column. */
     private function validatedMargin(Request $request): array
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'sale_channel' => 'required|string|max:100',
+            'airline_id' => 'nullable|integer|exists:airlines,id',
             'excluded_airline_ids' => 'nullable|array',
             'excluded_airline_ids.*' => 'integer|distinct|exists:airlines,id',
             'margin_type' => 'required|in:markup,discount',
             'margin_value' => 'required|numeric|min:0',
             'is_active' => 'sometimes|boolean',
-            'priority' => 'sometimes|integer|between:-10000,10000',
         ]);
 
+        $airlineId = !empty($validated['airline_id']) ? (int) $validated['airline_id'] : null;
         $excludedAirlineIds = array_values(array_unique(array_map(
             'intval',
             $validated['excluded_airline_ids'] ?? [],
         )));
+        // A targeted airline cannot also be excluded from its own override.
+        $excludedAirlineIds = array_values(array_diff($excludedAirlineIds, $airlineId ? [$airlineId] : []));
 
         unset($validated['excluded_airline_ids']);
 
         return array_merge($validated, [
-            'airline_id' => null,
+            'airline_id' => $airlineId,
             'airline_ids' => [],
             'disabled_airline_ids' => $excludedAirlineIds,
             'is_active' => $validated['is_active'] ?? true,
-            'priority' => $validated['priority'] ?? 0,
             'value_currency' => 'AED',
         ]);
     }

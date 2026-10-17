@@ -88,7 +88,12 @@ class PriceQuoteService
         string $displayCurrency,
         array $providerPricing,
     ): PriceQuote {
-        $providerCurrency = strtoupper((string) ($providerPricing['currency'] ?? 'INR'));
+        $providerCurrency = strtoupper((string) config('hakimi.provider_currency', 'INR'));
+        $reportedCurrency = strtoupper((string) ($providerPricing['currency'] ?? $providerCurrency));
+
+        if ($reportedCurrency !== $providerCurrency) {
+            throw new \UnexpectedValueException('Hakimi Reprice currency does not match its INR provider contract.');
+        }
         $providerAmount = (string) $providerPricing['totalFare'];
 
         return $this->createCommercialQuote(

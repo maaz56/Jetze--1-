@@ -28,16 +28,22 @@ class SegmentMarginService
     /** Resolve the matching provider margin rule without changing provider fare amounts. */
     public function commercialRuleForFare(array $provider, array $flight): ?array
     {
+        $airlineMap = $this->airlineIdToIata();
         $margin = $this->resolveBestMargin(
             $this->activeMarginRules(),
             $this->buildFlightContext(
                 $flight,
-                $this->airlineIdToIata(),
+                $airlineMap,
                 $this->buildProviderChannels($provider),
             ),
         );
 
         if (!$margin) {
+            return null;
+        }
+
+        $eligibleSegmentCount = $this->eligibleSegmentCount([$flight], $margin, $airlineMap);
+        if ($eligibleSegmentCount === 0) {
             return null;
         }
 
@@ -48,11 +54,11 @@ class SegmentMarginService
             'calculation_type' => 'amount',
             'configured_value' => (string) $margin->margin_value,
             'passenger_count' => $this->getPassengerCount($flight),
-            'segment_count' => max(count($flight['segments'] ?? []), 1),
+            'segment_count' => $eligibleSegmentCount,
             'application_scope' => 'per_segment_per_passenger',
             'snapshot' => $margin->only([
                 'id', 'title', 'sale_channel', 'margin_type', 'margin_value',
-                'value_currency', 'disabled_airline_ids', 'is_active', 'priority',
+                'value_currency', 'airline_id', 'airline_ids', 'disabled_airline_ids', 'is_active',
             ]),
         ];
     }
@@ -75,8 +81,7 @@ class SegmentMarginService
         $bestEligibleSegmentCount = 0;
 
         foreach ($this->activeMarginRules() as $margin) {
-            $marginChannel = strtoupper((string) ($margin->sale_channel ?? ''));
-            if ($marginChannel !== '' && !in_array($marginChannel, array_map('strtoupper', $channels), true)) {
+            if (!$this->marginMatchesChannel($margin, $channels)) {
                 continue;
             }
 
@@ -85,7 +90,9 @@ class SegmentMarginService
                 continue;
             }
 
-            $rank = [(int) ($margin->priority ?? 0), (int) $margin->id];
+            // A rule scoped to a carrier automatically overrides a matching
+            // All Airlines default. Priority is intentionally not consulted.
+            $rank = [$this->targetsSpecificAirline($margin) ? 1 : 0, (int) $margin->id];
             if ($bestRank === null || $rank > $bestRank) {
                 $bestMargin = $margin;
                 $bestRank = $rank;
@@ -110,7 +117,7 @@ class SegmentMarginService
             'application_scope' => 'per_segment_per_passenger',
             'snapshot' => array_merge($bestMargin->only([
                 'id', 'title', 'sale_channel', 'margin_type', 'margin_value',
-                'value_currency', 'disabled_airline_ids', 'is_active', 'priority',
+                'value_currency', 'airline_id', 'airline_ids', 'disabled_airline_ids', 'is_active',
             ]), [
                 'total_physical_segments' => $this->physicalSegmentCount($flights),
                 'eligible_segment_count' => $bestEligibleSegmentCount,
@@ -166,7 +173,6 @@ class SegmentMarginService
             foreach ($flights as &$flight) {
                 // Get the list of individual flight segments
                 $segments = is_array($flight['segments'] ?? null) ? $flight['segments'] : [];
-                $segmentCount = count($segments);
                 
                 // Get the total passenger count based on passenger_fares records
                 $passengerCount = $this->getPassengerCount($flight);
@@ -177,6 +183,11 @@ class SegmentMarginService
                 $bestMargin = $this->resolveBestMargin($margins, $flightContext);
                 // If no matching rules are found, skip updating pricing for this flight
                 if (!$bestMargin) {
+                    continue;
+                }
+
+                $segmentCount = $this->eligibleSegmentCount([$flight], $bestMargin, $airlineIdToIata);
+                if ($segmentCount === 0) {
                     continue;
                 }
                 $fares = $flight['fares'] ?? [];
@@ -355,9 +366,14 @@ class SegmentMarginService
         return $this->getPassengerCount($flights[0] ?? []);
     }
 
-    /** Count physical segments after removing those belonging to excluded airlines. */
+    /** Count segments targeted by the rule after applying optional exclusions. */
     private function eligibleSegmentCount(array $flights, SegmentMargin $margin, array $airlineMap): int
     {
+        $targetIatas = collect($this->targetAirlineIds($margin))
+            ->map(fn ($id) => strtoupper((string) ($airlineMap[(int) $id] ?? '')))
+            ->filter()
+            ->unique()
+            ->all();
         $excludedIatas = collect($margin->disabled_airline_ids ?? [])
             ->map(fn ($id) => strtoupper((string) ($airlineMap[(int) $id] ?? '')))
             ->filter()
@@ -374,6 +390,12 @@ class SegmentMarginService
                     strtoupper((string) data_get($segment, 'marketing_carrier.iata', '')),
                     strtoupper((string) data_get($segment, 'operating_carrier.iata', '')),
                 ])));
+
+                // An airline-specific rule applies to that carrier's physical
+                // segments only. An empty target is the All Airlines default.
+                if ($targetIatas !== [] && !array_intersect($targetIatas, $segmentAirlines)) {
+                    continue;
+                }
 
                 if ($excludedIatas !== [] && array_intersect($excludedIatas, $segmentAirlines)) {
                     continue;
@@ -442,8 +464,9 @@ class SegmentMarginService
     /**
      * Resolves the single highest-scoring segment margin that matches a flight's context.
      *
-     * Scores all matching margins according to specific criteria specificity. In case
-     * of a tie, the margin with the higher database primary key (ID) is chosen.
+     * A carrier-scoped rule automatically wins over an All Airlines default.
+     * The latest matching record is only a deterministic tie-breaker for the
+     * same scope; manual priority is not part of the calculation.
      *
      * @param iterable $margins List of all segment margins.
      * @param array $flightContext Flight context dataset.
@@ -460,13 +483,11 @@ class SegmentMarginService
                 continue;
             }
 
-            // Calculate the specificity score of the rule
             $rank = [
-                (int) ($margin->priority ?? 0),
+                $this->targetsSpecificAirline($margin) ? 1 : 0,
                 (int) $margin->id,
             ];
 
-            // Explicit priority wins; the latest rule breaks an equal-priority tie.
             if ($bestRank === null || $rank > $bestRank) {
                 $best = $margin;
                 $bestRank = $rank;
@@ -481,7 +502,7 @@ class SegmentMarginService
      *
      * Filters evaluated:
      * - Sale Channel (TravelPort-GDS / TravelPort-NDC)
-     * - Airline (matching list of blocked airline IDs or individual airline_id)
+     * - Airline scope (specific carrier or All Airlines default)
      *
      * @param SegmentMargin $margin The margin rule database model.
      * @param array $flightContext Current flight traits.
@@ -495,12 +516,10 @@ class SegmentMarginService
             return false;
         }
 
-        // 2. Excluded airlines check using the canonical exclusion list.
-        $disabledAirlineIds = array_values(array_unique(array_filter(array_map(
-            'intval',
-            is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
-        ))));
-        if (!empty($disabledAirlineIds) && !empty(array_intersect($disabledAirlineIds, $flightContext['airline_ids'] ?? []))) {
+        // 2. A selected airline limits the rule to that carrier. A null scope
+        // is the All Airlines default.
+        $targetAirlineIds = $this->targetAirlineIds($margin);
+        if ($targetAirlineIds !== [] && empty(array_intersect($targetAirlineIds, $flightContext['airline_ids'] ?? []))) {
             return false;
         }
 
@@ -532,6 +551,7 @@ class SegmentMarginService
             'segment_count' => max($segmentCount, 1),
             'passenger_count' => max($passengerCount, 1),
             'multiplier_applied' => $multiplier,
+            'airline_id' => $margin->airline_id ? (int) $margin->airline_id : null,
             'disabled_airline_ids' => is_array($margin->disabled_airline_ids) ? array_values($margin->disabled_airline_ids) : [],
             'excluded_airline_ids' => is_array($margin->disabled_airline_ids)
                 ? array_values($margin->disabled_airline_ids)
@@ -645,6 +665,32 @@ class SegmentMarginService
     {
         return $this->activeMargins
             ??= SegmentMargin::query()->where('is_active', true)->get();
+    }
+
+    /** Match a rule's sale channel without deciding its airline scope. */
+    private function marginMatchesChannel(SegmentMargin $margin, array $channels): bool
+    {
+        $marginChannel = strtoupper((string) ($margin->sale_channel ?? ''));
+
+        return $marginChannel === '' || in_array($marginChannel, array_map('strtoupper', $channels), true);
+    }
+
+    /** A non-empty carrier target makes this the automatic override rule. */
+    private function targetsSpecificAirline(SegmentMargin $margin): bool
+    {
+        return $this->targetAirlineIds($margin) !== [];
+    }
+
+    /** Normalize legacy multi-airline data and the current single-airline scope. */
+    private function targetAirlineIds(SegmentMargin $margin): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            'intval',
+            array_merge(
+                is_array($margin->airline_ids) ? $margin->airline_ids : [],
+                $margin->airline_id ? [(int) $margin->airline_id] : [],
+            ),
+        ))));
     }
 
     /** Cache the airline lookup used by rule matching for this request. */

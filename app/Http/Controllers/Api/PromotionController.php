@@ -81,7 +81,6 @@ class PromotionController extends Controller
             'ticketing_start_date' => 'nullable|date',
             'ticketing_end_date' => 'nullable|date|after_or_equal:ticketing_start_date',
             'is_active' => 'sometimes|boolean',
-            'priority' => 'sometimes|integer|between:-10000,10000',
         ]);
 
         if ($validated['price_option'] === 'discount'
@@ -93,7 +92,6 @@ class PromotionController extends Controller
         }
 
         $validated['is_active'] = $validated['is_active'] ?? true;
-        $validated['priority'] = $validated['priority'] ?? 0;
         $validated['value_currency'] = 'AED';
 
         return $validated;

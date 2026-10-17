@@ -394,7 +394,7 @@ class UtilityService
             }
 
             $rank = [
-                (int) ($margin->priority ?? 0),
+                $this->marginTargetsSpecificAirline($margin) ? 1 : 0,
                 (int) $margin->id,
             ];
             if ($bestRank === null || $rank > $bestRank) {
@@ -410,6 +410,11 @@ class UtilityService
     {
         $marginChannel = strtoupper((string) ($margin->sale_channel ?? ''));
         if ($marginChannel !== '' && !in_array($marginChannel, $context['channels'] ?? [], true)) {
+            return false;
+        }
+
+        $targetAirlineIds = $this->marginTargetAirlineIds($margin);
+        if ($targetAirlineIds !== [] && empty(array_intersect($targetAirlineIds, $context['airline_ids'] ?? []))) {
             return false;
         }
 
@@ -432,7 +437,7 @@ class UtilityService
             }
 
             $rank = [
-                (int) ($promotion->priority ?? 0),
+                $this->promotionTargetsSpecificAirline($promotion) ? 1 : 0,
                 $this->promotionSpecificityScore($promotion),
                 (int) $promotion->id,
             ];
@@ -452,7 +457,8 @@ class UtilityService
             return false;
         }
 
-        if (!is_null($promotion->airline_id) && !in_array((int) $promotion->airline_id, $context['airline_ids'] ?? [], true)) {
+        $targetAirlineIds = $this->promotionTargetAirlineIds($promotion);
+        if ($targetAirlineIds !== [] && empty(array_intersect($targetAirlineIds, $context['airline_ids'] ?? []))) {
             return false;
         }
 
@@ -480,7 +486,7 @@ class UtilityService
     {
         $score = 0;
 
-        if (!is_null($promotion->airline_id)) {
+        if ($this->promotionTargetsSpecificAirline($promotion)) {
             $score += 10;
         }
         if (!empty($promotion->travel_start_date) || !empty($promotion->travel_end_date)) {
@@ -497,6 +503,38 @@ class UtilityService
         }
 
         return $score;
+    }
+
+    private function marginTargetsSpecificAirline(SegmentMargin $margin): bool
+    {
+        return $this->marginTargetAirlineIds($margin) !== [];
+    }
+
+    private function marginTargetAirlineIds(SegmentMargin $margin): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            'intval',
+            array_merge(
+                is_array($margin->airline_ids) ? $margin->airline_ids : [],
+                !is_null($margin->airline_id) ? [(int) $margin->airline_id] : [],
+            ),
+        ))));
+    }
+
+    private function promotionTargetsSpecificAirline(Promotion $promotion): bool
+    {
+        return $this->promotionTargetAirlineIds($promotion) !== [];
+    }
+
+    private function promotionTargetAirlineIds(Promotion $promotion): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            'intval',
+            array_merge(
+                is_array($promotion->airline_ids ?? null) ? $promotion->airline_ids : [],
+                !is_null($promotion->airline_id) ? [(int) $promotion->airline_id] : [],
+            ),
+        ))));
     }
 
     private function calculateSegmentMarginDelta(SegmentMargin $margin, int $segmentCount, int $passengerCount): float

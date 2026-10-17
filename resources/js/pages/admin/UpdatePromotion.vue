@@ -43,7 +43,6 @@ const form = ref({
     commission_type: "amount",
     commission_value: 0,
     is_active: true,
-    priority: 0,
     travel_start_date: "",
     travel_end_date: "",
     ticketing_start_date: "",
@@ -108,7 +107,6 @@ async function fetchData() {
                 commission_type: promo.commission_type,
                 commission_value: promo.commission_value,
                 is_active: promo.is_active ?? true,
-                priority: Number(promo.priority ?? 0),
                 travel_start_date: promo.travel_start_date,
                 travel_end_date: promo.travel_end_date,
                 ticketing_start_date: promo.ticketing_start_date,
@@ -193,15 +191,11 @@ onMounted(() => {
                         <Input id="title" v-model="form.title" placeholder="e.g. Summer Special 2024" required class="h-12 text-lg" />
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="flex items-center gap-3 text-sm font-medium">
                         <label class="flex items-center gap-3 text-sm font-medium">
                             <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
                             Active rule
                         </label>
-                        <div class="space-y-2">
-                            <Label class="text-sm font-semibold">Priority</Label>
-                            <Input v-model.number="form.priority" type="number" min="-10000" max="10000" class="h-12" />
-                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">

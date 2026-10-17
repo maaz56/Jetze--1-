@@ -99,6 +99,15 @@ class HakimiApiService
             throw new RuntimeException('Hakimi returned an invalid search response.');
         }
 
+        $data['results'] = array_map(function (array $offer): array {
+            $offer['currency'] = $this->providerCurrency(
+                $offer['currency'] ?? null,
+                'search',
+            );
+
+            return $offer;
+        }, $data['results'] ?? []);
+
         return $data;
     }
 
@@ -168,7 +177,37 @@ class HakimiApiService
             throw new RuntimeException('Hakimi returned an invalid reprice response.');
         }
 
+        $data['currency'] = $this->providerCurrency(
+            $data['currency'] ?? null,
+            'reprice',
+        );
+
         return $data;
+    }
+
+    /**
+     * Hakimi's test and live contracts are INR-based. Missing currency is
+     * normalized to INR, while an explicit mismatch is rejected so a provider
+     * amount can never be converted using the wrong source rate.
+     */
+    private function providerCurrency(mixed $reportedCurrency, string $operation): string
+    {
+        $expectedCurrency = strtoupper((string) config('hakimi.provider_currency', 'INR'));
+        $reportedCurrency = strtoupper(trim((string) $reportedCurrency));
+
+        if ($reportedCurrency !== '' && $reportedCurrency !== $expectedCurrency) {
+            Log::error('Hakimi returned an unexpected provider currency.', [
+                'operation' => $operation,
+                'expected_currency' => $expectedCurrency,
+                'reported_currency' => $reportedCurrency,
+            ]);
+
+            throw new RuntimeException(
+                "Hakimi {$operation} returned {$reportedCurrency}; {$expectedCurrency} was expected."
+            );
+        }
+
+        return $expectedCurrency;
     }
 
     /** Create a test booking after the final Reprice check. */

@@ -36,11 +36,11 @@ const isSaving = ref(false);
 const form = ref({
     title: "",
     sale_channel: "",
+    airline_id: null,
     excluded_airline_ids: [],
     margin_type: "markup",
     margin_value: 0,
     is_active: true,
-    priority: 0,
 });
 
 const airlines = computed(() => store.getters["airline/airlines"] || []);
@@ -48,6 +48,7 @@ const channels = computed(() => store.getters["segmentMargin/providers"] || []);
 const isLoading = computed(() => store.getters["segmentMargin/isLoading"] || store.getters["airline/isLoading"]);
 
 const airlineSearchOpen = ref(false);
+const scopeAirlineSearchOpen = ref(false);
 const airlineSearch = ref("");
 let airlineSearchDebounce = null;
 const airlineCache = ref([]);
@@ -70,6 +71,16 @@ const selectedAirlines = computed(() => {
     });
 });
 
+const selectedScopeAirline = computed(() => {
+    if (!form.value.airline_id) return null;
+    return airlineCache.value.find((airline) => Number(airline.id) === Number(form.value.airline_id)) || null;
+});
+
+const scopeAirlineButtonText = computed(() => {
+    const airline = selectedScopeAirline.value;
+    return airline ? `${airline.name} (${airline.iata_code})` : "All Airlines";
+});
+
 const airlineButtonText = computed(() => {
     if (!form.value.excluded_airline_ids?.length) return "No exclusions";
     if (form.value.excluded_airline_ids.length === 1) {
@@ -86,6 +97,15 @@ function toggleAirline(airlineId) {
     } else {
         form.value.excluded_airline_ids = [...ids, airlineId];
     }
+}
+
+function selectScopeAirline(airlineId = null) {
+    form.value.airline_id = airlineId;
+    if (airlineId) {
+        form.value.excluded_airline_ids = (form.value.excluded_airline_ids || [])
+            .filter((id) => Number(id) !== Number(airlineId));
+    }
+    scopeAirlineSearchOpen.value = false;
 }
 
 function clearAirlines() {
@@ -133,7 +153,8 @@ function handleAirlineSearchInput(event) {
     }, 300);
 }
 
-watch(airlineSearchOpen, (isOpen) => {
+watch([airlineSearchOpen, scopeAirlineSearchOpen], ([isExclusionOpen, isScopeOpen]) => {
+    const isOpen = isExclusionOpen || isScopeOpen;
     if (!isOpen) return;
     fetchAirlinesBySearch(airlineSearch.value);
 });
@@ -175,18 +196,14 @@ onMounted(() => {
                         <Input v-model="form.title" placeholder="e.g. Summer Special B2B Markup" required class="h-10" />
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex items-center gap-3 text-sm font-medium">
                         <label class="flex items-center gap-3 text-sm font-medium">
                             <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
                             Active rule
                         </label>
-                        <div class="space-y-2">
-                            <Label class="text-xs uppercase font-bold text-gray-500">Priority</Label>
-                            <Input v-model.number="form.priority" type="number" min="-10000" max="10000" class="h-10" />
-                        </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <div class="space-y-2">
                             <Label class="text-xs uppercase font-bold text-gray-500">Sale Channel</Label>
                             <Select v-model="form.sale_channel" required>
@@ -197,6 +214,41 @@ onMounted(() => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        <div class="space-y-2 lg:col-span-1">
+                            <Label class="text-xs uppercase font-bold text-gray-500">Airline Scope</Label>
+                            <Popover v-model:open="scopeAirlineSearchOpen">
+                                <PopoverTrigger as-child>
+                                    <Button variant="outline" class="w-full h-10 justify-between text-left font-normal">
+                                        <span class="truncate">{{ scopeAirlineButtonText }}</span>
+                                        <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent class="w-[300px] p-0">
+                                    <Command>
+                                        <CommandInput
+                                            placeholder="Search airline..."
+                                            :value="airlineSearch"
+                                            @input="handleAirlineSearchInput"
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No airline found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem value="all-airlines-scope" @select="() => selectScopeAirline()">
+                                                    <Check :class="cn('mr-2 h-4 w-4', !form.airline_id ? 'opacity-100' : 'opacity-0')" />
+                                                    All Airlines
+                                                </CommandItem>
+                                                <CommandItem v-for="airline in airlines" :key="`scope-${airline.id}`" :value="airline.name + ' ' + airline.iata_code" @select="() => { syncAirlineCache([airline]); selectScopeAirline(airline.id); }">
+                                                    <Check :class="cn('mr-2 h-4 w-4', Number(form.airline_id) === Number(airline.id) ? 'opacity-100' : 'opacity-0')" />
+                                                    {{ airline.name }} ({{ airline.iata_code }})
+                                                </CommandItem>
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            <p class="text-xs text-emerald-600 mt-1">Specific airline rules automatically override the All Airlines default.</p>
                         </div>
 
                         <div class="space-y-2 lg:col-span-1">

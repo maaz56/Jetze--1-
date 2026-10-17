@@ -295,7 +295,7 @@ class PromotionService
                 'id', 'title', 'sale_channel', 'reservation_type', 'price_option',
                 'commission_type', 'commission_value', 'value_currency', 'airline_id',
                 'travel_start_date', 'travel_end_date', 'ticketing_start_date',
-                'ticketing_end_date', 'is_active', 'priority',
+                'ticketing_end_date', 'is_active',
             ]), $matchedContext === [] ? [] : ['matched_context' => $matchedContext]),
         ];
     }
@@ -410,8 +410,11 @@ class PromotionService
                 continue;
             }
 
+            // A targeted airline rule is the automatic override for the
+            // matching All Airlines default. There is deliberately no manual
+            // priority in commercial pricing.
             $rank = [
-                (int) ($promotion->priority ?? 0),
+                $this->targetsSpecificAirline($promotion) ? 1 : 0,
                 $this->specificityScore($promotion),
                 (int) $promotion->id,
             ];
@@ -432,13 +435,7 @@ class PromotionService
             return false;
         }
 
-        $includedAirlineIds = array_values(array_unique(array_filter(array_map(
-            'intval',
-            array_merge(
-                is_array($promotion->airline_ids ?? null) ? $promotion->airline_ids : [],
-                !is_null($promotion->airline_id ?? null) ? [(int) $promotion->airline_id] : []
-            )
-        ))));
+        $includedAirlineIds = $this->targetAirlineIds($promotion);
 
         if (!empty($includedAirlineIds) && empty(array_intersect($includedAirlineIds, $flightContext['airline_ids'] ?? []))) {
             return false;
@@ -509,7 +506,7 @@ class PromotionService
     {
         $score = 0;
 
-        $hasIncludedAirlines = !empty($promotion->airline_ids) || !is_null($promotion->airline_id);
+        $hasIncludedAirlines = $this->targetsSpecificAirline($promotion);
         $hasDisabledAirlines = !empty($promotion->disabled_airline_ids);
         $hasTravelWindow = !empty($promotion->travel_start_date) || !empty($promotion->travel_end_date);
         $hasTicketingWindow = !empty($promotion->ticketing_start_date) || !empty($promotion->ticketing_end_date);
@@ -536,6 +533,24 @@ class PromotionService
         }
 
         return $score;
+    }
+
+    /** Airline scope is the first and only override level over an All Airlines rule. */
+    private function targetsSpecificAirline(Promotion $promotion): bool
+    {
+        return $this->targetAirlineIds($promotion) !== [];
+    }
+
+    /** Normalize the legacy multi-airline field and the current single-airline scope. */
+    private function targetAirlineIds(Promotion $promotion): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            'intval',
+            array_merge(
+                is_array($promotion->airline_ids ?? null) ? $promotion->airline_ids : [],
+                !is_null($promotion->airline_id ?? null) ? [(int) $promotion->airline_id] : [],
+            ),
+        ))));
     }
 
     /**

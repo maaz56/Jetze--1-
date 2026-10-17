@@ -4,12 +4,20 @@ namespace App\Transformers;
 
 use App\Models\Airline;
 use App\Models\Airport;
+use App\Services\CurrencyConversionService;
 use Illuminate\Support\Str;
 
 class HakimiFlightTransformer
 {
+    private readonly CurrencyConversionService $currencyConversionService;
     private array $airports = [];
     private array $airlines = [];
+
+    public function __construct(?CurrencyConversionService $currencyConversionService = null)
+    {
+        $this->currencyConversionService = $currencyConversionService
+            ?? app(CurrencyConversionService::class);
+    }
 
     /** Convert Hakimi's one-way test offers into Jetze's flight-card structure. */
     public function transform(array $response, array $params): array
@@ -21,7 +29,10 @@ class HakimiFlightTransformer
         return collect($response['results'] ?? [])
             ->filter(fn (array $offer): bool => !empty($offer['inventoryId']))
             ->map(function (array $offer) use ($origin, $destination, $date, $params): array {
-                $currency = strtoupper((string) ($offer['currency'] ?? 'INR'));
+                // Hakimi test and live amounts are both provider-payable INR.
+                // The API service validates any explicit response currency.
+                $currency = strtoupper((string) config('hakimi.provider_currency', 'INR'));
+                $displayCurrency = strtoupper((string) ($params['currency_code'] ?? 'AED'));
                 // Hakimi Search prices are per passenger. The flight card needs
                 // the current party's total, but the source amounts remain on
                 // the fare for the required Reprice call before booking.
@@ -36,6 +47,14 @@ class HakimiFlightTransformer
                     + ($childPrice * $counts['CHD'])
                     + ($infantPrice * $counts['INF']);
                 $taxTotal = (float) ($offer['taxTotal'] ?? 0) * array_sum($counts);
+                $providerBookingMoney = $this->currencyConversionService->makeMoney($total, $currency);
+                $providerGrossMoney = $this->currencyConversionService->makeMoney($total, $currency);
+                $baseMoney = $this->currencyConversionService->toBaseMoney($total, $currency);
+                $displayMoney = $this->currencyConversionService->convertMoney(
+                    $total,
+                    $currency,
+                    $displayCurrency,
+                );
                 $fare = [
                     'ref_id' => (string) Str::uuid(), 'inventory_id' => $offer['inventoryId'],
                     'offer_id' => $offer['offerId'] ?? null, 'fare_id' => $offer['fareId'] ?? null,
@@ -45,15 +64,28 @@ class HakimiFlightTransformer
                     // Search total for the selected party; Reprice totalFare is still authoritative.
                     'base_price' => $total, 'taxes' => $taxTotal,
                     'total_price' => $total, 'billable_price' => $total,
-                    'display_money' => ['currency' => $currency, 'amount' => $total],
-                    'provider_booking_money' => ['currency' => $currency, 'amount' => $total],
-                    'provider_gross_money' => ['currency' => $currency, 'amount' => $total],
+                    'source_money' => [
+                        'base_price' => $providerBookingMoney,
+                        'taxes' => $this->currencyConversionService->makeMoney($taxTotal, $currency),
+                        'total_price' => $providerGrossMoney,
+                    ],
+                    'base_money' => $baseMoney,
+                    'display_money' => $displayMoney,
+                    'provider_booking_money' => $providerBookingMoney,
+                    'provider_gross_money' => $providerGrossMoney,
                     'per_pax_prices' => ['adult' => $adultPrice, 'child' => $childPrice, 'infant' => $infantPrice],
                     'passenger_counts' => $counts, 'passenger_count' => array_sum($counts),
                     'is_refundable' => (bool) ($offer['refundable'] ?? false),
                     'seats_left' => $offer['seatsLeft'] ?? null, 'requires_reprice' => true,
                     'baggage_policies' => $this->baggagePolicies($offer['baggage'] ?? [], $segments),
-                    'passenger_fares' => $this->passengerFares($counts, $adultPrice, $childPrice, $infantPrice, $currency),
+                    'passenger_fares' => $this->passengerFares(
+                        $counts,
+                        $adultPrice,
+                        $childPrice,
+                        $infantPrice,
+                        $currency,
+                        $displayCurrency,
+                    ),
                 ];
                 $flight = [
                     'ref_id' => (string) Str::uuid(), 'from' => $firstSegment['from'], 'to' => $lastSegment['to'],
@@ -67,9 +99,10 @@ class HakimiFlightTransformer
                 ];
 
                 return [
+                    'stream_key' => 'HAKIMI:' . $offer['inventoryId'],
                     'provider' => ['name' => 'Travel With Hakimi (Test)', 'identifier' => 'HAKIMI', 'contentSource' => 'HAKIMI_TEST', 'sector' => $origin . '-' . $destination, 'travel_date' => $date],
                     'currencyCode' => $currency,
-                    'displayCurrencyCode' => strtoupper((string) ($params['currency_code'] ?? 'AED')),
+                    'displayCurrencyCode' => $displayCurrency,
                     'leg' => ['ref_id' => (string) Str::uuid(), 'flights' => [$flight], 'trip_nature' => 'one-way'],
                 ];
             })->values()->all();
@@ -133,13 +166,42 @@ class HakimiFlightTransformer
         return $policies;
     }
 
-    private function passengerFares(array $counts, float $adultPrice, float $childPrice, float $infantPrice, string $currency): array
+    private function passengerFares(
+        array $counts,
+        float $adultPrice,
+        float $childPrice,
+        float $infantPrice,
+        string $currency,
+        string $displayCurrency,
+    ): array
     {
-        return [
-            ['type' => 'ADT', 'count' => $counts['ADT'], 'base_price' => $adultPrice, 'total_price' => $adultPrice * $counts['ADT'], 'currency' => $currency],
-            ['type' => 'CHD', 'count' => $counts['CHD'], 'base_price' => $childPrice, 'total_price' => $childPrice * $counts['CHD'], 'currency' => $currency],
-            ['type' => 'INF', 'count' => $counts['INF'], 'base_price' => $infantPrice, 'total_price' => $infantPrice * $counts['INF'], 'currency' => $currency],
-        ];
+        return collect([
+            ['type' => 'ADT', 'count' => $counts['ADT'], 'unit_amount' => $adultPrice],
+            ['type' => 'CHD', 'count' => $counts['CHD'], 'unit_amount' => $childPrice],
+            ['type' => 'INF', 'count' => $counts['INF'], 'unit_amount' => $infantPrice],
+        ])->map(function (array $passengerFare) use ($currency, $displayCurrency): array {
+            $total = $passengerFare['unit_amount'] * $passengerFare['count'];
+
+            return [
+                'type' => $passengerFare['type'],
+                'count' => $passengerFare['count'],
+                'base_price' => $passengerFare['unit_amount'],
+                'total_price' => $total,
+                'currency' => $currency,
+                'source_money' => [
+                    'base_price' => $this->currencyConversionService->makeMoney($passengerFare['unit_amount'], $currency),
+                    'total_price' => $this->currencyConversionService->makeMoney($total, $currency),
+                ],
+                'base_money' => [
+                    'base_price' => $this->currencyConversionService->toBaseMoney($passengerFare['unit_amount'], $currency),
+                    'total_price' => $this->currencyConversionService->toBaseMoney($total, $currency),
+                ],
+                'display_money' => [
+                    'base_price' => $this->currencyConversionService->convertMoney($passengerFare['unit_amount'], $currency, $displayCurrency),
+                    'total_price' => $this->currencyConversionService->convertMoney($total, $currency, $displayCurrency),
+                ],
+            ];
+        })->values()->all();
     }
 
     /** Jetze's cards expect durations as integer minutes, not "02:00" strings. */
