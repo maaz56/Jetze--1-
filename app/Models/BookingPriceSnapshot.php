@@ -11,6 +11,8 @@ class BookingPriceSnapshot extends Model
 
     protected $guarded = [];
 
+    protected $appends = ['commercial_reconciliation'];
+
     protected function casts(): array
     {
         return [
@@ -40,5 +42,31 @@ class BookingPriceSnapshot extends Model
     public function priceQuote()
     {
         return $this->belongsTo(PriceQuote::class);
+    }
+
+    /** Return a permanent AED reconciliation summary for admin audit screens. */
+    public function getCommercialReconciliationAttribute(): ?array
+    {
+        if ($this->provider_aed_amount === null || $this->aed_amount === null) {
+            return null;
+        }
+
+        $adjustmentTotal = '0';
+        foreach ((array) $this->adjustments_snapshot as $adjustment) {
+            $adjustmentTotal = bcadd($adjustmentTotal, (string) ($adjustment['aed_amount'] ?? '0'), 8);
+        }
+
+        $expectedSelling = bcadd((string) $this->provider_aed_amount, $adjustmentTotal, 8);
+        $difference = bcsub((string) $this->aed_amount, $expectedSelling, 8);
+        $absoluteDifference = str_starts_with($difference, '-') ? substr($difference, 1) : $difference;
+
+        return [
+            'provider_cost_aed' => (string) $this->provider_aed_amount,
+            'adjustment_total_aed' => $adjustmentTotal,
+            'expected_selling_aed' => $expectedSelling,
+            'locked_selling_aed' => (string) $this->aed_amount,
+            'difference_aed' => $difference,
+            'is_reconciled' => bccomp($absoluteDifference, '0.01000000', 8) <= 0,
+        ];
     }
 }

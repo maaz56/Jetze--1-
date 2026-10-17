@@ -13,7 +13,11 @@ class AtFareBreakdownTransformer
     /** Transform AT FlightInfo into selected-fare money fields for the FlightSearch breakdown tab. */
     public function transform(array $response, array $flight, array $fareReferences): array
     {
-        $providerCurrency = strtoupper((string) (data_get($flight, 'currencyCode') ?: 'AED'));
+        $providerCurrency = strtoupper((string) (
+            data_get($response, 'CurrencyCode')
+            ?: data_get($flight, 'currencyCode')
+            ?: 'AED'
+        ));
         $displayCurrency = strtoupper((string) (data_get($flight, 'displayCurrencyCode') ?: 'AED'));
         $selectedReferences = array_flip($fareReferences);
         $selectedFaresByLeg = [];

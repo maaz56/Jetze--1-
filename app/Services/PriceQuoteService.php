@@ -18,6 +18,7 @@ class PriceQuoteService
     public function __construct(
         private readonly CurrencyConversionService $currencyConversionService,
         private readonly CommercialPricingService $commercialPricingService,
+        private readonly FareBreakdownPricingService $fareBreakdownPricingService,
     )
     {
     }
@@ -29,34 +30,27 @@ class PriceQuoteService
      */
     public function create(User $user, array $flight, array $fareReferences, string $displayCurrency): PriceQuote
     {
-        [$providerMoney, $provider] = $this->selectedProviderMoney($flight, $fareReferences);
-        $providerCurrency = $providerMoney['currency'];
-        $baseMoney = $this->currencyConversionService->toBaseMoney(
-            $providerMoney['amount'],
-            $providerCurrency,
-        );
-        $displayMoney = $this->currencyConversionService->convertMoney(
-            $providerMoney['amount'],
-            $providerCurrency,
-            $displayCurrency,
+        [$providerMoney, $providerGrossMoney, $provider] = $this->selectedProviderAmounts(
+            $flight,
+            $fareReferences,
         );
 
-        return PriceQuote::create([
-            'uuid' => (string) Str::uuid(),
-            'user_id' => $user->id,
-            'provider' => $provider,
-            'provider_amount' => $providerMoney['amount'],
-            'provider_currency' => $providerCurrency,
-            'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
-            'display_amount' => $displayMoney['amount'],
-            'display_currency' => $displayMoney['currency'],
-            'display_rate_to_aed' => $this->currencyConversionService->rateToBase($displayMoney['currency']),
-            'aed_amount' => $baseMoney['amount'],
-            'flight_data' => $flight,
-            'selected_fare_references' => array_values($fareReferences),
-            'expires_at' => now()->addMinutes(self::QUOTE_TTL_MINUTES),
-            'retain_until' => now()->addDays(self::QUOTE_RETENTION_DAYS),
-        ]);
+        return $this->createCommercialQuote(
+            $user,
+            $flight,
+            $fareReferences,
+            $displayCurrency,
+            [
+                'source' => 'server_cached_search',
+                'currency' => $providerMoney['currency'],
+                'net_amount' => $providerMoney['amount'],
+                'gross_amount' => $providerGrossMoney['amount'],
+            ],
+            $provider,
+            $providerMoney['amount'],
+            $providerGrossMoney['amount'],
+            $providerMoney['currency'],
+        );
     }
 
     /** Create an AT quote only after fresh provider pricing and AED commercial pricing are locked. */
@@ -131,6 +125,11 @@ class PriceQuoteService
             $providerCurrency,
             $displayCurrency,
         );
+        $fareBreakdownData = $this->fareBreakdownPricingService->withCommercialServiceCharges(
+            $fareBreakdownData,
+            $commercial,
+            $displayCurrency,
+        );
 
         return DB::transaction(function () use ($user, $flight, $fareReferences, $displayCurrency, $providerPricing, $fareBreakdownData, $provider, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial) {
             $quote = PriceQuote::create([
@@ -156,22 +155,10 @@ class PriceQuoteService
             ]);
 
             foreach ($commercial['adjustments'] as $adjustment) {
-                PriceQuoteAdjustment::create([
-                    'price_quote_id' => $quote->id,
-                    'type' => $adjustment['type'],
-                    'rule_id' => $adjustment['rule_id'],
-                    'title' => $adjustment['title'],
-                    'direction' => $adjustment['direction'],
-                    'calculation_type' => $adjustment['calculation_type'],
-                    'configured_value' => $adjustment['configured_value'],
-                    'passenger_count' => $adjustment['passenger_count'],
-                    'segment_count' => $adjustment['segment_count'],
-                    'aed_amount' => $adjustment['signed_aed_amount'],
-                    'rule_snapshot' => $adjustment['snapshot'],
-                ]);
+                $this->persistAdjustment($quote, $adjustment);
             }
 
-            return $quote;
+            return $quote->load('adjustments');
         });
     }
 
@@ -184,27 +171,48 @@ class PriceQuoteService
             (string) ($providerPricing['currency'] ?? $quote->provider_currency),
         );
         $providerAmount = (string) $providerPricing['net_amount'];
-        $baseMoney = $this->currencyConversionService->toBaseMoney(
-            $providerAmount,
-            $providerCurrency,
+        $providerGrossAmount = (string) (
+            $providerPricing['gross_amount']
+            ?? $quote->provider_gross_amount
+            ?? $providerAmount
         );
-        $displayMoney = $this->currencyConversionService->convertMoney(
+        $commercial = $this->commercialPricingService->quoteTotals(
+            $quote->flight_data,
+            $quote->selected_fare_references,
             $providerAmount,
+            $providerGrossAmount,
             $providerCurrency,
             $quote->display_currency,
         );
+        $fareBreakdownData = $this->fareBreakdownPricingService->withCommercialServiceCharges(
+            $quote->fare_breakdown_data,
+            $commercial,
+            $quote->display_currency,
+        );
 
-        $quote->update([
-            'provider_amount' => $providerAmount,
-            'provider_currency' => $providerCurrency,
-            'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
-            'display_amount' => $displayMoney['amount'],
-            'display_rate_to_aed' => $this->currencyConversionService->rateToBase($displayMoney['currency']),
-            'aed_amount' => $baseMoney['amount'],
-            'provider_pricing_data' => $providerPricing,
-        ]);
+        return DB::transaction(function () use ($quote, $providerPricing, $providerCurrency, $providerAmount, $providerGrossAmount, $commercial, $fareBreakdownData) {
+            $lockedQuote = PriceQuote::query()->lockForUpdate()->findOrFail($quote->id);
+            $lockedQuote->update([
+                'provider_amount' => $providerAmount,
+                'provider_currency' => $providerCurrency,
+                'provider_rate_to_aed' => $this->currencyConversionService->rateToBase($providerCurrency),
+                'provider_aed_amount' => $commercial['provider_cost_base_money']['amount'],
+                'provider_gross_amount' => $providerGrossAmount,
+                'provider_gross_aed_amount' => $commercial['provider_gross_base_money']['amount'],
+                'display_amount' => $commercial['selling_display_money']['amount'],
+                'display_rate_to_aed' => $this->currencyConversionService->rateToBase($lockedQuote->display_currency),
+                'aed_amount' => $commercial['selling_base_money']['amount'],
+                'provider_pricing_data' => $providerPricing,
+                'fare_breakdown_data' => $fareBreakdownData,
+            ]);
 
-        return $quote->refresh();
+            $lockedQuote->adjustments()->delete();
+            foreach ($commercial['adjustments'] as $adjustment) {
+                $this->persistAdjustment($lockedQuote, $adjustment);
+            }
+
+            return $lockedQuote->refresh()->load('adjustments');
+        });
     }
 
     /**
@@ -231,9 +239,9 @@ class PriceQuoteService
     /**
      * Find each selected fare and add the provider booking amounts without floats.
      *
-     * @return array{0: array{amount: string, currency: string}, 1: string}
+     * @return array{0: array{amount: string, currency: string}, 1: array{amount: string, currency: string}, 2: string}
      */
-    private function selectedProviderMoney(array $flight, array $fareReferences): array
+    private function selectedProviderAmounts(array $flight, array $fareReferences): array
     {
         $fareReferences = array_values(array_unique(array_filter($fareReferences, 'is_string')));
         $legs = data_get($flight, 'leg.flights', []);
@@ -262,6 +270,7 @@ class PriceQuoteService
 
         $providerCurrency = null;
         $providerAmount = '0';
+        $providerGrossAmount = '0';
 
         foreach ($matchedFares as $fare) {
             $money = $fare['provider_booking_money'] ?? null;
@@ -282,13 +291,48 @@ class PriceQuoteService
 
             $providerCurrency = $currency;
             $providerAmount = bcadd($providerAmount, (string) $money['amount'], 8);
+
+            $grossMoney = $fare['provider_gross_money'] ?? $money;
+            $grossCurrency = strtoupper((string) ($grossMoney['currency'] ?? ''));
+            if (!isset($grossMoney['amount']) || $grossCurrency !== $providerCurrency) {
+                throw ValidationException::withMessages([
+                    'fare_references' => 'The selected fare gross amount is missing or uses a different currency.',
+                ]);
+            }
+            $providerGrossAmount = bcadd($providerGrossAmount, (string) $grossMoney['amount'], 8);
         }
 
         return [
             ['amount' => $providerAmount, 'currency' => $providerCurrency],
+            ['amount' => $providerGrossAmount, 'currency' => $providerCurrency],
             data_get($flight, 'provider.identifier')
                 ?? data_get($flight, 'provider.name')
                 ?? 'unknown',
         ];
+    }
+
+    /** Store one immutable, fully ordered AED calculation row for quote audit. */
+    private function persistAdjustment(PriceQuote $quote, array $adjustment): PriceQuoteAdjustment
+    {
+        return PriceQuoteAdjustment::create([
+            'price_quote_id' => $quote->id,
+            'type' => $adjustment['type'],
+            'application_order' => $adjustment['application_order'],
+            'rule_id' => $adjustment['rule_id'],
+            'title' => $adjustment['title'],
+            'direction' => $adjustment['direction'],
+            'calculation_type' => $adjustment['calculation_type'],
+            'application_scope' => $adjustment['application_scope'],
+            'configured_value' => $adjustment['configured_value'],
+            'passenger_count' => $adjustment['passenger_count'],
+            'segment_count' => $adjustment['segment_count'],
+            'aed_amount' => $adjustment['signed_aed_amount'],
+            'amount_before_aed' => $adjustment['amount_before_aed'],
+            'amount_after_aed' => $adjustment['amount_after_aed'],
+            'fare_reference' => $adjustment['fare_reference'] ?? null,
+            'flight_reference' => $adjustment['flight_reference'] ?? null,
+            'formula_version' => $adjustment['formula_version'],
+            'rule_snapshot' => $adjustment['snapshot'],
+        ]);
     }
 }

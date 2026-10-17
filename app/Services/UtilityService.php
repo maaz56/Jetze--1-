@@ -32,8 +32,8 @@ class UtilityService
             $airlineIataToId
         );
 
-        $segmentMargins = SegmentMargin::query()->get();
-        $promotions = Promotion::query()->get();
+        $segmentMargins = SegmentMargin::query()->where('is_active', true)->get();
+        $promotions = Promotion::query()->where('is_active', true)->get();
 
         $offers = $this->normalizeList($response['OfferListResponse']['OfferID']);
         foreach ($offers as &$offer) {
@@ -54,6 +54,21 @@ class UtilityService
             $adjustments = [];
             $totalDelta = 0.0;
 
+            if ($bestPromotion) {
+                $promotionDelta = $this->calculatePromotionDelta($bestPromotion, $basePrice, $passengerCount);
+                $totalDelta += $promotionDelta;
+                $adjustments['promotion'] = [
+                    'id' => $bestPromotion->id,
+                    'title' => $bestPromotion->title,
+                    'price_option' => $bestPromotion->price_option ?? 'markup',
+                    'commission_type' => $bestPromotion->commission_type,
+                    'commission_value' => (float) $bestPromotion->commission_value,
+                    'applied_amount' => round(abs($promotionDelta), 2),
+                    'passenger_count' => $passengerCount,
+                    'multiplier_applied' => $passengerCount,
+                ];
+            }
+
             if ($bestSegmentMargin) {
                 $segmentDelta = $this->calculateSegmentMarginDelta(
                     $bestSegmentMargin,
@@ -70,21 +85,6 @@ class UtilityService
                     'segment_count' => (int) ($offerContext['segment_count'] ?? 1),
                     'passenger_count' => $passengerCount,
                     'multiplier_applied' => ((int) ($offerContext['segment_count'] ?? 1)) * $passengerCount,
-                ];
-            }
-
-            if ($bestPromotion) {
-                $promotionDelta = $this->calculatePromotionDelta($bestPromotion, $basePrice, $passengerCount);
-                $totalDelta += $promotionDelta;
-                $adjustments['promotion'] = [
-                    'id' => $bestPromotion->id,
-                    'title' => $bestPromotion->title,
-                    'price_option' => $bestPromotion->price_option ?? 'markup',
-                    'commission_type' => $bestPromotion->commission_type,
-                    'commission_value' => (float) $bestPromotion->commission_value,
-                    'applied_amount' => round(abs($promotionDelta), 2),
-                    'passenger_count' => $passengerCount,
-                    'multiplier_applied' => $passengerCount,
                 ];
             }
 
@@ -140,7 +140,7 @@ class UtilityService
         );
         $context = $this->mergeOneApiPriceContext($pricedItineraries, $context, $airlineIataToId);
 
-        $promotion = $this->resolveBestPromotion(Promotion::query()->get(), $context);
+        $promotion = $this->resolveBestPromotion(Promotion::query()->where('is_active', true)->get(), $context);
         if (!$promotion) {
             return $response;
         }
@@ -386,17 +386,20 @@ class UtilityService
     private function resolveBestSegmentMargin($margins, array $context): ?SegmentMargin
     {
         $best = null;
-        $bestScore = -1;
+        $bestRank = null;
 
         foreach ($margins as $margin) {
             if (!$this->segmentMarginMatches($margin, $context)) {
                 continue;
             }
 
-            $score = (!empty($margin->airline_ids) || !is_null($margin->airline_id)) ? 10 : 0;
-            if ($score > $bestScore || ($score === $bestScore && (int) $margin->id > (int) data_get($best, 'id', 0))) {
+            $rank = [
+                (int) ($margin->priority ?? 0),
+                (int) $margin->id,
+            ];
+            if ($bestRank === null || $rank > $bestRank) {
                 $best = $margin;
-                $bestScore = $score;
+                $bestRank = $rank;
             }
         }
 
@@ -412,11 +415,7 @@ class UtilityService
 
         $disabledAirlineIds = array_values(array_unique(array_filter(array_map(
             'intval',
-            array_merge(
-                is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
-                is_array($margin->airline_ids) ? $margin->airline_ids : [],
-                !is_null($margin->airline_id) ? [(int) $margin->airline_id] : []
-            )
+            is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
         ))));
 
         return empty($disabledAirlineIds) || empty(array_intersect($disabledAirlineIds, $context['airline_ids'] ?? []));
@@ -425,17 +424,21 @@ class UtilityService
     private function resolveBestPromotion($promotions, array $context): ?Promotion
     {
         $best = null;
-        $bestScore = -1;
+        $bestRank = null;
 
         foreach ($promotions as $promotion) {
             if (!$this->promotionMatches($promotion, $context)) {
                 continue;
             }
 
-            $score = $this->promotionSpecificityScore($promotion);
-            if ($score > $bestScore || ($score === $bestScore && (int) $promotion->id > (int) data_get($best, 'id', 0))) {
+            $rank = [
+                (int) ($promotion->priority ?? 0),
+                $this->promotionSpecificityScore($promotion),
+                (int) $promotion->id,
+            ];
+            if ($bestRank === null || $rank > $bestRank) {
                 $best = $promotion;
-                $bestScore = $score;
+                $bestRank = $rank;
             }
         }
 
@@ -508,10 +511,10 @@ class UtilityService
     {
         $commissionValue = (float) ($promotion->commission_value ?? 0);
         $commissionType = strtolower((string) ($promotion->commission_type ?? 'amount'));
-        $perPassengerAmount = $commissionType === 'percentage'
+        $multiplier = $commissionType === 'percentage' ? 1 : max($passengerCount, 1);
+        $amount = ($commissionType === 'percentage'
             ? ($basePrice * $commissionValue) / 100
-            : $commissionValue;
-        $amount = $perPassengerAmount * max($passengerCount, 1);
+            : $commissionValue) * $multiplier;
 
         return strtolower((string) ($promotion->price_option ?? 'markup')) === 'discount'
             ? -abs($amount)

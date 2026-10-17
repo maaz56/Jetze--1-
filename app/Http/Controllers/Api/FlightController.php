@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Currency;
 use App\Services\AtApiService;
 use App\Services\AncillaryPricingService;
+use App\Services\CommercialPricingService;
+use App\Services\FareBreakdownPricingService;
 use App\Services\FlightAggregationService;
 use App\Services\HakimiApiService;
 use App\Services\PriceQuoteService;
@@ -33,6 +35,8 @@ class FlightController extends Controller
     protected $atAncillaryTransformer;
     protected $atFareBreakdownTransformer;
     protected $hakimiApiService;
+    protected $commercialPricingService;
+    protected $fareBreakdownPricingService;
 
     public function __construct(
         FlightAggregationService $flightAggregationService,
@@ -43,6 +47,8 @@ class FlightController extends Controller
         AtAncillaryTransformer $atAncillaryTransformer,
         AtFareBreakdownTransformer $atFareBreakdownTransformer,
         HakimiApiService $hakimiApiService,
+        CommercialPricingService $commercialPricingService,
+        FareBreakdownPricingService $fareBreakdownPricingService,
     )
     {
         $this->flightAggregator = $flightAggregationService;
@@ -53,13 +59,15 @@ class FlightController extends Controller
         $this->atAncillaryTransformer = $atAncillaryTransformer;
         $this->atFareBreakdownTransformer = $atFareBreakdownTransformer;
         $this->hakimiApiService = $hakimiApiService;
+        $this->commercialPricingService = $commercialPricingService;
+        $this->fareBreakdownPricingService = $fareBreakdownPricingService;
     }
     public function fetchProviders()
     {
 
 
 
-        $apiProviders = [
+       $apiProviders = [
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
             // ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
             ['identifier' => 'AT', 'name' => 'Akbar Travels'],
@@ -420,6 +428,7 @@ class FlightController extends Controller
                         $mappedFlights = $availableTripCount >= $requiredTripCount
                             ? $atTransformer->fromAT($mergedResponse, $params)
                             : [];
+                        $mappedFlights = $this->commercialPricingService->applyToProviderFlights($mappedFlights);
                         $transformMs = round((microtime(true) - $transformStartedAt) * 1000, 2);
                         $deduplicationStartedAt = microtime(true);
                         $newFlights = [];
@@ -931,6 +940,7 @@ class FlightController extends Controller
             'fare_references' => ['required', 'array', 'min:1'],
             'fare_references.*' => ['required', 'string'],
             'search_token' => ['required', 'uuid'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
         ]);
 
         $flight = Cache::get($this->quoteFlightCacheKey(
@@ -968,12 +978,37 @@ class FlightController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'message' => 'AT fare details fetched successfully.',
-            'fare_breakdown' => $this->atFareBreakdownTransformer->transform(
+        $displayCurrency = $this->currencyCodeForRequest(
+            $request,
+            (string) data_get($flight, 'displayCurrencyCode', 'AED'),
+        );
+        $providerCurrency = strtoupper((string) (
+            $response['CurrencyCode']
+            ?? data_get($flight, 'currencyCode', 'AED')
+        ));
+        $flight['displayCurrencyCode'] = $displayCurrency;
+        $fareBreakdown = $this->fareBreakdownPricingService->withProviderPriceDetails(
+            $this->atFareBreakdownTransformer->transform(
                 $response,
                 $flight,
                 $validated['fare_references'],
+            ),
+        );
+        $commercial = $this->commercialPricingService->quoteTotals(
+            $flight,
+            $validated['fare_references'],
+            $this->atFlightInfoTotal($response, 'NetAmount', 'NetFare'),
+            $this->atFlightInfoTotal($response, 'GrossAmount', 'GrossFare'),
+            $providerCurrency,
+            $displayCurrency,
+        );
+
+        return response()->json([
+            'message' => 'AT fare details fetched successfully.',
+            'fare_breakdown' => $this->fareBreakdownPricingService->withCommercialServiceCharges(
+                $fareBreakdown,
+                $commercial,
+                $displayCurrency,
             ),
         ]);
     }
@@ -1002,7 +1037,7 @@ class FlightController extends Controller
             // FlightInfo display details in the currency selected at Book Now.
             $flight['displayCurrencyCode'] = $displayCurrency;
 
-            return $this->withAtFareBreakdownPriceDetails(
+            return $this->fareBreakdownPricingService->withProviderPriceDetails(
                 $this->atFareBreakdownTransformer->transform($response, $flight, $fareReferences),
             );
         } catch (\Throwable $exception) {
@@ -1014,43 +1049,25 @@ class FlightController extends Controller
         }
     }
 
-    /** Sum each selected trip's display-currency fare components for checkout Price Details. */
-    private function withAtFareBreakdownPriceDetails(array $fareBreakdown): array
+    /** Read a FlightInfo total or add its journey values without floating-point math. */
+    private function atFlightInfoTotal(array $response, string $totalField, string $journeyField): string
     {
-        $fields = [
-            'base_fare',
-            'taxes',
-            'fees',
-            'service_charges',
-            'surcharge',
-            'discount',
-            'total_price',
-        ];
-        $summary = [];
-
-        foreach ($fields as $field) {
-            $amount = '0';
-            $currency = $fareBreakdown['display_currency'] ?? null;
-
-            foreach ($fareBreakdown['trips'] ?? [] as $trip) {
-                $money = data_get($trip, "provider_money.{$field}.display_money");
-                if (!is_array($money) || !isset($money['amount'])) {
-                    continue;
-                }
-
-                $amount = bcadd($amount, (string) $money['amount'], 8);
-                $currency ??= $money['currency'] ?? null;
-            }
-
-            $summary[$field] = [
-                'amount' => $amount,
-                'currency' => $currency,
-            ];
+        if (
+            isset($response[$totalField])
+            && is_numeric($response[$totalField])
+            && bccomp((string) $response[$totalField], '0', 8) > 0
+        ) {
+            return (string) $response[$totalField];
         }
 
-        $fareBreakdown['price_details'] = $summary;
+        $total = '0';
+        foreach (($response['Trips'] ?? []) as $trip) {
+            foreach (($trip['Journey'] ?? []) as $journey) {
+                $total = bcadd($total, (string) ($journey[$journeyField] ?? '0'), 8);
+            }
+        }
 
-        return $fareBreakdown;
+        return $total;
     }
 
     /**
@@ -1122,9 +1139,9 @@ class FlightController extends Controller
     private function currencyCodeForRequest(Request $request, ?string $fallback = null): string
     {
         $requestedCode = strtoupper(trim((string) (
-            $fallback
-            ?? $request->input('currency_code')
+            $request->input('currency_code')
             ?? $request->input('currencyCode')
+            ?? $fallback
             ?? ''
         )));
 

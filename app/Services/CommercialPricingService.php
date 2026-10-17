@@ -5,6 +5,8 @@ namespace App\Services;
 /** Build provider selling prices in AED while preserving source amounts for audit. */
 class CommercialPricingService
 {
+    private const FORMULA_VERSION = 'commercial-v3';
+
     public function __construct(
         private readonly CurrencyConversionService $currencyConversionService,
         private readonly SegmentMarginService $segmentMarginService,
@@ -12,116 +14,223 @@ class CommercialPricingService
     ) {
     }
 
-    /** Add AED selling and selected-display money to AT and Hakimi search fares. */
+    /** Add AED selling and selected-display money to every normalized provider fare. */
     public function applyToProviderFlights(array $itineraries): array
     {
         foreach ($itineraries as &$itinerary) {
-            $providerIdentifier = strtoupper((string) data_get($itinerary, 'provider.identifier'));
-
-            if (!in_array($providerIdentifier, ['AT', 'HAKIMI'], true)) {
-                continue;
-            }
-
             $provider = data_get($itinerary, 'provider', []);
             $displayCurrency = strtoupper((string) data_get($itinerary, 'displayCurrencyCode', 'AED'));
+            $flights = data_get($itinerary, 'leg.flights', []);
 
-            foreach (data_get($itinerary, 'leg.flights', []) as &$flight) {
+            foreach ($flights as &$flight) {
                 foreach ($flight['fares'] ?? [] as &$fare) {
-                    $providerMoney = $fare['provider_booking_money'] ?? null;
-                    $providerGrossMoney = $fare['provider_gross_money'] ?? $providerMoney;
-                    if (!is_array($providerMoney) || !isset($providerMoney['amount'], $providerMoney['currency'])
-                        || !is_array($providerGrossMoney) || !isset($providerGrossMoney['amount'], $providerGrossMoney['currency'])) {
-                        continue;
-                    }
-
-                    $costBaseMoney = $this->currencyConversionService->toBaseMoney(
-                        $providerMoney['amount'],
-                        $providerMoney['currency'],
-                    );
-                    $grossBaseMoney = $this->currencyConversionService->toBaseMoney(
-                        $providerGrossMoney['amount'],
-                        $providerGrossMoney['currency'],
-                    );
-                    $margin = $this->segmentMarginService->commercialRuleForFare($provider, $flight);
-                    $marginAmount = $this->adjustmentAmount($costBaseMoney['amount'], $margin);
-                    $beforePromotion = bcadd($costBaseMoney['amount'], $marginAmount, 8);
-                    $promotion = $this->promotionService->commercialRuleForFare($provider, $flight);
-                    $promotionAmount = $this->adjustmentAmount($beforePromotion, $promotion);
-                    $sellingAed = bcadd($beforePromotion, $promotionAmount, 8);
-
-                    if (bccomp($sellingAed, '0', 8) < 0) {
-                        $sellingAed = '0';
-                    }
-
-                    $fare['provider_cost_base_money'] = $costBaseMoney;
-                    $fare['provider_gross_base_money'] = $grossBaseMoney;
-                    $fare['selling_base_money'] = $this->currencyConversionService->makeMoney($sellingAed, 'AED');
-                    $fare['selling_display_money'] = $this->currencyConversionService->convertMoney($sellingAed, 'AED', $displayCurrency);
-                    $fare['commercial_adjustments'] = array_values(array_filter([
-                        $this->adjustmentPayload('segment_margin', $margin, $marginAmount),
-                        $this->adjustmentPayload('promotion', $promotion, $promotionAmount),
-                    ]));
+                    $this->initializeFareMoney($fare, $displayCurrency);
                 }
                 unset($fare);
             }
             unset($flight);
+            data_set($itinerary, 'leg.flights', $flights);
 
             if (!empty($itinerary['leg']['fare_combinations'])) {
-                $itinerary['leg']['fare_combinations'] = $this->refreshCombinationMoney(
+                $itinerary['leg']['fare_combinations'] = $this->priceFareCombinations(
                     $itinerary['leg']['fare_combinations'],
-                    $itinerary['leg']['flights'],
+                    $itinerary,
+                    $provider,
+                    $displayCurrency,
                 );
+                continue;
             }
+
+            foreach ($flights as &$flight) {
+                foreach ($flight['fares'] ?? [] as &$fare) {
+                    $fareReference = (string) ($fare['ref_id'] ?? '');
+                    $costAed = (string) data_get($fare, 'provider_cost_base_money.amount', '0');
+
+                    if ($fareReference === '' || bccomp($costAed, '0', 8) <= 0) {
+                        continue;
+                    }
+
+                    $promotion = $this->promotionService->commercialRuleForItinerary(
+                        $provider,
+                        $itinerary,
+                        [$fareReference],
+                    );
+                    $promotionResult = $this->applyAdjustment($costAed, $promotion);
+                    $margin = $this->segmentMarginService->commercialRuleForItinerary(
+                        $provider,
+                        $itinerary,
+                        [$fareReference],
+                    );
+                    $marginResult = $this->applyAdjustment($promotionResult['amount_after'], $margin);
+
+                    $fare['selling_base_money'] = $this->currencyConversionService->makeMoney(
+                        $marginResult['amount_after'],
+                        'AED',
+                    );
+                    $fare['selling_display_money'] = $this->currencyConversionService->convertMoney(
+                        $marginResult['amount_after'],
+                        'AED',
+                        $displayCurrency,
+                    );
+                    $fare['commercial_adjustments'] = $this->buildAdjustmentPayloads(
+                        $promotion,
+                        $promotionResult,
+                        $margin,
+                        $marginResult,
+                        [$fareReference],
+                        [(string) ($flight['ref_id'] ?? '')],
+                    );
+                }
+                unset($fare);
+            }
+            unset($flight);
+            data_set($itinerary, 'leg.flights', $flights);
         }
         unset($itinerary);
 
         return $itineraries;
     }
 
-    /** Recalculate paired fare selling money and keep the cheapest pair first. */
-    private function refreshCombinationMoney(array $combinations, array $flights): array
+    /** Preserve provider cost money on a fare before pricing its complete selection. */
+    private function initializeFareMoney(array &$fare, string $displayCurrency): void
     {
-        $faresByReference = collect($flights)
-            ->flatMap(fn (array $flight) => $flight['fares'] ?? [])
-            ->keyBy('ref_id');
+        $providerMoney = $fare['provider_booking_money'] ?? null;
+        $providerGrossMoney = $fare['provider_gross_money'] ?? $providerMoney;
 
+        if (!is_array($providerMoney) || !isset($providerMoney['amount'], $providerMoney['currency'])
+            || !is_array($providerGrossMoney) || !isset($providerGrossMoney['amount'], $providerGrossMoney['currency'])) {
+            return;
+        }
+
+        $costBaseMoney = $this->currencyConversionService->toBaseMoney(
+            $providerMoney['amount'],
+            $providerMoney['currency'],
+        );
+        $grossBaseMoney = $this->currencyConversionService->toBaseMoney(
+            $providerGrossMoney['amount'],
+            $providerGrossMoney['currency'],
+        );
+
+        $fare['provider_cost_base_money'] = $costBaseMoney;
+        $fare['provider_gross_base_money'] = $grossBaseMoney;
+        $fare['selling_base_money'] = $this->currencyConversionService->makeMoney($costBaseMoney['amount'], 'AED');
+        $fare['selling_display_money'] = $this->currencyConversionService->convertMoney(
+            $costBaseMoney['amount'],
+            'AED',
+            $displayCurrency,
+        );
+        $fare['commercial_adjustments'] = [];
+    }
+
+    /** Price each provider-approved return pair as one commercial quote. */
+    private function priceFareCombinations(
+        array $combinations,
+        array $itinerary,
+        array $provider,
+        string $displayCurrency,
+    ): array {
         return collect($combinations)
-            ->map(function (array $combination) use ($faresByReference): array {
-                $fareReferences = array_values($combination['fare_references'] ?? []);
-                $onwardReference = $fareReferences[0] ?? null;
-                $returnReference = $fareReferences[1] ?? null;
-                $onwardFare = $faresByReference->get($onwardReference);
-                $returnFare = $faresByReference->get($returnReference);
-                $onwardMoney = data_get($onwardFare, 'selling_display_money')
-                    ?? data_get($onwardFare, 'display_money');
-                $returnMoney = data_get($returnFare, 'selling_display_money')
-                    ?? data_get($returnFare, 'display_money');
-                $onwardBaseMoney = data_get($onwardFare, 'selling_base_money')
-                    ?? data_get($onwardFare, 'base_money');
-                $returnBaseMoney = data_get($returnFare, 'selling_base_money')
-                    ?? data_get($returnFare, 'base_money');
+            ->map(function (array $combination) use ($itinerary, $provider, $displayCurrency): array {
+                $fareReferences = array_values(array_filter(
+                    $combination['fare_references'] ?? [],
+                    'is_string',
+                ));
+                $selectedFares = $this->selectedFares($itinerary, $fareReferences);
+                $providerCurrency = null;
+                $providerNetAmount = '0';
+                $providerGrossAmount = '0';
+                $flightReferences = [];
 
-                if (is_array($onwardBaseMoney) && is_array($returnBaseMoney)
-                    && isset($onwardBaseMoney['amount'], $returnBaseMoney['amount'])) {
-                    $combination['combined_base_money'] = [
-                        'currency' => 'AED',
-                        'amount' => bcadd((string) $onwardBaseMoney['amount'], (string) $returnBaseMoney['amount'], 8),
-                    ];
+                foreach ($selectedFares as $item) {
+                    $fareCurrency = strtoupper((string) data_get($item, 'fare.provider_booking_money.currency'));
+                    $grossCurrency = strtoupper((string) data_get(
+                        $item,
+                        'fare.provider_gross_money.currency',
+                        $fareCurrency,
+                    ));
+
+                    if ($providerCurrency !== null && $providerCurrency !== $fareCurrency) {
+                        throw new \InvalidArgumentException('Combined provider fares must use one currency.');
+                    }
+                    if ($grossCurrency !== $fareCurrency) {
+                        throw new \InvalidArgumentException('Combined provider gross fares must use the booking currency.');
+                    }
+
+                    $providerCurrency = $fareCurrency;
+                    $providerNetAmount = bcadd(
+                        $providerNetAmount,
+                        (string) data_get($item, 'fare.provider_booking_money.amount', '0'),
+                        8,
+                    );
+                    $providerGrossAmount = bcadd(
+                        $providerGrossAmount,
+                        (string) data_get(
+                            $item,
+                            'fare.provider_gross_money.amount',
+                            data_get($item, 'fare.provider_booking_money.amount', '0'),
+                        ),
+                        8,
+                    );
+                    $flightReferences[] = (string) ($item['flight']['ref_id'] ?? '');
                 }
 
-                if (is_array($onwardMoney) && is_array($returnMoney)
-                    && isset($onwardMoney['amount'], $onwardMoney['currency'], $returnMoney['amount'], $returnMoney['currency'])
-                    && $onwardMoney['currency'] === $returnMoney['currency']) {
-                    $combination['combined_display_money'] = [
-                        'currency' => $onwardMoney['currency'],
-                        'amount' => bcadd((string) $onwardMoney['amount'], (string) $returnMoney['amount'], 8),
-                    ];
+                if (!$providerCurrency || bccomp($providerNetAmount, '0', 8) <= 0) {
+                    return $combination;
                 }
+
+                $costBaseMoney = $this->currencyConversionService->toBaseMoney(
+                    $providerNetAmount,
+                    $providerCurrency,
+                );
+                $grossBaseMoney = $this->currencyConversionService->toBaseMoney(
+                    $providerGrossAmount,
+                    $providerCurrency,
+                );
+                $promotion = $this->promotionService->commercialRuleForItinerary(
+                    $provider,
+                    $itinerary,
+                    $fareReferences,
+                );
+                $promotionResult = $this->applyAdjustment($costBaseMoney['amount'], $promotion);
+                $margin = $this->segmentMarginService->commercialRuleForItinerary(
+                    $provider,
+                    $itinerary,
+                    $fareReferences,
+                );
+                $marginResult = $this->applyAdjustment($promotionResult['amount_after'], $margin);
+
+                $combination['provider_booking_money'] = [
+                    'amount' => $providerNetAmount,
+                    'currency' => $providerCurrency,
+                ];
+                $combination['provider_gross_money'] = [
+                    'amount' => $providerGrossAmount,
+                    'currency' => $providerCurrency,
+                ];
+                $combination['provider_cost_base_money'] = $costBaseMoney;
+                $combination['provider_gross_base_money'] = $grossBaseMoney;
+                $combination['combined_base_money'] = $this->currencyConversionService->makeMoney(
+                    $marginResult['amount_after'],
+                    'AED',
+                );
+                $combination['combined_display_money'] = $this->currencyConversionService->convertMoney(
+                    $marginResult['amount_after'],
+                    'AED',
+                    $displayCurrency,
+                );
+                $combination['commercial_adjustments'] = $this->buildAdjustmentPayloads(
+                    $promotion,
+                    $promotionResult,
+                    $margin,
+                    $marginResult,
+                    $fareReferences,
+                    $flightReferences,
+                );
 
                 return $combination;
             })
             ->sortBy(fn (array $combination): float => (float) (
-                data_get($combination, 'combined_display_money.amount')
+                data_get($combination, 'combined_base_money.amount')
                     ?? $combination['combined_amount']
                     ?? INF
             ))
@@ -141,55 +250,43 @@ class CommercialPricingService
     {
         $costBaseMoney = $this->currencyConversionService->toBaseMoney($providerNetAmount, $providerCurrency);
         $grossBaseMoney = $this->currencyConversionService->toBaseMoney($providerGrossAmount, $providerCurrency);
+        if (bccomp($providerNetAmount, '0', 8) <= 0) {
+            throw new \InvalidArgumentException('Fresh provider pricing must be greater than zero.');
+        }
+
         $selectedFares = $this->selectedFares($flight, $fareReferences);
-        $previousNetTotal = '0';
+        $flightReferences = [];
 
         foreach ($selectedFares as $item) {
-            $previousNetTotal = bcadd(
-                $previousNetTotal,
-                (string) data_get($item, 'fare.provider_booking_money.amount'),
-                8,
-            );
-        }
-
-        $adjustments = [];
-        $allocatedNet = '0';
-        $sellingAed = '0';
-        $lastIndex = count($selectedFares) - 1;
-
-        foreach ($selectedFares as $index => $item) {
-            $fareNet = $index === $lastIndex
-                ? bcsub($costBaseMoney['amount'], $allocatedNet, 8)
-                : bcdiv(
-                    bcmul(
-                        $costBaseMoney['amount'],
-                        (string) data_get($item, 'fare.provider_booking_money.amount'),
-                        12,
-                    ),
-                    $previousNetTotal,
-                    8,
-                );
-            $allocatedNet = bcadd($allocatedNet, $fareNet, 8);
-
-            $margin = $this->segmentMarginService->commercialRuleForFare($flight['provider'] ?? [], $item['flight']);
-            $marginAmount = $this->adjustmentAmount($fareNet, $margin);
-            $promotion = $this->promotionService->commercialRuleForFare($flight['provider'] ?? [], $item['flight']);
-            $promotionAmount = $this->adjustmentAmount(bcadd($fareNet, $marginAmount, 8), $promotion);
-            $sellingAed = bcadd($sellingAed, bcadd(bcadd($fareNet, $marginAmount, 8), $promotionAmount, 8), 8);
-
-            foreach ([
-                $this->adjustmentPayload('segment_margin', $margin, $marginAmount),
-                $this->adjustmentPayload('promotion', $promotion, $promotionAmount),
-            ] as $adjustment) {
-                if ($adjustment) {
-                    $adjustment['rule_snapshot']['fare_ref_id'] = $item['fare']['ref_id'];
-                    $adjustment['rule_snapshot']['flight_ref_id'] = $item['flight']['ref_id'] ?? null;
-                    $adjustments[] = $adjustment;
-                }
+            $fareCurrency = strtoupper((string) data_get($item, 'fare.provider_booking_money.currency'));
+            if ($fareCurrency !== strtoupper($providerCurrency)) {
+                throw new \InvalidArgumentException('Selected fares do not use the repriced provider currency.');
             }
+            $flightReferences[] = (string) ($item['flight']['ref_id'] ?? '');
         }
 
-        $sellingAed = bccomp($sellingAed, '0', 8) < 0 ? '0' : $sellingAed;
+        $promotion = $this->promotionService->commercialRuleForItinerary(
+            $flight['provider'] ?? [],
+            $flight,
+            $fareReferences,
+        );
+        $promotionResult = $this->applyAdjustment($costBaseMoney['amount'], $promotion);
+        $margin = $this->segmentMarginService->commercialRuleForItinerary(
+            $flight['provider'] ?? [],
+            $flight,
+            $fareReferences,
+        );
+        $marginResult = $this->applyAdjustment($promotionResult['amount_after'], $margin);
+        $sellingAed = $marginResult['amount_after'];
+        $adjustments = $this->buildAdjustmentPayloads(
+            $promotion,
+            $promotionResult,
+            $margin,
+            $marginResult,
+            $fareReferences,
+            $flightReferences,
+        );
+        $this->assertQuoteReconciles($costBaseMoney['amount'], $sellingAed, $adjustments);
 
         return [
             'provider_cost_base_money' => $costBaseMoney,
@@ -200,11 +297,15 @@ class CommercialPricingService
         ];
     }
 
-    /** Calculate one signed AED adjustment from its rule snapshot. */
-    private function adjustmentAmount(string $amountBeforeAdjustment, ?array $rule): string
+    /** Apply one rule in AED and cap discounts so no intermediate total is negative. */
+    private function applyAdjustment(string $amountBeforeAdjustment, ?array $rule): array
     {
         if (!$rule) {
-            return '0';
+            return [
+                'amount_before' => $amountBeforeAdjustment,
+                'signed_amount' => '0',
+                'amount_after' => $amountBeforeAdjustment,
+            ];
         }
 
         $value = (string) $rule['configured_value'];
@@ -216,21 +317,112 @@ class CommercialPricingService
             $amount = bcmul($value, $multiplier, 8);
         }
 
-        return $rule['direction'] === 'discount' ? '-' . $amount : $amount;
+        // Lock every normal AED adjustment at AED precision. This prevents a
+        // display/payment mismatch caused by retaining hidden fractions.
+        $amount = $this->currencyConversionService->makeMoney($amount, 'AED')['amount'];
+
+        $signedAmount = bccomp($amount, '0', 2) === 0
+            ? '0.00'
+            : ($rule['direction'] === 'discount' ? '-' . $amount : $amount);
+        $amountAfter = bcadd($amountBeforeAdjustment, $signedAmount, 8);
+
+        if (bccomp($amountAfter, '0', 8) < 0) {
+            $signedAmount = bcmul($amountBeforeAdjustment, '-1', 8);
+            $amountAfter = '0';
+        }
+
+        return [
+            'amount_before' => $amountBeforeAdjustment,
+            'signed_amount' => $signedAmount,
+            'amount_after' => $amountAfter,
+        ];
     }
 
-    /** Create the immutable adjustment data that will be persisted with a quote in phase 2. */
-    private function adjustmentPayload(string $type, ?array $rule, string $amount): ?array
+    /** Create one ordered adjustment payload for search display and later quote persistence. */
+    private function adjustmentPayload(string $type, int $order, ?array $rule, array $result): ?array
     {
         if (!$rule) {
             return null;
         }
 
-        return array_merge($rule, [
+        $audit = [
             'type' => $type,
-            'aed_amount' => $this->currencyConversionService->makeMoney(ltrim($amount, '-'), 'AED')['amount'],
-            'signed_aed_amount' => $amount,
+            'application_order' => $order,
+            'application_scope' => $rule['application_scope'] ?? null,
+            'aed_amount' => $this->currencyConversionService->makeMoney(ltrim($result['signed_amount'], '-'), 'AED')['amount'],
+            'signed_aed_amount' => $result['signed_amount'],
+            'amount_before_aed' => $result['amount_before'],
+            'amount_after_aed' => $result['amount_after'],
+            'formula_version' => self::FORMULA_VERSION,
+        ];
+
+        $audit['snapshot'] = array_merge((array) ($rule['snapshot'] ?? []), [
+            'direction' => $rule['direction'],
+            'calculation_type' => $rule['calculation_type'],
+            'configured_value' => $rule['configured_value'],
+            'passenger_count' => $rule['passenger_count'],
+            'segment_count' => $rule['segment_count'],
+            'application_order' => $order,
+            'application_scope' => $audit['application_scope'],
+            'amount_before_aed' => $result['amount_before'],
+            'signed_aed_amount' => $result['signed_amount'],
+            'amount_after_aed' => $result['amount_after'],
+            'formula_version' => self::FORMULA_VERSION,
         ]);
+
+        return array_merge($rule, $audit);
+    }
+
+    /** Build promotion then segment-margin audit rows for one complete selection. */
+    private function buildAdjustmentPayloads(
+        ?array $promotion,
+        array $promotionResult,
+        ?array $margin,
+        array $marginResult,
+        array $fareReferences,
+        array $flightReferences,
+    ): array {
+        $fareReferences = array_values(array_unique(array_filter(
+            $fareReferences,
+            static fn ($reference): bool => is_string($reference) && $reference !== '',
+        )));
+        $flightReferences = array_values(array_unique(array_filter(
+            $flightReferences,
+            static fn ($reference): bool => is_string($reference) && $reference !== '',
+        )));
+
+        return array_values(array_filter(array_map(
+            function (?array $adjustment) use ($fareReferences, $flightReferences): ?array {
+                if (!$adjustment) {
+                    return null;
+                }
+
+                $adjustment['fare_reference'] = implode('|', $fareReferences) ?: null;
+                $adjustment['flight_reference'] = implode('|', $flightReferences) ?: null;
+                $adjustment['snapshot']['fare_references'] = $fareReferences;
+                $adjustment['snapshot']['flight_references'] = $flightReferences;
+
+                return $adjustment;
+            },
+            [
+                $this->adjustmentPayload('promotion', 1, $promotion, $promotionResult),
+                $this->adjustmentPayload('segment_margin', 2, $margin, $marginResult),
+            ],
+        )));
+    }
+
+    /** Ensure provider cost plus every signed adjustment equals the locked selling total. */
+    private function assertQuoteReconciles(string $providerAed, string $sellingAed, array $adjustments): void
+    {
+        $expected = $providerAed;
+
+        foreach ($adjustments as $adjustment) {
+            $expected = bcadd($expected, (string) $adjustment['signed_aed_amount'], 8);
+        }
+
+        if (bccomp($expected, $sellingAed, 8) !== 0) {
+            throw new \LogicException('Commercial pricing adjustments do not reconcile with the selling total.');
+        }
     }
 
     /** Find the trusted selected fare and flight pair from one cached search result. */

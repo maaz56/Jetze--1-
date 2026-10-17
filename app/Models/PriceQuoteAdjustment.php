@@ -16,6 +16,9 @@ class PriceQuoteAdjustment extends Model
         return [
             'configured_value' => 'decimal:8',
             'aed_amount' => 'decimal:8',
+            'amount_before_aed' => 'decimal:8',
+            'amount_after_aed' => 'decimal:8',
+            'application_order' => 'integer',
             'rule_snapshot' => 'array',
         ];
     }

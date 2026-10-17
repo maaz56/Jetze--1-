@@ -320,13 +320,6 @@ const menuSections = [
         permission: ["airlines_view"]
       },
       {
-        name: "Airport Markups",
-        to: { name: "AirportMarkups" },
-        icon: Plane,
-        permission: 'manage-airports'
-      },
-      // add
-      {
         name: "Segment Margins",
         to: { name: "SegmentMargins" },
         icon: LandmarkIcon,

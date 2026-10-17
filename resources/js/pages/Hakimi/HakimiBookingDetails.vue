@@ -153,7 +153,9 @@ const lockedCustomerBookingMoney = computed(() => {
 
 const lockedCommercialAdjustments = computed(() => {
     const adjustments = booking.value?.price_snapshot?.adjustments_snapshot;
-    return Array.isArray(adjustments) ? adjustments : [];
+    return Array.isArray(adjustments)
+        ? [...adjustments].sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+        : [];
 });
 
 function formatLockedCommercialAdjustment(adjustment) {
@@ -161,6 +163,17 @@ function formatLockedCommercialAdjustment(adjustment) {
     const curr = adjustment?.aed_amount ? "AED" : (lockedCustomerBookingMoney.value?.currency || "INR");
     const sign = amount < 0 ? "-" : "+";
     return `${sign}${formatAmountWithCurrency(Math.abs(amount || 0), curr)}`;
+}
+
+function describeLockedCommercialAdjustment(adjustment) {
+    const value = Number(adjustment?.configured_value || 0);
+    if (adjustment?.calculation_type === "percentage") {
+        return `${value}% of fare`;
+    }
+
+    const passengers = Number(adjustment?.passenger_count || 1);
+    const segments = Number(adjustment?.segment_count || 1);
+    return `${formatAmountWithCurrency(value, "AED")} × ${segments} segment(s) × ${passengers} passenger(s)`;
 }
 
 function formatCustomerSelectedBookingAmount() {
@@ -1293,11 +1306,14 @@ onMounted(async () => {
                                     </tr>
                                     <tr
                                         v-for="adjustment in lockedCommercialAdjustments"
-                                        :key="`${adjustment.type}-${adjustment.rule_id}`"
+                                        :key="`${adjustment.sequence}-${adjustment.type}-${adjustment.rule_id}-${adjustment.fare_reference}`"
                                     >
                                         <td colspan="3" class="px-2 pb-2 text-right text-[11px] font-bold text-slate-950">
                                             {{ adjustment.type === "segment_margin" ? "Segment Margin" : "Promotion" }}
                                             <span v-if="adjustment.title" class="font-normal text-slate-500">— {{ adjustment.title }}</span>
+                                            <span class="block text-[9px] font-normal text-slate-500">
+                                                {{ describeLockedCommercialAdjustment(adjustment) }}
+                                            </span>
                                         </td>
                                         <td class="px-2 pb-2 text-[11px] font-bold text-primary">
                                             {{ formatLockedCommercialAdjustment(adjustment) }}

@@ -37,11 +37,11 @@ const isSaving = ref(false);
 const form = ref({
     title: "",
     sale_channel: "",
-    airline_id: null,
-    airline_ids: [],
-    reservation_type: "ALL-SECTORS",
+    excluded_airline_ids: [],
     margin_type: "markup",
     margin_value: 0,
+    is_active: true,
+    priority: 0,
 });
 
 const airlines = computed(() => store.getters["airline/airlines"] || []);
@@ -63,41 +63,38 @@ function syncAirlineCache(list = []) {
 }
 
 const selectedAirlines = computed(() => {
-    if (!Array.isArray(form.value.airline_ids)) return [];
+    if (!Array.isArray(form.value.excluded_airline_ids)) return [];
     const airlineById = new Map(airlineCache.value.map((airline) => [Number(airline.id), airline]));
-    return form.value.airline_ids.map((airlineId) => {
+    return form.value.excluded_airline_ids.map((airlineId) => {
         const airline = airlineById.get(Number(airlineId));
         return airline || { id: airlineId, iata_code: `ID:${airlineId}`, name: "" };
     });
 });
 
 const airlineButtonText = computed(() => {
-    if (!form.value.airline_ids?.length) return "All Airlines";
-    if (form.value.airline_ids.length === 1) {
+    if (!form.value.excluded_airline_ids?.length) return "No exclusions";
+    if (form.value.excluded_airline_ids.length === 1) {
         const airline = selectedAirlines.value[0];
         return airline ? `${airline.name} (${airline.iata_code})` : "1 airline selected";
     }
-    return `${form.value.airline_ids.length} airlines selected`;
+    return `${form.value.excluded_airline_ids.length} airlines excluded`;
 });
 
 function toggleAirline(airlineId) {
-    const ids = form.value.airline_ids || [];
+    const ids = form.value.excluded_airline_ids || [];
     if (ids.includes(airlineId)) {
-        form.value.airline_ids = ids.filter((id) => id !== airlineId);
+        form.value.excluded_airline_ids = ids.filter((id) => id !== airlineId);
     } else {
-        form.value.airline_ids = [...ids, airlineId];
+        form.value.excluded_airline_ids = [...ids, airlineId];
     }
-    form.value.airline_id = form.value.airline_ids[0] ?? null;
 }
 
 function clearAirlines() {
-    form.value.airline_ids = [];
-    form.value.airline_id = null;
+    form.value.excluded_airline_ids = [];
 }
 
 function removeAirline(airlineId) {
-    form.value.airline_ids = (form.value.airline_ids || []).filter((id) => id !== airlineId);
-    form.value.airline_id = form.value.airline_ids[0] ?? null;
+    form.value.excluded_airline_ids = (form.value.excluded_airline_ids || []).filter((id) => id !== airlineId);
 }
 
 async function fetchAirlinesBySearch(query = "") {
@@ -142,13 +139,11 @@ async function fetchData() {
         const margin = store.getters["segmentMargin/segmentMargin"];
         if (margin) {
             Object.assign(form.value, margin);
-            if (Array.isArray(margin.airline_ids)) {
-                form.value.airline_ids = margin.airline_ids;
-            } else if (margin.airline_id) {
-                form.value.airline_ids = [margin.airline_id];
-            } else {
-                form.value.airline_ids = [];
-            }
+            form.value.excluded_airline_ids = Array.isArray(margin.excluded_airline_ids)
+                ? margin.excluded_airline_ids
+                : [];
+            form.value.is_active = margin.is_active ?? true;
+            form.value.priority = Number(margin.priority ?? 0);
         }
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -158,7 +153,6 @@ async function fetchData() {
 async function updateMargin() {
     isSaving.value = true;
     try {
-        form.value.airline_id = form.value.airline_ids?.[0] ?? null;
         await store.dispatch("segmentMargin/updateSegmentMargin", {
             id: route.params.id,
             ...form.value
@@ -196,6 +190,17 @@ onMounted(() => {
                         <Input v-model="form.title" placeholder="e.g. Summer Special B2B Markup" required class="h-10" />
                     </div>
 
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <label class="flex items-center gap-3 text-sm font-medium">
+                            <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+                            Active rule
+                        </label>
+                        <div class="space-y-2">
+                            <Label class="text-xs uppercase font-bold text-gray-500">Priority</Label>
+                            <Input v-model.number="form.priority" type="number" min="-10000" max="10000" class="h-10" />
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div class="space-y-2">
                             <Label class="text-xs uppercase font-bold text-gray-500">Sale Channel</Label>
@@ -210,7 +215,7 @@ onMounted(() => {
                         </div>
 
                         <div class="space-y-2 lg:col-span-1">
-                            <Label class="text-xs uppercase font-bold text-gray-500">Select Airlines</Label>
+                            <Label class="text-xs uppercase font-bold text-gray-500">Excluded Airlines</Label>
                             <Popover v-model:open="airlineSearchOpen">
                                 <PopoverTrigger as-child>
                                     <Button variant="outline" class="w-full h-10 justify-between text-left font-normal">
@@ -229,11 +234,11 @@ onMounted(() => {
                                             <CommandEmpty>No airline found.</CommandEmpty>
                                             <CommandGroup>
                                                 <CommandItem value="all-airlines" @select="() => { clearAirlines(); }">
-                                                    <Check :class="cn('mr-2 h-4 w-4', !form.airline_ids?.length ? 'opacity-100' : 'opacity-0')" />
-                                                    All Airlines
+                                                    <Check :class="cn('mr-2 h-4 w-4', !form.excluded_airline_ids?.length ? 'opacity-100' : 'opacity-0')" />
+                                                    No exclusions
                                                 </CommandItem>
                                                 <CommandItem v-for="airline in airlines" :key="airline.id" :value="airline.name + ' ' + airline.iata_code" @select="() => { toggleAirline(airline.id); }">
-                                                    <Check :class="cn('mr-2 h-4 w-4', form.airline_ids?.includes(airline.id) ? 'opacity-100' : 'opacity-0')" />
+                                                    <Check :class="cn('mr-2 h-4 w-4', form.excluded_airline_ids?.includes(airline.id) ? 'opacity-100' : 'opacity-0')" />
                                                     {{ airline.name }} ({{ airline.iata_code }})
                                                 </CommandItem>
                                             </CommandGroup>
@@ -257,16 +262,16 @@ onMounted(() => {
                                     <line x1="12" y1="8" x2="12" y2="12"></line>
                                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                                 </svg>
-                                Note: Margin/discount will be blocked on selected airlines
+                                Margin/discount will not apply to selected airlines.
                             </p>
                         </div>
 
                         <div class="space-y-2 lg:col-span-2">
-                            <Label class="text-xs uppercase font-bold text-gray-500">Margin Amount & Type</Label>
+                            <Label class="text-xs uppercase font-bold text-gray-500">Margin Per Segment, Per Passenger</Label>
                             <div class="flex gap-2">
                                 <div class="relative flex-grow">
                                     <Input type="number" v-model="form.margin_value" class="h-10 pr-12" required step="0.01" />
-                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">PKR</span>
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">AED</span>
                                 </div>
                                 <Select v-model="form.margin_type" required>
                                     <SelectTrigger class="h-10 w-[160px]"><SelectValue /></SelectTrigger>

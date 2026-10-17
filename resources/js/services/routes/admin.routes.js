@@ -239,12 +239,6 @@ export const adminRoutes = [
                 meta: { permission: 'manage-airlines' }
             },
             {
-                path: "airport-markups",
-                name: "AirportMarkups",
-                component: () => import("@/pages/admin/AirportMargin.vue"),
-                meta: { permission: 'manage-airports' }
-            },
-            {
                 path: "new/airline",
                 name: "NewAirline",
                 component: () => import("@/pages/admin/newAirline.vue"),

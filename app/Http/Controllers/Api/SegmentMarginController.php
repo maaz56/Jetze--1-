@@ -5,67 +5,36 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SegmentMargin;
 use Illuminate\Http\Request;
-use Log;
 
 class SegmentMarginController extends Controller
 {
+    /** List segment-margin rules for the admin panel. */
     public function index()
     {
         return SegmentMargin::with('airline')->latest()->get();
     }
 
-   public function store(Request $request)
-{   
-    Log::info('Creating segment margin with data: ', $request->all());
-    
-    $validated = $request->validate([
-        'title' => 'required|string|max:255',
-        'sale_channel' => 'required|string',
-        'airline_id' => 'nullable|exists:airlines,id',
-        'airline_ids' => 'nullable|array',
-        'airline_ids.*' => 'integer|exists:airlines,id',
-        'disabled_airline_ids' => 'nullable|array',
-        'disabled_airline_ids.*' => 'integer|exists:airlines,id',
-        'margin_type' => 'required|string|in:markup,discount', // Added string validation
-        'margin_value' => 'required|numeric|min:0',
-    ]);
-    
-    // Create margin by assigning fields one by one
-    $margin = new SegmentMargin();
-    $margin->title = $validated['title'];
-    $margin->sale_channel = $validated['sale_channel'];
-    $margin->airline_id = $validated['airline_id'] ?? null;
-    $margin->airline_ids = $validated['airline_ids'] ?? [];
-    $margin->disabled_airline_ids = $validated['disabled_airline_ids'] ?? [];
-    $margin->margin_type = (string) $validated['margin_type']; // Explicitly cast to string
-    $margin->margin_value = $validated['margin_value'];
-    $margin->save();
+    /** Create a per-segment, per-passenger AED adjustment rule. */
+    public function store(Request $request)
+    {
+        $margin = SegmentMargin::create($this->validatedMargin($request));
 
-    return response()->json([
-        'message' => 'Segment margin created successfully',
-        'margin' => $margin->load('airline')
-    ], 201);
-}
+        return response()->json([
+            'message' => 'Segment margin created successfully',
+            'margin' => $margin->load('airline'),
+        ], 201);
+    }
+
     public function show($id)
     {
         return SegmentMargin::with('airline')->findOrFail($id);
     }
 
+    /** Update a per-segment, per-passenger AED adjustment rule. */
     public function update(Request $request, $id)
     {
         $margin = SegmentMargin::findOrFail($id);
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'sale_channel' => 'required|string',
-            'airline_id' => 'nullable|exists:airlines,id',
-            'airline_ids' => 'nullable|array',
-            'airline_ids.*' => 'integer|exists:airlines,id',
-            'disabled_airline_ids' => 'nullable|array',
-            'disabled_airline_ids.*' => 'integer|exists:airlines,id',
-            'margin_type' => 'required|in:markup,discount',
-            'margin_value' => 'required|numeric|min:0',
-        ]);
+        $validated = $this->validatedMargin($request);
 
         $margin->update($validated);
 
@@ -89,6 +58,37 @@ class SegmentMarginController extends Controller
             ['identifier' => 'OneApi', 'name' => 'OneApi'],
             ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
             ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
+        ]);
+    }
+
+    /** Validate the canonical excluded-airline payload and normalize legacy columns. */
+    private function validatedMargin(Request $request): array
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'sale_channel' => 'required|string|max:100',
+            'excluded_airline_ids' => 'nullable|array',
+            'excluded_airline_ids.*' => 'integer|distinct|exists:airlines,id',
+            'margin_type' => 'required|in:markup,discount',
+            'margin_value' => 'required|numeric|min:0',
+            'is_active' => 'sometimes|boolean',
+            'priority' => 'sometimes|integer|between:-10000,10000',
+        ]);
+
+        $excludedAirlineIds = array_values(array_unique(array_map(
+            'intval',
+            $validated['excluded_airline_ids'] ?? [],
+        )));
+
+        unset($validated['excluded_airline_ids']);
+
+        return array_merge($validated, [
+            'airline_id' => null,
+            'airline_ids' => [],
+            'disabled_airline_ids' => $excludedAirlineIds,
+            'is_active' => $validated['is_active'] ?? true,
+            'priority' => $validated['priority'] ?? 0,
+            'value_currency' => 'AED',
         ]);
     }
 }

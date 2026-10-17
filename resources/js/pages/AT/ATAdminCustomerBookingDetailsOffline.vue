@@ -118,8 +118,14 @@ const lockedCustomerBookingMoney = computed(() => {
 const lockedCommercialAdjustments = computed(() => {
     const adjustments = bookingDetails.value?.[0]?.price_snapshot?.adjustments_snapshot;
 
-    return Array.isArray(adjustments) ? adjustments : [];
+    return Array.isArray(adjustments)
+        ? [...adjustments].sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+        : [];
 });
+
+const lockedCommercialReconciliation = computed(
+    () => bookingDetails.value?.[0]?.price_snapshot?.commercial_reconciliation ?? null,
+);
 
 /** Format one locked AED commercial adjustment with its original sign. */
 function formatLockedCommercialAdjustment(adjustment) {
@@ -127,6 +133,18 @@ function formatLockedCommercialAdjustment(adjustment) {
     const sign = amount < 0 ? '-' : '+';
 
     return `${sign}${formatAmountWithCurrency(Math.abs(amount || 0), 'AED')}`;
+}
+
+/** Explain the exact locked rule formula without recalculating it in the browser. */
+function describeLockedCommercialAdjustment(adjustment) {
+    const value = Number(adjustment?.configured_value || 0);
+    if (adjustment?.calculation_type === 'percentage') {
+        return `${value}% of fare`;
+    }
+
+    const passengers = Number(adjustment?.passenger_count || 1);
+    const segments = Number(adjustment?.segment_count || 1);
+    return `${formatAmountWithCurrency(value, 'AED')} × ${segments} segment(s) × ${passengers} passenger(s)`;
 }
 
 /** Format the currency amount selected by the customer at booking time. */
@@ -1552,14 +1570,28 @@ onMounted(async () => {
                                                 {{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}
                                             </td>
                                         </tr>
-                                        <tr v-for="adjustment in lockedCommercialAdjustments" :key="`${adjustment.type}-${adjustment.rule_id}-${adjustment.rule_snapshot?.fare_ref_id}`">
+                                        <tr v-for="adjustment in lockedCommercialAdjustments" :key="`${adjustment.sequence}-${adjustment.type}-${adjustment.rule_id}-${adjustment.fare_reference}`">
                                             <td colspan="3"
                                                 class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
                                                 {{ adjustment.type === 'segment_margin' ? 'Segment Margin' : 'Promotion' }}
                                                 <span v-if="adjustment.title" class="font-normal text-slate-500">— {{ adjustment.title }}</span>
+                                                <span class="block font-normal text-[9px] text-slate-500">
+                                                    {{ describeLockedCommercialAdjustment(adjustment) }}
+                                                </span>
                                             </td>
                                             <td class="pb-2 px-2 text-[11px] font-bold text-primary">
                                                 {{ formatLockedCommercialAdjustment(adjustment) }}
+                                            </td>
+                                        </tr>
+                                        <tr v-if="lockedCommercialReconciliation">
+                                            <td colspan="3"
+                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
+                                                Pricing Audit
+                                            </td>
+                                            <td
+                                                class="pb-2 px-2 text-[11px] font-bold"
+                                                :class="lockedCommercialReconciliation.is_reconciled ? 'text-emerald-600' : 'text-red-600'">
+                                                {{ lockedCommercialReconciliation.is_reconciled ? 'Reconciled' : 'Review Required' }}
                                             </td>
                                         </tr>
                                         <tr>

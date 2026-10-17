@@ -267,8 +267,8 @@ class FlightAggregationService
         // $transformedFlights = array_merge($transformedFlights, $airsialResponse ?? []);
         // $transformedFlights = array_merge($transformedFlights ?? []);
         // }
-        $transformedFlights = $this->segmentMarginService->applySegmentMargins($transformedFlights, $params);
         $transformedFlights = $this->promotionService->applyPromotions($transformedFlights, $params);
+        $transformedFlights = $this->segmentMarginService->applySegmentMargins($transformedFlights, $params);
         $transformedFlights = $this->commercialPricingService->applyToProviderFlights($transformedFlights);
         return [ 
             // 'sooperFlights' => $sooperFlights,

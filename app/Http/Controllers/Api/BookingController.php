@@ -629,6 +629,8 @@ class BookingController extends Controller
             'travellers.*.dob' => 'nullable|string'
         ])->validate();
 
+        $lockedAdjustmentTotals = $this->lockedQuoteAdjustmentTotals($priceQuote);
+
         // Log::info('Validated Booking Data:', [
         //     'main_contact' => $validated['main_contact'],
         //     'agency_mobile' => $validated['agency_mobile'],
@@ -664,8 +666,10 @@ class BookingController extends Controller
             'agent_margin' => $request->agent_margin ?? 0,
             'agent_discount' => $request->agent_discount ?? 0,
             'add_ones_amount' => $request->add_ones_amount ?? 0,
-            'segment_margin' => $validated['segment_margin'] ?? 0,
-            'promotion_margin' => $validated['promotion_margin'] ?? 0,
+            'segment_margin' => $lockedAdjustmentTotals['segment_margin']
+                ?? ($validated['segment_margin'] ?? 0),
+            'promotion_margin' => $lockedAdjustmentTotals['promotion']
+                ?? ($validated['promotion_margin'] ?? 0),
             'fare_reference' => $request->fare_reference
                 ? json_encode($request->fare_reference)
                 : null,
@@ -739,6 +743,23 @@ class BookingController extends Controller
     }
 
     // Helper functions
+
+    /** Return signed AED legacy totals from trusted quote adjustments, never browser pricing. */
+    private function lockedQuoteAdjustmentTotals($quote): array
+    {
+        if (!$quote) {
+            return [];
+        }
+
+        return [
+            'promotion' => (string) $quote->adjustments()
+                ->where('type', 'promotion')
+                ->sum('aed_amount'),
+            'segment_margin' => (string) $quote->adjustments()
+                ->where('type', 'segment_margin')
+                ->sum('aed_amount'),
+        ];
+    }
 
     /**
      * Replace AT or Hakimi checkout price data with active server-side quote values.

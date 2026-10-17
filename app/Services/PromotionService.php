@@ -5,19 +5,29 @@ namespace App\Services;
 use App\Models\Airline;
 use App\Models\Promotion;
 use Carbon\Carbon;
-use Log;
+use Illuminate\Support\Collection;
 
 class PromotionService
 {
+    private ?Collection $activePromotions = null;
+
+    private ?array $airlineIdToIata = null;
+
+    public function __construct(
+        private readonly CurrencyConversionService $currencyConversionService,
+    ) {
+    }
+
     /** Resolve the matching provider promotion rule without changing provider fare amounts. */
-    public function commercialRuleForFare(array $provider, array $flight): ?array
+    public function commercialRuleForFare(array $provider, array $flight, array $itineraryContext = []): ?array
     {
         $promotion = $this->resolveBestPromotion(
-            Promotion::query()->get(),
+            $this->activePromotionRules(),
             $this->buildFlightContext(
                 $flight,
-                Airline::query()->pluck('iata_code', 'id')->map(fn ($iata) => strtoupper((string) $iata))->toArray(),
+                $this->airlineIdToIata(),
                 $this->buildProviderChannels($provider),
+                $itineraryContext,
             ),
         );
 
@@ -25,15 +35,104 @@ class PromotionService
             return null;
         }
 
+        return $this->commercialRulePayload(
+            $promotion,
+            $this->getPassengerCount($flight),
+            strtolower((string) $promotion->commission_type) === 'percentage'
+                ? 'per_leg'
+                : 'per_leg_per_passenger',
+        );
+    }
+
+    /** Resolve one promotion for the complete selected quote, regardless of trip price layout. */
+    public function commercialRuleForItinerary(
+        array $provider,
+        array $itinerary,
+        array $fareReferences = [],
+    ): ?array {
+        $flights = $this->selectedFlights($itinerary, $fareReferences);
+        if ($flights === []) {
+            return null;
+        }
+
+        $airlineMap = $this->airlineIdToIata();
+        $channels = $this->buildProviderChannels($provider);
+        $itineraryContext = $this->itineraryContext($itinerary);
+        $flightContexts = array_map(
+            fn (array $flight): array => $this->buildFlightContext(
+                $flight,
+                $airlineMap,
+                $channels,
+                $itineraryContext,
+            ),
+            $flights,
+        );
+
+        $context = [
+            'channels' => array_values(array_unique(array_merge(...array_column($flightContexts, 'channels')))),
+            'airline_ids' => array_values(array_unique(array_merge(...array_column($flightContexts, 'airline_ids')))),
+            'travel_departure_date' => collect($flightContexts)->pluck('travel_departure_date')->filter()->min(),
+            'travel_arrival_date' => collect($flightContexts)->pluck('travel_arrival_date')->filter()->max(),
+            'ticketing_date' => now()->toDateString(),
+            'reservation_type' => $itineraryContext['reservation_type'] ?? 'ALL-SECTORS',
+        ];
+        $promotion = $this->resolveBestPromotion($this->activePromotionRules(), $context);
+
+        if (!$promotion) {
+            return null;
+        }
+
+        return $this->commercialRulePayload(
+            $promotion,
+            $this->passengerCountForSelectedFares($flights, $fareReferences),
+            strtolower((string) $promotion->commission_type) === 'percentage'
+                ? 'per_quote'
+                : 'per_quote_per_passenger',
+            $context,
+        );
+    }
+
+    /** Build one reservation classification shared by every leg in an itinerary. */
+    public function itineraryContext(array $itinerary): array
+    {
+        $flights = data_get($itinerary, 'leg.flights', []);
+        if (!is_array($flights) || empty($flights)) {
+            return [];
+        }
+
+        $outbound = $flights[0];
+        $allAirlines = [];
+        $isCodeShare = false;
+
+        foreach ($flights as $flight) {
+            $marketingIata = strtoupper((string) data_get($flight, 'marketing_carrier.iata', ''));
+            if ($marketingIata !== '') {
+                $allAirlines[] = $marketingIata;
+            }
+
+            foreach ($flight['segments'] ?? [] as $segment) {
+                $segmentMarketing = strtoupper((string) data_get($segment, 'marketing_carrier.iata', $marketingIata));
+                $operatingIata = strtoupper((string) data_get($segment, 'operating_carrier.iata', ''));
+
+                if ($operatingIata !== '') {
+                    $allAirlines[] = $operatingIata;
+                }
+                if ($segmentMarketing !== '' && $operatingIata !== '' && $segmentMarketing !== $operatingIata) {
+                    $isCodeShare = true;
+                }
+            }
+        }
+
+        $originCountry = strtoupper((string) data_get($outbound, 'from.country.code', data_get($outbound, 'from.city.country.code', '')));
+        $destinationCountry = strtoupper((string) data_get($outbound, 'to.country.code', data_get($outbound, 'to.city.country.code', '')));
+
         return [
-            'rule_id' => $promotion->id,
-            'title' => $promotion->title,
-            'direction' => strtolower((string) ($promotion->price_option ?? 'markup')) === 'discount' ? 'discount' : 'markup',
-            'calculation_type' => strtolower((string) $promotion->commission_type) === 'percentage' ? 'percentage' : 'amount',
-            'configured_value' => (string) $promotion->commission_value,
-            'passenger_count' => $this->getPassengerCount($flight),
-            'segment_count' => 1,
-            'snapshot' => $promotion->only(['id', 'title', 'sale_channel', 'reservation_type', 'price_option', 'commission_type', 'commission_value', 'airline_id', 'airline_ids', 'disabled_airline_ids', 'travel_start_date', 'travel_end_date', 'ticketing_start_date', 'ticketing_end_date']),
+            'reservation_type' => $this->detectReservationType(
+                $originCountry,
+                $destinationCountry,
+                count(array_unique(array_filter($allAirlines))) > 1,
+                $isCodeShare,
+            ),
         ];
     }
 
@@ -44,22 +143,20 @@ class PromotionService
             return $transformedFlights;
         }
 
-        $promotions = Promotion::query()->get();
+        $promotions = $this->activePromotionRules();
         if ($promotions->isEmpty()) {
             return $transformedFlights;
         }
 
-        $airlineIdToIata = Airline::query()
-            ->pluck('iata_code', 'id')
-            ->map(fn ($iata) => strtoupper((string) $iata))
-            ->toArray();
+        $airlineIdToIata = $this->airlineIdToIata();
 
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
-            if (in_array(strtoupper((string) data_get($provider, 'identifier')), ['AT', 'HAKIMI'], true)) {
+            if ($this->usesCommercialMoney($itinerary)) {
                 continue;
             }
             $channels = $this->buildProviderChannels($provider);
+            $itineraryContext = $this->itineraryContext($itinerary);
             $flights = data_get($itinerary, 'leg.flights', []);
 
             if (!is_array($flights)) {
@@ -69,7 +166,7 @@ class PromotionService
             foreach ($flights as &$flight) {
                 $segments = is_array($flight['segments'] ?? null) ? $flight['segments'] : [];
                 $passengerCount = $this->getPassengerCount($flight);
-                $flightContext = $this->buildFlightContext($flight, $airlineIdToIata, $channels);
+                $flightContext = $this->buildFlightContext($flight, $airlineIdToIata, $channels, $itineraryContext);
 
                 $bestPromotion = $this->resolveBestPromotion($promotions, $flightContext);
 
@@ -91,9 +188,12 @@ class PromotionService
                         'price_option' => $bestPromotion->price_option ?? 'markup',
                         'commission_type' => $bestPromotion->commission_type,
                         'commission_value' => (float) $bestPromotion->commission_value,
+                        'value_currency' => 'AED',
                         'applied_amount' => round($applied, 2),
                         'passenger_count' => $passengerCount,
-                        'multiplier_applied' => $passengerCount,
+                        'multiplier_applied' => strtolower((string) $bestPromotion->commission_type) === 'percentage'
+                            ? 1
+                            : $passengerCount,
                     ];
                 }
                 unset($fare);
@@ -175,7 +275,79 @@ class PromotionService
         return max($count, 1);
     }
 
-    private function buildFlightContext(array $flight, array $airlineIdToIata, array $channels): array
+    /** Build the immutable calculation payload shared by fare and quote pricing. */
+    private function commercialRulePayload(
+        Promotion $promotion,
+        int $passengerCount,
+        string $scope,
+        array $matchedContext = [],
+    ): array {
+        return [
+            'rule_id' => $promotion->id,
+            'title' => $promotion->title,
+            'direction' => strtolower((string) ($promotion->price_option ?? 'markup')) === 'discount' ? 'discount' : 'markup',
+            'calculation_type' => strtolower((string) $promotion->commission_type) === 'percentage' ? 'percentage' : 'amount',
+            'configured_value' => (string) $promotion->commission_value,
+            'passenger_count' => max($passengerCount, 1),
+            'segment_count' => 1,
+            'application_scope' => $scope,
+            'snapshot' => array_merge($promotion->only([
+                'id', 'title', 'sale_channel', 'reservation_type', 'price_option',
+                'commission_type', 'commission_value', 'value_currency', 'airline_id',
+                'travel_start_date', 'travel_end_date', 'ticketing_start_date',
+                'ticketing_end_date', 'is_active', 'priority',
+            ]), $matchedContext === [] ? [] : ['matched_context' => $matchedContext]),
+        ];
+    }
+
+    /** Keep only flights containing the selected fares; use all flights for search-level pricing. */
+    private function selectedFlights(array $itinerary, array $fareReferences): array
+    {
+        $flights = data_get($itinerary, 'leg.flights', []);
+        if (!is_array($flights)) {
+            return [];
+        }
+
+        $references = array_flip(array_values(array_filter($fareReferences, 'is_string')));
+        if ($references === []) {
+            return array_values($flights);
+        }
+
+        return array_values(array_filter($flights, static function (array $flight) use ($references): bool {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if (isset($references[$fare['ref_id'] ?? ''])) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+    }
+
+    /** Read passenger count from the selected fare instead of unrelated alternatives. */
+    private function passengerCountForSelectedFares(array $flights, array $fareReferences): int
+    {
+        $references = array_flip(array_values(array_filter($fareReferences, 'is_string')));
+
+        foreach ($flights as $flight) {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if ($references !== [] && !isset($references[$fare['ref_id'] ?? ''])) {
+                    continue;
+                }
+
+                return $this->getPassengerCount(array_merge($flight, ['fares' => [$fare]]));
+            }
+        }
+
+        return $this->getPassengerCount($flights[0] ?? []);
+    }
+
+    private function buildFlightContext(
+        array $flight,
+        array $airlineIdToIata,
+        array $channels,
+        array $itineraryContext = [],
+    ): array
     {
         $segments = is_array($flight['segments'] ?? null) ? $flight['segments'] : [];
         $marketingIata = strtoupper((string) data_get($flight, 'marketing_carrier.iata', ''));
@@ -223,24 +395,30 @@ class PromotionService
             'travel_departure_date' => $overallDepartureAt ? Carbon::parse($overallDepartureAt)->toDateString() : null,
             'travel_arrival_date' => $overallArrivalAt ? Carbon::parse($overallArrivalAt)->toDateString() : null,
             'ticketing_date' => Carbon::today()->toDateString(),
-            'reservation_type' => $this->detectReservationType($originCountry, $destinationCountry, $isInterline, $isCodeShare),
+            'reservation_type' => $itineraryContext['reservation_type']
+                ?? $this->detectReservationType($originCountry, $destinationCountry, $isInterline, $isCodeShare),
         ];
     }
 
     private function resolveBestPromotion($promotions, array $flightContext): ?Promotion
     {
         $best = null;
-        $bestScore = -1;
+        $bestRank = null;
 
         foreach ($promotions as $promotion) {
             if (!$this->promotionMatches($promotion, $flightContext)) {
                 continue;
             }
 
-            $score = $this->specificityScore($promotion);
-            if ($score > $bestScore || ($score === $bestScore && (int) $promotion->id > (int) data_get($best, 'id', 0))) {
+            $rank = [
+                (int) ($promotion->priority ?? 0),
+                $this->specificityScore($promotion),
+                (int) $promotion->id,
+            ];
+
+            if ($bestRank === null || $rank > $bestRank) {
                 $best = $promotion;
-                $bestScore = $score;
+                $bestRank = $rank;
             }
         }
 
@@ -369,23 +547,33 @@ class PromotionService
         $commissionValue = (float) ($promotion->commission_value ?? 0);
         $commissionType = strtolower((string) ($promotion->commission_type ?? 'amount'));
         $priceOption = strtolower((string) ($promotion->price_option ?? 'markup'));
+        $fareCurrency = strtoupper((string) data_get($fare, 'currency.code', 'AED'));
 
-        // Calculate per passenger commission/discount amount
+        $flatAmountInFareCurrency = $commissionType === 'amount'
+            ? (float) $this->currencyConversionService->convertMoney(
+                $commissionValue,
+                'AED',
+                $fareCurrency,
+            )['amount']
+            : 0.0;
+
+        // Percentage applies to the total fare once. A flat amount applies per passenger.
+        $multiplier = $commissionType === 'percentage' ? 1 : max($passengerCount, 1);
         $perPassengerAmount = $commissionType === 'percentage'
             ? ($basePrice * $commissionValue) / 100
-            : $commissionValue;
-
-        // Multiply by passenger count only (NOT segment count)
-        $multiplier = max($passengerCount, 1);
+            : $flatAmountInFareCurrency;
         $totalAmount = $perPassengerAmount * $multiplier;
         
         $isDiscount = $priceOption === 'discount';
-        $delta = $isDiscount ? -abs($totalAmount) : abs($totalAmount);
+        $effectiveAmount = $isDiscount
+            ? min(abs($totalAmount), max($basePrice, 0))
+            : abs($totalAmount);
+        $delta = $isDiscount ? -$effectiveAmount : $effectiveAmount;
 
         // Apply to fare level fields
         foreach (['base_price', 'total_price', 'billable_price'] as $field) {
             if (isset($fare[$field]) && is_numeric($fare[$field])) {
-                $fare[$field] = round(((float) $fare[$field]) + $delta, 2);
+                $fare[$field] = round(max(((float) $fare[$field]) + $delta, 0), 2);
             }
         }
 
@@ -396,7 +584,7 @@ class PromotionService
             foreach ($fare['passenger_fares'] as &$passengerFare) {
                 foreach (['base_price', 'total_price'] as $field) {
                     if (isset($passengerFare[$field]) && is_numeric($passengerFare[$field])) {
-                        $passengerFare[$field] = round(((float) $passengerFare[$field]) + $perPassengerDelta, 2);
+                        $passengerFare[$field] = round(max(((float) $passengerFare[$field]) + $perPassengerDelta, 0), 2);
                     }
                 }
                 $passengerFare['applied_promotion_per_passenger'] = round(abs($perPassengerDelta), 2);
@@ -405,13 +593,46 @@ class PromotionService
         }
 
         // Store promotion metadata
-        $fare['promotion_amount'] = round(abs($totalAmount), 2);
+        $fare['promotion_amount'] = round(abs($effectiveAmount), 2);
         $fare['promotion_per_unit'] = round(abs($perPassengerAmount), 2);
         $fare['promotion_type'] = $isDiscount ? 'discount' : 'markup';
         $fare['promotion_value_type'] = $commissionType;
+        $fare['promotion_value_currency'] = 'AED';
+        $fare['promotion_applied_currency'] = $fareCurrency;
         $fare['promotion_multiplier'] = $multiplier;
 
-        return $totalAmount;
+        return $effectiveAmount;
+    }
+
+    /** Detect fares handled by the normalized AED commercial-pricing pipeline. */
+    private function usesCommercialMoney(array $itinerary): bool
+    {
+        foreach (data_get($itinerary, 'leg.flights', []) as $flight) {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if (isset($fare['provider_booking_money']['amount'], $fare['provider_booking_money']['currency'])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Load active rules once so large streamed searches do not query per fare. */
+    private function activePromotionRules(): Collection
+    {
+        return $this->activePromotions
+            ??= Promotion::query()->where('is_active', true)->get();
+    }
+
+    /** Cache the airline lookup used by rule matching for this request. */
+    private function airlineIdToIata(): array
+    {
+        return $this->airlineIdToIata
+            ??= Airline::query()
+                ->pluck('iata_code', 'id')
+                ->map(fn ($iata) => strtoupper((string) $iata))
+                ->toArray();
     }
 
     private function detectReservationType(

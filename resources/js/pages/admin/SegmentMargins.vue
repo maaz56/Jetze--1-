@@ -25,7 +25,7 @@ const marginToDelete = ref(null);
 
 function getAirlineTags(margin) {
     const airlineById = new Map(airlines.value.map((airline) => [Number(airline.id), airline]));
-    const blockedAirlines = Array.isArray(margin?.airline_ids) ? margin.airline_ids : [];
+    const blockedAirlines = Array.isArray(margin?.excluded_airline_ids) ? margin.excluded_airline_ids : [];
 
     if (blockedAirlines.length) {
         return blockedAirlines.map((id) => {
@@ -126,7 +126,10 @@ onMounted(() => {
                         </tr>
                         <tr v-else v-for="margin in margins" :key="margin.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                                {{ margin.title }}
+                                <div>{{ margin.title }}</div>
+                                <div class="text-xs font-normal" :class="margin.is_active ? 'text-emerald-600' : 'text-gray-400'">
+                                    {{ margin.is_active ? 'Active' : 'Inactive' }} · Priority {{ margin.priority ?? 0 }}
+                                </div>
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex flex-col gap-1">
@@ -141,7 +144,7 @@ onMounted(() => {
                                             {{ airlineTag.code }}
                                         </span>
                                     </div>
-                                    <span v-else class="text-[10px] text-gray-400 italic">ALL AIRLINES</span>
+                                    <span v-else class="text-[10px] text-gray-400 italic">NO EXCLUSIONS</span>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
@@ -150,7 +153,7 @@ onMounted(() => {
                                         {{ margin.margin_type }}
                                     </span>
                                     <span class="text-xs text-gray-500 font-semibold">
-                                        {{ margin.margin_value }} PKR
+                                        {{ margin.margin_value }} AED × segments × passengers
                                     </span>
                                 </div>
                             </td>

@@ -83,7 +83,10 @@ onMounted(() => {
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <tr v-for="promo in promotions" :key="promo.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                                {{ promo.title }}
+                                <div>{{ promo.title }}</div>
+                                <div class="text-xs font-normal" :class="promo.is_active ? 'text-emerald-600' : 'text-gray-400'">
+                                    {{ promo.is_active ? 'Active' : 'Inactive' }} · Priority {{ promo.priority ?? 0 }}
+                                </div>
                             </td>
                             <td class="px-6 py-4">
                                 <span class="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
@@ -102,7 +105,7 @@ onMounted(() => {
                                 {{ promo.reservation_type }}
                             </td>
                             <td class="px-6 py-4 font-semibold">
-                                {{ promo.commission_value }} {{ promo.commission_type === 'percentage' ? '%' : 'PKR' }}
+                                {{ promo.price_option === 'discount' ? '-' : '+' }}{{ promo.commission_value }} {{ promo.commission_type === 'percentage' ? '%' : 'AED' }}
                             </td>
                             <td class="px-6 py-4 text-xs text-gray-500">
                                 <div>Travel: {{ promo.travel_start_date || 'N/A' }} - {{ promo.travel_end_date || 'N/A' }}</div>

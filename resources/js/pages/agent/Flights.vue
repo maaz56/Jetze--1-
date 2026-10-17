@@ -1905,7 +1905,8 @@ async function fetchFreeSsrBaggage() {
     const fareReferences = [...selectedFares].filter(Boolean);
     if (!flightRefId || !searchToken || fareReferences.length === 0) return;
 
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
+    const displayCurrency = getSelectedCurrencyCode();
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}:${displayCurrency}`;
     const runId = freeSsrBaggageRunId.value;
     // Count in-flight requests per selection so one completion cannot hide
     // another request's skeleton.
@@ -2439,7 +2440,8 @@ async function fetchAtFareBreakdown() {
         return;
     }
 
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
+    const displayCurrency = getSelectedCurrencyCode();
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}:${displayCurrency}`;
     if (requestKey === lastAtFareBreakdownKey || atFareBreakdownLoading.value) return;
 
     atFareBreakdown.value = null;
@@ -2451,6 +2453,7 @@ async function fetchAtFareBreakdown() {
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
+            currency_code: displayCurrency,
         });
         atFareBreakdown.value = response.data?.fare_breakdown ?? null;
         lastAtFareBreakdownKey = requestKey;

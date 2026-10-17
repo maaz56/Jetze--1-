@@ -1633,14 +1633,22 @@ function normalizedFareMoney(fare) {
     return { currency: "", amount: Number(fare?.combined_amount) || calculateFare(fare) };
 }
 
-/**
- * Build one return-pair total from each fare's AED base value.
- *
- * This deliberately does not rely on the backend's combined display amount:
- * changing the navigation currency must immediately update both legs of a
- * return flight without another search request.
- */
+/** Convert the backend's locked AED return-pair total without another API call. */
 function combinationDisplayMoney(combination, leg = selectedFlight.value?.leg) {
+    const combinedBaseMoney = combination?.combined_base_money;
+    const combinedBaseAmount = Number(combinedBaseMoney?.amount);
+
+    if (
+        String(combinedBaseMoney?.currency || "").toUpperCase() === "AED"
+        && Number.isFinite(combinedBaseAmount)
+    ) {
+        const money = displayMoneyFromBase(combinedBaseMoney, null);
+
+        if (money?.currency) {
+            return money;
+        }
+    }
+
     const fareReferences = combination?.fare_references ?? [];
     const fares = (leg?.flights ?? []).flatMap((flight) => flight?.fares ?? []);
     let baseAmount = 0;
@@ -1687,6 +1695,17 @@ function pairedReturnFareMoney(fare, flightIndex) {
 
     if (!pairedFare) {
         return normalizedFareMoney(fare);
+    }
+
+    const combination = (leg?.fare_combinations ?? []).find((candidate) => {
+        const references = candidate?.fare_references ?? [];
+
+        return references.includes(fare?.ref_id)
+            && references.includes(pairedFare?.ref_id);
+    });
+
+    if (combination) {
+        return combinationDisplayMoney(combination, leg);
     }
 
     const currentBaseMoney = fare?.selling_base_money ?? fare?.base_money;
@@ -2048,7 +2067,8 @@ async function fetchFreeSsrBaggage() {
     const fareReferences = [...selectedFares].filter(Boolean);
     if (!flightRefId || !searchToken || fareReferences.length === 0) return;
 
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
+    const displayCurrency = getSelectedCurrencyCode();
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}:${displayCurrency}`;
     const runId = freeSsrBaggageRunId.value;
     // Count in-flight requests per selection so one completion cannot hide
     // another request's skeleton.
@@ -2582,7 +2602,8 @@ async function fetchAtFareBreakdown() {
         return;
     }
 
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
+    const displayCurrency = getSelectedCurrencyCode();
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}:${displayCurrency}`;
     if (requestKey === lastAtFareBreakdownKey || atFareBreakdownLoading.value) return;
 
     atFareBreakdown.value = null;
@@ -2594,6 +2615,7 @@ async function fetchAtFareBreakdown() {
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
+            currency_code: displayCurrency,
         });
         atFareBreakdown.value = response.data?.fare_breakdown ?? null;
         lastAtFareBreakdownKey = requestKey;

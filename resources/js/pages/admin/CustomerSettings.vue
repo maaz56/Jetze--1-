@@ -61,86 +61,6 @@
             </div>
         </div>
 
-        <!-- Financial Values Tiles Section -->
-        <div>
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold text-gray-800">Financial Values</h2>
-                <Dialog v-model:open="isFinancialDialogOpen">
-                    <DialogTrigger as-child>
-                        <button class="bg-primary text-white px-4 py-2 rounded-md shadow hover:bg-primary/90 transition text-sm">
-                            Edit Financial Values
-                        </button>
-                    </DialogTrigger>
-                    
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Update Financial Values</DialogTitle>
-                            <DialogDescription>
-                                Enter new values for discount, margin amount, and other charges.
-                            </DialogDescription>
-                        </DialogHeader>
-                        
-                        <div class="space-y-4 mt-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Discount (%)</label>
-                                <input v-model.number="financialForm.discount" type="number"
-                                    class="mt-1 w-full border rounded px-3 py-2" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Margin Amount (%)</label>
-                                <input v-model.number="financialForm.amount" type="number"
-                                    class="mt-1 w-full border rounded px-3 py-2" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Other Charges</label>
-                                <input v-model.number="financialForm.otherCharges" type="number"
-                                    class="mt-1 w-full border rounded px-3 py-2" />
-                            </div>
-                        </div>
-                        
-                        <DialogFooter class="mt-4">
-                            <button @click="updateFinancialValues"
-                                class="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90 transition">
-                                Save
-                            </button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="bg-blue-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md">
-                    <PercentIcon class="h-8 w-8 text-blue-500 mr-4" />
-                    <div>
-                        <p class="text-sm font-medium text-blue-500">Discount (%)</p>
-                        <p class="text-2xl font-bold text-blue-500">
-                            {{ CustomerMargin?.discount }}%
-                        </p>
-                    </div>
-                </div>
-                
-                <div class="bg-yellow-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md">
-                    <CalculatorIcon class="h-8 w-8 text-yellow-500 mr-4" />
-                    <div>
-                        <p class="text-sm font-medium text-yellow-600">Margin Amount (%)</p>
-                        <p class="text-2xl font-bold text-yellow-800">
-                            {{ CustomerMargin?.margin_amount }}%
-                        </p>
-                    </div>
-                </div>
-                
-                <div class="bg-primary/10 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md">
-                    <DollarSignIcon class="h-8 w-8 text-primary mr-4" />
-                    <div>
-                        <p class="text-sm font-medium text-primary">Other Charges</p>
-                        <p class="text-2xl font-bold text-primary">
-                            {{ CustomerMargin?.other_charges }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <!-- AbhiPay / One Bill settings are temporarily disabled. Keep the section for an easy re-enable. -->
         <div v-if="false">
             <div class="flex justify-between items-center mb-4">
@@ -229,61 +149,12 @@
             <p class="mt-2 text-xs text-gray-500">Current setting: {{ Number(customerSettings?.nomod_percentage_charge ?? 2.5).toFixed(2) }}% + {{ Number(customerSettings?.nomod_fixed_charge ?? 0).toFixed(2) }} fixed.</p>
         </div>
 
-        <!-- Void Charges Section -->
-        <div>
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold text-gray-800">Void Charges</h2>
-                <Dialog v-model:open="isVoidChargesDialogOpen">
-                    <DialogTrigger as-child>
-                        <button class="bg-rose-600 text-white px-4 py-2 rounded-md shadow hover:bg-rose-700 transition text-sm">
-                            Edit Void Charges
-                        </button>
-                    </DialogTrigger>
-
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Update Void Charges</DialogTitle>
-                            <DialogDescription>
-                                Enter new value for void charges.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div class="space-y-4 mt-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Void Charges</label>
-                                <input v-model.number="voidChargesForm.voidCharges" type="number"
-                                    class="mt-1 w-full border rounded px-3 py-2" />
-                            </div>
-                        </div>
-
-                        <DialogFooter class="mt-4">
-                            <button @click="updateVoidCharges"
-                                class="bg-rose-600 text-white px-4 py-2 rounded hover:bg-rose-700 transition">
-                                Save
-                            </button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-1 gap-4">
-                <div class="bg-rose-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md">
-                    <DollarSignIcon class="h-8 w-8 text-rose-600 mr-4" />
-                    <div>
-                        <p class="text-sm font-medium text-rose-700">Void Charges</p>
-                        <p class="text-2xl font-bold text-rose-700">
-                            {{ Number(customerSettings?.void_charges ?? 0).toFixed(2) }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { PercentIcon, DollarSignIcon, CalculatorIcon } from "lucide-vue-next";
+import { PercentIcon, DollarSignIcon } from "lucide-vue-next";
 import {
     Dialog,
     DialogContent,
@@ -295,44 +166,25 @@ import {
 } from "@/components/ui/dialog";
 import { useStore } from "vuex";
 import {
-    FETCH_CUSTOMER_MARGIN,
     FETCH_CUSTOMER_SETTINGS,
-    SAVE_CUSTOMER_MARGIN,
     UPDATE_CUSTOMER_SETTINGS,
 } from "@/services/store/actions.type";
 
 const store = useStore();
 
-const isFinancialDialogOpen = ref(false);
 const isOneBillDialogOpen = ref(false);
-const isVoidChargesDialogOpen = ref(false);
 
 const customerSettings = computed(() => store.getters['customer/customerSettings']);
-const CustomerMargin = computed(() => store.getters['customerMargin/customerMargin']);
-
-const financialForm = ref({
-    discount: 0,
-    otherCharges: 0,
-    amount: 0,
-});
 
 const oneBillForm = ref({
     fixedCharge: 0,
     percentageCharge: 0,
 });
 
-const voidChargesForm = ref({
-    voidCharges: 0,
-});
-
 const nomodForm = ref({
     percentageCharge: 2.5,
     fixedCharge: 0,
 });
-
-function fetchCustomerMarginValues() {
-    store.dispatch("customerMargin/" + FETCH_CUSTOMER_MARGIN);
-}
 
 function fetchCustomerSettings() {
     store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
@@ -345,20 +197,6 @@ function updateCustomerSettings(type) {
     };
     store.dispatch("customer/" + UPDATE_CUSTOMER_SETTINGS, payload).then(() => {
         fetchCustomerSettings();
-    });
-}
-
-function updateFinancialValues() {
-    const marginPayload = {
-        id: 1,
-        discount: financialForm.value.discount ?? 0,
-        otherCharges: financialForm.value.otherCharges ?? 0,
-        amount: financialForm.value.amount ?? 0,
-    };
-
-    store.dispatch("customerMargin/" + SAVE_CUSTOMER_MARGIN, marginPayload).then(() => {
-        fetchCustomerMarginValues();
-        isFinancialDialogOpen.value = false;
     });
 }
 
@@ -381,35 +219,15 @@ function updateNomodCharges() {
     }).then(() => fetchCustomerSettings());
 }
 
-function updateVoidCharges() {
-    const voidPayload = {
-        void_charges: voidChargesForm.value.voidCharges ?? 0,
-    };
-
-    store.dispatch("customer/" + UPDATE_CUSTOMER_SETTINGS, voidPayload).then(() => {
-        fetchCustomerSettings();
-        isVoidChargesDialogOpen.value = false;
-    });
-}
-
-watch(CustomerMargin, (margin) => {
-    if (!margin) return;
-    financialForm.value.discount = Number(margin.discount ?? 0);
-    financialForm.value.otherCharges = Number(margin.other_charges ?? margin.otherCharges ?? 0);
-    financialForm.value.amount = Number(margin.margin_amount ?? margin.amount ?? 0);
-}, { immediate: true });
-
 watch(customerSettings, (settings) => {
     if (!settings) return;
     oneBillForm.value.fixedCharge = Number(settings.one_bill_fixed_charge ?? settings.one_bill_charges ?? 0);
     oneBillForm.value.percentageCharge = Number(settings.one_bill_percentage_charge ?? 0);
-    voidChargesForm.value.voidCharges = Number(settings.void_charges ?? 0);
     nomodForm.value.percentageCharge = Number(settings.nomod_percentage_charge ?? 2.5);
     nomodForm.value.fixedCharge = Number(settings.nomod_fixed_charge ?? 0);
 }, { immediate: true });
 
 onMounted(() => {
-    fetchCustomerMarginValues();
     fetchCustomerSettings();
 });
 </script>

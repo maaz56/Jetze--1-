@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Airline;
 use App\Models\SegmentMargin;
 use Carbon\Carbon;
-use Log;
+use Illuminate\Support\Collection;
 
 /**
  * Class UtilityService
@@ -16,14 +16,23 @@ use Log;
  */
 class SegmentMarginService
 {
+    private ?Collection $activeMargins = null;
+
+    private ?array $airlineIdToIata = null;
+
+    public function __construct(
+        private readonly CurrencyConversionService $currencyConversionService,
+    ) {
+    }
+
     /** Resolve the matching provider margin rule without changing provider fare amounts. */
     public function commercialRuleForFare(array $provider, array $flight): ?array
     {
         $margin = $this->resolveBestMargin(
-            SegmentMargin::query()->get(),
+            $this->activeMarginRules(),
             $this->buildFlightContext(
                 $flight,
-                Airline::query()->pluck('iata_code', 'id')->map(fn ($iata) => strtoupper((string) $iata))->toArray(),
+                $this->airlineIdToIata(),
                 $this->buildProviderChannels($provider),
             ),
         );
@@ -40,7 +49,72 @@ class SegmentMarginService
             'configured_value' => (string) $margin->margin_value,
             'passenger_count' => $this->getPassengerCount($flight),
             'segment_count' => max(count($flight['segments'] ?? []), 1),
-            'snapshot' => $margin->only(['id', 'title', 'sale_channel', 'margin_type', 'margin_value', 'airline_id', 'airline_ids', 'disabled_airline_ids']),
+            'application_scope' => 'per_segment_per_passenger',
+            'snapshot' => $margin->only([
+                'id', 'title', 'sale_channel', 'margin_type', 'margin_value',
+                'value_currency', 'disabled_airline_ids', 'is_active', 'priority',
+            ]),
+        ];
+    }
+
+    /** Resolve one margin using every eligible physical segment in the selected quote. */
+    public function commercialRuleForItinerary(
+        array $provider,
+        array $itinerary,
+        array $fareReferences = [],
+    ): ?array {
+        $flights = $this->selectedFlights($itinerary, $fareReferences);
+        if ($flights === []) {
+            return null;
+        }
+
+        $channels = $this->buildProviderChannels($provider);
+        $airlineMap = $this->airlineIdToIata();
+        $bestMargin = null;
+        $bestRank = null;
+        $bestEligibleSegmentCount = 0;
+
+        foreach ($this->activeMarginRules() as $margin) {
+            $marginChannel = strtoupper((string) ($margin->sale_channel ?? ''));
+            if ($marginChannel !== '' && !in_array($marginChannel, array_map('strtoupper', $channels), true)) {
+                continue;
+            }
+
+            $eligibleSegmentCount = $this->eligibleSegmentCount($flights, $margin, $airlineMap);
+            if ($eligibleSegmentCount === 0) {
+                continue;
+            }
+
+            $rank = [(int) ($margin->priority ?? 0), (int) $margin->id];
+            if ($bestRank === null || $rank > $bestRank) {
+                $bestMargin = $margin;
+                $bestRank = $rank;
+                $bestEligibleSegmentCount = $eligibleSegmentCount;
+            }
+        }
+
+        if (!$bestMargin) {
+            return null;
+        }
+
+        $passengerCount = $this->passengerCountForSelectedFares($flights, $fareReferences);
+
+        return [
+            'rule_id' => $bestMargin->id,
+            'title' => $bestMargin->title,
+            'direction' => strtolower((string) $bestMargin->margin_type) === 'discount' ? 'discount' : 'markup',
+            'calculation_type' => 'amount',
+            'configured_value' => (string) $bestMargin->margin_value,
+            'passenger_count' => $passengerCount,
+            'segment_count' => $bestEligibleSegmentCount,
+            'application_scope' => 'per_segment_per_passenger',
+            'snapshot' => array_merge($bestMargin->only([
+                'id', 'title', 'sale_channel', 'margin_type', 'margin_value',
+                'value_currency', 'disabled_airline_ids', 'is_active', 'priority',
+            ]), [
+                'total_physical_segments' => $this->physicalSegmentCount($flights),
+                'eligible_segment_count' => $bestEligibleSegmentCount,
+            ]),
         ];
     }
 
@@ -66,21 +140,18 @@ class SegmentMarginService
         }
 
         // 2. Fetch all segment margin rules from the database
-        $margins = SegmentMargin::query()->get();
+        $margins = $this->activeMarginRules();
         if ($margins->isEmpty()) {
             return $transformedFlights;
         }
 
         // 3. Create a map of airline IDs to IATA codes (e.g. [1 => "PK", 2 => "EK"]) in uppercase for easy matching
-        $airlineIdToIata = Airline::query()
-            ->pluck('iata_code', 'id')
-            ->map(fn ($iata) => strtoupper((string) $iata))
-            ->toArray();
+        $airlineIdToIata = $this->airlineIdToIata();
 
         // 4. Iterate through each itinerary in the search results
         foreach ($transformedFlights as &$itinerary) {
             $provider = data_get($itinerary, 'provider', []);
-            if (in_array(strtoupper((string) data_get($provider, 'identifier')), ['AT', 'HAKIMI'], true)) {
+            if ($this->usesCommercialMoney($itinerary)) {
                 continue;
             }
             
@@ -242,6 +313,88 @@ class SegmentMarginService
         return max((int) $quantity, 1);
     }
 
+    /** Keep only the flights represented by selected fare references. */
+    private function selectedFlights(array $itinerary, array $fareReferences): array
+    {
+        $flights = data_get($itinerary, 'leg.flights', []);
+        if (!is_array($flights)) {
+            return [];
+        }
+
+        $references = array_flip(array_values(array_filter($fareReferences, 'is_string')));
+        if ($references === []) {
+            return array_values($flights);
+        }
+
+        return array_values(array_filter($flights, static function (array $flight) use ($references): bool {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if (isset($references[$fare['ref_id'] ?? ''])) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+    }
+
+    /** Read the passenger total from the actual selected fare. */
+    private function passengerCountForSelectedFares(array $flights, array $fareReferences): int
+    {
+        $references = array_flip(array_values(array_filter($fareReferences, 'is_string')));
+
+        foreach ($flights as $flight) {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if ($references !== [] && !isset($references[$fare['ref_id'] ?? ''])) {
+                    continue;
+                }
+
+                return $this->getPassengerCount(array_merge($flight, ['fares' => [$fare]]));
+            }
+        }
+
+        return $this->getPassengerCount($flights[0] ?? []);
+    }
+
+    /** Count physical segments after removing those belonging to excluded airlines. */
+    private function eligibleSegmentCount(array $flights, SegmentMargin $margin, array $airlineMap): int
+    {
+        $excludedIatas = collect($margin->disabled_airline_ids ?? [])
+            ->map(fn ($id) => strtoupper((string) ($airlineMap[(int) $id] ?? '')))
+            ->filter()
+            ->unique()
+            ->all();
+        $count = 0;
+
+        foreach ($flights as $flight) {
+            $flightMarketing = strtoupper((string) data_get($flight, 'marketing_carrier.iata', ''));
+
+            foreach ($flight['segments'] ?? [] as $segment) {
+                $segmentAirlines = array_values(array_filter(array_unique([
+                    $flightMarketing,
+                    strtoupper((string) data_get($segment, 'marketing_carrier.iata', '')),
+                    strtoupper((string) data_get($segment, 'operating_carrier.iata', '')),
+                ])));
+
+                if ($excludedIatas !== [] && array_intersect($excludedIatas, $segmentAirlines)) {
+                    continue;
+                }
+
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /** Count the actual flight chunks represented by the selected itinerary. */
+    private function physicalSegmentCount(array $flights): int
+    {
+        return array_sum(array_map(
+            static fn (array $flight): int => count($flight['segments'] ?? []),
+            $flights,
+        ));
+    }
+
     /**
      * Extracts and builds a structured context mapping the physical traits of a flight option.
      *
@@ -299,7 +452,7 @@ class SegmentMarginService
     private function resolveBestMargin($margins, array $flightContext): ?SegmentMargin
     {
         $best = null;
-        $bestScore = -1;
+        $bestRank = null;
 
         foreach ($margins as $margin) {
             // Check if the current rule meets all flight context criteria
@@ -308,12 +461,15 @@ class SegmentMarginService
             }
 
             // Calculate the specificity score of the rule
-            $score = $this->specificityScore($margin);
-            
-            // Rule selection priority: Higher score wins. If scores are equal, the higher ID wins.
-            if ($score > $bestScore || ($score === $bestScore && (int) $margin->id > (int) data_get($best, 'id', 0))) {
+            $rank = [
+                (int) ($margin->priority ?? 0),
+                (int) $margin->id,
+            ];
+
+            // Explicit priority wins; the latest rule breaks an equal-priority tie.
+            if ($bestRank === null || $rank > $bestRank) {
                 $best = $margin;
-                $bestScore = $score;
+                $bestRank = $rank;
             }
         }
 
@@ -339,16 +495,10 @@ class SegmentMarginService
             return false;
         }
 
-        // 2. Excluded airlines check.
-        // In current module behavior, airline_ids are treated as excluded airlines.
-        // If disabled_airline_ids exists, merge both to support both payload styles.
+        // 2. Excluded airlines check using the canonical exclusion list.
         $disabledAirlineIds = array_values(array_unique(array_filter(array_map(
             'intval',
-            array_merge(
-                is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
-                is_array($margin->airline_ids) ? $margin->airline_ids : [],
-                !is_null($margin->airline_id) ? [(int) $margin->airline_id] : []
-            )
+            is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
         ))));
         if (!empty($disabledAirlineIds) && !empty(array_intersect($disabledAirlineIds, $flightContext['airline_ids'] ?? []))) {
             return false;
@@ -376,47 +526,17 @@ class SegmentMarginService
             'sale_channel' => $margin->sale_channel,
             'margin_type' => $margin->margin_type,
             'amount_type' => 'amount',
+            'value_currency' => 'AED',
             'margin_value' => $marginValue,
             'margin_per_unit' => round($marginValue, 2),
             'segment_count' => max($segmentCount, 1),
             'passenger_count' => max($passengerCount, 1),
             'multiplier_applied' => $multiplier,
-            'configured_airline_ids' => is_array($margin->airline_ids) ? array_values($margin->airline_ids) : [],
             'disabled_airline_ids' => is_array($margin->disabled_airline_ids) ? array_values($margin->disabled_airline_ids) : [],
-            'excluded_airline_ids' => array_values(array_unique(array_merge(
-                is_array($margin->airline_ids) ? $margin->airline_ids : [],
-                is_array($margin->disabled_airline_ids) ? $margin->disabled_airline_ids : [],
-                !is_null($margin->airline_id) ? [(int) $margin->airline_id] : []
-            ))),
+            'excluded_airline_ids' => is_array($margin->disabled_airline_ids)
+                ? array_values($margin->disabled_airline_ids)
+                : [],
         ];
-    }
-
-    /**
-     * Calculates the specificity score of a segment margin rule to resolve conflicts.
-     *
-     * Specificity weighting scheme:
-     * - Airline specification: +10 points (highly target-specific)
-     * - Dual origin & destination: +9 points
-     * - Single origin or destination: +5 points
-     * - RBD class targeting: +7 points
-     * - Departure date limit: +4 points
-     * - Custom reservation classification: +3 points
-     * - Price tier option: +2 points
-     *
-     * @param SegmentMargin $margin SegmentMargin rule to evaluate.
-     * @return int Total specificity score.
-     */
-    private function specificityScore(SegmentMargin $margin): int
-    {
-        $score = 0;
-
-        $hasAirlines = (!empty($margin->airline_ids) || !is_null($margin->airline_id));
-
-        if ($hasAirlines) {
-            $score += 10;
-        }
-
-        return $score;
     }
 
     /**
@@ -438,8 +558,13 @@ class SegmentMarginService
         $basePrice = (float) ($fare['base_price'] ?? 0);
         $marginValue = (float) ($margin->margin_value ?? 0);
         $priceOption = strtolower((string) ($margin->margin_type ?? 'markup')); // can be: discount or markup
+        $fareCurrency = strtoupper((string) data_get($fare, 'currency.code', 'AED'));
 
-        $computed = $marginValue;
+        $computed = (float) $this->currencyConversionService->convertMoney(
+            $marginValue,
+            'AED',
+            $fareCurrency,
+        )['amount'];
 
         // 2. Calculate the multiplier (segments × passengers) because margins apply per segment per traveler
         $multiplier = $segmentCount * $passengerCount;
@@ -449,7 +574,10 @@ class SegmentMarginService
 
         // Determine if delta should represent a discount (subtraction) or markup (addition)
         $isDiscount = $priceOption === 'discount';
-        $delta = $isDiscount ? -abs($totalComputed) : abs($totalComputed);
+        $effectiveAmount = $isDiscount
+            ? min(abs($totalComputed), max($basePrice, 0))
+            : abs($totalComputed);
+        $delta = $isDiscount ? -$effectiveAmount : $effectiveAmount;
 
         // Store the original base price for audit tracking
         $originalBasePrice = $basePrice;
@@ -457,7 +585,7 @@ class SegmentMarginService
         // 4. Update the parent fare price fields in-place
         foreach (['base_price', 'total_price', 'billable_price'] as $field) {
             if (isset($fare[$field]) && is_numeric($fare[$field])) {
-                $fare[$field] = round(((float) $fare[$field]) + $delta, 2);
+                $fare[$field] = round(max(((float) $fare[$field]) + $delta, 0), 2);
             }
         }
 
@@ -471,7 +599,7 @@ class SegmentMarginService
 
                 foreach (['base_price', 'total_price'] as $field) {
                     if (isset($passengerFare[$field]) && is_numeric($passengerFare[$field])) {
-                        $passengerFare[$field] = round(((float) $passengerFare[$field]) + $passengerFareDelta, 2);
+                        $passengerFare[$field] = round(max(((float) $passengerFare[$field]) + $passengerFareDelta, 0), 2);
                     }
                 }
                 // Log the final calculated pricing adjustment per traveler
@@ -483,10 +611,12 @@ class SegmentMarginService
         }
 
         // 6. Record metadata for audit trail auditing and transparency in the database/JSON logging
-        $fare['segment_margin_amount'] = round(abs($totalComputed), 2);
+        $fare['segment_margin_amount'] = round(abs($effectiveAmount), 2);
         $fare['segment_margin_signed_amount'] = round($delta, 2);
         $fare['margin_per_unit'] = round(abs($computed), 2);
         $fare['segment_amount_type'] = 'amount';
+        $fare['segment_margin_currency'] = 'AED';
+        $fare['segment_margin_applied_currency'] = $fareCurrency;
         $fare['segment_margin_type'] = $isDiscount ? 'discount' : 'markup';
         $fare['multiplier'] = $multiplier;
         $fare['segment_count'] = $segmentCount;
@@ -494,6 +624,37 @@ class SegmentMarginService
         $fare['original_base_price'] = $originalBasePrice;
 
         return $delta;
+    }
+
+    /** Detect fares handled by the normalized AED commercial-pricing pipeline. */
+    private function usesCommercialMoney(array $itinerary): bool
+    {
+        foreach (data_get($itinerary, 'leg.flights', []) as $flight) {
+            foreach ($flight['fares'] ?? [] as $fare) {
+                if (isset($fare['provider_booking_money']['amount'], $fare['provider_booking_money']['currency'])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Load active rules once so large streamed searches do not query per fare. */
+    private function activeMarginRules(): Collection
+    {
+        return $this->activeMargins
+            ??= SegmentMargin::query()->where('is_active', true)->get();
+    }
+
+    /** Cache the airline lookup used by rule matching for this request. */
+    private function airlineIdToIata(): array
+    {
+        return $this->airlineIdToIata
+            ??= Airline::query()
+                ->pluck('iata_code', 'id')
+                ->map(fn ($iata) => strtoupper((string) $iata))
+                ->toArray();
     }
 
     /**

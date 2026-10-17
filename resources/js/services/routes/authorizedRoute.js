@@ -10,7 +10,6 @@ const adminLandingRoutes = [
     { permission: "manage-marketing", route: { name: "Banners" } },
     { permission: "manage-airlines", route: { name: "Airlines" } },
     { permission: "airlines_view", route: { name: "Promotions" } },
-    { permission: "manage-airports", route: { name: "AirportMarkups" } },
     { permission: "manage-staff", route: { name: "Staff" } },
     { permission: "manage-roles", route: { name: "Roles" } },
     { permission: "manage-customers", route: { name: "Customers" } },
