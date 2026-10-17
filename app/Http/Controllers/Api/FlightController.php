@@ -69,7 +69,7 @@ class FlightController extends Controller
 
        $apiProviders = [
             // ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            // ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
+            ['identifier' => 'HAKIMI', 'name' => 'Travel With Hakimi (Test)'],
             ['identifier' => 'AT', 'name' => 'Akbar Travels'],
 
             // ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
