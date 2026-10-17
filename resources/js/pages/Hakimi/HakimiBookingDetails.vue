@@ -1424,30 +1424,60 @@ onMounted(async () => {
     </section>
 </template>
 
-<style scoped>
+<style>
 @media print {
     @page {
-        margin: 0.5in;
+        margin: 0.4in;
         size: A4;
     }
 
-    body * {
-        visibility: hidden !important;
+    /* When the print clone exists, remove the whole app from layout
+       so only the ticket prints, starting at the top of page 1 */
+    body:has(> #print-container) > *:not(#print-container) {
+        display: none !important;
     }
 
-    #print-section,
-    #print-section * {
-        visibility: visible !important;
-    }
-
-    #print-section {
-        position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
+    #print-container {
+        display: block !important;
         width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
         background: white !important;
+        font-size: 9pt !important;
+        line-height: 1.35 !important;
     }
 
+    /* Compact print layout so the ticket fits on one page */
+    #print-container .text-xs { font-size: 7pt !important; }
+    #print-container .text-sm { font-size: 8pt !important; }
+    #print-container .text-base { font-size: 9pt !important; }
+    #print-container .text-lg { font-size: 10.5pt !important; }
+    #print-container .text-xl { font-size: 11.5pt !important; }
+    #print-container .text-2xl { font-size: 13pt !important; }
+
+    #print-container .p-6 { padding: 10px !important; }
+    #print-container .p-4 { padding: 8px !important; }
+    #print-container .p-3 { padding: 6px !important; }
+    #print-container .px-6 { padding-left: 10px !important; padding-right: 10px !important; }
+    #print-container .py-4 { padding-top: 6px !important; padding-bottom: 6px !important; }
+    #print-container .py-3 { padding-top: 5px !important; padding-bottom: 5px !important; }
+    #print-container .mb-4 { margin-bottom: 8px !important; }
+    #print-container .mb-6 { margin-bottom: 10px !important; }
+    #print-container .gap-4 { gap: 8px !important; }
+    #print-container .space-y-4 > * + * { margin-top: 6px !important; }
+    #print-container .space-y-3 > * + * { margin-top: 5px !important; }
+    #print-container th,
+    #print-container td { padding: 4px 8px !important; }
+    #print-container img { max-height: 2.75rem !important; }
+
+    /* Let large cards flow across pages (prevents blank gaps),
+       but keep table rows intact */
+    #print-container .print\:break-inside-avoid { page-break-inside: auto !important; }
+    #print-container tr { page-break-inside: avoid !important; }
+
+    nav,
+    aside,
+    footer,
     button,
     .fixed,
     .sticky,

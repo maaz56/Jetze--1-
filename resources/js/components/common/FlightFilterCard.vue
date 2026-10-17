@@ -813,7 +813,7 @@ const startCountdown = (remainingTime) => {
                                                     :class="[
                                                         'py-2 rounded-md text-sm font-medium transition uppercase',
                                                         localValue.classType === 'Y'
-                                                            ? 'bg-secondary text-white'
+                                                            ? 'bg-primary text-primary-foreground'
                                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                                                     ]"
                                                 >
@@ -824,7 +824,7 @@ const startCountdown = (remainingTime) => {
                                                     :class="[
                                                         'py-2 rounded-md text-sm font-medium transition uppercase',
                                                         localValue.classType === 'S'
-                                                            ? 'bg-secondary text-white'
+                                                            ? 'bg-primary text-primary-foreground'
                                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                                                     ]"
                                                 >
@@ -835,7 +835,7 @@ const startCountdown = (remainingTime) => {
                                                     :class="[
                                                         'py-2 rounded-md text-sm font-medium transition uppercase',
                                                         localValue.classType === 'C'
-                                                            ? 'bg-secondary text-white'
+                                                            ? 'bg-primary text-primary-foreground'
                                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                                                     ]"
                                                 >
@@ -846,7 +846,7 @@ const startCountdown = (remainingTime) => {
                                                     :class="[
                                                         'py-2 rounded-md text-sm font-medium transition uppercase',
                                                         localValue.classType === 'F'
-                                                            ? 'bg-secondary text-white'
+                                                            ? 'bg-primary text-primary-foreground'
                                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                                                     ]"
                                                 >
@@ -910,13 +910,13 @@ const startCountdown = (remainingTime) => {
                                             <div class="flex justify-between">
                                                 <Button
                                                     @click="resetTravelers"
-                                                    class="text-sm text-white font-medium hover:text-gray-800"
+                                                    variant="outline" class="text-sm font-medium text-gray-700 hover:text-white"
                                                 >
                                                     Reset
                                                 </Button>
                                                 <Button
                                                     @click="applyChanges"
-                                                    class="px-5 py-1 bg-secondary text-white rounded-md font-sm"
+                                                    class="px-5 py-1 bg-primary text-primary-foreground rounded-md font-sm"
                                                 >
                                                     Apply
                                                 </Button>
@@ -1053,10 +1053,10 @@ const startCountdown = (remainingTime) => {
                                     <PopoverContent class="w-80 p-6 rounded-lg border-0 shadow-xl">
                                         <div class="space-y-6">
                                             <div class="grid grid-cols-2 gap-2">
-                                                <button @click="localValue.classType = 'Y'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'Y' ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("economy") }}</button>
-                                                <button @click="localValue.classType = 'S'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'S' ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("premium_economy") }}</button>
-                                                <button @click="localValue.classType = 'C'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'C' ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("business") }}</button>
-                                                <button @click="localValue.classType = 'F'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'F' ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("first class") }}</button>
+                                                <button @click="localValue.classType = 'Y'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'Y' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("economy") }}</button>
+                                                <button @click="localValue.classType = 'S'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'S' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("premium_economy") }}</button>
+                                                <button @click="localValue.classType = 'C'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'C' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("business") }}</button>
+                                                <button @click="localValue.classType = 'F'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'F' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("first class") }}</button>
                                             </div>
 
                                             <div class="space-y-5">
@@ -1093,10 +1093,10 @@ const startCountdown = (remainingTime) => {
                                             </div>
 
                                             <div class="flex justify-between">
-                                                <Button @click="resetTravelers" class="text-sm text-white font-medium hover:text-gray-800">
+                                                <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
                                                     Reset
                                                 </Button>
-                                                <Button @click="applyChanges" class="px-5 py-1 bg-secondary text-white rounded-md font-sm">
+                                                <Button @click="applyChanges" class="px-5 py-1 bg-primary text-primary-foreground rounded-md font-sm">
                                                     Apply
                                                 </Button>
                                             </div>

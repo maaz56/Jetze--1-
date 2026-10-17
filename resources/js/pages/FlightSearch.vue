@@ -3933,7 +3933,10 @@ watch(isLoggedIn, (newVal) => {
                             {{ item?.leg?.flights[0]?.from?.city?.name }}
                         </div>
                         <div class="text-sm font-semibold text-gray-400">
-                            {{ item?.leg?.flights[0]?.from?.city?.code }}
+                            {{ item?.leg?.flights[0]?.from?.iata || item?.leg?.flights[0]?.from?.city?.code }}
+                        </div>
+                        <div v-if="item?.leg?.flights[0]?.departure_at" class="mt-1 whitespace-nowrap text-xs font-medium text-gray-500">
+                            {{ moment.parseZone(item.leg.flights[0].departure_at).format("ddd, DD MMM YYYY") }}
                         </div>
                     </div>
 
@@ -4016,7 +4019,10 @@ watch(isLoggedIn, (newVal) => {
                             {{ item?.leg?.flights[0]?.to?.city?.name }}
                         </div>
                         <div class="text-sm font-semibold text-gray-400">
-                            {{ item?.leg?.flights[0]?.to?.city?.code }}
+                            {{ item?.leg?.flights[0]?.to?.iata || item?.leg?.flights[0]?.to?.city?.code }}
+                        </div>
+                        <div v-if="item?.leg?.flights[0]?.arrival_at" class="mt-1 whitespace-nowrap text-xs font-medium text-gray-500">
+                            {{ moment.parseZone(item.leg.flights[0].arrival_at).format("ddd, DD MMM YYYY") }}
                         </div>
                     </div>
                 </div>

@@ -1374,7 +1374,7 @@ onMounted(() => {
                                             </div>
                                         </div>
                                         <div class="flex justify-between">
-                                            <Button @click="resetTravelers" class="text-sm text-gray-700 font-medium hover:text-gray-900">
+                                            <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
                                                 Reset
                                             </Button>
                                             <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
@@ -1620,7 +1620,7 @@ onMounted(() => {
                                                         </div>
                                                     </div>
                                                     <div class="flex justify-between">
-                                                        <Button @click="resetTravelers" class="text-sm text-gray-700 font-medium hover:text-gray-900">
+                                                        <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
                                                             Reset
                                                         </Button>
                                                         <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
