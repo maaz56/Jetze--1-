@@ -124,7 +124,7 @@ class HakimiFlightTransformer
                 'to' => $this->airport($segment['destination'] ?? $offer['destination']),
                 'departure_at' => $segment['departure'] ?? $offer['departure'] ?? null,
                 'arrival_at' => $segment['arrival'] ?? $offer['arrival'] ?? null,
-                'flight_number' => $segment['flightNo'] ?? $segment['flightNumber'] ?? $offer['flightNo'] ?? null,
+                'flight_number' => $this->flightNumber($segment['flightNo'] ?? $segment['flightNumber'] ?? $offer['flightNo'] ?? null),
                 'flight_time' => $segment['duration'] ?? $offer['duration'] ?? null,
                 'travel_time' => $this->durationMinutes($segment['duration'] ?? $offer['duration'] ?? null),
                 'cabin_class' => $segment['cabin'] ?? $offer['cabin'] ?? 'Economy',
@@ -133,11 +133,32 @@ class HakimiFlightTransformer
         }, $rawSegments);
     }
 
+    private function flightNumber(?string $number): ?string
+    {
+        if ($number === null) {
+            return null;
+        }
+
+        $number = trim($number);
+        return preg_replace('/^(?=[A-Z0-9]{0,1}[A-Z])[A-Z0-9]{2}\s*(\d+[A-Z]?)$/i', '$1', $number);
+    }
+
     private function carrier(?string $iata, ?string $name): array
     {
         $iata = strtoupper(trim((string) $iata));
-        $airline = $iata === '' ? null : ($this->airlines[$iata] ??= Airline::where('iata_code', $iata)->first());
-        return ['iata' => $iata ?: null, 'name' => $airline?->name ?? $name ?? $iata, 'logo' => $airline?->logo_url];
+        $name = trim((string) $name);
+        $key = $iata !== '' ? 'iata:' . $iata : 'name:' . strtolower($name);
+        $airline = null;
+        if ($iata !== '' || $name !== '') {
+            if (!array_key_exists($key, $this->airlines)) {
+                $this->airlines[$key] = $iata !== ''
+                    ? Airline::where('iata_code', $iata)->first()
+                    : Airline::whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
+            }
+            $airline = $this->airlines[$key];
+        }
+
+        return ['iata' => $iata ?: $airline?->iata_code, 'name' => $airline?->name ?? ($name ?: $iata), 'logo' => $airline?->logo_url];
     }
 
     private function airport(?string $iata): array

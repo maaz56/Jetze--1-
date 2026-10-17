@@ -691,24 +691,27 @@ const cheapestFlightsByAirline = computed(() => {
 
     allFlights.value.forEach((flight) => {
         const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
-        const airlineId =
-            carrier?.id || carrier?.iata || carrier?.code || carrier?.name;
+        const airlineId = carrier?.id || carrier?.iata || carrier?.code || carrier?.name;
+        const groupKey = (carrier?.name || carrier?.iata || carrier?.code || String(carrier?.id || ""))
+            .trim().toLowerCase();
 
-        if (!airlineId) return;
+        if (!airlineId || !groupKey) return;
 
-        if (
-            !map.has(airlineId) ||
-            displayFlightPrice(map.get(airlineId)) > displayFlightPrice(flight)
-        ) {
-            map.set(airlineId, flight);
+        const group = map.get(groupKey);
+        if (!group) {
+            map.set(groupKey, { flight, airlineIds: [airlineId] });
+        } else {
+            if (!group.airlineIds.includes(airlineId)) group.airlineIds.push(airlineId);
+            if (displayFlightPrice(group.flight) > displayFlightPrice(flight)) group.flight = flight;
         }
     });
 
     return Array.from(map.entries())
-        .map(([airlineId, flight]) => {
+        .map(([airlineId, { flight, airlineIds }]) => {
             const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
             return {
                 airlineId,
+                airlineIds,
                 flight,
                 name: carrier?.name || carrier?.iata || "Airline",
                 logo: carrier?.logo || carrier?.logo_url,
@@ -750,10 +753,10 @@ function filterByAirline() {
     refreshFilteredFlights();
 }
 
-function filterByCarouselAirline(airlineId) {
-    selectedAirline.value = selectedAirline.value.includes(airlineId)
+function filterByCarouselAirline(airlineIds) {
+    selectedAirline.value = airlineIds.some((id) => selectedAirline.value.includes(id))
         ? []
-        : [airlineId];
+        : [...airlineIds];
     filterByAirline();
 }
 
@@ -3473,10 +3476,10 @@ watch(isLoggedIn, (newVal) => {
                                 >
                                     <button
                                         type="button"
-                                        @click="filterByCarouselAirline(airline.airlineId)"
+                                        @click="filterByCarouselAirline(airline.airlineIds)"
                                         :class="[
                                             'flex min-h-[72px] w-full items-center gap-3 rounded border p-3 text-left transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30',
-                                            selectedAirline.includes(airline.airlineId)
+                                            airline.airlineIds.some((id) => selectedAirline.includes(id))
                                                 ? 'border-primary bg-primary/5'
                                                 : 'border-gray-200 bg-white',
                                         ]"

@@ -417,6 +417,11 @@ Route::get('/fetch-popular-route/{id}', [CmsController::class, 'getPopularRoute'
 Route::post('/update-popular-route/{id}', [CmsController::class, 'updatePopularRoute']);
 Route::delete('/deletePopularRoute/{id}', [CmsController::class, 'deletePopularRoutes']);
 Route::post('/send-popular-routes-mail', [CmsController::class, 'sendSelectedPopularRoutesMail']);
+Route::get('/popular-routes', [CmsController::class, 'getPublicPopularRoutes']);
+Route::get('/popular-routes/{slug}', [CmsController::class, 'getPublicPopularRoute']);
+Route::post('/popular-routes/{id}/refresh-price', [CmsController::class, 'refreshPopularRoutePrice']);
+
+
 
 Route::post('/save-top-airline', [CmsController::class, 'storeTopAirline']);
 Route::get('/fetch-top-airlines', [CmsController::class, 'getTopAirlines']);

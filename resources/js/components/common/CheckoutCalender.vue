@@ -16,39 +16,90 @@
       <PopoverContent class=" p-3 bg-white">
         <!-- header: month + year selects -->
         <div class="flex items-center justify-between mb-2">
-          <div class="flex gap-2 items-center">
-            
-            <Select v-model="selectedMonth" @update:modelValue="onMonthYearChange" class="px-2 py-1 border rounded">
-              <SelectTrigger>
-                 <span class=" w-[90px]">
-                  {{ months.find(m => m.month === selectedMonth)?.label || 'Month' }}
-                </span>
-              </SelectTrigger>
-              <SelectContent class="!h-[200px] overflow-auto ">
-                <SelectItem v-for="m in months" :key="m.month" :value="m.month">{{ m.label }}</SelectItem>
-              </SelectContent>
-            </Select>
+          <div ref="monthPicker" class="relative flex gap-2 items-center">
+            <button
+              type="button"
+              class="flex h-9 w-[108px] items-center justify-between rounded border px-2 text-sm hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              :aria-expanded="isMonthPickerOpen"
+              aria-haspopup="listbox"
+              @click="toggleMonthPicker"
+            >
+              <span>{{ months.find(m => m.month === selectedMonth)?.label || 'Month' }}</span>
+              <svg class="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <div
+              v-if="isMonthPickerOpen"
+              class="absolute left-0 top-full z-50 mt-1 max-h-64 w-[140px] overflow-y-auto rounded border border-gray-200 bg-white py-1 text-sm shadow-lg"
+              role="listbox"
+            >
+              <button
+                v-for="month in months"
+                :key="month.month"
+                type="button"
+                role="option"
+                :aria-selected="month.month === selectedMonth"
+                class="year-picker-option"
+                :class="{ 'bg-primary/10 text-primary font-medium': month.month === selectedMonth }"
+                @click="selectMonth(month.month)"
+              >{{ month.label }}</button>
+            </div>
           </div>
 
-          <div class="flex gap-2 items-center">
-           
-            <Select v-model="selectedYear" @update:modelValue="onMonthYearChange">
-              <SelectTrigger class="px-2 py-1 border rounded w-[80px]">
-                <span>{{ selectedYear||'Year' }}</span>
-              </SelectTrigger>
-              <SelectContent  class="!h-[200px] overflow-auto ">
-                <SelectItem v-for="y in years" :key="y.year" :value="y.year">
-                  {{ y.year }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+          <div ref="yearPicker" class="relative flex gap-2 items-center">
+            <button
+              type="button"
+              class="flex h-9 w-[80px] items-center justify-between rounded border px-2 text-sm hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              :aria-expanded="isYearPickerOpen"
+              aria-haspopup="listbox"
+              @click="toggleYearPicker"
+            >
+              <span>{{ selectedYear || 'Year' }}</span>
+              <svg class="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <div
+              v-if="isYearPickerOpen"
+              class="year-picker absolute right-0 top-full z-50 mt-1 w-[140px] overflow-hidden rounded border border-gray-200 bg-white py-1 text-sm shadow-lg"
+              role="listbox"
+            >
+              <button type="button" class="year-picker-nav" :disabled="isPreviousYearPageDisabled" aria-label="Show 4 earlier years" @click="changeYearPage(-1)">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m18 15-6-6-6 6" /></svg>
+              </button>
+
+              <div class="year-picker-list">
+                <Transition :name="yearPageTransition" mode="out-in">
+                  <div :key="visibleYearStart" class="year-picker-page">
+                    <button
+                      v-for="year in visibleYears"
+                      :key="year"
+                      type="button"
+                      role="option"
+                      :aria-selected="year === selectedYear"
+                      class="year-picker-option"
+                      :class="{ 'bg-primary/10 text-primary font-medium': year === selectedYear }"
+                      @click="selectYear(year)"
+                    >{{ year }}</button>
+                  </div>
+                </Transition>
+              </div>
+
+              <button type="button" class="year-picker-nav" :disabled="isNextYearPageDisabled" aria-label="Show 4 later years" @click="changeYearPage(1)">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" /></svg>
+              </button>
+            </div>
           </div>
+
         </div>
 
         <!-- calendar -->
         <Calendar
           v-model="selectedDate"
-          :placeholder="placeholder"
+          v-model:placeholder="placeholder"
           :min-value="minCalendarDate"
           :max-value="maxCalendarDate"
           class="rounded-lg border"
@@ -62,7 +113,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 /**
  * IMPORTANT: adjust these imports to match your project's shadcn-vue component locations.
@@ -73,18 +124,19 @@ import { computed, ref, watch } from 'vue';
  */
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Calendar as CalendarIcon } from 'lucide-vue-next';
 
 import { CalendarDate } from '@internationalized/date';
 import { toDate } from 'reka-ui/date';
 import Button from '../ui/button/Button.vue';
+import { getTravellerDobRange } from '@/lib/travellerDob';
 
 /* Props & emits for v-model + min/max */
 const props = defineProps({
   modelValue: { type: String, default: '' }, // 'YYYY-mm-dd' (user-specified format)
   minValue: { type: String, default: '' },   // optional 'YYYY-mm-dd'
   maxValue: { type: String, default: '' },   // optional 'YYYY-mm-dd'
+  dobType: { type: String, default: '' },    // adult | child | infant
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -102,42 +154,43 @@ const selectedMonth = ref(placeholder.value.month - 1)
 const selectedYear = ref(placeholder.value.year)
 
 // available years list (only between min and max)
-const years = computed(() => {
-  let minY = minCalendarDate.value?.year ?? (placeholder.value.year - 100)
-  let maxY = maxCalendarDate.value?.year ?? (placeholder.value.year + 10)
-
-  const result = []
-  for (let y = minY; y <= maxY; y++) {
-    result.push({ year: y, dateObj: new CalendarDate(y, 1, 1) })
+const effectiveDobRange = computed(() => {
+  if (props.dobType) {
+    return getTravellerDobRange(props.dobType);
   }
-  return result
-})
 
-// available months list (depends on selected year, and respects min/max)
+  return {
+    min: props.minValue,
+    max: props.maxValue,
+  };
+});
+
+const minYear = computed(() => minCalendarDate.value?.year ?? (placeholder.value.year - 100))
+const maxYear = computed(() => maxCalendarDate.value?.year ?? (placeholder.value.year + 10))
+const isYearPickerOpen = ref(false)
+const yearPicker = ref(null)
+const isMonthPickerOpen = ref(false)
+const monthPicker = ref(null)
+const visibleYearStart = ref(placeholder.value.year)
+const yearPageTransition = ref('year-page-down')
+const visibleYears = computed(() => {
+  const years = []
+  for (let year = visibleYearStart.value; year <= Math.min(visibleYearStart.value + 3, maxYear.value); year++) {
+    years.push(year)
+  }
+  return years
+})
+const isPreviousYearPageDisabled = computed(() => visibleYearStart.value <= minYear.value)
+const isNextYearPageDisabled = computed(() => visibleYearStart.value + 3 >= maxYear.value)
+
+// The selected year always exposes all twelve months. The Calendar itself
+// enforces the date range by disabling out-of-range days.
 const months = computed(() => {
   const result = []
   const currentYear = selectedYear.value
 
   for (let m = 1; m <= 12; m++) {
     const d = new Date(currentYear, m - 1, 1)
-
-    // skip months before min
-    if (
-      minCalendarDate.value &&
-      (currentYear < minCalendarDate.value.year ||
-        (currentYear === minCalendarDate.value.year && m < minCalendarDate.value.month))
-    ) {
-      continue
-    }
-
-    // skip months after max
-    if (
-      maxCalendarDate.value &&
-      (currentYear > maxCalendarDate.value.year ||
-        (currentYear === maxCalendarDate.value.year && m > maxCalendarDate.value.month))
-    ) {
-      continue
-    }
 
     result.push({
       label: new Intl.DateTimeFormat('en', { month: 'long' }).format(d),
@@ -148,6 +201,7 @@ const months = computed(() => {
 
   return result
 })
+
 
 /* Helpers: format and parse 'YYYY-mm-dd' strings.
    NOTE: user requested 'YYYY-mm-dd' — here we interpret 'mm' as month number (01..12).
@@ -204,8 +258,8 @@ watch(
   { immediate: true }
 )
 /* min/max props -> CalendarDate or undefined (passed to Calendar as :min/:max) */
-const minCalendarDate = computed(() => parseYYYYmmddToCalendarDate(props.minValue))
-const maxCalendarDate = computed(() => parseYYYYmmddToCalendarDate(props.maxValue))
+const minCalendarDate = computed(() => parseYYYYmmddToCalendarDate(effectiveDobRange.value.min))
+const maxCalendarDate = computed(() => parseYYYYmmddToCalendarDate(effectiveDobRange.value.max))
 
 /* When user picks a date in Calendar, update v-model string */
 watch(selectedDate, (val) => {
@@ -221,12 +275,65 @@ watch(selectedDate, (val) => {
 watch(placeholder, (val) => {
   selectedMonth.value = val.month - 1
   selectedYear.value = val.year
+  if (isYearPickerOpen.value) alignYearPage(val.year)
 })
 
 /* Called when month/year selects change */
 function onMonthYearChange() {
   placeholder.value = new CalendarDate(Number(selectedYear.value), Number(selectedMonth.value) + 1, 1)
 }
+
+function alignYearPage(year = selectedYear.value) {
+  const latestStart = Math.max(minYear.value, maxYear.value - 3)
+  visibleYearStart.value = Math.max(minYear.value, Math.min(year - 1, latestStart))
+}
+
+function toggleYearPicker() {
+  isYearPickerOpen.value = !isYearPickerOpen.value
+  if (isYearPickerOpen.value) {
+    isMonthPickerOpen.value = false
+    alignYearPage()
+  }
+}
+
+function changeYearPage(direction) {
+  const nextStart = visibleYearStart.value + direction * 4
+  if (nextStart < minYear.value || nextStart > maxYear.value) return
+
+  yearPageTransition.value = direction > 0 ? 'year-page-down' : 'year-page-up'
+  visibleYearStart.value = nextStart
+}
+
+function selectYear(year) {
+  selectedYear.value = year
+  onMonthYearChange()
+  isYearPickerOpen.value = false
+}
+
+function toggleMonthPicker() {
+  isMonthPickerOpen.value = !isMonthPickerOpen.value
+  if (isMonthPickerOpen.value) {
+    isYearPickerOpen.value = false
+  }
+}
+
+function selectMonth(month) {
+  selectedMonth.value = month
+  onMonthYearChange()
+  isMonthPickerOpen.value = false
+}
+
+function closeYearPickerOnOutsideClick(event) {
+  if (yearPicker.value && !yearPicker.value.contains(event.target)) {
+    isYearPickerOpen.value = false
+  }
+  if (monthPicker.value && !monthPicker.value.contains(event.target)) {
+    isMonthPickerOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('mousedown', closeYearPickerOnOutsideClick))
+onBeforeUnmount(() => document.removeEventListener('mousedown', closeYearPickerOnOutsideClick))
 
 /* Popover action buttons */
 function clear() {
@@ -243,8 +350,85 @@ const displayText = computed(() => {
   if (!props.modelValue) return ''
   return props.modelValue
 })
+
+watch(
+  [minCalendarDate, maxCalendarDate, () => props.dobType],
+  () => {
+    if (props.modelValue) return
+
+    const anchor = maxCalendarDate.value ?? minCalendarDate.value
+    if (anchor) {
+      placeholder.value = new CalendarDate(anchor.year, anchor.month, 1)
+      selectedMonth.value = placeholder.value.month - 1
+      selectedYear.value = placeholder.value.year
+    }
+  },
+  { immediate: true },
+)
+
 </script>
 
 <style scoped>
-/* customize to your design system */
+.year-picker-list {
+  min-height: 8rem;
+  overflow: hidden;
+}
+
+.year-picker-page {
+  display: grid;
+}
+
+.year-picker-nav,
+.year-picker-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.year-picker-nav {
+  height: 1.75rem;
+  color: #6b7280;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.year-picker-nav:hover:not(:disabled) {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+}
+
+.year-picker-nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.year-picker-option {
+  height: 2rem;
+  color: #374151;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.year-picker-option:hover {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+}
+
+.year-page-down-enter-active,
+.year-page-down-leave-active,
+.year-page-up-enter-active,
+.year-page-up-leave-active {
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.year-page-down-enter-from,
+.year-page-up-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
+
+.year-page-down-leave-to,
+.year-page-up-enter-from {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+}
 </style>

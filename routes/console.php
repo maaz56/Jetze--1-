@@ -14,3 +14,10 @@ Artisan::command('inspire', function () {
 Schedule::command('payments:nomod:recover-at-fulfilments')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('popular-routes:refresh-prices')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+

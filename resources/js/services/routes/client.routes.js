@@ -224,7 +224,13 @@ export const clientRoutes = [
                 path: "popular-routes/:id",
                 name: "PopularRouteDetails",
                 component: () => import("@/pages/PopularRouteDetails.vue"),
+            },
+            {
+                path: "flights/:slug",
+                name: "PopularRouteBySlug",
+                component: () => import("@/pages/PopularRouteDetails.vue"),
             }
+
 
         ],
     },

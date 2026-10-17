@@ -929,6 +929,20 @@ export default {
     getPopularRoute(id) {
         return apiClient.get(`/fetch-popular-route/${id}`);
     },
+    getPublicPopularRoutes(params) {
+        return apiClient.get("/popular-routes", {
+            params: params,
+        });
+    },
+    getPublicPopularRoute(slug, params) {
+        return apiClient.get(`/popular-routes/${slug}`, {
+            params: params,
+        });
+    },
+    refreshPopularRoutePrice(id) {
+        return apiClient.post(`/popular-routes/${id}/refresh-price`);
+    },
+
     updatePopularRoute(params) {
         return apiClient.post(`/update-popular-route/${params.id}`, params.data);
     },
