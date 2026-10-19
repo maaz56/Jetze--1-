@@ -1,5 +1,6 @@
 <script setup>
 import FlightFilterCard from "@/components/common/FlightFilterCard.vue";
+import FareRuleText from "@/components/common/FareRuleText.vue";
 import FlightLayoverTooltip from "@/components/common/FlightLayoverTooltip.vue";
 import Spinner from "@/components/common/Spinner.vue";
 
@@ -106,7 +107,6 @@ import {
     Sunset,
     Info,
     ArrowRight,
-    RefreshCw,
 } from "lucide-vue-next";
 import moment from "moment";
 import {
@@ -1907,17 +1907,12 @@ async function fetchFreeSsrBaggage() {
 
     if (provider !== "at") return;
 
-    // Search results with a confirmed checked allowance do not need the slow
-    // pricing/SSR chain. Free SSR is only for fares where it is unknown.
-    if (!needsFreeSsrBaggage()) return;
-
     const flightRefId = selectedFlight.value?.leg?.ref_id;
     const searchToken = selectedFlight.value?.quote_search_token;
     const fareReferences = [...selectedFares].filter(Boolean);
     if (!flightRefId || !searchToken || fareReferences.length === 0) return;
 
-    const displayCurrency = getSelectedCurrencyCode();
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}:${displayCurrency}`;
+    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
     const runId = freeSsrBaggageRunId.value;
     // Count in-flight requests per selection so one completion cannot hide
     // another request's skeleton.
@@ -1945,7 +1940,7 @@ async function fetchFreeSsrBaggage() {
         ));
         if (!response) return;
         const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
-        if (currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
+        if (freeSsrBaggageRunId.value !== runId || currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
 
         const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
         fareReferences.forEach((fareRef) => {
@@ -1961,7 +1956,6 @@ async function fetchFreeSsrBaggage() {
         } else {
             delete freeSsrBaggageLoadingByKey.value[requestKey];
         }
-        const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
     }
 }
 
@@ -2028,8 +2022,10 @@ function parseBaggagePolicy(policy) {
         rawType.includes("carry") ||
         rawType.includes("cabin") ||
         rawType.includes("hand") ||
-        rawDesc.toLowerCase().includes("carry") ||
-        rawDesc.toLowerCase().includes("cabin");
+        (policy?.source !== "free_ssr" && (
+            rawDesc.toLowerCase().includes("carry") ||
+            rawDesc.toLowerCase().includes("cabin")
+        ));
 
     const isZero =
         /\b0\s*(?:kg|pieces?|pc)\b/i.test(rawDesc) ||
@@ -2038,7 +2034,7 @@ function parseBaggagePolicy(policy) {
     const isIncluded = !isZero && rawDesc.length > 0;
 
     let headline = rawDesc;
-    if (policy?.weight && !rawDesc.toLowerCase().includes(String(policy.weight).toLowerCase())) {
+    if (policy?.source !== "free_ssr" && policy?.weight && !rawDesc.toLowerCase().includes(String(policy.weight).toLowerCase())) {
         headline = `${policy.weight} ${rawDesc}`.trim();
     }
 
@@ -2301,17 +2297,9 @@ const visibleFareBaggageLegGroups = computed(() => {
     );
 });
 
-function retryFareBaggageDialog() {
-    if (fareBaggageDialog.value.fare) {
-        openFareBaggageDialog(
-            fareBaggageDialog.value.fare,
-            fareBaggageDialog.value.flight,
-            fareBaggageDialog.value.flightIndex ?? 0,
-        );
-    }
-}
-
 function selectedFareReferencesForBaggage(fare, flightIndex) {
+    if (fare?.fare_references?.length) return fare.fare_references;
+
     return (selectedFlight.value?.leg?.flights ?? [])
         .map((flight, index) =>
             index === flightIndex
@@ -2359,7 +2347,7 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
     }
 
     if (!flightRefId || !searchToken || fareReferences.length === 0) {
-        fareBaggageDialogError.value = "Baggage allowance is unavailable for this fare.";
+        fareBaggageDialogError.value = "Please check the baggage section.";
         fareBaggageDialogLoading.value = false;
         return;
     }
@@ -2377,14 +2365,13 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
 
         if (!response || requestId !== fareBaggageDialogRequestId) return;
 
-        fareBaggageDialog.value.policies =
-            response?.free_ssr_baggage?.baggage_policies ?? fallbackPolicies;
+        const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
+        fareBaggageDialog.value.policies = policies;
+        if (!policies.length) fareBaggageDialogError.value = "Please check the baggage section.";
     } catch (error) {
         if (requestId !== fareBaggageDialogRequestId) return;
 
-        fareBaggageDialogError.value =
-            error.response?.data?.message
-            || "Unable to load baggage allowance. Please try again.";
+        fareBaggageDialogError.value = "Please check the baggage section.";
         fareBaggageDialog.value.policies = fallbackPolicies;
     } finally {
         if (requestId === fareBaggageDialogRequestId) {
@@ -2413,12 +2400,6 @@ function hasKnownCheckedBaggage(flightIndex) {
             || (policy.allowance_known === undefined && !isBaggageAllowancePlaceholder(policy))
         ),
     );
-}
-
-function needsFreeSsrBaggage() {
-    const legs = selectedFlight.value?.leg?.flights ?? [];
-
-    return legs.some((_, flightIndex) => !hasKnownCheckedBaggage(flightIndex));
 }
 
 const isCurrentFreeSsrBaggageLoading = computed(() => {
@@ -2566,8 +2547,6 @@ const getSelectedFare = (flightIndex) => {
     if (!fare) return null;
 
     const freePolicies = freeSsrBaggagePoliciesByFare.value[selectedFareRefId] ?? [];
-    if (freePolicies.length === 0) return fare;
-
     // Free SSR wins only for its matching passenger/segment; carry-on and
     // unmatched Inclusion policies stay as fallbacks.
     const freePolicyKeys = new Set(
@@ -2575,6 +2554,7 @@ const getSelectedFare = (flightIndex) => {
     );
     const baggagePolicies = (fare.baggage_policies ?? []).filter((policy) => {
         if (policy.type !== "checkIn") return true;
+        if (String(selectedFlight.value?.provider?.name ?? selectedFlight.value?.provider?.identifier ?? "").toLowerCase() === "at" && isBaggageAllowancePlaceholder(policy)) return false;
         return !freePolicyKeys.has(`${policy.segment_ref_id}:${policy.traveler_type}`);
     });
 
@@ -5173,7 +5153,7 @@ watch(isLoggedIn, (newVal) => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <p v-if="rule.fare_rule_text" class="whitespace-pre-line break-words py-2 text-sm leading-6 text-gray-700">{{ rule.fare_rule_text }}</p>
+                                                <FareRuleText v-if="rule.fare_rule_text" :text="rule.fare_rule_text" />
                                                 <p v-if="rule.remarks" class="whitespace-pre-line break-words py-2 text-sm text-gray-500">{{ rule.remarks }}</p>
                                             </div>
                                         </template>
@@ -5805,7 +5785,7 @@ watch(isLoggedIn, (newVal) => {
 
                                             <!-- Baggage Policies Display -->
                                             <div
-                                                v-if="isCurrentFreeSsrBaggageLoading && !hasKnownCheckedBaggage(flightIndex) && String(selectedFlight?.provider?.name || selectedFlight?.provider?.identifier || '').toLowerCase() === 'at'"
+                                                v-if="isCurrentFreeSsrBaggageLoading && String(selectedFlight?.provider?.name || selectedFlight?.provider?.identifier || '').toLowerCase() === 'at'"
                                                 class="space-y-3 p-3 sm:p-4"
                                             >
                                                 <div class="h-5 w-40 animate-pulse rounded bg-slate-200"></div>
@@ -6274,14 +6254,6 @@ watch(isLoggedIn, (newVal) => {
                                 <div class="mt-0.5 text-xs text-amber-800 leading-relaxed">
                                     {{ fareBaggageDialogError }}
                                 </div>
-                                <button
-                                    type="button"
-                                    @click="retryFareBaggageDialog"
-                                    class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-50"
-                                >
-                                    <RefreshCw class="h-3.5 w-3.5 text-amber-700" />
-                                    Try again
-                                </button>
                             </div>
                         </div>
                     </div>

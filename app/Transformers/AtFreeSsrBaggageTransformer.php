@@ -31,6 +31,7 @@ class AtFreeSsrBaggageTransformer
                         }
 
                         $description = trim((string) ($ssr['Description'] ?? ''));
+                        $checkedDescription = trim(explode(',', $description, 2)[0]);
                         $pieceDescription = trim((string) ($ssr['PieceDescription'] ?? ''));
                         $weights = $this->weights($ssr);
                         $checkedText = $pieceDescription ?: ($description ?: (string) ($ssr['Code'] ?? 'Included checked baggage'));
@@ -51,9 +52,9 @@ class AtFreeSsrBaggageTransformer
                             'type' => 'checkIn',
                             'pieces' => $pieces,
                             'weight' => $weight,
-                            'description' => $this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
+                            'description' => $checkedDescription ?: ($description !== '' ? 'Checked baggage unavailable' : ($this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
                                 isset($weights[1]) ? $this->weightDescription($weights[0]) : $checkedText
-                            ),
+                            ))),
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                             'segment_ref_id' => $segmentRefId,
                             'source' => 'free_ssr',
