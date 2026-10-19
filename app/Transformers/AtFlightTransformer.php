@@ -996,8 +996,7 @@ class AtFlightTransformer
         $onwardFlights = $this->groupAllFares($onwardJourneys, true);
         $returnFlights = $this->groupAllFares($returnJourneys, true);
 
-        // Only same-airline flights can pair, so bucket return flights by airline
-        // instead of testing every onward/return combination.
+        // Bucket by provider; fare pairing below also checks the return identifier.
         $returnFlightsByAirline = [];
         foreach ($returnFlights as $return) {
             $returnFlightsByAirline[$this->returnPairingKey($return['legs']['flight'])][] = $return;
@@ -1083,13 +1082,10 @@ class AtFlightTransformer
         return $final;
     }
 
-    /** Onward and return flights may pair only when these airline fields match. */
+    /** Pair flights by provider, regardless of validating carrier. */
     private function returnPairingKey(array $flight): string
     {
-        return json_encode([
-            $flight['VAC'] ?? null,
-            $flight['Provider'] ?? null,
-        ]);
+        return strtoupper(trim((string) ($flight['Provider'] ?? '')));
     }
 
     /**
