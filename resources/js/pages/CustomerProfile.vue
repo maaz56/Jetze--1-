@@ -77,7 +77,7 @@ import {
     FETCH_CUSTOMER_DATA,
 } from "@/services/store/actions.type";
 const CustomerWallet = defineAsyncComponent(() => import("@/pages/CustomerWallet.vue"));
-const AgentLedger = defineAsyncComponent(() => import("./agent/AgentLedger.vue"));
+const AgentLedger = defineAsyncComponent(() => import("./customer/CustomerLedger.vue"));
 
 /* ------------------------------------------------------------------ */
 /*  STORES & ROUTE                                                    */
@@ -597,9 +597,6 @@ watch([user_id, activeTab], ([id, tab]) => {
                                         Booking ID
                                     </th>
                                     <th scope="col" class="px-4 py-3">PNR</th>
-                                    <th scope="col" class="px-4 py-3">Source</th>
-
-                                    <th scope="col" class="px-4 py-3">Supplier</th>
                                     <th scope="col" class="px-4 py-3">Rout</th>
                                     <th scope="col" class="px-4 py-3">
                                         Passenger Name
@@ -630,25 +627,6 @@ watch([user_id, activeTab], ([id, tab]) => {
                                     </td>
                                     <td class="px-4 py-3">
                                         {{ booking.itinerary_ref ?? booking.itinerary_ref ?? booking.pnr }}
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        {{ parseFlightData(booking?.flight_data)?.provider?.source || parseFlightData(booking?.flight_data)?.provider?.identifier  }}
-
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"
-                                            :key="flightIndex" class="flex gap-2 justify-start items-center">
-
-                                            <span class="relative group">
-                                                <img :src="flight?.marketing_carrier?.logo" alt="Carrier Logo"
-                                                    class="h-6 w-6" />
-                                                <span v-if="flight?.marketing_carrier?.name"
-                                                    class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 rounded bg-primary text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                                                    {{ flight?.marketing_carrier?.name }}
-                                                </span>
-                                            </span>
-                                        </div>
-
                                     </td>
                                     <td px-4 py-3>
                                         <div v-if="booking?.booking_source == 1">

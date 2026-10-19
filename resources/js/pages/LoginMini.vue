@@ -86,8 +86,8 @@ defineProps({
 
 const emit = defineEmits(['close'])
 
-const Login = defineAsyncComponent(() => import('@/components/agent/auth/Login.vue'))
-const OTPValidation = defineAsyncComponent(() => import('@/components/agent/auth/OTPValidation.vue'))
+const Login = defineAsyncComponent(() => import('@/components/auth/Login.vue'))
+const OTPValidation = defineAsyncComponent(() => import('@/components/auth/OTPValidation.vue'))
 
 const route = useRoute()
 const router = useRouter()

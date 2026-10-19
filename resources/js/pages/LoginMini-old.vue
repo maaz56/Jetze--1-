@@ -155,9 +155,9 @@ import { toast } from 'vue3-toastify'
 defineEmits(['close'])
 
 // Async Components
-const Login = defineAsyncComponent(() => import('@/components/agent/auth/Login.vue'))
-const Register = defineAsyncComponent(() => import('@/components/agent/auth/Register.vue'))
-const OTPValidation = defineAsyncComponent(() => import('@/components/agent/auth/OTPValidation.vue'))
+const Login = defineAsyncComponent(() => import('@/components/auth/Login.vue'))
+const Register = defineAsyncComponent(() => import('@/components/auth/Register.vue'))
+const OTPValidation = defineAsyncComponent(() => import('@/components/auth/OTPValidation.vue'))
 
 const route = useRoute()
 const router = useRouter()

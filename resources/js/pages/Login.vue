@@ -145,9 +145,9 @@ import { FETCH_PROMO_IMAGES } from "@/services/store/actions.type";
 import { useStore } from "vuex";
 
 const store = useStore();
-const Login = defineAsyncComponent(() => import('@/components/agent/auth/Login.vue'))
-const Register = defineAsyncComponent(() => import('@/components/agent/auth/Register.vue'))
-const OTPValidation = defineAsyncComponent(() => import('@/components/agent/auth/OTPValidation.vue'))
+const Login = defineAsyncComponent(() => import('@/components/auth/Login.vue'))
+const Register = defineAsyncComponent(() => import('@/components/auth/Register.vue'))
+const OTPValidation = defineAsyncComponent(() => import('@/components/auth/OTPValidation.vue'))
 // Store and router setup
 const route = useRoute()
 const router = useRouter()

@@ -11,7 +11,7 @@ export const authRoutes = [
             {
                 path: "register",
                 name: "Register",
-                component: () => import("@/components/agent/auth/Register.vue"),
+                component: () => import("@/components/auth/Register.vue"),
             },
             {
                 path: "verify-email",

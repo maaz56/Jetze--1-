@@ -1,8 +1,6 @@
 <script setup>
 import SabreCustomerFlightCheckout from '@/pages/Sabre/SabreCustomerFlightCheckout.vue';
 import { useRoute, useRouter } from 'vue-router';
-import SabreFlightCheckout from './Sabre/SabreFlightCheckout.vue';
-import AirsialFlightCheckout from './Airsial/AirsialFlightCheckout.vue';
 import { watch } from 'vue';
 import PIACustomerFlightCheckout from './PIA/PIACustomerFlightCheckout.vue';
 import AirsialCustomerFlightCheckout from './Airsial/AirsialCustomerFlightCheckout.vue';

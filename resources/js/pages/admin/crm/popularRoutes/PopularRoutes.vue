@@ -57,10 +57,12 @@ const authStore = useAuthStore();
 
 const authUser = computed(() => authStore.user);
 
-// Assuming you created a Vuex module: popularRoutes
-// Example state: routes = { data: [], meta: {...} }
-const routesData = computed(() => store.getters['cms/popularRoutes']);
-const popularRoutes = computed(() => routesData.value.data || []);
+// The API wraps Laravel's paginator in a response data object.
+const routesData = computed(() => store.getters['cms/popularRoutes']?.data || {});
+const popularRoutes = computed(() => {
+    const routes = routesData.value?.data;
+    return Array.isArray(routes) ? routes.filter((routeItem) => routeItem != null) : [];
+});
 const isLoading = computed(() => store.state.cms?.isLoading || false);
 
 const showDeleteDialog = ref(false);
@@ -412,8 +414,8 @@ onMounted(() => {
                 </Table>
             </div>
 
-            <div v-if="routesData.meta" class="flex justify-end pt-6">
-                <Pagination :meta="routesData.meta" @change="fetchPopularRoutes" />
+            <div v-if="routesData.total != null && routesData.per_page" class="flex justify-end pt-6">
+                <Pagination :meta="routesData" @change="fetchPopularRoutes" />
             </div>
         </section>
     </div>

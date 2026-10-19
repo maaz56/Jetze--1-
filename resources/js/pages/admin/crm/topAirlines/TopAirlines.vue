@@ -47,8 +47,11 @@ const authStore = useAuthStore();
 
 const authUser = computed(() => authStore.user);
 
-const airlinesData = computed(() => store.getters['cms/topAirlines']);
-const topAirlines = computed(() => airlinesData.value.data || []);
+const airlinesData = computed(() => store.getters['cms/topAirlines']?.data || {});
+const topAirlines = computed(() => {
+    const airlines = airlinesData.value.data;
+    return Array.isArray(airlines) ? airlines.filter((airline) => airline != null) : [];
+});
 const isLoading = computed(() => store.state.cms?.isLoading || false);
 
 const showDeleteDialog = ref(false);
@@ -209,8 +212,8 @@ onMounted(() => {
                 </Table>
             </div>
 
-            <div v-if="airlinesData.meta" class="flex justify-end pt-6">
-                <Pagination :meta="airlinesData.meta" @change="fetchTopAirlines" />
+            <div v-if="airlinesData.total != null && airlinesData.per_page" class="flex justify-end pt-6">
+                <Pagination :meta="airlinesData" @change="fetchTopAirlines" />
             </div>
         </section>
     </div>

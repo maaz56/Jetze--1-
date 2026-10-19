@@ -1037,53 +1037,34 @@ onMounted(() => {
 <template>
     <div class="relative mx-auto max-w-7xl pt-[28px] sm:pt-[34px]">
         <!-- Main booking services: Boxed Navigation Bar -->
-        <nav
-            class="absolute left-1/2 top-0 z-20 flex -translate-x-1/2 max-w-[calc(100vw-2rem)] items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-[0_16px_36px_-8px_rgba(15,23,42,0.18),0_4px_12px_-2px_rgba(15,23,42,0.06)] backdrop-blur-md scrollbar-hide"
-            role="tablist"
-            aria-label="Booking Services"
-        >
+         <div class="absolute left-1/2 top-0 z-10 flex -translate-x-1/2 items-stretch rounded-2xl border border-slate-100 bg-white p-1.5 shadow-md sm:p-2">
             <button
                 v-for="tab in tabs"
                 :key="tab.id"
                 type="button"
-                role="tab"
-                :aria-selected="activeTab === tab.id"
                 @click="setActiveTab(tab.id)"
                 :class="[
-                    'service-tab group',
-                    activeTab === tab.id ? 'service-tab-active' : 'service-tab-idle',
+                    'relative flex min-w-[78px] flex-col items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:min-w-[112px] sm:px-6 sm:py-3 sm:text-sm',
+                    activeTab === tab.id
+                        ? 'bg-blue-50 text-primary shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-primary',
                 ]"
             >
                 <span
-                    :class="[
-                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-200 sm:h-9 sm:w-9',
-                        activeTab === tab.id
-                            ? 'bg-white/20 text-white shadow-inner'
-                            : 'bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary',
-                    ]"
-                >
-                    <component
-                        v-if="tab.iconComponent"
-                        :is="tab.iconComponent"
-                        class="h-4 w-4 transition-transform duration-200 group-hover:scale-110 sm:h-5 sm:w-5"
-                    />
-                    <img
-                        v-else
-                        :src="tab.icon"
-                        :alt="tab.name"
-                        class="h-4 w-4 object-contain transition-transform duration-200 group-hover:scale-110 sm:h-5 sm:w-5"
-                    />
-                </span>
-                <span class="whitespace-nowrap font-bold tracking-tight text-xs sm:text-sm">{{ tab.name }}</span>
-                <span
                     v-if="tab.badge"
-                    class="absolute -right-1 -top-1.5 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-sm ring-2 ring-white sm:text-[9px]"
+                    class="absolute right-1 top-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white sm:right-2 sm:text-[9px]"
                 >
-                    <span class="inline-block h-1 w-1 rounded-full bg-white animate-pulse"></span>
                     {{ tab.badge }}
                 </span>
+                <img :src="tab.icon" :alt="tab.name" class="h-7 w-7 object-contain sm:h-8 sm:w-8" />
+                <span>{{ tab.name }}</span>
+                <span
+                    v-if="activeTab === tab.id"
+                    aria-hidden="true"
+                    class="absolute inset-x-4 -bottom-1 h-0.5 rounded-full bg-primary sm:inset-x-6"
+                ></span>
             </button>
-        </nav>
+        </div>
 
         <div
             class="h-auto overflow-visible rounded-2xl border border-slate-200/80 bg-white shadow-[0_24px_60px_-16px_rgba(15,23,42,0.18)] sm:rounded-3xl"
@@ -1442,7 +1423,7 @@ onMounted(() => {
                                 >
                                     <ClockIcon class="h-3.5 w-3.5 text-slate-400 group-hover:text-primary transition-colors" />
                                     <span class="font-semibold text-slate-800 group-hover:text-primary">{{ getRecentSearchCities(search).from }}</span>
-                                    <span class="text-slate-300">→</span>
+                                    <ArrowRight class="h-4 w-4 shrink-0 text-primary" :stroke-width="2.5" aria-hidden="true" />
                                     <span class="font-semibold text-slate-800 group-hover:text-primary">{{ getRecentSearchCities(search).to }}</span>
                                     <span class="text-slate-400 text-[11px]">
                                         {{ getRecentSearchDateLabel(search) }}

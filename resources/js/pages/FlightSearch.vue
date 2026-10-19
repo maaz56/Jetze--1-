@@ -1703,6 +1703,28 @@ function selectedCardTotal(flight, references = cardFareReferences(flight)) {
     return currency ? formatAmountWithCurrency(amount, currency) : formatFlightDisplayMoney(flight);
 }
 
+/** Names of the fares currently selected on a result card, de-duplicated across legs. */
+function selectedCardFareNames(flight) {
+    const references = cardFareReferences(flight);
+    return [...new Set((flight?.leg?.flights ?? []).map((leg, index) => {
+        const fare = leg?.fares?.find((option) => option.ref_id === references[index]);
+        return fare?.name_class || fare?.name || fare?.class;
+    }).filter(Boolean))];
+}
+
+function cardLegLabel(index) {
+    if (route.query.flightType === "multi-city") return `Trip ${index + 1}`;
+    return index === 0 ? "Departure" : "Return";
+}
+
+/** Calendar days between departure and arrival in their local time zones (e.g. 1 for "+1"). */
+function arrivalDayOffset(leg) {
+    if (!leg?.departure_at || !leg?.arrival_at) return 0;
+    const departureDay = moment(moment.parseZone(leg.departure_at).format("YYYY-MM-DD"));
+    const arrivalDay = moment(moment.parseZone(leg.arrival_at).format("YYYY-MM-DD"));
+    return arrivalDay.diff(departureDay, "days");
+}
+
 function initializeSelectedFares(flight) {
     selectedFares.splice(0, selectedFares.length);
 
@@ -4001,272 +4023,67 @@ watch(isLoggedIn, (newVal) => {
     >
 
 
-        <!-- Single Flight (Direct) -->
-        <div v-if="item?.leg?.flights?.length === 1" class="p-5 sm:p-6">
-            <div class="flight-single-layout flex flex-col gap-4">
-                <!-- Airline -->
-                <div class="flight-single-airline min-w-0">
-                    <div class="flex min-w-0 items-center gap-3.5">
-                    <div>
-                        <div
-                            class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm"
-                        >
-                            <img
-                                class="h-9 w-9 object-contain"
-                                :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
-                                :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <div class="flex flex-wrap items-start gap-x-3 gap-y-1">
-                            <p class="text-base font-bold leading-tight text-slate-900">
-                                {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
-                            </p>
-                        </div>
-                        <p class="mt-1 text-xs font-medium tracking-wide text-slate-500">
-                            {{ item?.leg?.flights[0]?.marketing_carrier?.iata }}
-                            {{ formatFlightNumber(item?.leg?.flights[0]?.flight_number) }}
-                        </p>
-                        <p
-                            v-if="operatingCarrierLabel(item?.leg?.flights)"
-                            class="mt-1 text-xs font-medium text-slate-500"
-                        >
-                            Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
-                        </p>
-                    </div>
-                    </div>
-                    <div class="mt-2">
-                        <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
-                    </div>
-                </div>
-
-                <!-- Route -->
-                <div class="flight-single-route flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-4">
-                    <div class="min-w-0 max-w-[35%]">
-                        <div class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                            {{
-                                moment
-                                    .parseZone(item?.leg?.flights[0]?.departure_at)
-                                    .format("HH:mm")
-                            }}
-                        </div>
-                        <div class="text-base font-semibold text-gray-700 mt-0.5">
-                            {{ item?.leg?.flights[0]?.from?.city?.name }}
-                        </div>
-                        <div class="text-xs font-medium tracking-wide text-slate-500">
-                            {{ item?.leg?.flights[0]?.from?.iata || item?.leg?.flights[0]?.from?.city?.code }}
-                        </div>
-                        <div v-if="item?.leg?.flights[0]?.departure_at" class="mt-1 text-xs font-medium text-gray-500">
-                            {{ moment.parseZone(item.leg.flights[0].departure_at).format("ddd, DD MMM YYYY") }}
-                        </div>
-                    </div>
-
-                    <div class="relative flex min-w-[3rem] flex-1 flex-col items-center px-2">
-                        <span class="text-sm font-medium text-gray-500 mb-5">
-                            {{
-                                Math.floor(
-                                    getLegTotalDurationMinutes(
-                                        item,
-                                        item?.leg?.flights[0],
-                                    ) / 60,
-                                )
-                            }}h
-                            {{ getLegTotalDurationMinutes(item, item?.leg?.flights[0]) % 60 }}m
-                        </span>
-
-                        <div class="relative w-full flex justify-center items-center">
-                            <div class="h-px w-full rounded-full bg-slate-300"></div>
-                            <div class="absolute left-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                            <div class="absolute right-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                            <svg
-                                class="absolute h-6 w-6 rotate-45 text-primary"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
-                            >
-                                <path
-                                    d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2.5 1.8V22l4-1 4 1v-1.2L13 19v-5.5l8 2.5z"
-                                />
-                            </svg>
-                        </div>
-
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger as-child>
-                                    <span
-                                        class="absolute inset-0 z-10 cursor-help"
-                                        aria-label="Show layover time"
-                                    ></span>
-                                </TooltipTrigger>
-                                <span
-                                        class="pointer-events-none mt-5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
-                                    :class="
-                                        item?.leg?.flights[0]?.has_layovers
-                                            ? 'bg-amber-50 text-amber-600'
-                                            : 'bg-emerald-50 text-emerald-600'
-                                    "
-                                >
-                                    <GitCommitHorizontal
-                                        v-if="item?.leg?.flights[0]?.has_layovers"
-                                        class="h-3 w-3"
-                                    />
-                                    <PlaneTakeoff v-else class="h-3 w-3" />
-                                    {{
-                                        item?.leg?.flights[0]?.has_layovers
-                                            ? `${item?.leg?.flights[0]?.layovers_count} Stop`
-                                            : "Non stop"
-                                    }}
-                                </span>
-                                <TooltipContent
-                                    v-if="item?.leg?.flights[0]?.has_layovers"
-                                    side="top"
-                                    :side-offset="12"
-                                    class="rounded border-0 p-0 shadow-xl"
-                                >
-                                    <FlightLayoverTooltip :flight="item?.leg?.flights[0]" />
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-
-                    <div class="min-w-0 max-w-[35%] text-right">
-                        <div class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                            {{
-                                moment
-                                    .parseZone(item?.leg?.flights[0]?.arrival_at)
-                                    .format("HH:mm")
-                            }}
-                        </div>
-                        <div class="text-base font-semibold text-gray-700 mt-0.5">
-                            {{ item?.leg?.flights[0]?.to?.city?.name }}
-                        </div>
-                        <div class="text-xs font-medium tracking-wide text-slate-500">
-                            {{ item?.leg?.flights[0]?.to?.iata || item?.leg?.flights[0]?.to?.city?.code }}
-                        </div>
-                        <div v-if="item?.leg?.flights[0]?.arrival_at" class="mt-1 text-xs font-medium text-gray-500">
-                            {{ moment.parseZone(item.leg.flights[0].arrival_at).format("ddd, DD MMM YYYY") }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Price + CTA -->
-                <div
-                    class="flight-single-price flex items-center justify-between gap-3 border-t border-gray-100 pt-4"
-                >
-                    <div class="flex min-w-0 flex-col items-start gap-1.5 flight-single-fare-summary">
-                        <div
-                            class="text-3xl font-extrabold tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent"
-                        >
-                            {{ selectedCardTotal(item) }}
-                        </div>
-                    </div>
-                    <button
-                        @click="bookCardFare(item)"
-                        :disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
-                        class="rounded bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Book now
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Multi Flight (Round Trip / Connecting) -->
-        <div v-else class="p-5 sm:p-6">
-            <div class="mb-5 flex items-start justify-between gap-4">
-                <div class="flex items-center gap-3.5">
-                    <div
-                        class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm"
-                    >
-                        <img
-                            class="h-9 w-9 object-contain"
-                            :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
-                            :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
-                        />
-                    </div>
-                    <div>
-                        <div class="flex flex-wrap items-start gap-x-3 gap-y-1">
-                            <p class="text-base font-bold leading-tight text-slate-900">
-                                {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
-                            </p>
-                            <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
-                        </div>
-                        <p class="mt-1 text-xs font-medium tracking-wide text-slate-500">
-                            {{
-                                (item?.leg?.flights || [])
-                                    .map(
-                                        (f) =>
-                                            f?.marketing_carrier?.iata +
-                                            " " +
-                                            formatFlightNumber(f?.flight_number),
-                                    )
-                                    .join(", ")
-                            }}
-                        </p>
-                        <p
-                            v-if="operatingCarrierLabel(item?.leg?.flights)"
-                            class="mt-1 text-xs font-medium text-slate-500"
-                        >
-                            Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
-                        </p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <p
-                        class="text-3xl font-extrabold tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent"
-                    >
-                        {{ selectedCardTotal(item) }}
-                    </p>
-                    <button
-                        @click="bookCardFare(item)"
-                        :disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
-                        class="mt-2 rounded bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Book now
-                    </button>
-                </div>
-            </div>
-
-            <div
-                class="flight-legs-grid grid grid-cols-1 gap-4"
-            >
+        <!-- One layout for one-way, return and multi-city: itinerary rows + price panel -->
+        <div class="flight-card-body">
+            <div class="flight-card-itinerary divide-y divide-slate-100" :class="{ 'flight-card-itinerary--single': item?.leg?.flights?.length === 1 }">
                 <div
                     v-for="(leg, legIndex) in item?.leg?.flights"
-                    :key="legIndex"
-                    class="rounded border border-slate-200/80 bg-slate-50/70 p-4 sm:p-5"
+                    :key="leg?.ref_id || legIndex"
+                    class="flight-leg-row px-5 py-4 sm:px-6 sm:py-5"
                 >
-                    <p class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        <span
-                            class="w-1.5 h-1.5 rounded-full"
-                            :class="legIndex === 0 ? 'bg-blue-600' : 'bg-violet-500'"
-                        ></span>
-                        {{ legIndex === 0 ? "Depart" : "Return" }}
-                        •
-                        {{ moment(leg?.departure_at).format("ddd, DD MMM") }}
-                    </p>
-                    <div class="flex items-center justify-between gap-3">
-                        <div>
-                            <p class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                                {{ moment.parseZone(leg?.departure_at).format("HH:mm") }}
+                    <!-- Leg label + airline -->
+                    <div class="flight-leg-airline flex min-w-0 items-center gap-3">
+                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white">
+                            <img
+                                v-if="leg?.marketing_carrier?.logo"
+                                class="h-8 w-8 object-contain"
+                                :src="leg?.marketing_carrier?.logo"
+                                :alt="leg?.marketing_carrier?.name"
+                            />
+                            <PlaneTakeoff v-else class="h-5 w-5 text-primary" />
+                        </div>
+                        <div class="min-w-0">
+                            <p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
+                                <span
+                                    class="h-1.5 w-1.5 shrink-0 rounded-full"
+                                    :class="legIndex === 0 ? 'bg-blue-600' : 'bg-violet-500'"
+                                ></span>
+                                {{ cardLegLabel(legIndex) }}
                             </p>
-                            <p class="mt-0.5 text-sm font-semibold text-slate-700">
-                                {{ leg?.from?.city?.name }}
+                            <p class="mt-1 truncate text-base font-bold text-slate-900">
+                                {{ leg?.marketing_carrier?.name }}
                             </p>
-                            <p class="text-xs font-medium tracking-wide text-slate-500">
-                                {{ leg?.from?.city?.code }}
+                            <p class="truncate text-sm font-semibold text-slate-600">
+                                {{ leg?.marketing_carrier?.iata }} {{ formatFlightNumber(leg?.flight_number) }}
+                            </p>
+                            <p v-if="operatingCarrierLabel([leg])" class="truncate text-xs font-semibold text-slate-600" :title="`Operated by ${operatingCarrierLabel([leg])}`">
+                                Operated by {{ operatingCarrierLabel([leg]) }}
                             </p>
                         </div>
-                        <div class="relative flex-1 flex flex-col items-center px-1">
-                            <p class="mb-3 text-xs font-semibold text-slate-500">
+                    </div>
+
+                    <!-- Departure / duration / arrival -->
+                    <div class="flight-leg-route flex min-w-0 items-center gap-3 sm:gap-5">
+                        <div class="min-w-0 shrink-0">
+                            <p class="text-xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-2xl">
+                                {{ moment.parseZone(leg?.departure_at).format("HH:mm") }}
+                            </p>
+                            <p v-if="leg?.from?.city?.name" class="truncate text-base font-semibold text-slate-700">{{ leg.from.city.name }}</p>
+                            <p class="text-sm font-semibold text-slate-600">{{ leg?.from?.iata || leg?.from?.city?.code }}</p>
+                            <p v-if="leg?.departure_at" class="mt-1 whitespace-nowrap text-sm font-semibold text-slate-600">{{ moment.parseZone(leg.departure_at).format("ddd, DD MMM") }}</p>
+                        </div>
+
+                        <div class="relative flex min-w-[5rem] flex-1 flex-col items-center">
+                            <p class="mb-1.5 text-xs font-semibold text-slate-600">
                                 {{ Math.floor(getLegTotalDurationMinutes(item, leg) / 60) }}h
                                 {{ getLegTotalDurationMinutes(item, leg) % 60 }}m
                             </p>
-                            <div class="relative w-full flex items-center">
-                                <div class="h-px w-full rounded-full bg-slate-300"></div>
+                            <div class="relative flex w-full items-center">
+                                <div class="h-px w-full bg-slate-300"></div>
                                 <div class="absolute left-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
                                 <div class="absolute right-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
                                 <svg
-                                    class="absolute left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 text-primary"
+                                    class="absolute left-1/2 h-5 w-5 -translate-x-1/2 rotate-90 bg-white text-primary"
                                     viewBox="0 0 24 24"
                                     fill="currentColor"
                                     aria-hidden="true"
@@ -4277,26 +4094,24 @@ watch(isLoggedIn, (newVal) => {
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger as-child>
-                                        <p
-                                            class="absolute inset-0 z-10 cursor-help"
+                                        <span
+                                            class="absolute inset-0 z-10"
+                                            :class="leg?.has_layovers ? 'cursor-help' : ''"
                                             aria-label="Show layover time"
-                                        ></p>
+                                        ></span>
                                     </TooltipTrigger>
-                                    <p
-                                        class="pointer-events-none mt-5 inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-center text-xs font-semibold"
-                                        :class="
-                                            leg?.has_layovers
-                                                ? 'bg-amber-50 text-amber-600'
-                                                : 'bg-emerald-50 text-emerald-600'
-                                        "
+                                    <span
+                                        class="pointer-events-none mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                        :class="leg?.has_layovers ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'"
                                     >
-                                        <GitCommitHorizontal
-                                            v-if="leg?.has_layovers"
-                                            class="h-3 w-3"
-                                        />
+                                        <GitCommitHorizontal v-if="leg?.has_layovers" class="h-3 w-3" />
                                         <PlaneTakeoff v-else class="h-3 w-3" />
-                                        {{ leg?.has_layovers ? `${leg?.layovers_count} stop` : "Non stop" }}
-                                    </p>
+                                        {{
+                                            leg?.has_layovers
+                                                ? `${leg?.layovers_count} ${leg?.layovers_count === 1 ? "stop" : "stops"}`
+                                                : "Non stop"
+                                        }}
+                                    </span>
                                     <TooltipContent
                                         v-if="leg?.has_layovers"
                                         side="top"
@@ -4308,20 +4123,49 @@ watch(isLoggedIn, (newVal) => {
                                 </Tooltip>
                             </TooltipProvider>
                         </div>
-                        <div class="text-right">
-                            <p class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+
+                        <div class="min-w-0 shrink-0 text-right">
+                            <p class="text-xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-2xl">
                                 {{ moment.parseZone(leg?.arrival_at).format("HH:mm") }}
+                                <sup
+                                    v-if="arrivalDayOffset(leg) > 0"
+                                    class="ml-0.5 text-[11px] font-semibold text-amber-600"
+                                    :title="moment.parseZone(leg?.arrival_at).format('ddd, DD MMM YYYY')"
+                                >+{{ arrivalDayOffset(leg) }}</sup>
                             </p>
-                            <p class="mt-0.5 text-sm font-semibold text-slate-700">
-                                {{ leg?.to?.city?.name }}
-                            </p>
-                            <p class="text-xs font-medium tracking-wide text-slate-500">
-                                {{ leg?.to?.city?.code }}
-                            </p>
+                            <p v-if="leg?.to?.city?.name" class="truncate text-base font-semibold text-slate-700">{{ leg.to.city.name }}</p>
+                            <p class="text-sm font-semibold text-slate-600">{{ leg?.to?.iata || leg?.to?.city?.code }}</p>
+                            <p v-if="leg?.arrival_at" class="mt-1 whitespace-nowrap text-sm font-semibold text-slate-600">{{ moment.parseZone(leg.arrival_at).format("ddd, DD MMM") }}</p>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Price panel -->
+            <aside class="flight-card-price flex items-center justify-between gap-4 border-t border-dashed border-slate-200 bg-slate-50/60 px-5 py-4 sm:px-6">
+                <div class="flight-card-price-summary flex min-w-0 flex-col items-start gap-1">
+                    <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
+                    <p
+                        class="mt-1 text-2xl font-extrabold tabular-nums tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent sm:text-[1.7rem]"
+                    >
+                        {{ selectedCardTotal(item) }}
+                    </p>
+                    <p
+                        v-if="selectedCardFareNames(item).length"
+                        class="max-w-full truncate text-xs font-medium text-slate-500"
+                        :title="selectedCardFareNames(item).join(' + ')"
+                    >
+                        {{ selectedCardFareNames(item).join(" + ") }}
+                    </p>
+                </div>
+                <button
+                    @click="bookCardFare(item)"
+                    :disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
+                    class="flight-card-book shrink-0 rounded bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    Book now
+                </button>
+            </aside>
         </div>
 
         <FlightFareOptions
@@ -6478,43 +6322,54 @@ watch(isLoggedIn, (newVal) => {
     container-type: inline-size;
 }
 
-@container (min-width: 650px) {
-    .flight-legs-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+.flight-leg-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
 }
 
-@container (min-width: 850px) {
-    .flight-single-layout {
+/* Airline column on the left, route on the right, once the card has room. */
+@container (min-width: 560px) {
+    .flight-leg-row {
         display: grid;
-        grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) minmax(0, 10rem);
+        grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
         align-items: center;
         column-gap: 1.5rem;
     }
-
-    .flight-single-route {
-        transform: translateX(-8px);
-    }
-
-    .flight-single-fare-summary {
-        align-items: flex-end;
-    }
-
-    .flight-single-price {
-        width: 100%;
-        flex-direction: column;
-        align-items: flex-end;
-        justify-content: center;
-        border-top: 0;
-        border-left: 1px solid #f3f4f6;
-        padding-top: 0;
-        padding-left: 1.5rem;
-    }
 }
 
-@container (min-width: 1000px) {
-    .flight-legs-grid {
-        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+/* Ticket-style split: itinerary rows beside a fixed-width price panel. */
+@container (min-width: 760px) {
+    .flight-card-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 13.5rem;
+    }
+
+    .flight-card-itinerary--single {
+        display: flex;
+        align-items: center;
+    }
+
+    .flight-card-itinerary--single .flight-leg-row {
+        width: 100%;
+    }
+
+    .flight-card-price {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: center;
+        border-top: 0;
+        border-left: 1px dashed #e2e8f0;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .flight-card-price-summary {
+        align-items: flex-end;
+        text-align: right;
+    }
+
+    .flight-card-book {
+        width: 100%;
     }
 }
 

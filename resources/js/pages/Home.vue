@@ -31,13 +31,12 @@ onMounted(() => {
     <div class="flex flex-col min-h-screen bg-slate-50/60 font-roboto antialiased">
         
         <!-- SCENIC HERO BANNER (extends behind the transparent navigation) -->
-        <div class="relative z-10 h-[510px] w-full overflow-hidden bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat sm:h-[560px] lg:h-[620px]">
+        <div class="relative z-10 w-full bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat">
             <!-- Keep the image vivid while retaining enough contrast for the white hero copy. -->
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/38 via-slate-950/12 to-slate-900/5"></div>
-        </div>
 
-        <!-- OVERLAPPING SEARCH SECTION -->
-        <div class="relative z-20 mx-auto -mt-[385px] w-full max-w-7xl px-4 sm:-mt-[425px] sm:px-6 lg:-mt-[460px] lg:px-8 animate-fade-in-up">
+        <!-- HERO SEARCH SECTION -->
+        <div class="relative z-20 mx-auto w-full max-w-7xl px-4 pb-12 pt-[130px] sm:px-6 sm:pb-14 sm:pt-[140px] lg:px-8 lg:pb-20 lg:pt-[155px] animate-fade-in-up">
             
             <!-- Centered hero copy -->
             <div class="mb-5 text-center text-white sm:mb-7 lg:mb-8">
@@ -54,6 +53,7 @@ onMounted(() => {
             <!-- Service selector and search form -->
             <Header />
 
+        </div>
         </div>
 
         <!-- OFFERS & SEASONAL PROMOTIONS -->

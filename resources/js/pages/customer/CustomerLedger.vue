@@ -69,7 +69,7 @@ function normalizeFlightProvider(provider) {
 }
 
 function getBookingRouteName() {
-    return user.value?.role === "customer" ? "BookingsDetails" : "AgentBookingDetails";
+    return "BookingsDetails";
 }
 
 function getReferenceLabel(transaction) {
@@ -123,7 +123,7 @@ function getReferenceRoute(transaction) {
                 pnr: transaction.pnr_ref || transaction.details || "",
                 booking_source: transaction.booking_source ?? 1,
                 flight_provider: flightProvider,
-                flight_mode: ["customer", "user"].includes(user.value?.role) ? "B2C" : "B2B",
+                flight_mode: "B2C",
             },
         };
     }

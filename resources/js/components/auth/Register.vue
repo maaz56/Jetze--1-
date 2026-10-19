@@ -1,21 +1,10 @@
 <script setup>
-import FileUploaderWithView from '@/components/common/FileUploaderWithView.vue';
 import Label from "@/components/ui/label/Label.vue";
 import Button from "@/components/ui/button/Button.vue";
 
 import { custom, email, minLength, required, useValidation } from '@/components/composables/useFormValidation';
-import {
-    Stepper,
-    StepperDescription,
-    StepperIndicator,
-    StepperItem,
-    StepperSeparator,
-    StepperTitle,
-    StepperTrigger,
-} from '@/components/ui/stepper';
 import { useAuthStore } from '@/services/stores/auth';
-import { LucideBuilding, LucideHome, UploadCloud, UserRoundPlus } from 'lucide-vue-next';
-import { VisuallyHidden } from 'radix-vue';
+import { LucideBuilding } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { VueTelInput } from 'vue-tel-input';
 import 'vue-tel-input/vue-tel-input.css';
@@ -23,7 +12,7 @@ import 'vue-tel-input/vue-tel-input.css';
 const authStore = useAuthStore();
 
 const userDetail = ref({
-    role: 'customer', // 'agent' or 'customer'
+    role: 'customer',
     name: '',
     email: '',
     phone: '',
@@ -52,12 +41,6 @@ const validator = {
         required('Please enter Full Name'),
         custom(() => (/^[A-Za-z\s]+$/.test(userDetail.value.name.trim())), 'Full Name should contain only alphabetic characters and spaces')
     ]),
-    companyName: useValidation([custom(() => {
-        if (userDetail.value.role === 'agent') {
-            return required('Please enter Company Name')(userDetail.value.companyName) === true;
-        }
-        return true;
-    }, 'Please enter Company Name')]),
     email: useValidation([required('Please enter email address'), email('Please enter valid email address')]),
     password: useValidation([
         required('Password is required'),
@@ -79,12 +62,11 @@ const currentStep = ref(1)
 
 const getValidation = computed(() => {
     const shouldValidate = isSubmitForm.value;
-    const { role, name, companyName, email, password, phone, confirmPassword } = userDetail.value;
+    const { role, name, email, password, phone, confirmPassword } = userDetail.value;
 
     return {
         role: shouldValidate && !!validator.role.validate(role),
         name: shouldValidate && !!validator.name.validate(name),
-        companyName: shouldValidate && !!validator.companyName.validate(companyName),
         email: shouldValidate && !!validator.email.validate(email),
         password: shouldValidate && !!validator.password.validate(password),
         confirmPassword: shouldValidate && !!validator.confirmPassword.validate(confirmPassword),
@@ -98,8 +80,6 @@ const showPassword = ref(false)
 const isLoading = computed(() => authStore.isLoading)
 const validationMessages = computed(() => authStore.validationMessages);
 
-// Check if user is registering as agent
-const isAgent = computed(() => userDetail.value.role === 'agent');
 
 async function handleRegister() {
     isSubmitForm.value = true;
@@ -112,11 +92,6 @@ async function handleRegister() {
         currentStep.value = 1;
         return;
     }
-    else if (currentStep.value == 1 && isAgent.value) {
-        currentStep.value = 2;
-        return;
-    }
-    
     const { role, name, email, phone, password, confirmPassword, logo, license, e_id, companyName, address } = userDetail.value
     const formData = new FormData();
     formData.append('role', role);
@@ -130,20 +105,6 @@ async function handleRegister() {
     formData.append('preferred_currency', 'PKR');
     formData.append('preferredCurrency', 'PKR');
     
-    // Only add agent-specific fields if registering as agent
-    if (isAgent.value) {
-        formData.append('logo', logo);
-        formData.append('license', license);
-        if (Array.isArray(e_id)) {
-            e_id.forEach((file) => {
-                formData.append('e_id[]', file);
-            });
-        } else {
-            formData.append('e_id', e_id);
-        }
-        formData.append('company_name', companyName);
-    }
-    
     formData.append('address', address);
     
     await authStore.register(formData);
@@ -152,69 +113,10 @@ async function handleRegister() {
     }
 }
 
-const handleUploadFile = (event, key) => {
-    const files = event;
-    userDetail.value[key] = key == 'e_id' ? files : files[0];
-};
 </script>
 
 <template>
-    <!-- <div class="flex justify-center">
-        <Stepper v-model="currentStep">
-            <StepperItem :step="1">
-                <StepperTrigger>
-                    <StepperIndicator>
-                        <UserRoundPlus></UserRoundPlus>
-                    </StepperIndicator>
-                    <StepperTitle>Information</StepperTitle>
-                    <VisuallyHidden>
-                        <StepperDescription>Enter your details</StepperDescription>
-                    </VisuallyHidden>
-                </StepperTrigger>
-                <StepperSeparator />
-            </StepperItem>
-            <StepperItem v-if="isAgent" :step="2">
-                <StepperTrigger>
-                    <StepperIndicator>
-                        <UploadCloud></UploadCloud>
-                    </StepperIndicator>
-                    <StepperTitle>Documents</StepperTitle>
-                    <VisuallyHidden>
-                        <StepperDescription>Upload your files</StepperDescription>
-                    </VisuallyHidden>
-                </StepperTrigger>
-            </StepperItem>
-        </Stepper>
-    </div> -->
     <form @submit.prevent="handleRegister()" class="space-y-4">
-        <!-- Role Selection -->
-        <!-- <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Register as:</label>
-            <div class="flex space-x-4">
-                <label class="flex items-center">
-                    <input 
-                        type="radio" 
-                        v-model="userDetail.role" 
-                        value="customer"
-                        class="h-4 w-4 text-primary focus:ring-primary border-gray-300"
-                    >
-                    <span class="ml-2 text-gray-700">Customer</span>
-                </label>
-                <label class="flex items-center">
-                    <input 
-                        type="radio" 
-                        v-model="userDetail.role" 
-                        value="agent"
-                        class="h-4 w-4 text-primary focus:ring-primary border-gray-300"
-                    >
-                    <span class="ml-2 text-gray-700">Agent</span>
-                </label>
-            </div>
-            <p v-if="(!!getValidation.role) && isSubmitForm" class="text-red-500 text-xs mt-1">
-                {{ validator.role.validate(userDetail.role) }}
-            </p>
-        </div> -->
-
         <template v-if="currentStep == 1">
             <div>
                 <div class="relative">
@@ -429,52 +331,6 @@ const handleUploadFile = (event, key) => {
             </div> -->
         </template>
         
-        <!-- Document Step - Only for Agents -->
-        <template v-else-if="currentStep == 2 && isAgent">
-            <div class="space-y-2">
-                <Label for="logo" title="Logo" class="text-sm font-medium text-gray-700 dark:text-gray-300">Logo</Label>
-                <FileUploaderWithView @update:model-value="handleUploadFile($event, 'logo')" :required="true"
-                    :max-size="2" accept="image/*,application/pdf">
-                </FileUploaderWithView>
-                <p v-if="validationMessages?.logo" class="text-red-500 text-xs mt-1">
-                    {{ validationMessages.logo }}
-                </p>
-            </div>
-            <div class="space-y-2">
-                <Label for="license" title="License"
-                    class="text-sm font-medium text-gray-700 dark:text-gray-300">T-License</Label>
-                <FileUploaderWithView @update:model-value="handleUploadFile($event, 'license')" :required="true"
-                    :max-size="2" accept="image/*,application/pdf">
-                </FileUploaderWithView>
-                <p v-if="validationMessages?.tradeLicense" class="text-red-500 text-xs mt-1">
-                    {{ validationMessages.tradeLicense }}
-                </p>
-            </div>
-            <div class="space-y-2">
-                <Label for="e_id" title="E-ID" class="text-sm font-medium text-gray-700 dark:text-gray-300">Emirates
-                    ID</Label>
-                <FileUploaderWithView :multiple="true" @update:model-value="handleUploadFile($event, 'e_id')"
-                    :required="true" :max-size="2" accept="image/*,application/pdf">
-                </FileUploaderWithView>
-                <p v-if="validationMessages?.emirateId" class="text-red-500 text-xs mt-1">
-                    {{ validationMessages.emirateId }}
-                </p>
-            </div>
-        </template>
-        
-        <!-- <button type="submit" :disabled="isLoading"
-            class="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center disabled:opacity-50 shadow-lg">
-            <span v-if="!isLoading">
-                {{ 
-                    currentStep == 1 && isAgent ? 'NEXT STEP' : 
-                    (isAgent ? 'CREATE AGENT ACCOUNT' : 'CREATE CUSTOMER ACCOUNT')
-                }}
-            </span>
-            <span v-else>Processing...</span>
-            <svg v-if="!isLoading && currentStep == 1 && isAgent" class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-        </button> -->
         <div v-if="authStore.generalError" class="p-3.5 bg-rose-50 border-l-4 border-rose-500 rounded-lg text-rose-800 text-xs font-medium leading-relaxed shadow-sm mb-4">
             <div class="flex items-start gap-2.5">
                 <svg class="w-4 h-4 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -484,18 +340,10 @@ const handleUploadFile = (event, key) => {
             </div>
         </div>
 
-        <button @click = "handleRegister()" :disabled="isLoading"
+        <button type="submit" :disabled="isLoading"
             class="w-full bg-primary hover:bg-primary/80 text-white font-semibold py-3 px-4 rounded-md transition-all duration-200 flex items-center justify-center disabled:opacity-50 shadow-lg">
-            <span v-if="!isLoading">
-                {{ 
-                    currentStep == 1 && isAgent ? 'NEXT STEP' : 
-                    (isAgent ? 'CREATE AGENT ACCOUNT' : 'CREATE CUSTOMER ACCOUNT')
-                }}
-            </span>
+            <span v-if="!isLoading">CREATE CUSTOMER ACCOUNT</span>
             <span v-else>Processing...</span>
-            <svg v-if="!isLoading && currentStep == 1 && isAgent" class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
         </button>
        
     </form>

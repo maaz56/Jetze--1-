@@ -7,7 +7,7 @@
       </div>
 
       <div class="mb-6 grid grid-cols-2 gap-3 rounded border border-gray-200 bg-white p-2 shadow-sm">
-        <button v-for="item in pages" :key="item.value" @click="selectPage(item.value)" class="rounded px-4 py-3 text-sm font-semibold transition" :class="page === item.value ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'">{{ item.label }}</button>
+        <button v-for="item in pages" :key="item.value" @click="selectPage(item.value)" class="rounded px-4 py-3 text-sm font-semibold transition" :class="page === item.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'">{{ item.label }}</button>
       </div>
 
       <div v-if="loading" class="rounded border border-gray-200 bg-white p-16 text-center text-gray-500">Loading SEO settings...</div>
