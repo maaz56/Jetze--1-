@@ -30,7 +30,7 @@ router.beforeEach(async (to, from, next) => {
     const isEmailVerified = authStore.isEmailVerified;
     const user = authStore.user;
 
-    const loginPages = ["Login", "Register", "AgentRegister"];
+    const loginPages = ["Login", "Register"];
     if (isAuthenticated && loginPages.includes(to.name)) {
         return next(getUserHomeRoute(authStore));
     }

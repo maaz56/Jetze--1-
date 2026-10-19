@@ -117,16 +117,7 @@ onMounted(() => {
                                         <span>Mon-Fri, 9:00 AM - 5:00 PM</span>
                                     </div>
                                 </div>
-                                <div class="mt-8" v-if="!user?.is_formFilled">
-                                    <button @click="
-                                        $router.push({
-                                            name: 'AddAgentDetails'
-                                        })
-                                        "
-                                        class="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                        Please add your company details.
-                                    </button>
-                                </div>
+
 
 
                             </div>

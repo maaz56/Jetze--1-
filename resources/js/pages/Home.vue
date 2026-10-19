@@ -41,10 +41,10 @@ onMounted(() => {
             
             <!-- Centered hero copy -->
             <div class="mb-5 text-center text-white sm:mb-7 lg:mb-8">
-                <h1 class="font-montserrat text-[2.05rem] font-black tracking-tight drop-shadow-md sm:text-[2.5rem] lg:text-[3.3rem]">
+                <h1 class="hero-title font-montserrat text-[2.05rem] font-black tracking-tight sm:text-[2.5rem] lg:text-[3.3rem]">
                     Discover the World with <span class="text-amber-300">Jetze</span>
                 </h1>
-                <p class="mt-2 text-[15px] font-bold text-slate-100 drop-shadow-sm sm:text-[1.1rem] lg:text-[1.25rem]">
+                <p class="hero-subtitle mt-2 text-[15px] font-bold text-slate-100 sm:text-[1.1rem] lg:text-[1.25rem]">
                     Better Fares <span class="mx-2 text-amber-300">•</span>
                     More Choices <span class="mx-2 text-amber-300">•</span>
                     Unforgettable Journeys
@@ -81,12 +81,14 @@ onMounted(() => {
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(10px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
     }
+}
+
+.hero-title, .hero-subtitle {
+    text-shadow: 0 2px 4px rgba(15, 23, 42, 0.35);
 }
 
 .animate-fade-in-up {

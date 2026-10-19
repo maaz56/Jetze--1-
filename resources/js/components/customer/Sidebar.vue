@@ -57,15 +57,15 @@ const menuItems = [
 { name: "Profile", icon: UserIcon, route: { name: "CustomerProfile", params: { section: "profile" } } },
 { name: "Wallet", icon: Wallet, route: { name: "CustomerWallet" } },
 { name: "Bookings", icon: ShoppingCartIcon, route: { name: "CustomerBookings" } },
- 
+
 ];
 
 const toggleSidebar = () => {
   isExpanded.value = !isExpanded.value;
-  
+
   // Emit event to parent component
   emit('toggle-sidebar', isExpanded.value);
-  
+
   // Also update the injected state if available
   if (sidebarState) {
     sidebarState.toggle(isExpanded.value);
@@ -118,21 +118,21 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between h-16 px-4 border-b border-gray-100 bg-white/30">
       <router-link :to="{ name: 'Home' }" class="flex items-center space-x-3">
-        
+
         <div v-if="isExpanded" class="flex flex-col">
           <span class="font-semibold text-gray-800 text-sm">{{ user?.name || 'Customer Profile' }}</span>
           <span class="text-xs text-gray-500  max-w-[140px]">{{ user?.email || 'agent@example.com' }}</span>
         </div>
       </router-link>
-      <button 
-        @click="toggleSidebar" 
+      <button
+        @click="toggleSidebar"
         class="text-gray-500 hover:text-gray-800 hover:bg-gray-100/50 rounded-md p-1 transition-colors duration-200 focus:outline-none"
       >
         <ChevronLeftIcon v-if="isExpanded" class="w-5 h-5" />
         <ChevronRightIcon v-else class="w-5 h-5" />
       </button>
     </div>
-    
+
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto py-6 px-3">
       <div v-if="isExpanded" class="mb-4 px-3">
@@ -140,34 +140,34 @@ onMounted(() => {
       </div>
       <ul class="space-y-1">
         <li v-for="(item, index) in menuItems" :key="index">
-          <router-link 
+          <router-link
             :to="item.route"
             class="flex items-center rounded-lg transition-colors duration-200 group relative"
             :class="[
-              isActive(item.route.name) 
-                ? 'bg-secondary text-white font-medium' 
+              isActive(item.route.name)
+                ? 'bg-secondary text-white font-medium'
                 : 'text-gray-700 hover:bg-white/30 hover:text-gray-900',
               isExpanded ? 'px-3 py-2' : 'justify-center py-3'
             ]"
           >
             <!-- Add a left border indicator for active items -->
-            
-            
-            <component 
-              :is="item.icon" 
+
+
+            <component
+              :is="item.icon"
               :class="[
                 'flex-shrink-0',
-                isActive(item.route.name) 
-                  ? 'text-white' 
+                isActive(item.route.name)
+                  ? 'text-white'
                   : 'text-gray-700 group-hover:text-gray-900',
                 isExpanded ? 'w-5 h-5 mr-3' : 'w-6 h-6'
-              ]" 
+              ]"
             />
             <span v-if="isExpanded" class="text-sm font-medium">{{ item.name }}</span>
-            
+
             <!-- Badge for notifications (example) -->
-            <span 
-              v-if="isExpanded && item.name === 'Bookings'" 
+            <span
+              v-if="isExpanded && item.name === 'Bookings'"
               class="ml-auto bg-white/50 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full"
             >
               New
@@ -175,57 +175,57 @@ onMounted(() => {
           </router-link>
         </li>
       </ul>
-      
-      
-     
+
+
+
     </nav>
-    
+
     <!-- Footer -->
     <div class="p-4 border-t border-gray-100/50">
-      <router-link 
-        :to="{ name: 'Settings' }"
+      <router-link
+        :to="{ name: 'CustomerProfile', params: { section: 'profile' } }"
         class="flex items-center rounded-lg transition-colors duration-200 group relative mb-2"
         :class="[
-          isActive('Settings') 
-            ? 'bg-white/50 text-gray-800 font-medium' 
+          isActive('CustomerProfile')
+            ? 'bg-white/50 text-gray-800 font-medium'
             : 'text-gray-700 hover:bg-white/30 hover:text-gray-900',
           isExpanded ? 'px-3 py-2' : 'justify-center py-3'
         ]"
       >
         <!-- Add a left border indicator for active items -->
-        <div 
-          v-if="isActive('Settings')" 
+        <div
+          v-if="isActive('CustomerProfile')"
           class="absolute left-0 top-0 bottom-0 w-1 bg-gray-600 rounded-l-lg"
         ></div>
-        
-        <SettingsIcon 
+
+        <SettingsIcon
           :class="[
             'flex-shrink-0',
-            isActive('Settings') 
-              ? 'text-gray-600' 
+            isActive('CustomerProfile')
+              ? 'text-gray-600'
               : 'text-gray-700 group-hover:text-gray-900',
             isExpanded ? 'w-5 h-5 mr-3' : 'w-6 h-6'
-          ]" 
+          ]"
         />
         <span v-if="isExpanded" class="text-sm font-medium">Settings</span>
       </router-link>
-      
+
       <!-- Logout Button -->
-      <button 
-        @click="logout()" 
+      <button
+        @click="logout()"
         class="w-full flex items-center rounded-lg transition-colors duration-200 group relative text-gray-700 hover:bg-white/30 hover:text-red-700"
         :class="[
           isExpanded ? 'px-3 py-2 justify-start' : 'justify-center py-3'
         ]"
       >
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          stroke-width="2" 
-          stroke-linecap="round" 
-          stroke-linejoin="round" 
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
           :class="[
             'flex-shrink-0 text-gray-700 group-hover:text-red-600',
             isExpanded ? 'w-5 h-5 mr-3' : 'w-6 h-6'

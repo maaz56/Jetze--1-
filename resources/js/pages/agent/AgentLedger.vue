@@ -123,7 +123,7 @@ function getReferenceRoute(transaction) {
                 pnr: transaction.pnr_ref || transaction.details || "",
                 booking_source: transaction.booking_source ?? 1,
                 flight_provider: flightProvider,
-                flight_mode: user.value?.role === "customer" ? "B2C" : "B2B",
+                flight_mode: ["customer", "user"].includes(user.value?.role) ? "B2C" : "B2B",
             },
         };
     }

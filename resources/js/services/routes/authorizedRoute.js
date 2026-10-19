@@ -39,11 +39,7 @@ export function getUserHomeRoute(authStore) {
         return { name: "Login" };
     }
 
-    if (user.role === "agent") {
-        return user.is_formFilled == "0"
-            ? { name: "AddAgentDetails" }
-            : { name: "DashboardFlights" };
-    }
+    if (user.role === "agent") return { name: "Home" };
 
     if (customerRoles.includes(user.role)) {
         return;

@@ -207,17 +207,6 @@ export const useAuthStore = defineStore("auth", {
                     if (response?.data?.user.role == "admin") {
                         router.push({ name: "Dashboard" });
                     } else if (
-                        response?.data?.user.role == "agent" &&
-                        response?.data?.user.is_approved == "0" &&
-                        response?.data?.user.is_formFilled == "0"
-                    ) {
-                        router.push({ name: "AddAgentDetails" });
-                    } else if (
-                        response?.data?.user.role == "agent" &&
-                        response?.data?.user.is_approved == "0"
-                    ) {
-                        router.push({ name: "DashboardFlights" });
-                    } else if (
                         response?.data?.user.role == "salesman" &&
                         response?.data?.user.is_approved == "1"
                     ) {

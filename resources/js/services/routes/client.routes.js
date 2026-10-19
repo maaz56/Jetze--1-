@@ -152,11 +152,6 @@ export const clientRoutes = [
                 component: () => import("@/pages/GroupTickets.vue"),
             },
             {
-                path: "add-agent-details",
-                name: "AddAgentDetails",
-                component: () => import("@/pages/profile/agent/AddAgentDetails.vue"),
-            },
-            {
                 path: "flights-checkout",
                 name: "Checkout",
                 component: () => import("@/pages/Checkout.vue"),

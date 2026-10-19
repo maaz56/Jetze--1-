@@ -254,11 +254,7 @@ function handleUserDashboard() {
   if (role === 'admin') {
     router.push({ name: 'Dashboard' });
   } else if (role === 'agent') {
-    if (user.value.is_formFilled === 0) {
-      router.push({ name: 'AddAgentDetails' });
-    } else {
-      router.push({ name: 'DashboardFlights' });
-    }
+    router.push({ name: 'Home' });
   } else if (role === 'customer' || role === 'user') {
     router.push({ name: 'CustomerProfile' });
   } else {

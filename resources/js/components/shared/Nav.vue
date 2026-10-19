@@ -172,8 +172,6 @@ function handleLogin() {
 function goToDashboard(tab) {
     if (user.value.role === 'admin' || user.value.role === 'super_admin') {
         router.push({ name: 'Dashboard'});
-    } else if (user.value.role === 'agent') {
-        router.push({ name: 'AgentDashboard' });
     } else if (user.value.role === 'customer') {
         router.push({ name: 'CustomerProfile', params: { section: tab } });
     } else {
