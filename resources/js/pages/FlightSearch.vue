@@ -4146,7 +4146,7 @@ watch(isLoggedIn, (newVal) => {
                 <div class="flight-card-price-summary flex min-w-0 flex-col items-start gap-1">
                     <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
                     <p
-                        class="mt-1 text-2xl font-extrabold tabular-nums tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent sm:text-[1.7rem]"
+                        class="mt-1 max-w-full break-words text-xl font-extrabold tabular-nums tracking-tight text-primary sm:text-[1.375rem]"
                     >
                         {{ selectedCardTotal(item) }}
                     </p>
@@ -4158,13 +4158,19 @@ watch(isLoggedIn, (newVal) => {
                         {{ selectedCardFareNames(item).join(" + ") }}
                     </p>
                 </div>
-                <button
-                    @click="bookCardFare(item)"
-                    :disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
-                    class="flight-card-book shrink-0 rounded bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    Book now
-                </button>
+                <div class="flight-card-actions flex shrink-0 flex-col items-stretch gap-2">
+                    <button
+                        type="button"
+                        @click="bookCardFare(item)"
+                        :disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
+                        class="flight-card-book rounded bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Book now
+                    </button>
+                    <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded px-2 py-1 text-sm font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" @click="openSooperFlightDetails(item)">
+                        <PlaneTakeoff class="h-3.5 w-3.5" /> Flight details
+                    </button>
+                </div>
             </aside>
         </div>
 
@@ -4181,9 +4187,6 @@ watch(isLoggedIn, (newVal) => {
             @book="(index, fare) => bookCardFare(item, index, fare)"
         />
 
-        <div v-if="!cardFareGroups(item).length" class="border-t border-slate-100 px-6 py-3 text-right">
-            <button type="button" class="text-sm font-semibold text-primary hover:underline" @click="openSooperFlightDetails(item)">View flight details</button>
-        </div>
     </div>
 
     <div
@@ -6342,7 +6345,7 @@ watch(isLoggedIn, (newVal) => {
 @container (min-width: 760px) {
     .flight-card-body {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 13.5rem;
+        grid-template-columns: minmax(0, 1fr) 15rem;
     }
 
     .flight-card-itinerary--single {
