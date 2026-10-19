@@ -764,7 +764,12 @@ class FlightController extends Controller
         }
 
         $tripType = strtoupper((string) data_get($flight, 'provider.fare_type', 'ON'));
-        $response = $this->atApiService->fetchFareRules($trips, $tripType);
+        try {
+            $response = $this->atApiService->fetchFareRules($trips, $tripType);
+        } catch (\Throwable $exception) {
+            Log::warning('AT fare rules request failed.', ['message' => $exception->getMessage()]);
+            $response = null;
+        }
 
         if ($response === null) {
             return response()->json([
@@ -773,9 +778,10 @@ class FlightController extends Controller
         }
 
         if ((string) data_get($response, 'Code') !== '200') {
+            Log::warning('AT fare rules returned an unsuccessful response.', ['response' => $response]);
             return response()->json([
-                'message' => data_get($response, 'Msg.0', 'AT could not retrieve fare rules for this fare.'),
-            ], 422);
+                'message' => 'Fare rules are unavailable right now. Please try again later.',
+            ], 502);
         }
 
         return response()->json([
@@ -966,16 +972,22 @@ class FlightController extends Controller
         }
 
         $tripType = strtoupper((string) data_get($flight, 'provider.fare_type', 'ON'));
-        $response = $this->atApiService->fetchFlightInfo($trips, $tripType);
+        try {
+            $response = $this->atApiService->fetchFlightInfo($trips, $tripType);
+        } catch (\Throwable $exception) {
+            Log::warning('AT fare breakdown request failed.', ['message' => $exception->getMessage()]);
+            $response = null;
+        }
 
         if ($response === null) {
-            return response()->json(['message' => 'Unable to retrieve fare details. Please try again.'], 422);
+            return response()->json(['message' => 'Fare details are unavailable right now. Please try again later.'], 502);
         }
 
         if ((string) ($response['Code'] ?? '') !== '200' || !is_array($response['Trips'] ?? null)) {
+            Log::warning('AT fare breakdown returned an unsuccessful response.', ['response' => $response]);
             return response()->json([
-                'message' => data_get($response, 'Msg.0', 'Fare details are unavailable for the selected flight.'),
-            ], 422);
+                'message' => 'Fare details are unavailable right now. Please try again later.',
+            ], 502);
         }
 
         $displayCurrency = $this->currencyCodeForRequest(

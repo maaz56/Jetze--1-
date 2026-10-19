@@ -1,6 +1,10 @@
 <script setup>
 import FlightFilterCard from "@/components/common/FlightFilterCard.vue";
+import FlightFareOptions from "@/components/common/FlightFareOptions.vue";
+import FlightCardBadges from "@/components/common/FlightCardBadges.vue";
+import { updateCardFareReferences } from "@/components/common/cardFareSelection";
 import FareRuleText from "@/components/common/FareRuleText.vue";
+import CombinedFareBreakdown from "@/components/common/CombinedFareBreakdown.vue";
 import FlightLayoverTooltip from "@/components/common/FlightLayoverTooltip.vue";
 import Spinner from "@/components/common/Spinner.vue";
 
@@ -310,7 +314,8 @@ const timerInterval = ref(null);
 const showDialog = ref(true);
 const isSideSheetOpen = ref(false);
 const isSooperFlihgtDetailsOpen = ref(false);
-const flightDetailsActiveTab = ref("fare-options");
+const flightDetailsActiveTab = ref("flight-details");
+const cardFareSelections = reactive({});
 const selectedFlightId = ref(null);
 const selectedFlight = ref(null);
 const loadingDetails = ref(false);
@@ -469,12 +474,14 @@ const formatTime = (milliseconds) => {
 };
 async function openSooperFlightDetails(flight, { fetchBaggage = true } = {}) {
     initializeSelectedFares(flight);
+    const savedFares = cardFareSelections[cardFareKey(flight)];
+    if (savedFares) selectedFares.splice(0, selectedFares.length, ...savedFares);
     selectedFlight.value = flight;
     // store.dispatch("flight/" + FETCH_FLIGHT, {
     //     flight_id: flightId,
     //     isSooperFlight: true
     // });
-    flightDetailsActiveTab.value = "fare-options";
+    flightDetailsActiveTab.value = "flight-details";
     isSooperFlihgtDetailsOpen.value = true;
     // View-details opens may enrich the default fare. Card Book Now opens
     // intentionally skip SSR so booking is not delayed by baggage retries.
@@ -1580,6 +1587,121 @@ const visibleFareOptionFlights = computed(() =>
         .filter(({ flight, flightIndex }) => visibleSortedFlightFares(flight, flightIndex).length > 0),
 );
 
+function cardFareKey(flight) {
+    return `${flight?.quote_search_token ?? ""}:${flight?.leg?.ref_id ?? ""}`;
+}
+
+function defaultCardFareReferences(flight) {
+    if (hasFareCombinations(flight?.leg)) {
+        return [...(cheapestCombination(flight.leg, fareSortAmount)?.fare_references ?? [])];
+    }
+    return (flight?.leg?.flights ?? []).map((leg) =>
+        (sortedFlightFares(leg).find((fare) => !isZeroPriceFare(fare)) ?? sortedFlightFares(leg)[0])?.ref_id,
+    );
+}
+
+function cardFareReferences(flight) {
+    return cardFareSelections[cardFareKey(flight)] ?? defaultCardFareReferences(flight);
+}
+
+function cardFareGroups(flight) {
+    const leg = flight?.leg;
+    if (hasFareCombinations(leg)) {
+        return [{ index: 0, label: "Round trip", fares: combinationFareCards(leg, fareSortAmount) }];
+    }
+    return (leg?.flights ?? []).map((segment, index) => ({
+        index,
+        label: `${segment?.from?.iata ?? segment?.from?.city?.name ?? ""} → ${segment?.to?.iata ?? segment?.to?.city?.name ?? ""}`,
+        fares: sortedFlightFares(segment).filter((fare) => !isZeroPriceFare(fare)),
+    })).filter((group) => group.fares.length);
+}
+
+function selectCardFare(flight, index, fare) {
+    cardFareSelections[cardFareKey(flight)] = updateCardFareReferences(
+        cardFareReferences(flight), index, fare,
+        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
+    );
+}
+
+function viewCardFareDetails(flight, index, fare) {
+    selectCardFare(flight, index, fare);
+    openSooperFlightDetails(flight);
+}
+
+function viewCardFareBaggage(flight, index, fare) {
+    cancelPendingFreeSsrBaggageRequests();
+    selectedFares.splice(0, selectedFares.length, ...cardFareReferences(flight));
+    selectedFlight.value = flight;
+    openFareBaggageDialog(fare, flight?.leg?.flights?.[index], index);
+}
+
+function cardFareLegs(flight, fare, index) {
+    if (!fare?.fare_references?.length) {
+        return [{ index, name: fare?.name_class || fare?.name || fare?.class, baggagePolicies: fare?.baggage_policies }];
+    }
+    return fare.fare_references.map((reference, legIndex) => {
+        const legFare = flight?.leg?.flights?.[legIndex]?.fares?.find((option) => option.ref_id === reference);
+        return {
+            index: legIndex,
+            name: legFare?.name_class || legFare?.name || legFare?.class,
+            baggagePolicies: legFare?.baggage_policies ?? (legIndex === 0 ? fare.baggage_policies : fare.return_baggage_policies),
+        };
+    });
+}
+
+function bookCardFare(flight, index, fare) {
+    if (isCheckoutLoading.value || customerSettings.value?.is_booking_allowed !== 1) return;
+    const references = updateCardFareReferences(
+        cardFareReferences(flight), index, fare,
+        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
+    );
+    const flights = flight?.leg?.flights ?? [];
+    if (!flights.length || references.length !== flights.length || references.some((reference, legIndex) =>
+        !reference || !flights[legIndex]?.fares?.some((option) => option.ref_id === reference),
+    )) {
+        toast("Please select a fare for each flight before booking.", { type: "error" });
+        return;
+    }
+    cardFareSelections[cardFareKey(flight)] = references;
+    selectedFares.splice(0, selectedFares.length, ...references);
+    selectedFlight.value = flight;
+    goToCheckout();
+}
+
+function cardOptionPrice(flight, fare, index) {
+    if (fare?.fare_references?.length || (flight?.leg?.flights?.length ?? 0) <= 1) return cardFarePrice(flight, fare);
+    const references = updateCardFareReferences(
+        cardFareReferences(flight), index, fare,
+        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
+    );
+    return selectedCardTotal(flight, references);
+}
+
+function cardFarePrice(flight, fare) {
+    const money = fare?.fare_references?.length ? combinationDisplayMoney(fare, flight?.leg) : fareDisplayMoney(fare);
+    if (money?.currency && Number.isFinite(Number(money.amount))) return formatAmountWithCurrency(money.amount, money.currency);
+    return formatAmount(Number.isFinite(Number(fare?.combined_amount)) ? Number(fare.combined_amount) : calculateFare(fare));
+}
+
+function selectedCardTotal(flight, references = cardFareReferences(flight)) {
+    const leg = flight?.leg;
+    const combination = (leg?.fare_combinations ?? []).find((pair) =>
+        pair.fare_references?.length === references.length && pair.fare_references.every((ref, index) => ref === references[index]),
+    );
+    if (combination) return cardFarePrice(flight, combination);
+    if (!references.length || references.length !== (leg?.flights ?? []).length) return formatFlightDisplayMoney(flight);
+    let amount = 0;
+    let currency = null;
+    for (let index = 0; index < references.length; index++) {
+        const fare = leg.flights[index]?.fares?.find((option) => option.ref_id === references[index]);
+        const money = fareDisplayMoney(fare);
+        if (!money?.currency || !Number.isFinite(Number(money.amount)) || (currency && currency !== money.currency)) return formatFlightDisplayMoney(flight);
+        currency = money.currency;
+        amount += Number(money.amount);
+    }
+    return currency ? formatAmountWithCurrency(amount, currency) : formatFlightDisplayMoney(flight);
+}
+
 function initializeSelectedFares(flight) {
     selectedFares.splice(0, selectedFares.length);
 
@@ -1592,7 +1714,7 @@ function initializeSelectedFares(flight) {
     }
 
     flight?.leg?.flights?.forEach((leg, index) => {
-        const lowestFare = sortedFlightFares(leg)[0];
+        const lowestFare = sortedFlightFares(leg).find((fare) => !isZeroPriceFare(fare)) ?? sortedFlightFares(leg)[0];
         if (lowestFare) selectedFares[index] = lowestFare.ref_id;
     });
 
@@ -1832,28 +1954,37 @@ function displayFlightPrice(flight) {
         : calculateTotalFare(flight);
 }
 
-/** Format a FlightInfo component with the currently selected currency rate. */
-function formatPassengerFareMoney(passengerFare, field) {
-    if (field === "taxes" && passengerFare?.tax_breakdown_available === false) {
-        return "Unavailable";
+/** Use the selected fare for each leg, preferring the fetched AT breakdown. */
+function getFareBreakdownFare(flightIndex) {
+    if (atFareBreakdown.value) {
+        return atFareBreakdown.value.trips?.find(
+            (trip) => Number(trip.flight_index) === Number(flightIndex),
+        )?.fare ?? null;
     }
-    const money = displayMoneyFromBase(
-        passengerFare?.base_money?.[field],
-        passengerFare?.display_money?.[field],
-    );
-
-    if (money?.currency && Number.isFinite(Number(money.amount))) {
-        return formatAmountWithCurrency(money.amount, money.currency);
-    }
-
-    return formatAmount(passengerFare?.[field] ?? 0);
+    return getSelectedFare(flightIndex);
 }
 
-/** Use AT FlightInfo data for the selected fare when it is available; otherwise use search data. */
-function getFareBreakdownFare(flightIndex) {
-    return atFareBreakdown.value?.trips?.find(
-        (trip) => Number(trip.flight_index) === Number(flightIndex),
-    )?.fare ?? getSelectedFare(flightIndex);
+const combinedBreakdownFares = computed(() =>
+    (selectedFlight.value?.leg?.flights ?? []).map((_, index) => getFareBreakdownFare(index)),
+);
+
+function resolveBreakdownMoney(passengerFare, field) {
+    const money = displayMoneyFromBase(passengerFare?.base_money?.[field], passengerFare?.display_money?.[field]);
+    if (money) return money;
+    const amount = passengerFare?.[field];
+    return amount !== undefined && amount !== null && amount !== "" ? { amount, currency: null } : null;
+}
+
+function formatCombinedBreakdownMoney(money) {
+    return money.currency ? formatAmountWithCurrency(money.amount, money.currency) : formatAmount(money.amount);
+}
+
+function formatCombinedFareTotal() {
+    const total = atFareBreakdown.value?.price_details?.total_price;
+    const money = displayMoneyFromBase(total?.base_money, total);
+    return money?.currency && Number.isFinite(Number(money.amount))
+        ? formatAmountWithCurrency(money.amount, money.currency)
+        : formatFareBreakdownTotal();
 }
 
 /** Sum selected fare display amounts for the side-sheet checkout total. */
@@ -2649,7 +2780,7 @@ async function fetchAtFareBreakdown() {
         atFareBreakdown.value = response.data?.fare_breakdown ?? null;
         lastAtFareBreakdownKey = requestKey;
     } catch (error) {
-        atFareBreakdownError.value = error.response?.data?.message || "Unable to fetch provider fare details.";
+        atFareBreakdownError.value = "Fare details are unavailable right now. Please try again later.";
     } finally {
         atFareBreakdownLoading.value = false;
     }
@@ -2690,7 +2821,7 @@ async function fetchAtFareRules() {
         atFareRules.value = response.data?.fare_rules ?? null;
         lastAtFareRulesKey = requestKey;
     } catch (error) {
-        atFareRulesError.value = error.response?.data?.message || "Unable to fetch provider fare rules.";
+        atFareRulesError.value = "Fare rules are unavailable right now. Please try again later.";
     } finally {
         atFareRulesLoading.value = false;
     }
@@ -3864,35 +3995,38 @@ watch(isLoggedIn, (newVal) => {
     <div
         v-for="item in visibleFlights"
         :key="item?.leg?.ref_id"
-        class="relative bg-white border border-gray-200 rounded shadow-md shadow-slate-200/80 overflow-hidden transition-all hover:shadow-xl hover:-translate-y-0.5"
+        class="relative overflow-hidden rounded border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_8px_26px_rgba(15,23,42,0.10)]"
     >
 
 
         <!-- Single Flight (Direct) -->
-        <div v-if="item?.leg?.flights?.length === 1" class="p-5 sm:p-6 pl-6 sm:pl-7">
+        <div v-if="item?.leg?.flights?.length === 1" class="p-5 sm:p-6">
             <div class="flex flex-col lg:flex-row lg:items-center gap-6">
                 <!-- Airline -->
                 <div class="flex items-center gap-3.5 lg:w-42 lg:h-full lg:self-center shrink-0">
                     <div
-                        class="mr-2 h-[4.2rem] w-[4.2rem] rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
+                        class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm"
                     >
                         <img
-                            class="h-[2.7rem] w-[2.7rem] object-contain"
+                            class="h-9 w-9 object-contain"
                             :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
                             :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
                         />
                     </div>
                     <div>
-                        <p class="text-lg font-semibold text-gray-900 leading-tight w-20">
-                            {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
-                        </p>
-                        <p class="text-sm text-gray-400 font-medium mt-0.5">
+                        <div class="flex flex-wrap items-start gap-x-3 gap-y-1">
+                            <p class="text-base font-bold leading-tight text-slate-900">
+                                {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
+                            </p>
+                            <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
+                        </div>
+                        <p class="mt-1 text-xs font-medium tracking-wide text-slate-500">
                             {{ item?.leg?.flights[0]?.marketing_carrier?.iata }}
                             {{ formatFlightNumber(item?.leg?.flights[0]?.flight_number) }}
                         </p>
                         <p
                             v-if="operatingCarrierLabel(item?.leg?.flights)"
-                            class="mt-1 text-[11px] font-medium text-gray-500 whitespace-nowrap"
+                            class="mt-1 text-xs font-medium text-slate-500"
                         >
                             Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
                         </p>
@@ -3902,7 +4036,7 @@ watch(isLoggedIn, (newVal) => {
                 <!-- Route -->
                 <div class="flex-1 flex items-center justify-between gap-4">
                     <div class="w-16">
-                        <div class="text-3xl font-extrabold text-gray-900 tracking-tight">
+                        <div class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                             {{
                                 moment
                                     .parseZone(item?.leg?.flights[0]?.departure_at)
@@ -3912,7 +4046,7 @@ watch(isLoggedIn, (newVal) => {
                         <div class="text-base font-semibold text-gray-700 mt-0.5">
                             {{ item?.leg?.flights[0]?.from?.city?.name }}
                         </div>
-                        <div class="text-sm font-semibold text-gray-400">
+                        <div class="text-xs font-medium tracking-wide text-slate-500">
                             {{ item?.leg?.flights[0]?.from?.iata || item?.leg?.flights[0]?.from?.city?.code }}
                         </div>
                         <div v-if="item?.leg?.flights[0]?.departure_at" class="mt-1 whitespace-nowrap text-xs font-medium text-gray-500">
@@ -3934,11 +4068,11 @@ watch(isLoggedIn, (newVal) => {
                         </span>
 
                         <div class="relative w-full flex justify-center items-center">
-                            <div class="h-[2px] w-full bg-gray-200 rounded-full"></div>
+                            <div class="h-px w-full rounded-full bg-slate-300"></div>
                             <div class="absolute left-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
                             <div class="absolute right-0 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
                             <svg
-                                class="absolute h-[29px] w-[29px] text-blue-600 rotate-45"
+                                class="absolute h-6 w-6 rotate-45 text-primary"
                                 viewBox="0 0 24 24"
                                 fill="currentColor"
                             >
@@ -3979,7 +4113,7 @@ watch(isLoggedIn, (newVal) => {
                                     v-if="item?.leg?.flights[0]?.has_layovers"
                                     side="top"
                                     :side-offset="12"
-                                    class="rounded-lg border-0 p-0 shadow-xl"
+                                    class="rounded border-0 p-0 shadow-xl"
                                 >
                                     <FlightLayoverTooltip :flight="item?.leg?.flights[0]" />
                                 </TooltipContent>
@@ -3988,7 +4122,7 @@ watch(isLoggedIn, (newVal) => {
                     </div>
 
                     <div class="text-right">
-                        <div class="text-3xl font-extrabold text-gray-900 tracking-tight">
+                        <div class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                             {{
                                 moment
                                     .parseZone(item?.leg?.flights[0]?.arrival_at)
@@ -3998,7 +4132,7 @@ watch(isLoggedIn, (newVal) => {
                         <div class="text-base font-semibold text-gray-700 mt-0.5">
                             {{ item?.leg?.flights[0]?.to?.city?.name }}
                         </div>
-                        <div class="text-sm font-semibold text-gray-400">
+                        <div class="text-xs font-medium tracking-wide text-slate-500">
                             {{ item?.leg?.flights[0]?.to?.iata || item?.leg?.flights[0]?.to?.city?.code }}
                         </div>
                         <div v-if="item?.leg?.flights[0]?.arrival_at" class="mt-1 whitespace-nowrap text-xs font-medium text-gray-500">
@@ -4014,11 +4148,11 @@ watch(isLoggedIn, (newVal) => {
                     <div
                         class="text-3xl font-extrabold tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent"
                     >
-                        {{ formatFlightDisplayMoney(item) }}
+                        {{ selectedCardTotal(item) }}
                     </div>
                     <button
                         @click="openSooperFlightDetails(item, { fetchBaggage: false })"
-                        class="bg-primary hover:bg-primary/90 transition-colors text-primary-foreground px-7 py-3 rounded-xl font-semibold text-base"
+                        class="rounded bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                     >
                         Book now
                     </button>
@@ -4027,23 +4161,26 @@ watch(isLoggedIn, (newVal) => {
         </div>
 
         <!-- Multi Flight (Round Trip / Connecting) -->
-        <div v-else class="p-5 sm:p-6 pl-6 sm:pl-7">
-            <div class="flex items-start justify-between mb-4">
+        <div v-else class="p-5 sm:p-6">
+            <div class="mb-5 flex items-start justify-between gap-4">
                 <div class="flex items-center gap-3.5">
                     <div
-                        class="mr-2 h-[4.2rem] w-[4.2rem] rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0"
+                        class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm"
                     >
                         <img
-                            class="h-[2.7rem] w-[2.7rem] object-contain"
+                            class="h-9 w-9 object-contain"
                             :src="item?.leg?.flights[0]?.marketing_carrier?.logo"
                             :alt="item?.leg?.flights[0]?.marketing_carrier?.name"
                         />
                     </div>
                     <div>
-                        <p class="text-lg font-semibold text-gray-900">
-                            {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
-                        </p>
-                        <p class="text-sm text-gray-400 font-medium mt-0.5">
+                        <div class="flex flex-wrap items-start gap-x-3 gap-y-1">
+                            <p class="text-base font-bold leading-tight text-slate-900">
+                                {{ item?.leg?.flights[0]?.marketing_carrier?.name }}
+                            </p>
+                            <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
+                        </div>
+                        <p class="mt-1 text-xs font-medium tracking-wide text-slate-500">
                             {{
                                 (item?.leg?.flights || [])
                                     .map(
@@ -4057,7 +4194,7 @@ watch(isLoggedIn, (newVal) => {
                         </p>
                         <p
                             v-if="operatingCarrierLabel(item?.leg?.flights)"
-                            class="mt-1 text-[11px] font-medium text-gray-500 whitespace-nowrap"
+                            class="mt-1 text-xs font-medium text-slate-500"
                         >
                             Operated by {{ operatingCarrierLabel(item?.leg?.flights) }}
                         </p>
@@ -4067,11 +4204,11 @@ watch(isLoggedIn, (newVal) => {
                     <p
                         class="text-3xl font-extrabold tracking-tight bg-[linear-gradient(135deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] bg-clip-text text-transparent"
                     >
-                        {{ formatFlightDisplayMoney(item) }}
+                        {{ selectedCardTotal(item) }}
                     </p>
                     <button
                         @click="openSooperFlightDetails(item, { fetchBaggage: false })"
-                        class="mt-2 bg-primary hover:bg-primary/90 transition-colors text-primary-foreground px-6 py-2.5 rounded-xl font-semibold text-sm"
+                        class="mt-2 rounded bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                     >
                         Book now
                     </button>
@@ -4090,9 +4227,9 @@ watch(isLoggedIn, (newVal) => {
                 <div
                     v-for="(leg, legIndex) in item?.leg?.flights"
                     :key="legIndex"
-                    class="bg-gray-50 rounded-xl p-4 border border-gray-100"
+                    class="rounded border border-slate-200/80 bg-slate-50/70 p-4 sm:p-5"
                 >
-                    <p class="text-xs font-bold text-gray-400 uppercase mb-2.5 flex items-center gap-2">
+                    <p class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <span
                             class="w-1.5 h-1.5 rounded-full"
                             :class="legIndex === 0 ? 'bg-blue-600' : 'bg-violet-500'"
@@ -4103,27 +4240,27 @@ watch(isLoggedIn, (newVal) => {
                     </p>
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-3xl font-extrabold text-gray-900 tracking-tight">
+                            <p class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                                 {{ moment.parseZone(leg?.departure_at).format("HH:mm") }}
                             </p>
-                            <p class="text-base font-semibold text-gray-700">
+                            <p class="mt-0.5 text-sm font-semibold text-slate-700">
                                 {{ leg?.from?.city?.name }}
                             </p>
-                            <p class="text-sm font-semibold text-gray-400">
+                            <p class="text-xs font-medium tracking-wide text-slate-500">
                                 {{ leg?.from?.city?.code }}
                             </p>
                         </div>
                         <div class="relative flex-1 flex flex-col items-center px-1">
-                            <p class="mb-3 text-sm font-medium text-gray-500">
+                            <p class="mb-3 text-xs font-semibold text-slate-500">
                                 {{ Math.floor(getLegTotalDurationMinutes(item, leg) / 60) }}h
                                 {{ getLegTotalDurationMinutes(item, leg) % 60 }}m
                             </p>
                             <div class="relative w-full flex items-center">
-                                <div class="h-[2px] w-full bg-gray-200 rounded-full"></div>
+                                <div class="h-px w-full rounded-full bg-slate-300"></div>
                                 <div class="absolute left-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
                                 <div class="absolute right-0 h-1.5 w-1.5 rounded-full bg-blue-600"></div>
                                 <svg
-                                    class="absolute left-1/2 h-[29px] w-[29px] -translate-x-1/2 rotate-45 text-blue-600"
+                                    class="absolute left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 text-primary"
                                     viewBox="0 0 24 24"
                                     fill="currentColor"
                                     aria-hidden="true"
@@ -4158,7 +4295,7 @@ watch(isLoggedIn, (newVal) => {
                                         v-if="leg?.has_layovers"
                                         side="top"
                                         :side-offset="12"
-                                        class="rounded-lg border-0 p-0 shadow-xl"
+                                        class="rounded border-0 p-0 shadow-xl"
                                     >
                                         <FlightLayoverTooltip :flight="leg" />
                                     </TooltipContent>
@@ -4166,13 +4303,13 @@ watch(isLoggedIn, (newVal) => {
                             </TooltipProvider>
                         </div>
                         <div class="text-right">
-                            <p class="text-3xl font-extrabold text-gray-900 tracking-tight">
+                            <p class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                                 {{ moment.parseZone(leg?.arrival_at).format("HH:mm") }}
                             </p>
-                            <p class="text-base font-semibold text-gray-700">
+                            <p class="mt-0.5 text-sm font-semibold text-slate-700">
                                 {{ leg?.to?.city?.name }}
                             </p>
-                            <p class="text-sm font-semibold text-gray-400">
+                            <p class="text-xs font-medium tracking-wide text-slate-500">
                                 {{ leg?.to?.city?.code }}
                             </p>
                         </div>
@@ -4181,32 +4318,21 @@ watch(isLoggedIn, (newVal) => {
             </div>
         </div>
 
-        <!-- Footer -->
-        <div
-            class="px-6 sm:px-7 py-4 bg-[#FBFBFD] border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-sm"
-        >
-            <div class="flex flex-wrap items-center gap-2">
-                <span class="px-3 py-1.5 rounded-md bg-violet-50 text-violet-700 font-semibold text-sm">
-                    {{ item?.leg?.flights?.[0]?.cabin_class || "Economy" }}
-                </span>
-                <span
-                    class="px-3 py-1.5 rounded-md font-semibold text-sm"
-                    :class="
-                        item?.leg?.flights[0]?.is_refundable
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-rose-50 text-rose-600'
-                    "
-                >
-                    {{ item?.leg?.flights[0]?.is_refundable ? "Refundable" : "Non-Refundable" }}
-                </span>
-            </div>
-            <button
-                @click="openSooperFlightDetails(item)"
-                class="text-blue-600 font-semibold hover:underline flex items-center gap-1"
-            >
-                View flight details
-                <ChevronRight class="h-3.5 w-3.5" />
-            </button>
+        <FlightFareOptions
+            :groups="cardFareGroups(item)"
+            :references="cardFareReferences(item)"
+            :format-price="(fare, index) => cardOptionPrice(item, fare, index)"
+            :fare-legs="(fare, index) => cardFareLegs(item, fare, index)"
+            :booking-disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
+            :baggage-summaries="getFareBaggageSummaries"
+            @select="(index, fare) => selectCardFare(item, index, fare)"
+            @view-baggage="(index, fare) => viewCardFareBaggage(item, index, fare)"
+            @details="(index, fare) => viewCardFareDetails(item, index, fare)"
+            @book="(index, fare) => bookCardFare(item, index, fare)"
+        />
+
+        <div v-if="!cardFareGroups(item).length" class="border-t border-slate-100 px-6 py-3 text-right">
+            <button type="button" class="text-sm font-semibold text-primary hover:underline" @click="openSooperFlightDetails(item)">View flight details</button>
         </div>
     </div>
 
@@ -4728,7 +4854,7 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Main Tabs -->
                     <Tabs
                         v-model="flightDetailsActiveTab"
-                        default-value="fare-options"
+                        default-value="flight-details"
                         class="flex min-h-0 flex-1 flex-col"
                     >
                         <!-- Top navigation, modelled after the fare-options sheet. -->
@@ -4739,6 +4865,7 @@ watch(isLoggedIn, (newVal) => {
                                 <TabsList
                                     class="flex h-full w-max min-w-full items-stretch justify-start gap-0 bg-transparent p-0"
                                 >
+                                    <!--
                                     <TabsTrigger
                                         value="fare-options"
                                         class="flight-sheet-tab"
@@ -4746,6 +4873,7 @@ watch(isLoggedIn, (newVal) => {
                                         <Ticket class="h-4 w-4" />
                                         Fare Options
                                     </TabsTrigger>
+                                    -->
 
                                     <TabsTrigger
                                         value="flight-details"
@@ -4785,7 +4913,7 @@ watch(isLoggedIn, (newVal) => {
                             class="side-sheet-scroll min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 pb-8 sm:p-6 lg:px-8"
                         >
                             <div
-                                v-if="selectedFlight?.leg?.flights?.length"
+                                v-if="flightDetailsActiveTab === 'flight-details' && selectedFlight?.leg?.flights?.length"
                                 class="mb-5 space-y-3"
                             >
                                 <div
@@ -5020,12 +5148,13 @@ watch(isLoggedIn, (newVal) => {
 
                             
 
-                            <!-- Fare Options Tab - Mobile Optimized -->
+                            <!-- Fare Options tab preserved for future use.
+
                             <TabsContent
                                 value="fare-options"
                                 class="mt-4 sm:mt-6"
                             >
-                                <!-- Fare Options Display -->
+
                                 <div class="space-y-4 sm:space-y-6">
                                     <div class="">
                                         <div
@@ -5037,10 +5166,10 @@ watch(isLoggedIn, (newVal) => {
                                                     : '',
                                             ]"
                                         >
-                                           
+
                                         </div>
 
-                                        <!-- Flight Tabs Navigation - Mobile Scrollable -->
+
                                         <Tabs
                                             v-if="visibleFareOptionFlights.length"
                                             :default-value="
@@ -5057,7 +5186,7 @@ watch(isLoggedIn, (newVal) => {
                                                     </h3>
                                                 </div>
                                             </div>
-                                            <!-- Flight Tabs -->
+
                                             <div
                                                 v-if="visibleFareOptionFlights.length > 1"
                                                 class="side-sheet-scroll mt-3 w-full overflow-x-auto overflow-y-hidden sm:mt-4"
@@ -5083,7 +5212,7 @@ watch(isLoggedIn, (newVal) => {
                                                                 ?.name
                                                         }}
 
-                                                        <!-- Bottom Notch -->
+
                                                         <span
                                                             class="absolute left-1/2 -bottom-[7px] -translate-x-1/2 w-3 h-3 bg-primary rotate-45 hidden group-data-[state=active]:block"
                                                         >
@@ -5092,7 +5221,7 @@ watch(isLoggedIn, (newVal) => {
                                                 </TabsList>
                                             </div>
 
-                                            <!-- Flight Tab Content -->
+
                                             <TabsContent
                                                 v-for="({
                                                     flight,
@@ -5107,7 +5236,7 @@ watch(isLoggedIn, (newVal) => {
                                                         : 'mt-3 sm:mt-4',
                                                 ]"
                                             >
-                                                <!-- Flight Header - Mobile Compact -->
+
                                                 <div
                                                     class="rounded border border-primary/30 bg-primary/5 p-3 shadow-sm sm:p-4"
                                                 >
@@ -5221,7 +5350,7 @@ watch(isLoggedIn, (newVal) => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <!-- Fare Options Rows for Current Flight -->
+
                                                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-4">
                                                     <div
                                                         v-for="(
@@ -5270,7 +5399,7 @@ watch(isLoggedIn, (newVal) => {
                                                         </div>
 
                                                         <div class="space-y-3 py-4 text-sm text-gray-700">
-                                                           
+
                                                             <div>
                                                                 <h6 class="mb-2 text-base font-bold text-gray-900">Baggage</h6>
                                                                 <div v-for="(summary, summaryIndex) in getFareBaggageSummaries(fare?.baggage_policies)" :key="summaryIndex" class="mb-1 flex items-start gap-2">
@@ -5310,6 +5439,8 @@ watch(isLoggedIn, (newVal) => {
                                     </div>
                                 </div>
                             </TabsContent>
+
+                            -->
 
                             <!-- Fare Rules Tab -->
                             <TabsContent value="fare-rules" class="mt-0 space-y-4">
@@ -5414,377 +5545,13 @@ watch(isLoggedIn, (newVal) => {
                                                 ?.length > 0
                                         "
                                     >
-                                        <!-- Loop through each flight -->
-                                        <div
-                                            v-for="(
-                                                flight, flightIndex
-                                            ) in selectedFlight?.leg?.flights"
-                                            :key="flightIndex"
-                                            class="mb-4 overflow-hidden rounded border border-gray-200 shadow-md shadow-slate-200/80 sm:mb-6 last:mb-0"
-                                        >
-                                            <!-- Flight Header - Mobile Compact -->
-                                            <div
-                                                class="bg-primary/5 p-3 sm:p-4 border-b border-primary/20"
-                                            >
-                                                <div
-                                                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3"
-                                                >
-                                                    <div class="flex-1 min-w-0">
-                                                        <h4
-                                                            class="font-bold text-sm sm:text-lg text-gray-800"
-                                                        >
-                                                            {{
-                                                                flight?.from
-                                                                    ?.city?.name
-                                                            }}
-                                                            to
-                                                            {{
-                                                                flight?.to?.city
-                                                                    ?.name
-                                                            }}
-                                                        </h4>
-                                                        <div
-                                                            class="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-1 sm:gap-3 mt-1 sm:mt-2 text-xs sm:text-sm text-gray-600"
-                                                        >
-                                                            <div
-                                                                class="flex items-center gap-1"
-                                                            >
-                                                                <Calendar
-                                                                    class="w-3 h-3 sm:w-4 sm:h-4"
-                                                                />
-                                                                <span>{{
-                                                                    moment(
-                                                                        flight?.departure_at,
-                                                                    ).format(
-                                                                        "ddd, DD MMM, YYYY",
-                                                                    )
-                                                                }}</span>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center gap-1"
-                                                            >
-                                                                <Plane
-                                                                    class="w-3 h-3 sm:w-4 sm:h-4"
-                                                                />
-                                                                <span>{{
-                                                                    flight
-                                                                        ?.operating_carrier
-                                                                        ?.name
-                                                                }}</span>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center gap-1"
-                                                            >
-                                                                <Clock
-                                                                    class="w-3 h-3 sm:w-4 sm:h-4"
-                                                                />
-                                                                <span
-                                                                    >{{
-                                                                        moment
-                                                                            .parseZone(
-                                                                                flight?.departure_at,
-                                                                            )
-                                                                            .format(
-                                                                                "HH:mm",
-                                                                            )
-                                                                    }}
-                                                                    -
-                                                                    {{
-                                                                        moment
-                                                                            .parseZone(
-                                                                                flight?.arrival_at,
-                                                                            )
-                                                                            .format(
-                                                                                "HH:mm",
-                                                                            )
-                                                                    }}</span
-                                                                >
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div
-                                                        class="inline-flex items-center rounded px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm font-medium gap-1 bg-white border border-gray-200 flex-shrink-0 mt-2 sm:mt-0"
-                                                        :class="
-                                                            flight?.is_refundable
-                                                                ? 'text-green-500'
-                                                                : 'text-red-500'
-                                                        "
-                                                    >
-                                                        <SquareCheckBig
-                                                            class="w-3 h-3 sm:w-4 sm:h-4"
-                                                            v-if="
-                                                                flight?.is_refundable
-                                                            "
-                                                        />
-                                                        <SquareX
-                                                            v-else
-                                                            class="w-3 h-3 sm:w-4 sm:h-4"
-                                                        />
-                                                        <span
-                                                            class="font-semibold text-xs sm:text-sm"
-                                                        >
-                                                            {{
-                                                                flight?.is_refundable
-                                                                    ? "Refundable"
-                                                                    : "Non-Refundable"
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Fare Information - Mobile Compact -->
-                                            <div
-                                                class="p-3 sm:p-4 border-b border-gray-200 bg-gray-50"
-                                            >
-                                                <div
-                                                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2"
-                                                >
-                                                    <div class="flex-1 min-w-0">
-                                                        <h5
-                                                            class="font-semibold text-gray-800 text-sm sm:text-base"
-                                                        >
-                                                            Selected Fare:
-                                                            <span
-                                                                v-if="
-                                                                    getFareBreakdownFare(
-                                                                        flightIndex,
-                                                                    )
-                                                                "
-                                                                class="text-primary"
-                                                            >
-                                                                {{
-                                                                    getFareBreakdownFare(
-                                                                        flightIndex,
-                                                                    )
-                                                                        ?.name_class ||
-                                                                    getFareBreakdownFare(
-                                                                        flightIndex,
-                                                                    )?.class ||
-                                                                    "Standard"
-                                                                }}
-                                                            </span>
-                                                            <span
-                                                                v-else
-                                                                class="text-amber-600"
-                                                                >No fare
-                                                                selected</span
-                                                            >
-                                                        </h5>
-                                                    </div>
-                                                    <div
-                                                        v-if="
-                                                            getFareBreakdownFare(
-                                                                flightIndex,
-                                                            )
-                                                        "
-                                                        class="text-lg sm:text-xl font-bold text-primary mt-1 sm:mt-0"
-                                                    >
-                                                        {{ formatFareDisplayMoney(getFareBreakdownFare(flightIndex)) }}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Passenger Fare Table - Mobile Scrollable -->
-                                            <div
-                                                v-if="
-                                                    getFareBreakdownFare(flightIndex)
-                                                "
-                                                class="overflow-x-auto"
-                                            >
-                                                <div
-                                                    class="min-w-[600px] sm:min-w-0"
-                                                >
-                                                    <table
-                                                        class="w-full border-collapse text-xs sm:text-sm"
-                                                    >
-                                                        <thead>
-                                                            <tr
-                                                                class="bg-gray-50"
-                                                            >
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Passenger
-                                                                    Type
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Base Price
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Taxes
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Fees
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Service
-                                                                    Charges
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Surcharge
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Discount
-                                                                </th>
-                                                                <th
-                                                                    class="border-b border-gray-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left text-xs font-semibold text-gray-900 whitespace-nowrap"
-                                                                >
-                                                                    Total
-                                                                </th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            <template
-                                                                v-if="
-                                                                    getFareBreakdownFare(
-                                                                        flightIndex,
-                                                                    )
-                                                                        ?.passenger_fares
-                                                                        ?.length >
-                                                                    0
-                                                                "
-                                                            >
-                                                                <tr
-                                                                    v-for="(
-                                                                        passengerFare,
-                                                                        index
-                                                                    ) in getFareBreakdownFare(
-                                                                        flightIndex,
-                                                                    )
-                                                                        ?.passenger_fares"
-                                                                    :key="index"
-                                                                    class="hover:bg-gray-50"
-                                                                >
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{
-                                                                            passengerFare.traveler_type
-                                                                        }}
-                                                                        X
-                                                                        {{
-                                                                            passengerFare.total_passenger
-                                                                        }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{ formatPassengerFareMoney(passengerFare, "base_price") }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{
-                                                                            formatPassengerFareMoney(passengerFare, "taxes")
-                                                                        }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{
-                                                                            formatPassengerFareMoney(passengerFare, "fees")
-                                                                        }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{
-                                                                            formatPassengerFareMoney(passengerFare, "service_charges")
-                                                                        }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        {{
-                                                                            formatPassengerFareMoney(passengerFare, "surchage")
-                                                                        }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b border-gray-100 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-xs font-medium text-left whitespace-nowrap"
-                                                                    >
-                                                                        -{{ formatPassengerFareMoney(passengerFare, "discount") }}
-                                                                    </td>
-                                                                    <td
-                                                                        class="border-b px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-3 text-left whitespace-nowrap"
-                                                                    >
-                                                                        <span
-                                                                            class="text-xs sm:text-sm lg:text-lg font-bold text-primary"
-                                                                        >
-                                                                            {{ formatPassengerFareMoney(passengerFare, "total_price") }}
-                                                                        </span>
-                                                                    </td>
-                                                                </tr>
-                                                            </template>
-                                                            <template v-else>
-                                                                <tr>
-                                                                    <td
-                                                                        colspan="8"
-                                                                        class="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 lg:py-4 text-center"
-                                                                    >
-                                                                        <div
-                                                                            class="text-xs sm:text-sm text-gray-500 italic"
-                                                                        >
-                                                                            No
-                                                                            passenger
-                                                                            fare
-                                                                            data
-                                                                            available
-                                                                            for
-                                                                            this
-                                                                            fare
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            </template>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-
-                                            <!-- No Fare Selected Message - Mobile Compact -->
-                                            <div
-                                                v-else
-                                                class="p-4 sm:p-6 text-center"
-                                            >
-                                                <div
-                                                    class="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mx-auto mb-2 sm:mb-3 rounded-full bg-gray-200/60 flex items-center justify-center"
-                                                >
-                                                    <AlertCircle
-                                                        class="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-400"
-                                                    />
-                                                </div>
-                                                <p
-                                                    class="text-xs sm:text-sm text-gray-600 font-medium mb-0.5 sm:mb-1"
-                                                >
-                                                    No fare selected for this
-                                                    flight
-                                                </p>
-                                                <p
-                                                    class="text-xs text-gray-500"
-                                                >
-                                                    Please select a fare from
-                                                    the fare options tab
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <p v-if="atFareBreakdown?.tax_breakdown_available === false" class="mb-3 text-xs text-amber-700">Tax breakdown is unavailable because the provider's tax details do not reconcile. The fare total remains unchanged.</p>
-                                        <div class="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-3">
-                                            <span class="text-sm font-semibold text-gray-800">Total Fare</span>
-                                            <span class="text-base font-bold text-primary">{{ formatFareBreakdownTotal() }}</span>
-                                        </div>
+                                        <CombinedFareBreakdown
+                                            :fares="combinedBreakdownFares"
+                                            :resolve-money="resolveBreakdownMoney"
+                                            :format-money="formatCombinedBreakdownMoney"
+                                            :total="formatCombinedFareTotal()"
+                                            :tax-unavailable="atFareBreakdown?.tax_breakdown_available === false"
+                                        />
                                     </div>
 
                                     <!-- Empty State for No Flights - Mobile Compact -->
@@ -6335,7 +6102,7 @@ watch(isLoggedIn, (newVal) => {
                             <div
                                 class="truncate text-xl font-extrabold text-gray-950 sm:text-2xl"
                             >
-                                {{ formatGrandTotalDisplayMoney() }}
+                                {{ selectedCardTotal(selectedFlight) }}
                             </div>
                         </div>
                         <div
