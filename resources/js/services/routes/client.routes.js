@@ -177,7 +177,7 @@ export const clientRoutes = [
                 component: () => import("@/pages/CustomerBookingsDetails.vue"),
             },
             {
-                path: "customer-profile",
+                path: "customer-profile/:section(profile|bookings|hotel-bookings|deposits|wallet)?",
                 name: "CustomerProfile",
                 component: () => import("@/pages/CustomerProfile.vue"),
             },

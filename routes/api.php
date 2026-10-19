@@ -317,6 +317,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
 
     Route::get('customers', [CustomerController::class, 'getCustomers']);
     Route::get('customer-data', [CustomerController::class, 'getCustomerData']);
+    Route::put('customer-profile', [CustomerController::class, 'updateOwnProfile']);
     Route::post('update-customer-settings', [CustomerController::class, 'updateCustomerSettings']);
     Route::post('update-customer-data', [CustomerController::class, 'updateCustomerData']);
     Route::post('resend-verification-email', [CustomerController::class, 'resendVerificationEmail']);

@@ -16,6 +16,24 @@ use Illuminate\Support\Facades\URL;
 
 class CustomerController extends Controller
 {
+    /** Update only the authenticated customer's own profile. */
+    public function updateOwnProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:30',
+            'address' => 'nullable|string|max:500',
+            'company_name' => 'nullable|string|max:255',
+            'preferred_currency' => 'nullable|string|size:3',
+        ]);
+
+        $customer = Customer::where('user_id', $request->user()->id)->firstOrFail();
+        $customer->update($validated);
+
+        return response()->json(['success' => true, 'data' => $customer]);
+    }
+
     public function getCustomerData(Request $request)
     {
 

@@ -13,7 +13,6 @@ import {
     Calendar,
     CircleUser,
     LayoutDashboard,
-    PencilRuler,
 } from "lucide-vue-next";
 
 import { computed, ref } from "vue";
@@ -104,10 +103,6 @@ function handleLogout() {
                         <DropdownMenuItem class="cursor-pointer" @click="$router.push({ name: 'Dashboard' })">
                             <LayoutDashboard class="mr-2 h-4 w-4 text-gray-500" />
                             <span>Dashboard</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem class="cursor-pointer" @click="$router.push({ name: 'Setting' })">
-                            <PencilRuler class="mr-2 h-4 w-4 text-gray-500" />
-                            <span>Settings</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem @click="handleLogout()" class="cursor-pointer text-red-600 focus:text-red-600">

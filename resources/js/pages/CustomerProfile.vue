@@ -1,7 +1,8 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
+import apiClient from "@/config/axios";
 import DateRangePicker from "@/components/common/DateRangePicker.vue";
-import CustomerWallet from "@/pages/CustomerWallet.vue";
+
 
 import {
     MoveRight,
@@ -57,7 +58,7 @@ import Label from "@/components/ui/label/Label.vue";
 import Input from "@/components/ui/input/Input.vue";
 import { useStore } from "vuex";
 import { useRoute, useRouter } from "vue-router";
-import { computed, onMounted, ref, watch, nextTick } from "vue";
+import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, ref, watch, nextTick } from "vue";
 import { formatAmount } from "@/lib/utils";
 import moment from "moment";
 import { useAuthStore } from "@/services/stores/auth";
@@ -75,7 +76,8 @@ import {
     DELETE_DEPOSIT_DATA,
     FETCH_CUSTOMER_DATA,
 } from "@/services/store/actions.type";
-import AgentLedger from "./agent/AgentLedger.vue";
+const CustomerWallet = defineAsyncComponent(() => import("@/pages/CustomerWallet.vue"));
+const AgentLedger = defineAsyncComponent(() => import("./agent/AgentLedger.vue"));
 
 /* ------------------------------------------------------------------ */
 /*  STORES & ROUTE                                                    */
@@ -83,7 +85,11 @@ import AgentLedger from "./agent/AgentLedger.vue";
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
-const activeTab = ref(route.query.tab || 'profile')
+const sections = ['profile', 'bookings', 'hotel-bookings', 'deposits', 'wallet'];
+const activeTab = computed(() => {
+    const section = route.params.section || route.query.tab || 'bookings';
+    return sections.includes(section) ? section : 'bookings';
+});
 
 const loading = ref(true);
 const bookingsLoading = ref(true);
@@ -105,25 +111,45 @@ const hotelBookingsLoaded = ref(false);
 const hotelBookings = computed(() => hotelStore.getBookings);
 const hotelBookingMeta = computed(() => hotelStore.getBookingMeta);
 
-const editDialogOpen = ref(false);
+const editingProfile = ref(false);
+const profileSaving = ref(false);
+const profileError = ref('');
+const profileSuccess = ref('');
+const profileForm = ref({});
 
-const closeEditDialog = () => {
-    editDialogOpen.value = false;
-};
-const openEditDialog = () => {
-    editDialogOpen.value = true;
-};
+function startEditingProfile() {
+    profileError.value = '';
+    profileSuccess.value = '';
+    profileForm.value = Object.fromEntries(['name', 'last_name', 'phone', 'address', 'company_name', 'preferred_currency']
+        .map((field) => [field, customer.value?.[field] || '']));
+    editingProfile.value = true;
+}
+
+async function saveProfile() {
+    profileSaving.value = true;
+    profileError.value = '';
+    try {
+        await apiClient.put('/customer-profile', profileForm.value);
+        await fetchCustomer();
+        editingProfile.value = false;
+        profileSuccess.value = 'Your profile has been updated.';
+    } catch (err) {
+        profileError.value = Object.values(err.response?.data?.errors || {}).flat().join(' ') || 'Unable to save your profile. Please try again.';
+    } finally {
+        profileSaving.value = false;
+    }
+}
 
 const user = computed(() => authStore.user);
 const user_role = computed(() => user?.value?.role);
 const user_id = computed(() => user?.value?.id);
 const now = ref(Date.now())
 
+let clockInterval;
 onMounted(() => {
-  setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-})
+  clockInterval = setInterval(() => { now.value = Date.now(); }, 1000);
+});
+onBeforeUnmount(() => clearInterval(clockInterval));
 
 const getRemainingTime = (expiry) => {
   if (!expiry) return 'N/A'
@@ -153,13 +179,6 @@ function filterBookings(type) {
 
 }
 
-function updateCustomerProfile() {
-    // Here you would typically send the updated customer data to your backend API
-    // For demonstration, we'll just log the updated customer data
-    // Close the dialog after saving
-    closeEditDialog();
-}
-
 /* ------------------------------------------------------------------ */
 /*  CUSTOMER (from customers table)                                   */
 /* ------------------------------------------------------------------ */
@@ -172,7 +191,7 @@ async function fetchCustomer() {
         // customer.value = res.data;
 
         // ----> DUMMY DATA (the row you printed) <----
-        store.dispatch("customer/" + FETCH_CUSTOMER_DATA, {
+        await store.dispatch("customer/" + FETCH_CUSTOMER_DATA, {
             id: user_id.value,
         })
     } catch (e) {
@@ -351,52 +370,28 @@ const formatDate = (d) =>
 /* ------------------------------------------------------------------ */
 /*  MOUNT / WATCH                                                     */
 /* ------------------------------------------------------------------ */
-onMounted(() => {
-    fetchCustomer();
-    fetchAgent();
-    fetchAgentDeposits();
-    fetchAgentLedger();
-    fetchBookings();
-    if (activeTab.value === "hotel-bookings") {
-        fetchHotelBookings();
-    }
-});
-
-watch(user_id, (id) => {
-    if (id) {
-        fetchCustomer();
+watch([user_id, activeTab], ([id, tab]) => {
+    if (!id) return;
+    if (tab === 'profile') fetchCustomer();
+    if (tab === 'bookings') {
         fetchAgent();
-        fetchAgentDeposits();
-        fetchAgentLedger();
         fetchBookings();
-        if (activeTab.value === "hotel-bookings") {
-            fetchHotelBookings();
-        }
     }
-});
-
-watch(activeTab, (tab) => {
-    if (tab === "hotel-bookings" && !hotelBookingsLoaded.value) {
-        fetchHotelBookings();
-    }
-});
+    if (tab === 'hotel-bookings') fetchHotelBookings();
+}, { immediate: true });
 </script>
 
 <template>
-    <div class="container mx-auto px-4 gap-6 md:gap-4 p-4 md:p-6 max-[320px]:px-2">
+    <div class="container mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-10">
+        <div class="mb-6 rounded-2xl border border-primary/15 bg-primary/5 px-6 py-7 text-slate-900 sm:px-8">
+            <p class="text-xs font-semibold uppercase tracking-widest text-primary">Your account</p>
+            <h1 class="mt-2 text-2xl font-bold sm:text-3xl">Customer dashboard</h1>
+            <p class="mt-2 text-sm text-slate-600">Manage your profile, bookings, deposits and transactions.</p>
+        </div>
 
         <div class="bg-white border-b border-gray-200 rounded-t-lg">
             <div class="flex overflow-x-auto sm:overflow-x-visible scrollbar-hide">
-                <button @click="activeTab = 'profile'" :class="[
-                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
-                    activeTab === 'profile'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-600 hover:text-gray-900'
-                ]">
-                    <UserRound class="h-4 w-4" aria-hidden="true" />
-                    My Profile
-                </button>
-                <button @click="activeTab = 'bookings'" :class="[
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'bookings' } }" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'bookings'
                         ? 'border-primary text-primary'
@@ -404,8 +399,8 @@ watch(activeTab, (tab) => {
                 ]">
                     <TicketCheck class="h-4 w-4" aria-hidden="true" />
                     Bookings Overview
-                </button>
-                <button @click="activeTab = 'hotel-bookings'" :class="[
+                </router-link>
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'hotel-bookings' } }" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'hotel-bookings'
                         ? 'border-primary text-primary'
@@ -413,8 +408,8 @@ watch(activeTab, (tab) => {
                 ]">
                     <Building2 class="h-4 w-4" aria-hidden="true" />
                     Hotel Bookings
-                </button>
-                <button @click="activeTab = 'deposits'" :class="[
+                </router-link>
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'deposits' } }" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'deposits'
                         ? 'border-primary text-primary'
@@ -422,8 +417,8 @@ watch(activeTab, (tab) => {
                 ]">
                     <WalletCards class="h-4 w-4" aria-hidden="true" />
                     Deposit Overview
-                </button>
-                <button @click="activeTab = 'wallet'" :class="[
+                </router-link>
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'wallet' } }" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'wallet'
                         ? 'border-primary text-primary'
@@ -431,123 +426,68 @@ watch(activeTab, (tab) => {
                 ]">
                     <ListChecks class="h-4 w-4" aria-hidden="true" />
                     Transactions Overview
-                </button>
+                </router-link>
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'profile' } }" :class="[
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
+                    activeTab === 'profile'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                ]">
+                    <UserRound class="h-4 w-4" aria-hidden="true" />
+                    My Profile
+                </router-link>
             </div>
         </div>
 
         <!-- Tabs Content -->
         <div class="bg-white rounded-b-lg shadow-sm">
-            <!-- Profile Tab -->
-            <div v-show="activeTab === 'profile'" class="p-6">
-                <Card v-if="customer" class="overflow-hidden border-none shadow-none">
-                    <CardHeader class="bg-primary text-white">
-                        <div class="flex items-center justify-between">
-
-                            <div>
-                                <CardTitle class="text-2xl">My Profile</CardTitle>
-                                <CardDescription class="text-indigo-100">
-                                    Account information
-                                </CardDescription>
-                            </div>
-                            <Button @click="openEditDialog" variant="ghost"
-                                class="bg-white text-primary hover:bg-gray-100 ">Edit</Button>
-
-                            <!-- Edit Profile Dialog -->
-                            <div v-if="editDialogOpen"
-                                class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                                <div class="bg-white rounded-lg w-full max-w-lg p-6 shadow-lg">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h3 class="text-lg font-semibold">Edit Profile</h3>
-                                        <button @click="closeEditDialog"
-                                            class="text-gray-500 hover:text-gray-700">✕</button>
-                                    </div>
-
-                                    <form @submit.prevent="updateCustomerProfile"
-                                        class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                            <Label class="text-gray-600">First Name</Label>
-                                            <Input v-model="customer.name" />
-                                        </div>
-
-                                        <div>
-                                            <Label class="text-gray-600">Last Name</Label>
-                                            <Input v-model="customer.last_name" />
-                                        </div>
-
-                                        <div>
-                                            <Label class="text-gray-600">Email</Label>
-                                            <Input type="email" v-model="customer.email" />
-                                        </div>
-
-                                        <div>
-                                            <Label class="text-gray-600">Phone</Label>
-                                            <Input v-model="customer.phone" />
-                                        </div>
-
-                                        <div class="md:col-span-2">
-                                            <Label class="text-gray-600">Address</Label>
-                                            <Input v-model="customer.address" />
-                                        </div>
-
-                                        <!-- Inline actions so save uses the new function and model -->
-                                        <div class="md:col-span-2 mt-4 flex justify-end gap-3">
-                                            <Button type="button" variant="outline"
-                                                @click="closeEditDialog">Cancel</Button>
-                                            <Button type="submit" class="bg-primary text-white">Save</Button>
-                                        </div>
-                                    </form>
-
-
-                                </div>
+            <!-- Profile -->
+            <section v-if="activeTab === 'profile'" class="p-4 sm:p-8">
+                <div v-if="customer" class="space-y-6">
+                    <div class="flex flex-col gap-5 rounded-2xl border border-primary/10 bg-primary/5 p-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary text-2xl font-bold text-white">{{ (customer.name || user?.email || 'U').charAt(0).toUpperCase() }}</div>
+                            <div><p class="text-xs font-semibold uppercase tracking-wider text-primary">My account</p>
+                                <h2 class="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">{{ [customer.name, customer.last_name].filter(Boolean).join(' ') || 'Your profile' }}</h2>
+                                <p class="mt-1 text-sm text-slate-500">{{ customer.email || user?.email }}</p>
                             </div>
                         </div>
-
-
-                    </CardHeader>
-
-                    <CardContent class="pt-6 bg-white border-none">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <Label class="text-gray-600">Full Name</Label>
-                                <p class="font-semibold">
-                                    {{ customer.name }} {{ customer.last_name }}
-                                </p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Email</Label>
-                                <p class="font-semibold">{{ customer.email }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Phone</Label>
-                                <p class="font-semibold">{{ customer.phone }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Address</Label>
-                                <p class="font-semibold">{{ customer.address }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Preferred Currency</Label>
-                                <p class="font-semibold">{{ customer.preferred_currency }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Company Name</Label>
-                                <p class="font-semibold">{{ customer.company_name }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Member Since</Label>
-                                <p class="font-semibold">{{ formatDate(customer.created_at) }}</p>
-                            </div>
-                            <div>
-                                <Label class="text-gray-600">Last Updated</Label>
-                                <p class="font-semibold">{{ formatDate(customer.updated_at) }}</p>
-                            </div>
+                        <Button v-if="!editingProfile" @click="startEditingProfile" class="text-white">Edit profile</Button>
+                    </div>
+                    <p v-if="profileSuccess" role="status" class="rounded-lg bg-green-50 p-3 text-sm text-green-700">{{ profileSuccess }}</p>
+                    <div class="grid gap-6 lg:grid-cols-3">
+                        <div class="rounded-2xl border border-slate-200 p-5 sm:p-6 lg:col-span-2">
+                            <div class="mb-5"><h3 class="text-lg font-semibold text-slate-900">Personal information</h3><p class="mt-1 text-sm text-slate-500">Your contact details and travel preferences.</p></div>
+                            <form v-if="editingProfile" @submit.prevent="saveProfile" class="grid gap-4 sm:grid-cols-2">
+                                <div><Label for="profile-name">First name</Label><Input id="profile-name" v-model="profileForm.name" required maxlength="255" /></div>
+                                <div><Label for="profile-last-name">Last name</Label><Input id="profile-last-name" v-model="profileForm.last_name" maxlength="255" /></div>
+                                <div><Label for="profile-phone">Phone</Label><Input id="profile-phone" v-model="profileForm.phone" type="tel" maxlength="30" /></div>
+                                <div><Label for="profile-company">Company</Label><Input id="profile-company" v-model="profileForm.company_name" maxlength="255" /></div>
+                                <div><Label for="profile-currency">Preferred currency</Label><Input id="profile-currency" v-model="profileForm.preferred_currency" placeholder="e.g. AED" minlength="3" maxlength="3" /></div>
+                                <div class="sm:col-span-2"><Label for="profile-address">Address</Label><Input id="profile-address" v-model="profileForm.address" maxlength="500" /></div>
+                                <p v-if="profileError" role="alert" class="text-sm text-red-600 sm:col-span-2">{{ profileError }}</p>
+                                <div class="flex gap-3 sm:col-span-2"><Button type="submit" :disabled="profileSaving" class="text-white">{{ profileSaving ? 'Saving...' : 'Save changes' }}</Button><Button type="button" variant="outline" @click="editingProfile = false" :disabled="profileSaving">Cancel</Button></div>
+                            </form>
+                            <dl v-else class="grid gap-5 text-sm sm:grid-cols-2">
+                                <div><dt class="text-slate-500">Full name</dt><dd class="mt-1 font-medium text-slate-900">{{ [customer.name, customer.last_name].filter(Boolean).join(' ') || 'Not provided' }}</dd></div>
+                                <div><dt class="text-slate-500">Email</dt><dd class="mt-1 break-all font-medium text-slate-900">{{ customer.email || user?.email || 'Not provided' }}</dd></div>
+                                <div><dt class="text-slate-500">Phone</dt><dd class="mt-1 font-medium text-slate-900">{{ customer.phone || 'Not provided' }}</dd></div>
+                                <div><dt class="text-slate-500">Company</dt><dd class="mt-1 font-medium text-slate-900">{{ customer.company_name || 'Not provided' }}</dd></div>
+                                <div><dt class="text-slate-500">Preferred currency</dt><dd class="mt-1 font-medium text-slate-900">{{ customer.preferred_currency || 'Not provided' }}</dd></div>
+                                <div><dt class="text-slate-500">Address</dt><dd class="mt-1 font-medium text-slate-900">{{ customer.address || 'Not provided' }}</dd></div>
+                            </dl>
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                        <div class="space-y-4">
+                            <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-semibold text-slate-900">Account</h3><p class="mt-3 text-sm text-slate-500">Member since</p><p class="mt-1 text-sm font-medium text-slate-900">{{ customer.created_at ? formatDate(customer.created_at) : 'Not available' }}</p></div>
+                            <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-semibold text-slate-900">Quick links</h3><div class="mt-3 flex flex-col gap-3 text-sm font-medium text-primary"><router-link :to="{ name: 'CustomerProfile', params: { section: 'bookings' } }">View flight bookings →</router-link><router-link :to="{ name: 'CustomerProfile', params: { section: 'hotel-bookings' } }">View hotel bookings →</router-link><router-link :to="{ name: 'CustomerProfile', params: { section: 'deposits' } }">Manage deposits →</router-link><router-link :to="{ name: 'CustomerProfile', params: { section: 'wallet' } }">View transactions →</router-link></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="py-12 text-center text-sm text-slate-500">Loading your profile...</div>
+            </section>
 
             <!-- Bookings Overview Tab -->
-            <div v-show="activeTab === 'bookings'" class="p-6 ">
+            <div v-if="activeTab === 'bookings'" class="p-6 ">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6">Bookings Overview</h2>
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-primary/10 rounded-md p-4 flex items-center cursor-pointer transition hover:shadow-md"
@@ -831,7 +771,7 @@ watch(activeTab, (tab) => {
             </div>
 
             <!-- Hotel Bookings Tab -->
-            <div v-show="activeTab === 'hotel-bookings'" class="p-6">
+            <div v-if="activeTab === 'hotel-bookings'" class="p-6">
                 <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-800">Hotel Bookings</h2>
@@ -891,19 +831,19 @@ watch(activeTab, (tab) => {
             </div>
 
             <!-- Deposits Overview Tab -->
-            <div v-show="activeTab === 'deposits'" class="p-6">
+            <div v-if="activeTab === 'deposits'" class="p-6">
 
                 <CustomerWallet />
 
             </div>
-            <div v-show="activeTab === 'wallet'" class="p-6">
+            <div v-if="activeTab === 'wallet'" class="p-6">
 
                 <AgentLedger />
 
             </div>
 
             <!-- Recent Deposits Tab -->
-            <div v-show="activeTab === 'recent'" class="p-6">
+            <div v-if="activeTab === 'recent'" class="p-6">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6">Recent Deposits</h2>
 
                 <!-- Loading -->

@@ -285,7 +285,7 @@ onMounted(() => {
                     }}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-800">
-                    {{ formatAdminAmount(transaction.balance) }}
+                    {{ formatAdminAmount(-Number(transaction.balance ?? 0)) }}
                   </td>
                 </tr>
               </tbody>
@@ -296,7 +296,7 @@ onMounted(() => {
                     Total Balance
                   </td>
                   <td class="px-6 py-4 text-gray-900">
-                    {{ formatAdminAmount(agentLedger?.balance ?? 0) }}
+                    {{ formatAdminAmount(-Number(agentLedger?.balance ?? 0)) }}
                   </td>
                 </tr>
               </tfoot>
@@ -316,7 +316,7 @@ onMounted(() => {
       </footer>
       <div class=" hidden print:block bg-gray-50 font-semibold mt-4">
         <p class="px-6 py-4 text-right text-gray-700">
-          Total Balance:  {{ formatAdminAmount(agentLedger?.balance ?? 0) }}
+          Total Balance:  {{ formatAdminAmount(-Number(agentLedger?.balance ?? 0)) }}
         </p>
       </div>
     </div>

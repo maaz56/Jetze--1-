@@ -164,11 +164,6 @@
         <Settings class="admin-sidebar-icon" :class="{ 'admin-sidebar-icon-active': $route.name === 'ActivityLog' }" />
         User Activities
       </router-link>
-      <router-link v-if="authStore.hasPermission('manage-settings')" :to="{ name: 'Setting' }"
-        class="admin-sidebar-link w-full" :class="{ 'admin-sidebar-link-active': $route.name === 'Setting' }">
-        <Settings class="admin-sidebar-icon" :class="{ 'admin-sidebar-icon-active': $route.name === 'Setting' }" />
-        Settings
-      </router-link>
     </div>
     <SocialLinks />
 

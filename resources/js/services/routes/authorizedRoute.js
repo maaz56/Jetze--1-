@@ -5,7 +5,7 @@ const adminLandingRoutes = [
     { permission: "manage-bookings", route: { name: "VoidBookings" } },
     { permission: "manage-cms", route: { name: "PopularRoutes" } },
     { permission: "manage-finance", route: { name: "TopUpRequest" } },
-    { permission: "manage-settings", route: { name: "Setting" } },
+    { permission: "manage-settings", route: { name: "CustomerMargin" } },
     { permission: "view-ledger", route: { name: "AdminLedger" } },
     { permission: "manage-marketing", route: { name: "Banners" } },
     { permission: "manage-airlines", route: { name: "Airlines" } },

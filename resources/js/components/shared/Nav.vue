@@ -91,6 +91,7 @@ let activeLedgerRequest = null;
 let queuedLedgerRequestKey = null;
 const emit = defineEmits(['login-click', 'search-click'])
 const isScrolled = ref(false);
+const mobileMenuOpen = ref(false);
 const isSearchResultsPage = computed(() =>
     ["FlightSearch", "HotelSearch"].includes(String(route.name)),
 );
@@ -174,7 +175,7 @@ function goToDashboard(tab) {
     } else if (user.value.role === 'agent') {
         router.push({ name: 'AgentDashboard' });
     } else if (user.value.role === 'customer') {
-        router.push({ name: 'CustomerProfile' , query: { tab: tab } });
+        router.push({ name: 'CustomerProfile', params: { section: tab } });
     } else {
         router.push({ name: 'Home' });
     }
@@ -291,7 +292,7 @@ onUnmounted(() => {
                     <div class="flex items-center">
                         
                         <!-- Nav Links Pills -->
-                        <div v-if="!isHomePage" class="hidden lg:flex items-center gap-2">
+                        <nav v-if="!isTransparent" aria-label="Travel services" class="hidden lg:flex items-center gap-2">
                             <component
                                 :is="link.routeName ? RouterLink : 'a'"
                                 v-for="(link, index) in navLinks" 
@@ -355,7 +356,7 @@ onUnmounted(() => {
                                     ]"
                                 ></span>
                             </component>
-                        </div>
+                        </nav>
 
                         <!-- Balance controls remain available only to logged-in users. -->
                         <div v-if="user" :class="['hidden md:flex items-center px-4 gap-4 shrink-0 whitespace-nowrap border-l', isTransparent ? 'border-white/20' : 'border-slate-200']">
@@ -450,7 +451,7 @@ onUnmounted(() => {
                                 <DropdownMenuContent align="end" class="w-56 bg-white border-slate-200 text-slate-900 rounded-xl shadow-2xl">
                                     <DropdownMenuLabel class="text-slate-500 text-xs">My Account</DropdownMenuLabel>
                                     <DropdownMenuSeparator class="bg-slate-200" />
-                                    <DropdownMenuItem @click="goToDashboard('profile')" class="cursor-pointer focus:bg-slate-100 focus:text-slate-900">
+                                    <DropdownMenuItem @click="goToDashboard('bookings')" class="cursor-pointer focus:bg-slate-100 focus:text-slate-900">
                                         <CircleUser class="h-4 w-4 mr-2 text-blue-500" /> Dashboard
                                     </DropdownMenuItem>
                                     <DropdownMenuItem @click="goToDashboard('bookings')" class="cursor-pointer focus:bg-slate-100 focus:text-slate-900">
@@ -463,7 +464,7 @@ onUnmounted(() => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
-                            <Sheet>
+                            <Sheet v-model:open="mobileMenuOpen">
                                 <SheetTrigger as-child>
                                     <Button 
                                         variant="ghost" 
@@ -482,6 +483,7 @@ onUnmounted(() => {
                                         <nav class="space-y-4">
                                             <component :is="link.routeName ? RouterLink : 'a'" v-for="link in navLinks"
                                                 :key="link.routeName || link.href" v-bind="getLinkProps(link)"
+                                                @click="mobileMenuOpen = false"
                                                 :aria-current="isLinkActive(link) ? 'page' : undefined"
                                                 :class="[
                                                     'relative flex items-center rounded-xl p-3 transition-colors',

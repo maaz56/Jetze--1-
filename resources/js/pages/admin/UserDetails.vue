@@ -1074,21 +1074,21 @@ transaction, index
                                 <td class="px-6 py-4 text-sm text-red-600">
                                     <!-- Display Debit value, if 0 show '-' -->
                                     {{
-                                        transaction.debit !== "0"
-                                            ? formatAmount(transaction.debit)
+                                        Number(transaction.credit ?? 0) !== 0
+                                            ? formatAmount(transaction.credit)
                                             : "-"
                                     }}
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600">
                                     <!-- Display Credit value, if 0 show '-' -->
                                     {{
-                                        transaction.credit !== "0"
-                                            ? formatAmount(transaction.credit)
+                                        Number(transaction.debit ?? 0) !== 0
+                                            ? formatAmount(transaction.debit)
                                             : "-"
                                     }}
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-800">
-                                    {{ formatAmount(transaction?.balance) }}
+                                    {{ formatAmount(-Number(transaction?.balance ?? 0)) }}
                                 </td>
                             </tr>
                         </tbody>

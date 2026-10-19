@@ -26,7 +26,7 @@ class DepositDataController extends Controller
         $validated = $request->validate([
             'date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
-            'receipt_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Validates uploaded image
+            'receipt_image' => (in_array($request->user()->role, ['user', 'customer'], true) ? 'required' : 'nullable') . '|image|mimes:jpeg,png,jpg,gif|max:2048',
             'payment_type' => 'required|string|max:255',
             'additional_details' => 'nullable|string',
             'agent_id' => 'nullable|integer|exists:users,id',

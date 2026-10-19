@@ -2,65 +2,6 @@
     <div class="p-6 space-y-6 bg-white">
         <h1 class="text-2xl font-bold text-gray-800">Customer Settings</h1>
         
-        <!-- Card & Booking Allowance Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-4 bg-gray-50 rounded-lg">
-                <p class="text-sm text-gray-500 mb-1">Card Payment Allowance</p>
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center">
-                        <div :class="[
-                            'h-3 w-3 rounded-full mr-2',
-                            customerSettings?.is_card_allowed
-                                ? 'bg-green-500'
-                                : 'bg-yellow-500',
-                        ]"></div>
-                        <span>{{
-                            customerSettings?.is_card_allowed
-                                ? "Allowed"
-                                : "Not Allowed"
-                        }}</span>
-                    </div>
-                    <div>
-                        <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" :checked="customerSettings?.is_card_allowed" @change="updateCustomerSettings('card')"
-                                class="sr-only peer" />
-                            <div
-                                class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary">
-                            </div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="p-4 bg-gray-50 rounded-lg">
-                <p class="text-sm text-gray-500 mb-1">Booking Allowance</p>
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center">
-                        <div :class="[
-                            'h-3 w-3 rounded-full mr-2',
-                            customerSettings?.is_booking_allowed
-                                ? 'bg-green-500'
-                                : 'bg-yellow-500',
-                        ]"></div>
-                        <span>{{
-                            customerSettings?.is_booking_allowed
-                                ? "Allowed"
-                                : "Not Allowed"
-                        }}</span>
-                    </div>
-                    <div>
-                        <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" :checked="customerSettings?.is_booking_allowed" @change="updateCustomerSettings('booking')"
-                                class="sr-only peer" />
-                            <div
-                                class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary">
-                            </div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- AbhiPay / One Bill settings are temporarily disabled. Keep the section for an easy re-enable. -->
         <div v-if="false">
             <div class="flex justify-between items-center mb-4">
@@ -188,16 +129,6 @@ const nomodForm = ref({
 
 function fetchCustomerSettings() {
     store.dispatch("customer/" + FETCH_CUSTOMER_SETTINGS);
-}
-
-function updateCustomerSettings(type) {
-    const payload = {
-        is_card_allowed: type === 'card' ? !customerSettings.value.is_card_allowed : customerSettings.value.is_card_allowed,
-        is_booking_allowed: type === 'booking' ? !customerSettings.value.is_booking_allowed : customerSettings.value.is_booking_allowed,
-    };
-    store.dispatch("customer/" + UPDATE_CUSTOMER_SETTINGS, payload).then(() => {
-        fetchCustomerSettings();
-    });
 }
 
 function updateOneBillCharges() {

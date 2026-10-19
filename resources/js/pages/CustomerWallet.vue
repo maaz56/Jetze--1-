@@ -30,15 +30,13 @@ import {
 } from "@/services/store/actions.type";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RangeCalendar } from '@/components/ui/range-calendar';
-import { CalendarDate, DateFormatter, getLocalTimeZone } from '@internationalized/date';
+import { DateFormatter, getLocalTimeZone } from '@internationalized/date';
 import Calender from "@/components/common/Calender.vue";
 
 const df = new DateFormatter('en-US', { dateStyle: 'medium' });
 
-const value = ref({
-    start: new CalendarDate(2022, 1, 20),
-    end: new CalendarDate(2022, 1, 20).add({ days: 20 }),
-});
+const value = ref({ start: undefined, end: undefined });
+const depositSearch = ref('');
 
 const authStore = useAuthStore();
 const store = useStore();
@@ -46,6 +44,20 @@ const route = useRoute();
 const user = computed(() => authStore.user);
 const hideButtons = ref(false);
 const agentDepositData = computed(() => store.getters["deposit/depositData"]);
+const filteredDeposits = computed(() => {
+    const search = depositSearch.value.trim().toLowerCase();
+    const start = value.value?.start?.toString();
+    const end = value.value?.end?.toString();
+    return (agentDepositData.value?.deposits || []).filter((deposit) => {
+        const date = String(deposit.date || '').slice(0, 10);
+        const matchesDate = (!start || date >= start) && (!end || date <= end);
+        const matchesSearch = !search || [deposit.receipt_reference, deposit.date, deposit.payment_method,
+            deposit.payment_type, deposit.additional_details, deposit.deposit_status, deposit.amount, deposit.currency]
+            .some((field) => String(field ?? '').toLowerCase().includes(search));
+        return matchesDate && matchesSearch;
+    });
+});
+const printDeposits = () => window.print();
 const showDialog = ref(false);
 const selectedDeposit = ref(null);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
@@ -56,6 +68,8 @@ const isCheckingPaymentStatus = computed(() => store.getters["payment/isChecking
 const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
+const receiptInputKey = ref(0);
+const receiptPreview = ref(null);
 const paymentType = ref();
 const selectedBankId = ref(null);
 const selectedCurrencyCode = ref(getSelectedCurrencyCode());
@@ -185,7 +199,10 @@ function fetchBanks() {
 }
 
 const handleReceiptImage = (event) => {
-    receiptImage.value = event.target.files[0];
+    if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
+    receiptImage.value = event.target.files?.[0] || null;
+    receiptPreview.value = receiptImage.value && ['image/jpeg', 'image/png', 'image/gif'].includes(receiptImage.value.type)
+        && receiptImage.value.size <= 2 * 1024 * 1024 ? URL.createObjectURL(receiptImage.value) : null;
 };
 
 const formatCurrency = (value) => {
@@ -220,6 +237,9 @@ async function handleDepositData() {
         formErrors.value.push("Select an active bank account.");
     }
     if (!depositCurrency.value) formErrors.value.push("Currency is required.");
+    if (!receiptImage.value) formErrors.value.push("A receipt image is required.");
+    else if (!['image/jpeg', 'image/png', 'image/gif'].includes(receiptImage.value.type)) formErrors.value.push("Receipt must be a JPEG, PNG or GIF image; PDF files are not accepted.");
+    else if (receiptImage.value.size > 2 * 1024 * 1024) formErrors.value.push("Receipt image must be 2 MB or smaller.");
     if (formErrors.value.length > 0) return;
 
     isSubmittingDeposit.value = true;
@@ -248,6 +268,9 @@ async function handleDepositData() {
         date.value = new Date().toISOString().slice(0, 10);
         amount.value = "";
         receiptImage.value = null;
+        if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
+        receiptPreview.value = null;
+        receiptInputKey.value++;
         paymentType.value = "";
         selectedBankId.value = null;
         additionalDetails.value = "";
@@ -255,7 +278,8 @@ async function handleDepositData() {
         fetchAgentLedger();
     } catch (err) {
         console.error("Error saving deposit data:", err);
-        error.value = "Failed to save deposit data. Please try again.";
+        formErrors.value = Object.values(err.response?.data?.errors || {}).flat();
+        error.value = err.response?.data?.message || "Failed to save deposit data. Please try again.";
     } finally {
         isSubmittingDeposit.value = false;
     }
@@ -349,7 +373,10 @@ onMounted(() => {
     window.addEventListener("currency-changed", refreshForCurrencyChange);
 });
 
-onBeforeUnmount(() => window.removeEventListener("currency-changed", refreshForCurrencyChange));
+onBeforeUnmount(() => {
+    window.removeEventListener("currency-changed", refreshForCurrencyChange);
+    if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
+});
 
 watch(user, (newUser) => {
     if (newUser?.id) {
@@ -465,7 +492,7 @@ watch(user, (newUser) => {
         <div class="bg-white rounded-lg mb-3">
             <span class="text-2xl font-bold">New Deposit</span>
             <div class="space-y-6">
-                <div class="grid grid-cols-5 max-[425px]:grid-cols-2 gap-2">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div class="grid">
                         <label>Date</label>
                         <Input class="text-black" v-model="date" type="date" />
@@ -474,9 +501,11 @@ watch(user, (newUser) => {
                         <label>Amount</label>
                         <Input type="number" placeholder="Enter amount" v-model="amount" />
                     </div>
-                    <div v-if="isBankTransferType(paymentType)" class="grid">
-                        <label>Receipt image</label>
-                        <Input type="file" accept="image/jpeg,image/png,image/gif" @change="handleReceiptImage" />
+                    <div class="grid gap-1" v-if="paymentType !== 'abhipay-deposit'">
+                        <label for="receipt-image">Receipt image <span class="text-red-600">*</span></label>
+                        <Input :key="receiptInputKey" id="receipt-image" type="file" accept="image/jpeg,image/png,image/gif" required @change="handleReceiptImage" />
+                        <p class="text-xs text-gray-500">JPEG, PNG or GIF, up to 2 MB. PDF files are not accepted.</p>
+                        <img v-if="receiptPreview" :src="receiptPreview" alt="Selected receipt preview" class="mt-2 max-h-40 rounded border object-contain" />
                     </div>
                     <div class="grid">
                         <label>Payment type</label>
@@ -529,6 +558,12 @@ watch(user, (newUser) => {
                         <Input placeholder="Details..." v-model="additionalDetails" />
                     </div>
                 </div>
+                <div v-if="formErrors.length || error" role="alert" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <ul v-if="formErrors.length" class="list-disc space-y-1 pl-5">
+                        <li v-for="(message, index) in formErrors" :key="index">{{ message }}</li>
+                    </ul>
+                    <p v-else>{{ error }}</p>
+                </div>
                 <div v-if="showBillId && generatedBillId"
                     class="w-1/2 bg-green-50 border border-green-200 rounded-lg p-4">
                     <div class="flex items-center gap-3">
@@ -540,7 +575,7 @@ watch(user, (newUser) => {
                         </div>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div class="mx-auto bg-white">
                         <h2 class="text-xl font-semibold text-gray-800 mb-4">Important Notes</h2>
                         <ul class="list-disc pl-5 text-gray-600 space-y-2">
@@ -612,18 +647,7 @@ watch(user, (newUser) => {
                     class="flex flex-col py-4 space-y-3 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 lg:space-x-4">
                     <div class="flex items-center flex-1 space-x-4">
                         <div class="relative w-full max-w-sm items-center">
-                            <Input @input="
-                                (event) => {
-                                    $router.push({
-                                        path: $route.path,
-                                        query: {
-                                            ...Object.fromEntries(Object.entries($route.query).filter(([key]) => key !== 'search_query')),
-                                            ...(event.target.value ? { search_query: event.target.value } : {}),
-                                        },
-                                    });
-                                    fetchAgentDeposits();
-                                }
-                            " id="search" type="text" placeholder="Search..." class="pl-10" />
+                            <Input v-model="depositSearch" id="search" type="search" placeholder="Search deposits..." class="pl-10" />
                             <span class="absolute start-0 inset-y-0 flex items-center justify-center px-2">
                                 <Search class="size-4 text-muted-foreground" />
                             </span>
@@ -635,7 +659,7 @@ watch(user, (newUser) => {
                                 :class="cn('w-full sm:w-[280px] justify-start text-left font-normal bg-white text-xs sm:text-sm', !value && 'text-muted-foreground')">
                                 <CalendarIcon class="mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                                 <span class="truncate">
-                                    <template v-if="value.start">
+                                    <template v-if="value?.start">
                                         <template v-if="value.end">
                                             {{ df.format(value.start.toDate(getLocalTimeZone())) }} - {{
                                                 df.format(value.end.toDate(getLocalTimeZone())) }}
@@ -651,23 +675,22 @@ watch(user, (newUser) => {
                         <PopoverContent class="w-[95vw] sm:w-auto p-0 bg-white">
                             <RangeCalendar v-model="value" initial-focus :number-of-months="2"
                                 @update:start-value="(startDate) => (value.start = startDate)" />
+                            <button type="button" class="px-4 pb-3 text-sm text-primary hover:underline"
+                                @click="value = { start: undefined, end: undefined }">Clear dates</button>
                         </PopoverContent>
                     </Popover>
                     <div
                         class="flex flex-col flex-shrink-0 space-y-3 md:flex-row md:items-center lg:justify-end md:space-y-0 md:space-x-3">
-                        <Button variant="outline" @click="fetchAgentDeposits" class="flex items-center bg-white">
+                        <Button variant="outline" @click="printDeposits" class="flex items-center bg-white">
                             <Printer class="w-4 h-4 mr-2" /> Print
                         </Button>
                     </div>
                 </div>
-                <section v-if="isLoading" class="p-24 flex items-center justify-center">
-                    <LoaderIcon class="w-8 h-8 animate-spin" />
-                </section>
-                <section v-if="agentDepositData.deposits && agentDepositData.deposits.length > 0 && !isLoading"
+                <section v-if="!loading && filteredDeposits.length > 0"
                     class="bg-gray-50">
                     <div class="bg-white shadow-sm rounded-lg overflow-hidden">
                         <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left text-gray-500">
+                            <table class="w-full min-w-[1000px] text-sm text-left text-gray-500">
                                 <thead class="text-xs text-gray-700 uppercase bg-gray-100">
                                     <tr>
                                         <th scope="col" class="px-3 py-3">Receipt Reference</th>
@@ -680,8 +703,8 @@ watch(user, (newUser) => {
                                         <th scope="col" class="px-1 py-3">Actions</th>
                                     </tr>
                                 </thead>
-                                <t  body>
-                                    <tr v-for="deposit in agentDepositData.deposits" :key="deposit.id"
+                                <tbody>
+                                    <tr v-for="deposit in filteredDeposits" :key="deposit.id"
                                         class="bg-white border-b hover:bg-gray-50">
                                         <td class="px-3 py-4 font-medium text-gray-900 whitespace-nowrap">
                                             {{ deposit.receipt_reference || "_" }}
@@ -691,7 +714,7 @@ watch(user, (newUser) => {
                                             <span class="inline-flex items-center gap-1">
                                                 <CreditCard v-if="deposit.payment_method === 'abhipay'"
                                                     class="w-3 h-3 text-green-600" />
-                                                <span>{{ deposit.payment_method === 'abhipay' ? 'Abhi Pay' : 'Bank Transfer' }}</span>
+                                                <span>{{ deposit.payment_method === 'abhipay' ? 'Abhi Pay' : (deposit.payment_type === 'cash' ? 'Cash' : 'Bank Transfer') }}</span>
                                             </span>
                                         </td>
                                         <td class="px-1 py-4">{{ deposit?.payment_type || "_" }}</td>
@@ -709,11 +732,11 @@ watch(user, (newUser) => {
                                         <td class="px-1 py-4">{{ formatAmount(deposit.source_money?.amount ?? deposit.amount, deposit.source_money?.currency ?? deposit.currency) }}</td>
                                         <td class="px-1 py-4">
                                             <div class="flex space-x-2">
-                                                <button @click="openDialog(deposit)"
+                                                <button @click="openDialog(deposit)" aria-label="View deposit details"
                                                     class="text-gray-600 hover:text-gray-900">
                                                     <EyeIcon class="w-5 h-5" />
                                                 </button>
-                                                <button @click="deleteDeposit(deposit.id)"
+                                                <button @click="deleteDeposit(deposit.id)" aria-label="Delete deposit"
                                                     class="text-red-600 hover:text-red-900"
                                                     :hidden="deposit.deposit_status === 'approved'"
                                                     :class="{ 'opacity-50 cursor-not-allowed': deposit.deposit_status === 'approved' }">
@@ -722,19 +745,19 @@ watch(user, (newUser) => {
                                             </div>
                                         </td>
                                     </tr>
-                                </t>
+                                </tbody>
                             </table>
                         </div>
                     </div>
                 </section>
-                <div v-else-if="isLoading" class="p-6 text-center">
+                <div v-else-if="loading" class="p-6 text-center">
                     <LoaderIcon class="w-8 h-8 animate-spin mx-auto text-gray-500" />
                     <p class="mt-2 text-gray-600">Loading deposits...</p>
                 </div>
                 <div v-else class="p-6 text-center">
                     <InboxIcon class="w-16 h-16 mx-auto text-gray-400" />
                     <p class="mt-4 text-lg font-semibold text-gray-600">No deposits found</p>
-                    <p class="mt-2 text-gray-500">There are no deposits to display at the moment.</p>
+                    <p class="mt-2 text-gray-500">No deposits match the selected filters.</p>
                 </div>
             </div>
         </div>
@@ -763,12 +786,14 @@ watch(user, (newUser) => {
                                     </h3>
                                     <div class="mt-4 space-y-6">
                                         <!-- Receipt Image if available -->
-                                        <div v-if="isBankTransferType(selectedDeposit?.payment_type) &&
-                                            selectedDeposit?.receipt_image &&
+                                        <div v-if="selectedDeposit?.receipt_image &&
                                             selectedDeposit.receipt_image !== '/storage/'">
+                                            <p class="mb-2 text-sm font-medium text-gray-700">Receipt</p>
                                             <img :src="selectedDeposit.receipt_image" alt="Receipt Image"
                                                 class="inset-0 w-full h-auto rounded-lg border border-gray-200" />
+                                            <a :href="selectedDeposit.receipt_image" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-sm text-primary hover:underline">Open receipt image</a>
                                         </div>
+                                        <p v-else class="text-sm text-gray-500">No receipt image available for this deposit.</p>
 
                                         <!-- Main Details Grid -->
                                         <div class="grid grid-cols-2 gap-4 text-sm">

@@ -54,7 +54,7 @@ if (sidebarState) {
 const route = useRoute();
 
 const menuItems = [
-{ name: "Profile", icon: UserIcon, route: { name: "CustomerProfile" } },
+{ name: "Profile", icon: UserIcon, route: { name: "CustomerProfile", params: { section: "profile" } } },
 { name: "Wallet", icon: Wallet, route: { name: "CustomerWallet" } },
 { name: "Bookings", icon: ShoppingCartIcon, route: { name: "CustomerBookings" } },
  

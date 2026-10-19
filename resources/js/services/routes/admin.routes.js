@@ -65,12 +65,6 @@ export const adminRoutes = [
             },
 
 
-            {
-                path:"setting",
-                name: "Setting",
-                component: () => import("@/pages/admin/Setting.vue"),
-                meta: { permission: 'manage-settings' }
-            },
              {
                 path: "/zoho/callback",
                 name: "ZohoCallback",
