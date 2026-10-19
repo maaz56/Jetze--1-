@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @include('partials.google-tag-manager')
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $metaTitle }}</title>
@@ -64,6 +65,7 @@
     $popularBlogs = $relatedBlogs->slice(5, 3)->values();
 @endphp
 <body class="bg-white font-roboto text-gray-900 antialiased">
+    @include('partials.google-tag-manager-noscript')
     @include('partials.marketing-nav')
 
     <main class="bg-white">

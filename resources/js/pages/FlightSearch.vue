@@ -337,6 +337,8 @@ const freeSsrBaggageLoadingByKey = ref({});
 const freeSsrBaggageRequestIdByKey = ref({});
 const freeSsrBaggageRunId = ref(0);
 const freeSsrBaggageAbortControllers = new Set();
+// Baggage depends on the search, itinerary and selected fares, not just the airline.
+const freeSsrBaggageCache = new Map();
 // Exactly three attempts: immediate, then after 3 seconds, then after 5 seconds.
 const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 5000];
 const isFareBaggageDialogOpen = ref(false);
@@ -2224,6 +2226,10 @@ const waitForFreeSsrBaggageRetry = (milliseconds) => new Promise(
 );
 
 async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => true) {
+    const cacheKey = JSON.stringify([payload.search_token, payload.flight_ref_id, payload.fare_references]);
+    if (!shouldContinue()) return null;
+    if (freeSsrBaggageCache.has(cacheKey)) return freeSsrBaggageCache.get(cacheKey);
+
     let lastError;
 
     for (const delay of FREE_SSR_BAGGAGE_RETRY_DELAYS) {
@@ -2237,10 +2243,16 @@ async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => tr
         freeSsrBaggageAbortControllers.add(controller);
 
         try {
-            return await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+            const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
                 ...payload,
                 signal: controller.signal,
             });
+            // Cache successful responses, including an explicitly empty allowance.
+            // Failures and malformed responses must remain retryable.
+            if (Array.isArray(response?.free_ssr_baggage?.baggage_policies)) {
+                freeSsrBaggageCache.set(cacheKey, response);
+            }
+            return response;
         } catch (error) {
             lastError = error;
         } finally {
