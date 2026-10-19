@@ -100,8 +100,6 @@ const isLockedPriceRoute = computed(() => {
     const lockedPriceRoutes = new Set([
         'Checkout',
         'FlightCheckout',
-        'AgentCheckout',
-        'AgentFlightCheckout',
         'CustomerPaymentView',
         'PaymentView',
     ]);
