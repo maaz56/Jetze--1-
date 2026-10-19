@@ -28,7 +28,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col min-h-screen bg-slate-50/60 font-roboto antialiased selection:bg-primary/20 selection:text-primary">
+    <div class="flex flex-col min-h-screen bg-slate-50/60 font-roboto antialiased">
         
         <!-- SCENIC HERO BANNER (extends behind the transparent navigation) -->
         <div class="relative z-10 h-[510px] w-full overflow-hidden bg-[url('/public/banner.jpeg')] bg-cover bg-center bg-no-repeat sm:h-[560px] lg:h-[620px]">

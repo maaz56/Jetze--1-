@@ -1,0 +1,223 @@
+JETZE PRODUCTION SERVER - CHANGE REPORT
+AT flight search streaming (SSE) performance
+=======================================================================
+
+Server     : srv1746245.hstgr.cloud (148.230.98.149), HestiaCP, Ubuntu
+Site       : https://jetze.ae  (project: /home/user/web/jetze.ae/public_html)
+Date       : 10 Oct 2026, 22:18 - 22:40 UTC  (11 Oct 2026, 03:18 - 03:40 PKT)
+Prepared by: Arslan Naveed
+
+
+1. SUMMARY
+-----------------------------------------------------------------------
+Problem reported: in the AT flight search, results stream to the browser
+page by page (SSE). Page 1 arrived quickly, but later pages took 10-20
+seconds to appear, and page 2 only appeared together with page 3.
+
+Root causes found on the server:
+
+  a) Size: one return search (KHI-JED) sent 24-28 MB of uncompressed
+     JSON to the browser (Apache access log). Downloading that alone
+     takes 10-20 s on a normal connection.
+
+  b) Buffering: requests go nginx -> Apache (mod_proxy_fcgi + mod_ssl)
+     -> PHP-FPM. Apache held back the last few KB of each SSE event until
+     more output arrived, so page 2 could not be read by the browser
+     until page 3's data pushed it through (about 13 s later).
+
+  c) A previous attempt to fix this (custom blocks added on 8 Oct) had
+     been placed in the plain-HTTP config files (port 80 / 8080) only.
+     The live site uses HTTPS, so that fix never applied to real traffic.
+
+Changes made (details in section 2):
+  - nginx now gzip-compresses the SSE stream.
+  - The SSE endpoint now goes from nginx directly to PHP-FPM, bypassing
+    Apache, with buffering turned off.
+  - The 8 Oct plain-HTTP SSE block has been restored as an include file.
+
+One incident (details in section 3): a PHP-FPM worker change caused about
+1 minute of HTTP 500 errors. It was rolled back; no visitor requests were
+affected (only our own test requests hit the error).
+
+
+2. CHANGES NOW ACTIVE ON THE SERVER
+-----------------------------------------------------------------------
+
+2.1  gzip compression for the SSE stream
+     File   : /etc/nginx/nginx.conf  (global nginx config, line 79)
+     Change : added "text/event-stream" to the end of gzip_types.
+     Before : gzip_types ... application/x-ttf;
+     After  : gzip_types ... application/x-ttf text/event-stream;
+     Applied: nginx -t passed, then "systemctl reload nginx" (no downtime).
+     Backup : /etc/nginx/nginx.conf.bak-2026-10-10-2218
+     Effect : the stream is compressed before it leaves the server.
+              JSON of this kind usually shrinks about 10x.
+     Rollback:
+       cp /etc/nginx/nginx.conf.bak-2026-10-10-2218 /etc/nginx/nginx.conf
+       systemctl reload nginx
+
+2.2  SSE endpoint sent from nginx straight to PHP-FPM (HTTPS)
+     New file: /home/user/conf/web/jetze.ae/nginx.ssl.conf_sse
+     Content :
+       location = /api/flights/at/stream {
+           include        fastcgi_params;
+           fastcgi_param  SCRIPT_FILENAME /home/user/web/jetze.ae/public_html/public/index.php;
+           fastcgi_param  SCRIPT_NAME     /index.php;
+           fastcgi_param  HTTPS           on;
+           fastcgi_pass   unix:/run/php/php8.3-fpm-jetze.ae.sock;
+           fastcgi_buffering    off;
+           fastcgi_read_timeout 300s;
+       }
+     Why    : Apache was holding back the end of each SSE event. nginx
+              with fastcgi_buffering off delivers each event as soon as
+              PHP flushes it. Only this one URL is affected; every other
+              URL still goes through Apache as before.
+     Survives Hestia rebuilds: yes. The domain's nginx.ssl.conf already
+              includes "nginx.ssl.conf_*" files, and Hestia does not touch
+              them.
+     Applied: nginx -t passed, nginx reloaded (no downtime).
+     Verified: a test POST to the endpoint reached Laravel (HTTP 422, as
+              expected for a non-AT test request) and did NOT appear in
+              Apache's access log, which confirms Apache is bypassed.
+              Home page, www, /api/airports and plain http all return 200.
+     Rollback:
+       rm /home/user/conf/web/jetze.ae/nginx.ssl.conf_sse
+       systemctl reload nginx
+
+2.3  Restored the 8 Oct plain-HTTP SSE block (port 80)
+     New file: /home/user/conf/web/jetze.ae/nginx.conf_sse
+     Content : the exact location block that was in nginx.conf on 8 Oct
+               (proxy_buffering off, proxy_cache off, gzip off,
+               300 s timeouts, X-Accel-Buffering no, Cache-Control
+               no-cache). Recovered from Hestia's nightly backup
+               /backup/user.2026-10-10_05-14-16.tar.
+     Why    : this block was lost when Hestia regenerated the domain
+               configs during the incident in section 3. Moving it into
+               an include file means future rebuilds keep it.
+     Rollback:
+       rm /home/user/conf/web/jetze.ae/nginx.conf_sse
+       systemctl reload nginx
+
+
+3. INCIDENT: PHP-FPM WORKER CHANGE (ROLLED BACK)
+-----------------------------------------------------------------------
+Goal   : raise PHP-FPM workers for the jetze.ae pool from 8 to 16. Each AT
+         search holds one worker for about 50 s, so 8 searches at once
+         can block the rest of the site.
+
+What was done (22:24 UTC):
+  - Created a Hestia PHP-FPM template "jetze.tpl" (copy of default.tpl
+    with pm.max_children = 16).
+  - Ran: v-change-web-domain-backend-tpl user jetze.ae jetze
+
+What went wrong:
+  - Hestia regenerated the whole pool file, not just the worker count.
+    It rebuilt open_basedir from the domain's custom document root:
+        before: open_basedir = ...:/home/user/web/jetze.ae/public_html/:...
+        after : open_basedir = ...:/home/user/web/jetze.ae/public_html/public:...
+    PHP could no longer read storage/ or vendor/, so every request
+    returned HTTP 500.
+  - Hestia also regenerated the domain's plain-HTTP configs (nginx.conf,
+    apache2.conf), which removed the 8 Oct custom SSE blocks
+    (restored in 2.3 / pending in 4.2).
+
+Impact : HTTP 500 from 22:24:19 to about 22:25:20 UTC (about 1 minute).
+         The Apache log shows 4 failed requests in that window, all from
+         the server's own IP (our test checks). No visitor requests failed.
+
+Rollback (22:25 UTC):
+  - Restored the original pool file from the backup taken just before:
+      /root/jetze.ae.fpm-pool.bak-2026-10-10-2224
+      -> /etc/php/8.3/fpm/pool.d/jetze.ae.conf
+    and reloaded php8.3-fpm. Site back to HTTP 200.
+  - Set Hestia's record back to BACKEND='default' by editing
+      /usr/local/hestia/data/users/user/web.conf
+    (backup: /root/hestia-web.conf.bak-2026-10-10-*). Hestia's own
+    command was NOT used for this, because it would have regenerated
+    the pool and caused the 500 again.
+  - Removed the custom template:
+      /usr/local/hestia/data/templates/web/php-fpm/jetze.tpl
+      -> moved to /root/jetze.tpl.removed
+
+Current state: PHP-FPM pool is exactly as before
+  (pm.max_children = 8, original open_basedir).
+
+
+4. OPEN ITEMS / RISKS
+-----------------------------------------------------------------------
+
+4.1  APP_DEBUG=true on production (SECURITY - HIGH)
+     /home/user/web/jetze.ae/public_html/.env still has APP_DEBUG=true
+     and LOG_LEVEL=debug. Any error response shows a full stack trace
+     with server file paths to the public (confirmed with a test
+     request). Recommended:
+       APP_DEBUG=false
+       LOG_LEVEL=info
+     Config is not cached, so the change takes effect immediately.
+     Note: APP_ENV=local should also become "production", but first
+     app/Providers/AppServiceProvider.php (forces HTTPS only when
+     APP_ENV is not "production") needs a code fix.
+
+4.2  Apache block from 8 Oct not yet restored (LOW)
+     The Apache <Location "/api/flights/at/stream"> block (SetEnv
+     no-gzip 1, SetEnv dont-vary 1) was lost in the incident. It only
+     affects plain HTTP (port 8080), which the live site does not use.
+     To restore, create
+       /home/user/conf/web/jetze.ae/apache2.conf_sse
+     with that block, then: apache2ctl -t && systemctl reload apache2
+
+4.3  Hestia rebuild will break the site (EXISTING RISK - HIGH)
+     The working pool file was generated before the document root was
+     changed to public_html/public. Any future Hestia rebuild of this
+     domain (rebuild web domains, document root or SSL changes, some
+     Hestia upgrades) will regenerate open_basedir with
+     public_html/public and cause HTTP 500 on every page, exactly as in
+     section 3. This was already true before these changes.
+     Quick fix if it happens: set open_basedir back to
+     /home/user/web/jetze.ae/public_html/ in
+     /etc/php/8.3/fpm/pool.d/jetze.ae.conf and reload php8.3-fpm
+     (working copy: /root/jetze.ae.fpm-pool.bak-2026-10-10-2224).
+     Permanent fix: a custom Hestia PHP-FPM template whose open_basedir
+     uses /home/%user%/web/%domain%/public_html/ (to be planned and
+     tested before applying).
+
+4.4  PHP-FPM worker limit still 8 (MEDIUM)
+     Server: 4 GB RAM (about 2.8 GB free), 1 CPU. Raising to 16 is
+     reasonable, but only via the safe template in 4.3, applied at a
+     quiet time.
+
+4.5  Other observations (no action taken)
+     - CACHE_STORE=database; Redis is not installed. Redis would make
+       the search cache writes (about 0.3-0.9 s per page) much cheaper.
+     - 11 unused PHP-FPM versions (5.6 to 8.5, except 8.3) are running
+       with only dummy pools. Stopping them would free RAM, but should
+       be checked against other sites/Hestia features first.
+
+
+5. RELATED APPLICATION CODE CHANGES (deployed separately)
+-----------------------------------------------------------------------
+For context; these are in the git repository, not server config.
+  - AtFlightTransformer: airport/airline lookups cached per search;
+    fare grouping and return-flight pairing rewritten from O(n^2) to
+    single-pass (same output; transform time on the largest page went
+    from about 2.0 s to about 0.4 s).
+  - FlightController (SSE): flights are sent to the browser before the
+    quote cache is written (cache write took up to 6 s); a flight is
+    re-sent when later AT pages add fares to it.
+  - AtApiService: no longer logs the full multi-MB supplier response on
+    every poll.
+  - Frontend: flight list updated once per page instead of once per
+    30-flight chunk, flight objects kept out of deep Vue reactivity,
+    deep watcher removed.
+  - Still planned: reduce the per-flight payload size (about 50 KB per
+    flight today). This is the main remaining fix for transfer time.
+
+
+6. HOW TO VERIFY
+-----------------------------------------------------------------------
+  - Run a KHI -> JED return search on jetze.ae with DevTools open.
+    The flights/at/stream request should show Content-Encoding: gzip,
+    and page 2's flights should appear about 3 s after page 1 instead
+    of together with page 3.
+  - Compare with the "AT SSE batch timing" lines in
+    storage/logs/laravel.log.

@@ -1030,46 +1030,48 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="relative mx-auto max-w-7xl pt-[58px] sm:pt-[66px]">
-        <!-- Main booking services, visually separated from the utility navigation. -->
-        <div class="absolute left-1/2 top-0 z-10 flex -translate-x-1/2 items-stretch rounded-2xl border border-slate-100 bg-white p-1.5 shadow-[0_14px_30px_rgba(15,23,42,0.16)] sm:p-2">
+    <div class="relative mx-auto max-w-7xl pt-[30px] sm:pt-[34px]">
+        <!-- Main booking services, floating over the search card. -->
+        <nav
+            class="absolute left-1/2 top-0 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-slate-200/70 bg-white/95 p-1.5 shadow-[0_18px_40px_-12px_rgba(15,23,42,0.28)] backdrop-blur-sm"
+        >
             <button
                 v-for="tab in tabs"
                 :key="tab.id"
                 type="button"
                 @click="setActiveTab(tab.id)"
                 :class="[
-                    'relative flex min-w-[78px] flex-col items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:min-w-[112px] sm:px-6 sm:py-3 sm:text-sm',
-                    activeTab === tab.id
-                        ? 'bg-blue-50 text-primary shadow-sm'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-primary',
+                    'service-tab',
+                    activeTab === tab.id ? 'service-tab-active' : 'service-tab-idle',
                 ]"
             >
                 <span
+                    :class="[
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors duration-200 sm:h-8 sm:w-8',
+                        activeTab === tab.id ? 'bg-white/90 shadow-sm' : 'bg-slate-100',
+                    ]"
+                >
+                    <img :src="tab.icon" :alt="tab.name" class="h-4 w-4 object-contain sm:h-5 sm:w-5" />
+                </span>
+                <span class="whitespace-nowrap">{{ tab.name }}</span>
+                <span
                     v-if="tab.badge"
-                    class="absolute right-1 top-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white sm:right-2 sm:text-[9px]"
+                    class="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-wide text-white shadow-sm sm:text-[9px]"
                 >
                     {{ tab.badge }}
                 </span>
-                <img :src="tab.icon" :alt="tab.name" class="h-7 w-7 object-contain sm:h-8 sm:w-8" />
-                <span>{{ tab.name }}</span>
-                <span
-                    v-if="activeTab === tab.id"
-                    aria-hidden="true"
-                    class="absolute inset-x-4 -bottom-1 h-0.5 rounded-full bg-primary sm:inset-x-6"
-                ></span>
             </button>
-        </div>
+        </nav>
 
         <div
-            class="h-auto overflow-visible rounded-2xl border border-white/80 bg-white shadow-[0_20px_40px_rgba(15,23,42,0.18)]"
+            class="h-auto overflow-visible rounded-2xl border border-slate-200/70 bg-white shadow-[0_24px_60px_-16px_rgba(15,23,42,0.2)] sm:rounded-3xl"
         >
         <!-- Content Area -->
-        <div class="px-4 py-4 sm:px-6 sm:py-5">
+        <div class="px-4 pb-5 pt-10 sm:px-7 sm:pb-6 sm:pt-12">
             <!-- Loading State -->
             <div
                 v-if="isLoading"
-                class="flex items-center justify-center bg-blue-50/50 p-12 sm:p-24 rounded"
+                class="flex items-center justify-center rounded-2xl bg-blue-50/50 p-12 sm:p-20"
             >
                 <div class="text-center">
                     <Spinner class="mx-auto mb-4 w-6 h-6 sm:w-8 sm:h-8" />
@@ -1090,16 +1092,16 @@ onMounted(() => {
                 >
                     <!-- Trip Type Buttons -->
                     <div
-                        class="flex w-full sm:w-auto bg-gray-100 rounded p-1 flex-row gap-1"
+                        class="inline-flex w-full items-center gap-1 rounded-full bg-slate-100 p-1 sm:w-auto"
                     >
                         <!-- Round Trip -->
                         <button
                             @click="setFlightType('return')"
                             :class="[
-                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'trip-type-btn',
                                 flightType === 'return'
-                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
-                                    : 'text-gray-600 hover:bg-white',
+                                    ? 'trip-type-btn-active'
+                                    : 'trip-type-btn-idle',
                             ]"
                         >
                             {{ $t("Round Trip") }}
@@ -1109,10 +1111,10 @@ onMounted(() => {
                         <button
                             @click="setFlightType('one-way')"
                             :class="[
-                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'trip-type-btn',
                                 flightType === 'one-way'
-                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
-                                    : 'text-gray-600 hover:bg-white',
+                                    ? 'trip-type-btn-active'
+                                    : 'trip-type-btn-idle',
                             ]"
                         >
                             {{ $t("One Way") }}
@@ -1122,19 +1124,19 @@ onMounted(() => {
                         <button
                             @click="setFlightType('multi-city')"
                             :class="[
-                                'w-full sm:w-auto h-10 sm:h-auto px-3 sm:px-4 py-1.5 rounded text-xs sm:text-sm font-semibold transition flex items-center justify-center cursor-pointer',
+                                'trip-type-btn',
                                 flightType === 'multi-city'
-                                    ? 'bg-white text-gray-900 border border-gray-200 shadow-xs'
-                                    : 'text-gray-600 hover:bg-white',
+                                    ? 'trip-type-btn-active'
+                                    : 'trip-type-btn-idle',
                             ]"
                         >
                             {{ $t("Multi-City") }}
                         </button>
                     </div>
 
-                    <!-- Right Indicator (Akbar Travels style) -->
-                    <div class="hidden sm:flex items-center gap-2 text-primary font-bold text-sm">
-                        <Plane class="w-4 h-4" />
+                    <!-- Right Indicator -->
+                    <div class="hidden items-center gap-2 rounded-full bg-primary/5 px-4 py-1.5 text-sm font-semibold text-primary sm:flex">
+                        <Plane class="h-4 w-4" />
                         <span>Book Flight Tickets</span>
                     </div>
                 </div>
@@ -1142,7 +1144,7 @@ onMounted(() => {
                 <div class="bg-white rounded-xl sm:pr-0 rtl:pr-0">
                     <div v-if="flightType !== 'multi-city'">
                         <div
-                            class="overflow-hidden rounded-md border border-gray-200 bg-white"
+                            class="overflow-hidden rounded-2xl border border-slate-200 bg-white"
                         >
                             <div
                                 class="grid grid-cols-1 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)] items-stretch"
@@ -1150,7 +1152,7 @@ onMounted(() => {
                         <!-- From -->
                         <div class="booking-cell text-start relative w-full">
                             <label
-                                class="block text-sm font-medium text-gray-700 sm:mb-1"
+                                class="booking-label sm:mb-1"
                                 >{{ $t("FROM") }}</label
                             >
                             <Autocomplete
@@ -1178,7 +1180,7 @@ onMounted(() => {
                             <button
                                 @click="swapAirports"
                                 type="button"
-                                class="absolute -right-5 top-1/2 z-10 hidden w-10 h-10 -translate-y-1/2 bg-white border border-gray-200 text-gray-700 rounded-full sm:flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
+                                class="absolute -right-5 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-primary shadow-md transition-all duration-300 hover:rotate-180 hover:border-primary/40 hover:bg-blue-50/60 sm:flex"
                             >
                                 <svg
                                     class="w-5 h-5"
@@ -1199,7 +1201,7 @@ onMounted(() => {
                         <!-- To -->
                         <div class="booking-cell text-start relative w-full">
                             <label
-                                class="block text-sm font-medium text-gray-700 mb-1"
+                                class="booking-label mb-1"
                                 >{{ $t("TO") }}</label
                             >
                             <Autocomplete
@@ -1231,7 +1233,7 @@ onMounted(() => {
                                 class="flex sm:mt-0.5 justify-start items-center"
                             >
                                 <label
-                                    class="block text-sm font-medium text-gray-700 mb-1"
+                                    class="booking-label mb-1"
                                     >Departure</label
                                 >
                             </div>
@@ -1248,7 +1250,7 @@ onMounted(() => {
                                 class="flex sm:mt-0.5 justify-start items-center"
                             >
                                 <label
-                                    class="block text-sm font-medium text-gray-700 mb-1"
+                                    class="booking-label mb-1"
                                     >Return</label
                                 >
                             </div>
@@ -1265,7 +1267,7 @@ onMounted(() => {
                             <button
                                 v-else
                                 type="button"
-                                class="min-h-[50px] w-full pt-2 text-left text-xs font-semibold leading-4 text-gray-500"
+                                class="min-h-[50px] w-full pt-2 text-left text-xs font-medium leading-4 text-primary/70"
                             >
                                 Tap to add a return date for bigger discounts
                             </button>
@@ -1273,7 +1275,7 @@ onMounted(() => {
 
                         <div class="booking-cell w-full text-start">
                             <label
-                                class="block text-sm font-medium text-gray-700 mb-1"
+                                class="booking-label mb-1"
                                 >Travellers & Class</label
                             >
                             <Popover v-model:open="isPopoverOpen">
@@ -1293,16 +1295,16 @@ onMounted(() => {
                                         <ChevronDownIcon class="w-4 h-4 opacity-70" />
                                     </button>
                                 </PopoverTrigger>
-                                <PopoverContent class="w-80 p-6 rounded-lg border-0 shadow-xl">
+                                <PopoverContent class="w-80 rounded-2xl border border-slate-100 p-5 shadow-2xl">
                                     <div class="space-y-6">
                                         <div class="grid grid-cols-2 gap-2">
                                             <button
                                                 @click="classType = 'Y'"
                                                 :class="[
-                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                     classType === 'Y'
-                                                        ? 'bg-primary text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                        ? 'bg-primary text-white shadow-sm'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                 ]"
                                             >
                                                 {{ $t("economy") }}
@@ -1310,10 +1312,10 @@ onMounted(() => {
                                             <button
                                                 @click="classType = 'S'"
                                                 :class="[
-                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                     classType === 'S'
-                                                        ? 'bg-primary text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                        ? 'bg-primary text-white shadow-sm'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                 ]"
                                             >
                                                 {{ $t("premium_economy") }}
@@ -1321,10 +1323,10 @@ onMounted(() => {
                                             <button
                                                 @click="classType = 'C'"
                                                 :class="[
-                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                     classType === 'C'
-                                                        ? 'bg-primary text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                        ? 'bg-primary text-white shadow-sm'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                 ]"
                                             >
                                                 {{ $t("business") }}
@@ -1332,10 +1334,10 @@ onMounted(() => {
                                             <button
                                                 @click="classType = 'F'"
                                                 :class="[
-                                                    'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                    'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                     classType === 'F'
-                                                        ? 'bg-primary text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                        ? 'bg-primary text-white shadow-sm'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                 ]"
                                             >
                                                 {{ $t("first class") }}
@@ -1397,11 +1399,11 @@ onMounted(() => {
                                     :key="search.signature || `${search.timestamp}-${index}`"
                                     type="button"
                                     @click="applyRecentSearch(search)"
-                                    class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-white hover:text-primary"
+                                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all duration-200 hover:border-primary/40 hover:bg-blue-50/60 hover:text-primary"
                                 >
                                     <ClockIcon class="h-3.5 w-3.5 text-primary" />
                                     <span>{{ getRecentSearchCities(search).from }}</span>
-                                    <span>-&gt;</span>
+                                    <span class="text-slate-400">→</span>
                                     <span>{{ getRecentSearchCities(search).to }}</span>
                                     <span class="text-gray-500">
                                         {{ getRecentSearchDateLabel(search) }}
@@ -1443,14 +1445,15 @@ onMounted(() => {
                                 :key="index"
                                 class="multicity-trip-row mb-3 last:mb-0"
                             >
-                                <div class="mb-1.5 font-normal text-start text-gray-700">
-                                    Trip {{ index + 1 }}
+                                <div class="mb-1.5 flex items-center gap-2 text-start">
+                                    <span class="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold leading-none text-primary">{{ index + 1 }}</span>
+                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Trip {{ index + 1 }}</span>
                                 </div>
                                 <div
-                                    class="grid grid-cols-1 items-stretch overflow-hidden rounded-md border border-gray-200 bg-white sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]"
+                                    class="grid grid-cols-1 items-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]"
                                 >
                                     <div class="booking-cell multicity-booking-cell text-start relative w-full">
-                                        <label class="block text-sm font-medium text-gray-700">{{ $t("FROM") }}</label>
+                                        <label class="booking-label">{{ $t("FROM") }}</label>
                                     <Autocomplete
                                         v-model="trip.origin"
                                         clear-on-click
@@ -1478,7 +1481,7 @@ onMounted(() => {
                                     </div>
 
                                     <div class="booking-cell multicity-booking-cell text-start relative w-full">
-                                        <label class="block text-sm font-medium text-gray-700">{{ $t("TO") }}</label>
+                                        <label class="booking-label">{{ $t("TO") }}</label>
                                     <Autocomplete
                                         v-model="trip.destination"
                                         clear-on-click
@@ -1506,7 +1509,7 @@ onMounted(() => {
                                     </div>
 
                                     <div class="booking-cell multicity-booking-cell w-full text-start">
-                                        <label class="block text-sm font-medium text-gray-700">Departure</label>
+                                        <label class="booking-label">Departure</label>
                                         <Calender
                                             v-model="trip.date"
                                             :minValue="
@@ -1521,7 +1524,7 @@ onMounted(() => {
                                     </div>
                                     <div v-if="index === 0" class="w-full text-start">
                                         <div class="booking-cell multicity-booking-cell w-full text-start">
-                                        <label class="block text-sm font-medium text-gray-700">Travellers &amp; Class</label>
+                                        <label class="booking-label">Travellers &amp; Class</label>
                                         <Popover v-model:open="isPopoverOpen">
                                             <PopoverTrigger as-child>
                                                 <button
@@ -1539,16 +1542,16 @@ onMounted(() => {
                                                     <ChevronDownIcon class="w-4 h-4 opacity-70" />
                                                 </button>
                                             </PopoverTrigger>
-                                            <PopoverContent class="w-80 p-6 rounded-lg border-0 shadow-xl">
+                                            <PopoverContent class="w-80 rounded-2xl border border-slate-100 p-5 shadow-2xl">
                                                 <div class="space-y-6">
                                                     <div class="grid grid-cols-2 gap-2">
                                                         <button
                                                             @click="classType = 'Y'"
                                                             :class="[
-                                                                'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                                'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                                 classType === 'Y'
-                                                                    ? 'bg-primary text-white'
-                                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                                    ? 'bg-primary text-white shadow-sm'
+                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                             ]"
                                                         >
                                                             {{ $t("economy") }}
@@ -1556,10 +1559,10 @@ onMounted(() => {
                                                         <button
                                                             @click="classType = 'S'"
                                                             :class="[
-                                                                'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                                'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                                 classType === 'S'
-                                                                    ? 'bg-primary text-white'
-                                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                                    ? 'bg-primary text-white shadow-sm'
+                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                             ]"
                                                         >
                                                             {{ $t("premium_economy") }}
@@ -1567,10 +1570,10 @@ onMounted(() => {
                                                         <button
                                                             @click="classType = 'C'"
                                                             :class="[
-                                                                'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                                'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                                 classType === 'C'
-                                                                    ? 'bg-primary text-white'
-                                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                                    ? 'bg-primary text-white shadow-sm'
+                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                             ]"
                                                         >
                                                             {{ $t("business") }}
@@ -1578,10 +1581,10 @@ onMounted(() => {
                                                         <button
                                                             @click="classType = 'F'"
                                                             :class="[
-                                                                'py-2 rounded-md text-sm font-medium transition uppercase',
+                                                                'rounded-lg py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200',
                                                                 classType === 'F'
-                                                                    ? 'bg-primary text-white'
-                                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                                                                    ? 'bg-primary text-white shadow-sm'
+                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                                             ]"
                                                         >
                                                             {{ $t("first class") }}
@@ -1685,7 +1688,7 @@ onMounted(() => {
                 <!-- Error Messages -->
                 <div
                     v-if="inputErrors"
-                    class="mt-6 bg-red-50 border border-red-200 rounded-xl p-4"
+                    class="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4"
                 >
                     <div class="flex items-start gap-3">
                         <div class="flex-shrink-0 w-5 h-5 text-red-600 mt-0.5">
@@ -1738,7 +1741,7 @@ onMounted(() => {
                         >
                             Import PNR
                         </h3>
-                        <p class="text-white mb-6 sm:mb-8 text-sm sm:text-base">
+                        <p class="text-gray-600 mb-6 sm:mb-8 text-sm sm:text-base">
                             Enter your PNR code to import booking details
                         </p>
                         <div class="flex flex-col sm:flex-row gap-4">
@@ -1750,7 +1753,7 @@ onMounted(() => {
                             />
                             <Button
                                 @click="importPnr(pnr)"
-                                class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl px-6 sm:px-8 py-3 shadow-lg text-sm sm:text-base"
+                                class="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110 sm:px-8 sm:text-base"
                             >
                                 Import
                             </Button>
@@ -1801,7 +1804,7 @@ onMounted(() => {
                             <Button
                                 class=""
                             >
-                               Comming Soon
+                               Coming Soon
                             </Button>
                         </a>
                     </div>
@@ -1817,11 +1820,42 @@ onMounted(() => {
     animation: fadeIn 0.5s ease-in-out;
 }
 
-.flight-search-button {
+/* Floating service tabs (Flights / Hotels / Holidays) */
+.service-tab {
+    @apply relative flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 sm:px-5 sm:py-2 sm:text-sm;
+}
 
+.service-tab-active {
+    @apply text-white shadow-md;
+    background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
+}
+
+.service-tab-idle {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-primary;
+}
+
+/* Segmented trip-type control */
+.trip-type-btn {
+    @apply flex h-10 w-full cursor-pointer items-center justify-center whitespace-nowrap rounded-full px-4 text-xs font-semibold transition-all duration-200 sm:h-9 sm:w-auto sm:px-5 sm:text-sm;
+}
+
+.trip-type-btn-active {
+    @apply bg-white text-primary shadow-sm ring-1 ring-slate-200;
+}
+
+.trip-type-btn-idle {
+    @apply text-slate-500 hover:text-slate-900;
+}
+
+/* Field labels inside the search grid */
+.booking-label {
+    @apply block text-[11px] font-semibold uppercase tracking-wider text-slate-500;
+}
+
+.flight-search-button {
     display: inline-flex;
-    border-radius: .25rem;
-    min-height: 2.85rem;
+    border-radius: 9999px;
+    min-height: 3rem;
     width: 100%;
     align-items: center;
     justify-content: center;
@@ -1830,21 +1864,27 @@ onMounted(() => {
     color: #ffffff;
     font-size: 0.95rem;
     font-weight: 800;
+    letter-spacing: 0.01em;
+    box-shadow: 0 12px 24px -10px hsl(var(--primary) / 0.55);
     transition:
         filter 0.2s ease,
-        transform 0.2s ease;
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .flight-search-button:hover {
-    filter: brightness(1.06);
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+    box-shadow: 0 16px 30px -12px hsl(var(--primary) / 0.6);
 }
 
 .flight-search-button:active {
     transform: translateY(1px);
+    box-shadow: 0 8px 18px -10px hsl(var(--primary) / 0.5);
 }
 
 .booking-cell {
-    @apply relative min-w-0 min-h-[76px] border-b border-gray-200 px-3.5 py-2 sm:border-b-0 sm:border-r;
+    @apply relative min-w-0 min-h-[76px] border-b border-slate-200 px-3.5 py-2 transition-colors duration-200 hover:bg-slate-50/70 focus-within:bg-blue-50/40 sm:border-b-0 sm:border-r;
 }
 
 .booking-cell:last-child {
@@ -1898,7 +1938,6 @@ onMounted(() => {
 /* Multi-city uses the same compact density as the one-way form. */
 .multicity-trip-row > .mb-1\.5 {
     margin-bottom: 0.35rem;
-    font-size: 0.9rem;
 }
 
 .multicity-booking-cell {

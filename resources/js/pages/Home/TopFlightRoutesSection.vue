@@ -8,12 +8,14 @@ const store = useStore();
 
 const dynamicRoutes = computed(() => {
     const data = store.getters['cms/popularRoutes'];
-    return data?.data || [];
+    const routes = data?.data?.data ?? data?.data;
+    return Array.isArray(routes) ? routes : [];
 });
 
 const dynamicAirlines = computed(() => {
     const data = store.getters['cms/topAirlines'];
-    return data?.data || [];
+    const airlines = data?.data?.data ?? data?.data;
+    return Array.isArray(airlines) ? airlines : [];
 });
 
 onMounted(() => {
@@ -139,7 +141,8 @@ const dummyAirlines = [
 const mergedAirlines = computed(() => {
     const adminAirlines = (dynamicAirlines.value || [])
         .filter(a => a.is_active !== false)
-        .map(a => ({ name: a.name || a.airline_name, code: a.code || a.airline_code }));
+        .map(a => ({ name: a.name || a.airline_name || a.airline?.name, code: a.code || a.airline_code || a.airline?.iata_code }))
+        .filter(a => a.name && a.code);
 
     const combined = [...adminAirlines];
     dummyAirlines.forEach(d => {
