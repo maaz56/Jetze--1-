@@ -255,6 +255,20 @@ it('scopes round-trip return identifiers to their fare provider', function () {
         ->and(array_column($byReturnFlight['356']['return']['fares'], 'Provider'))->toBe(['SB']);
 });
 
+it('pairs return fares with different validating carriers when provider and return identifier match', function () {
+    $processed = (new AtFlightTransformer())->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [
+            ['Journey' => [atJourney(['Provider' => 'EY', 'VAC' => 'PK', 'ReturnIdentifier' => 1, 'NetFare' => 8310])]],
+            ['Journey' => [atJourney(['Provider' => 'EY', 'VAC' => 'EY', 'ReturnIdentifier' => 1, 'FlightNo' => '201', 'From' => 'JED', 'To' => 'MUX', 'NetFare' => 0])]],
+        ],
+    ], ['flight_type' => 'return']);
+
+    expect($processed['flights'])->toHaveCount(1)
+        ->and($processed['flights'][0]['onward']['flight']['VAC'])->toBe('PK')
+        ->and($processed['flights'][0]['return']['flight']['VAC'])->toBe('EY');
+});
+
 it('rejects non-positive return identifiers and fares without a provider', function () {
     $transformer = new AtFlightTransformer();
 

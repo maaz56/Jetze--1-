@@ -55,6 +55,10 @@ class AtFreeSsrBaggageTransformer
                             'description' => $checkedDescription ?: ($description !== '' ? 'Checked baggage unavailable' : ($this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
                                 isset($weights[1]) ? $this->weightDescription($weights[0]) : $checkedText
                             ))),
+                            // Preserve AT's detailed wording (for example,
+                            // "1 BAG UP TO 7KG, 1 BAG UP TO 12 KG") for the
+                            // baggage sheet without replacing its short allowance.
+                            'detail_description' => trim($pieceDescription, " ,") ?: null,
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                             'segment_ref_id' => $segmentRefId,
                             'source' => 'free_ssr',

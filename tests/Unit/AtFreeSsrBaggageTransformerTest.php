@@ -16,6 +16,7 @@ it('uses the SSR description for checked baggage even when a piece description i
 
     expect($policies)->toHaveCount(1)
         ->and($policies[0]['description'])->toBe('0KG')
+        ->and($policies[0]['detail_description'])->toBeNull()
         ->and($policies[0]['type'])->toBe('checkIn')
         ->and($policies[0]['segment_ref_id'])->toBe('segment-1');
 });
