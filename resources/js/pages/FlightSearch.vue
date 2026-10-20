@@ -3070,8 +3070,10 @@ const getFareBaggageSummaries = (baggagePolicies) => {
         }
     });
 
+    // Cabin allowance is a fixed product rule. Provider payloads may omit it
+    // or return inconsistent values, so keep the search card display stable.
     return [
-        { label: "Carry-on", description: summaries.carry || "Not included" },
+        { label: "Carry-on", description: "7 Kg included" },
         summaries.checked
             ? { label: "Checked", description: summaries.checked }
             : {

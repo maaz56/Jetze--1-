@@ -7,7 +7,7 @@ use App\Models\HotelBookingPriceSnapshot;
 use App\Models\HotelPriceQuote;
 use Illuminate\Support\Facades\DB;
 
-/** Copy the active PreBook quote into an immutable record after TBO confirms the booking. */
+/** Copy the active PreBook quote into an immutable record before payment begins. */
 class HotelBookingPricingService
 {
     public function createSnapshot(HotelBooking $booking, HotelPriceQuote $quote): HotelBookingPriceSnapshot

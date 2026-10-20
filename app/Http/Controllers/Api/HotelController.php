@@ -7,6 +7,7 @@ use App\Models\HotelBooking;
 use App\Models\HotelBookingEvent;
 use App\Models\HotelPrebook;
 use App\Models\HotelPriceQuote;
+use App\Models\HotelPaymentAttempt;
 use App\Models\HotelSearchSession;
 use App\Models\TboHotel;
 use App\Models\TboHotelCity;
@@ -15,11 +16,13 @@ use App\Services\TboHotelService;
 use App\Services\CurrencyConversionService;
 use App\Services\HotelPriceQuoteService;
 use App\Services\HotelBookingPricingService;
+use App\Services\AgentWalletBalanceService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +36,7 @@ class HotelController extends Controller
         protected CurrencyConversionService $currencyConversionService,
         protected HotelPriceQuoteService $hotelPriceQuoteService,
         protected HotelBookingPricingService $hotelBookingPricingService,
+        protected AgentWalletBalanceService $agentWalletBalanceService,
     ) {}
 
     public function suggestions(Request $request): JsonResponse
@@ -385,18 +389,22 @@ class HotelController extends Controller
             ], $this->httpStatusForProviderStatus($statusCode));
         }
 
-        $prebook = DB::transaction(function () use ($session, $selection, $validated, $statusCode, $tboResponse, $request) {
+        $prebookExpiresAt = now()->addMinutes(30);
+
+        $prebook = DB::transaction(function () use ($session, $selection, $validated, $statusCode, $tboResponse, $request, $prebookExpiresAt) {
             $prebook = HotelPrebook::create([
                 'uuid' => (string) Str::uuid(),
                 'hotel_search_session_id' => $session->id,
-                'user_id' => $session->user_id,
+                'user_id' => $request->user()->id,
                 'hotel_code' => $selection['hotel_code'],
                 'booking_code' => $validated['booking_code'],
                 'payment_mode' => $validated['payment_mode'],
                 'provider_status_code' => $statusCode,
                 'search_room' => $selection['room'],
                 'tbo_response' => $tboResponse,
-                'expires_at' => $session->expires_at,
+                // This is the application's fixed reservation window, measured from
+                // the successful PreBook response and persisted with the prebook.
+                'expires_at' => $prebookExpiresAt,
             ]);
 
             $providerRoom = $this->prebookProviderRoom($prebook);
@@ -452,10 +460,6 @@ class HotelController extends Controller
             return response()->json(['message' => 'Hotel prebook was not found. Please search again.'], 404);
         }
 
-        if ($prebook->expires_at?->isPast()) {
-            return response()->json(['message' => 'Hotel prebook has expired. Please search again.'], 422);
-        }
-
         if ($prebook->user_id && $prebook->user_id !== optional($request->user())->id) {
             return response()->json(['message' => 'This hotel prebook belongs to another user.'], 403);
         }
@@ -464,6 +468,98 @@ class HotelController extends Controller
             'provider_status' => data_get($prebook->tbo_response, 'Status'),
             'data' => $this->normalizePrebook($prebook),
         ]);
+    }
+
+    /** Save validated hotel guests as a pending reservation; payment and TBO Book happen later. */
+    public function reserve(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'prebook_id' => 'required|uuid',
+            'email' => 'required|email:rfc,dns|max:255',
+            'phone_number' => 'required|string|max:64',
+            'customer_details' => 'required|array|min:1|max:8',
+            'customer_details.*.customer_names' => 'required|array|min:1|max:12',
+            'customer_details.*.customer_names.*.title' => 'required|string|in:Mr,Mrs,Ms',
+            'customer_details.*.customer_names.*.first_name' => 'required|string|max:100',
+            'customer_details.*.customer_names.*.last_name' => 'required|string|max:100',
+            'customer_details.*.customer_names.*.type' => 'required|string|in:Adult,Child',
+        ]);
+
+        $prebook = HotelPrebook::with(['searchSession', 'priceQuote'])
+            ->where('uuid', $validated['prebook_id'])
+            ->first();
+
+        if (! $prebook) {
+            return response()->json(['message' => 'Hotel prebook was not found. Please search again.'], 404);
+        }
+        if ($prebook->expires_at?->isPast()) {
+            return response()->json(['message' => 'This reservation window has expired. Please search again.'], 422);
+        }
+        if ($prebook->user_id && $prebook->user_id !== optional($request->user())->id) {
+            return response()->json(['message' => 'This hotel prebook belongs to another user.'], 403);
+        }
+
+        $this->validateBookingGuests($prebook, $validated['customer_details']);
+        $customerDetails = collect($validated['customer_details'])->map(fn (array $room) => [
+            'CustomerNames' => collect($room['customer_names'])->map(fn (array $guest) => [
+                'Title' => $guest['title'], 'FirstName' => $guest['first_name'], 'LastName' => $guest['last_name'], 'Type' => $guest['type'],
+            ])->values()->all(),
+        ])->values()->all();
+
+        $userId = $request->user()->id;
+        $booking = DB::transaction(function () use ($prebook, $validated, $customerDetails, $userId) {
+            $lockedPrebook = HotelPrebook::lockForUpdate()->findOrFail($prebook->id);
+            $quote = HotelPriceQuote::where('hotel_prebook_id', $lockedPrebook->id)->lockForUpdate()->first();
+            if (! $quote || $lockedPrebook->expires_at?->isPast()) {
+                throw ValidationException::withMessages(['prebook_id' => 'This reservation window has expired. Please search again.']);
+            }
+
+            $existing = HotelBooking::where('hotel_prebook_id', $lockedPrebook->id)->lockForUpdate()->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            $providerRoom = $this->prebookProviderRoom($lockedPrebook);
+            $bookingCode = $providerRoom['BookingCode'] ?? $lockedPrebook->booking_code;
+            $booking = HotelBooking::create([
+                'uuid' => (string) Str::uuid(),
+                'hotel_prebook_id' => $lockedPrebook->id,
+                'user_id' => $userId,
+                'status' => 'payment_pending',
+                'client_reference_id' => 'HB-'.Str::upper(Str::random(20)),
+                'booking_reference_id' => 'HBR-'.Str::upper(Str::random(20)),
+                'currency' => $quote->provider_currency,
+                'total_fare' => $quote->provider_amount,
+                'email' => $validated['email'],
+                'phone_number' => $validated['phone_number'],
+                'customer_details' => $customerDetails,
+                'tbo_request' => [
+                    'BookingCode' => $bookingCode,
+                    'CustomerDetails' => $customerDetails,
+                    'ClientReferenceId' => 'pending',
+                    'BookingReferenceId' => 'pending',
+                    'TotalFare' => (float) $quote->provider_amount,
+                    'EmailId' => $validated['email'],
+                    'PhoneNumber' => $validated['phone_number'],
+                    'BookingType' => 'Voucher',
+                    'PaymentMode' => $lockedPrebook->payment_mode,
+                ],
+            ]);
+            $request = $booking->tbo_request;
+            $request['ClientReferenceId'] = $booking->client_reference_id;
+            $request['BookingReferenceId'] = $booking->booking_reference_id;
+            $booking->update(['tbo_request' => $request]);
+            $booking->guests()->createMany(collect($validated['customer_details'])->flatMap(fn (array $room, int $roomIndex) => collect($room['customer_names'])->map(fn (array $guest, int $guestIndex) => [
+                'room_index' => $roomIndex, 'guest_index' => $guestIndex, 'type' => $guest['type'], 'title' => $guest['title'], 'first_name' => $guest['first_name'], 'last_name' => $guest['last_name'], 'raw_data' => $guest,
+            ]))->values()->all());
+            // Wallet eligibility must use an immutable server-side AED value.
+            $this->hotelBookingPricingService->createSnapshot($booking, $quote);
+            HotelBookingEvent::create(['hotel_prebook_id' => $lockedPrebook->id, 'hotel_booking_id' => $booking->id, 'provider' => 'tbo', 'stage' => 'reservation_saved', 'provider_reference' => $booking->booking_reference_id, 'occurred_at' => now()]);
+
+            return $booking;
+        });
+
+        return response()->json(['message' => 'Guest details saved. Continue to payment to confirm your booking.', 'data' => $this->normalizeBooking($booking, true)]);
     }
 
     public function book(Request $request): JsonResponse
@@ -723,6 +819,130 @@ class HotelController extends Controller
         ]);
     }
 
+    /** Verify wallet funds and then finalize the pending reservation with TBO. */
+    public function confirmReservation(Request $request, string $bookingUuid): JsonResponse
+    {
+        $request->validate([
+            'payment_method' => ['required', 'string', 'in:wallet'],
+        ]);
+
+        $booking = HotelBooking::with(['prebook.searchSession', 'prebook.priceQuote', 'priceSnapshot'])
+            ->where('uuid', $bookingUuid)
+            ->first();
+        if (! $booking) {
+            return response()->json(['message' => 'Hotel reservation was not found.'], 404);
+        }
+        if (! $booking->user_id || $booking->user_id !== optional($request->user())->id) {
+            return response()->json(['message' => 'This hotel reservation belongs to another user.'], 403);
+        }
+        if ($booking->status === 'confirmed') {
+            return response()->json(['message' => 'This hotel booking is already confirmed.', 'data' => $this->normalizeBooking($booking, true)]);
+        }
+        if ($booking->status !== 'payment_pending') {
+            return response()->json(['message' => 'This reservation cannot be confirmed in its current state.'], 422);
+        }
+        if ($booking->prebook?->expires_at?->isPast()) {
+            $booking->update(['status' => 'expired']);
+            return response()->json(['message' => 'This reservation window has expired. Please search again.'], 422);
+        }
+
+        // Support pending reservations created before snapshots were generated at reserve time.
+        if (! $booking->priceSnapshot && $booking->prebook?->priceQuote) {
+            $this->hotelBookingPricingService->createSnapshot($booking, $booking->prebook->priceQuote);
+            $booking->load('priceSnapshot');
+        }
+        if ($booking->priceSnapshot?->aed_amount === null
+            || bccomp((string) $booking->priceSnapshot->aed_amount, '0', 8) <= 0) {
+            return response()->json([
+                'code' => 'HOTEL_PRICE_SNAPSHOT_UNAVAILABLE',
+                'message' => 'The locked hotel price is unavailable. Please create a new reservation.',
+            ], 422);
+        }
+
+        $paymentLock = Cache::lock('hotel-payment:booking:'.$booking->uuid, 120);
+        if (! $paymentLock->get()) {
+            return response()->json([
+                'message' => 'A payment is already being processed for this hotel reservation.',
+            ], 409);
+        }
+
+        $walletLock = Cache::lock('wallet-confirm:agent:'.$booking->user_id, 120);
+        if (! $walletLock->get()) {
+            $paymentLock->release();
+            return response()->json([
+                'message' => 'A wallet payment is already being processed for this account.',
+            ], 409);
+        }
+
+        try {
+            // Re-read state and balance after acquiring the shared wallet lock.
+            $booking->refresh()->load(['prebook.priceQuote', 'priceSnapshot']);
+            if ($booking->status !== 'payment_pending') {
+                return response()->json(['message' => 'This reservation cannot be confirmed in its current state.'], 422);
+            }
+            if ($booking->prebook?->expires_at?->isPast()) {
+                $booking->update(['status' => 'expired']);
+                return response()->json(['message' => 'This reservation window has expired. Please search again.'], 422);
+            }
+            if (HotelPaymentAttempt::query()
+                ->where('hotel_booking_id', $booking->id)
+                ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
+                ->whereIn('status', [
+                    HotelPaymentAttempt::STATUS_INITIATING,
+                    HotelPaymentAttempt::STATUS_CREATED,
+                    HotelPaymentAttempt::STATUS_CREATION_UNKNOWN,
+                    HotelPaymentAttempt::STATUS_PAID,
+                ])
+                ->exists()) {
+                return response()->json([
+                    'message' => 'A card payment is already active for this hotel reservation. Do not pay again with wallet.',
+                ], 409);
+            }
+            if (! $this->agentWalletBalanceService->canPayForHotelBooking($booking)) {
+                return response()->json([
+                    'code' => 'INSUFFICIENT_WALLET_BALANCE',
+                    'message' => 'Your wallet balance is insufficient to confirm this hotel booking.',
+                    'required_aed' => $booking->priceSnapshot?->aed_amount,
+                    'available_aed' => $this->agentWalletBalanceService->balanceInAed((int) $booking->user_id),
+                ], 422);
+            }
+
+            $booking->update(['status' => 'processing', 'payment_method' => 'wallet']);
+            HotelBookingEvent::create(['hotel_prebook_id' => $booking->hotel_prebook_id, 'hotel_booking_id' => $booking->id, 'provider' => 'tbo', 'stage' => 'book_request', 'provider_reference' => $booking->booking_reference_id, 'occurred_at' => now()]);
+
+            try {
+                $tboResponse = $this->tboHotelService->book($booking->tbo_request);
+            } catch (Throwable $e) {
+                $booking->update(['status' => 'unknown']);
+                Log::error('TBO hotel reservation confirmation failed', ['hotel_booking_id' => $booking->uuid, 'message' => $e->getMessage()]);
+                return response()->json(['message' => 'The booking result is unknown. Do not submit again; verify it using the booking reference.'], 502);
+            }
+
+            $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
+            $isConfirmed = $statusCode === 200;
+            $booking->update([
+                'status' => $isConfirmed ? 'confirmed' : 'failed',
+                'paid_at' => $isConfirmed ? now() : null,
+                'provider_status_code' => $statusCode,
+                'confirmation_number' => data_get($tboResponse, 'ConfirmationNumber'),
+                'hotel_confirmation_number' => data_get($tboResponse, 'HotelConfirmationNumber'),
+                'tbo_response' => $tboResponse,
+            ]);
+            HotelBookingEvent::create(['hotel_prebook_id' => $booking->hotel_prebook_id, 'hotel_booking_id' => $booking->id, 'provider' => 'tbo', 'stage' => 'book', 'provider_status_code' => $statusCode, 'provider_reference' => data_get($tboResponse, 'ConfirmationNumber') ?: $booking->booking_reference_id, 'response_data' => $tboResponse, 'occurred_at' => now()]);
+
+            if (! $isConfirmed) {
+                return response()->json(['message' => $this->statusMessage($statusCode, data_get($tboResponse, 'Status.Description')), 'data' => $this->normalizeBooking($booking->fresh(), true)], $this->httpStatusForProviderStatus($statusCode));
+            }
+
+            $this->fetchAndStoreBookingDetailsAfterBooking($booking->fresh(['prebook']));
+
+            return response()->json(['message' => 'Hotel booking confirmed successfully.', 'data' => $this->normalizeBooking($booking->fresh(), true)]);
+        } finally {
+            $walletLock->release();
+            $paymentLock->release();
+        }
+    }
+
     public function bookings(Request $request): JsonResponse
     {
         $bookings = HotelBooking::with(['prebook.searchSession', 'priceSnapshot'])
@@ -854,6 +1074,8 @@ class HotelController extends Controller
             'booking_user_id' => $booking->user_id,
             'user_id' => $request->user()?->id,
             'status' => $booking->status,
+            'payment_method' => $booking->payment_method,
+            'paid_at' => $booking->paid_at?->toIso8601String(),
         ]);
 
         return response()->json(['data' => $this->normalizeBooking($booking, true)]);
@@ -1629,6 +1851,8 @@ class HotelController extends Controller
         return [
             'prebook_id' => $prebook->uuid,
             'expires_at' => $prebook->expires_at?->toIso8601String(),
+            'remaining_seconds' => max(0, now()->diffInSeconds($prebook->expires_at, false)),
+            'is_expired' => $prebook->expires_at?->isPast() ?? true,
             'payment_mode' => $prebook->payment_mode,
             'booking_code' => $room['BookingCode'] ?? $prebook->booking_code,
             'price_quote' => $this->normalizePriceQuote($prebook->priceQuote),
@@ -1734,10 +1958,13 @@ class HotelController extends Controller
         }
         $providerDetails = data_get($booking->tbo_booking_detail_response, 'BookingDetail', []);
         $prebookData = $booking->prebook ? $this->normalizePrebook($booking->prebook) : null;
+        $reservationExpiresAt = $booking->prebook?->expires_at;
 
         return [
             'booking_id' => $booking->uuid,
             'status' => $booking->status,
+            'payment_method' => $booking->payment_method,
+            'paid_at' => $booking->paid_at?->toIso8601String(),
             'provider_status_code' => $booking->provider_status_code,
             'confirmation_number' => $booking->confirmation_number,
             'hotel_confirmation_number' => $booking->hotel_confirmation_number,
@@ -1745,6 +1972,8 @@ class HotelController extends Controller
             'client_reference_id' => $booking->client_reference_id,
             'currency' => $booking->currency,
             'total_fare' => $booking->total_fare,
+            'reservation_expires_at' => $reservationExpiresAt?->toIso8601String(),
+            'remaining_seconds' => $reservationExpiresAt ? max(0, now()->diffInSeconds($reservationExpiresAt, false)) : 0,
             'price_snapshot' => $this->normalizeBookingPriceSnapshot($booking->priceSnapshot),
             'guests' => $includeGuests
                 ? $booking->guests

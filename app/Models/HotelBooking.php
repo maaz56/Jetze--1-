@@ -14,6 +14,8 @@ class HotelBooking extends Model
         'hotel_prebook_id',
         'user_id',
         'status',
+        'payment_method',
+        'paid_at',
         'provider_status_code',
         'client_reference_id',
         'booking_reference_id',
@@ -41,6 +43,7 @@ class HotelBooking extends Model
         'tbo_cancel_response' => 'array',
         'booking_details_checked_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     public function prebook(): BelongsTo
@@ -66,5 +69,10 @@ class HotelBooking extends Model
     public function events(): HasMany
     {
         return $this->hasMany(HotelBookingEvent::class);
+    }
+
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(HotelPaymentAttempt::class);
     }
 }

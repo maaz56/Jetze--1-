@@ -39,7 +39,9 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Must exceed the longest hotel supplier job timeout (150s), or a
+            // second worker could reserve the same job while TBO is responding.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 210),
             'after_commit' => false,
         ],
 

@@ -49,9 +49,7 @@ const socials = [
         <div class="flex items-center gap-3.5">
           <img src="/public/assets/logo.png" class="h-9 w-auto object-contain shrink-0" alt="Jetze Logo" />
           <div class="h-7 w-px bg-gray-200 hidden sm:block"></div>
-          <p class="hidden sm:block text-xs text-gray-500 leading-snug max-w-xs font-medium">
-            Your Journey, Simplified. Flights, stays, Umrah packages & fast-track visas.
-          </p>
+          
         </div>
 
         <!-- Contact Links & Social Media Badges -->

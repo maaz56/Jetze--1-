@@ -5,6 +5,7 @@ import { computed, watch } from 'vue';
 import TravelPortCustomerPaymentView from './Travelport/TravelPortCustomerPaymentView.vue';
 import OneApiCustomerPaymentView from './OneApi/OneApiCustomerPaymentView.vue';
 import ATCustomerPaymentView from './AT/ATCustomerPaymentView.vue';
+import HotelPaymentView from './HotelPaymentView.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -16,7 +17,8 @@ watch(provider,()=>{
 })
 </script>
 <template>
-    <TravelPortCustomerPaymentView v-if="provider === 'travelport' && flight_mode === 'B2C'" />
+    <HotelPaymentView v-if="route.query.booking_type === 'hotel'" />
+    <TravelPortCustomerPaymentView v-else-if="provider === 'travelport' && flight_mode === 'B2C'" />
     <OneApiCustomerPaymentView v-else-if="provider === 'OneApi' && flight_mode === 'B2C'" />
     <!-- Hakimi uses the same customer payment UI and gateways as AT. -->
     <ATCustomerPaymentView v-else-if="isAtOrHakimi && flight_mode === 'B2C'" />

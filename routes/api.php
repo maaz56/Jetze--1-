@@ -1,77 +1,81 @@
 <?php
 
-use App\Http\Controllers\Api\SegmentMarginController;
-use App\Http\Controllers\Api\SeoSettingController;
-use App\Http\Controllers\Api\BlogController;
-use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AdminSettingsController;
+use App\Http\Controllers\Api\AgentDataController;
+use App\Http\Controllers\Api\AgentLedgerController;
 use App\Http\Controllers\Api\AgentTravellerController;
 use App\Http\Controllers\Api\AirlineController;
 use App\Http\Controllers\Api\AirportController;
-use App\Http\Controllers\Api\B2CValueController;
 use App\Http\Controllers\Api\BankController;
+use App\Http\Controllers\Api\BlogController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CityController;
 use App\Http\Controllers\Api\CmsController;
-use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\CountryController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\CustomerMarginController;
 use App\Http\Controllers\Api\DepositController;
+use App\Http\Controllers\Api\DepositDataController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\FlightController;
 use App\Http\Controllers\Api\FlyDubaiController;
 use App\Http\Controllers\Api\GroupTicketController;
+use App\Http\Controllers\Api\HolidayPackageController;
+use App\Http\Controllers\Api\HotDealController;
 use App\Http\Controllers\Api\HotelController;
+use App\Http\Controllers\Api\HotelNomodCheckoutController;
 use App\Http\Controllers\Api\ModifyRequestController;
+use App\Http\Controllers\Api\NewsletterSubscriberController;
 use App\Http\Controllers\Api\NomodCheckoutController;
 use App\Http\Controllers\Api\NomodWebhookController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PromoImageController;
+use App\Http\Controllers\Api\PromotionController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\SegmentMarginController;
+use App\Http\Controllers\Api\SeoSettingController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\UmrahPackageController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisaController;
-use App\Http\Controllers\Api\HolidayPackageController;
-use App\Http\Controllers\Api\SettingsController;
-use App\Http\Controllers\Api\UmrahPackageController;
-use App\Http\Controllers\Api\AgentDataController;
-use App\Http\Controllers\Api\DepositDataController;
-use App\Http\Controllers\Api\AgentLedgerController;
-use App\Http\Controllers\Api\HotDealController;
-use App\Http\Controllers\Api\NewsletterSubscriberController;
-use App\Http\Controllers\Api\PromotionController;
 use App\Http\Controllers\Api\ZohoController;
-use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\NotificationController;
-
-
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 
 // Register broadcasting routes for API clients (token-based authentication)
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
-Route::post('/login/request-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'requestLoginOtp']);
-Route::post('/login/verify-otp', [App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'verifyLoginOtp']);
+Route::post('/login/request-otp', [AuthenticatedSessionController::class, 'requestLoginOtp']);
+Route::post('/login/verify-otp', [AuthenticatedSessionController::class, 'verifyLoginOtp']);
 Route::middleware('auth:sanctum')->get('hakimi-booking-details', [BookingController::class, 'hakimiBookingDetails']);
 
 Route::prefix('hotels')->group(function () {
     Route::get('suggestions', [HotelController::class, 'suggestions']);
     Route::post('search', [HotelController::class, 'search']);
     Route::post('details', [HotelController::class, 'details']);
-    Route::post('prebook', [HotelController::class, 'prebook']);
-    Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->whereUuid('prebookUuid');
-    Route::post('book', [HotelController::class, 'book']);
+    Route::post('prebook', [HotelController::class, 'prebook'])->middleware('auth:sanctum');
+    Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->middleware('auth:sanctum')->whereUuid('prebookUuid');
+    Route::post('reservations', [HotelController::class, 'reserve'])->middleware('auth:sanctum');
+    Route::post('payments/nomod/checkout', [HotelNomodCheckoutController::class, 'store'])
+        ->middleware(['auth:sanctum', 'throttle:10,1']);
+    Route::get('payments/nomod/{paymentAttempt}/status', [HotelNomodCheckoutController::class, 'show'])
+        ->middleware(['auth:sanctum', 'throttle:30,1'])
+        ->whereUuid('paymentAttempt');
     Route::get('bookings', [HotelController::class, 'bookings'])->middleware('auth:sanctum');
     Route::get('bookings/{bookingUuid}', [HotelController::class, 'showBooking'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
+    Route::post('bookings/{bookingUuid}/confirm', [HotelController::class, 'confirmReservation'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
     Route::post('bookings/{bookingUuid}/details', [HotelController::class, 'refreshBookingDetails'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
     Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'cancelBooking'])->middleware('auth:sanctum')->whereUuid('bookingUuid');
 });
@@ -83,7 +87,6 @@ Route::prefix('admin/hotels')->middleware('auth:sanctum')->group(function () {
     Route::post('bookings/{bookingUuid}/cancel', [HotelController::class, 'adminCancelBooking'])->whereUuid('bookingUuid');
 });
 
-
 // full CRUD
 Route::post('/subscribers', [NewsletterSubscriberController::class, 'store']);
 Route::get('/subscribers', [NewsletterSubscriberController::class, 'index']);
@@ -91,7 +94,6 @@ Route::get('/subscribers/{id}', [NewsletterSubscriberController::class, 'show'])
 Route::put('/subscribers/{id}', [NewsletterSubscriberController::class, 'update']);
 Route::patch('/subscribers/{id}', [NewsletterSubscriberController::class, 'update']);
 Route::delete('/subscribers/{id}', [NewsletterSubscriberController::class, 'destroy']);
-
 
 // Hot Deals / Admin
 Route::get('hot-deals', [HotDealController::class, 'index']);
@@ -112,12 +114,12 @@ Route::prefix('admin')->group(function () {
 Route::post('at/fare-breakdown', [FlightController::class, 'fetchAtFareBreakdown']);
 Route::post('flights/at/stream', [FlightController::class, 'streamAtSearch']);
 
-
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     $user = $request->user();
     $user->load('customer');
     $userData = $user->toArray();
     $userData['permissions'] = $user->getAllPermissions()->pluck('name');
+
     return response()->json($userData);
 });
 
@@ -135,14 +137,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::resource('users', UserController::class);
 });
 
-
 Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
-
-
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
     Route::delete('/delete-activity-logs', [ActivityLogController::class, 'delete']);
-
 
     Route::get('uploads', action: [FileUploadController::class, 'index']);
     Route::post('uploads', [FileUploadController::class, 'store']);
@@ -154,7 +152,6 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('users-summary', [UserController::class, 'UsersSummary']);
     Route::post('/add-staff', [UserController::class, 'saveStaff']);
     Route::post('/update-staff', [UserController::class, 'updateStaff']);
-
 
     Route::put('update-status', [UserController::class, 'updateStatus']);
     Route::post('update-card-allowance', [UserController::class, 'updateCardAllowance']);
@@ -180,7 +177,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
 
     Route::get('flights', [FlightController::class, 'index']);
     Route::post('flight-quotes', [FlightController::class, 'createPriceQuote'])->middleware('auth:sanctum');
-    
+
     Route::get('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'showQuoteAncillaries'])->middleware('auth:sanctum');
     Route::put('flight-quotes/{quoteUuid}/ancillaries', [FlightController::class, 'updateQuoteAncillaries'])->middleware('auth:sanctum');
     Route::get('flight-quotes/{quoteUuid}', [FlightController::class, 'showPriceQuote'])->middleware('auth:sanctum');
@@ -200,7 +197,6 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::post('update-offline-booking', [OfflineBookingController::class, 'update']);
     Route::post('offline-bookings', [OfflineBookingController::class, 'store']);
     Route::post('send-offline-booking-email', [OfflineBookingController::class, 'sendEmail']);
-
 
     Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
     Route::get('get-bookings', [BookingController::class, 'index']);
@@ -280,10 +276,9 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     // Route::delete('/notifications/{id}', [NotificationController::class, 'deleteNotification']);
     Route::delete('/notifications/clear-all', [NotificationController::class, 'clearAllNotifications']);
 
-    /////////public
+    // ///////public
 
-    ///
-
+    // /
 
     Route::resource('airports', AirportController::class);
     Route::get('/fetch-airport/{id}', [AirportController::class, 'show']);
@@ -343,6 +338,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
         Mail::raw('This is a test email', function ($message) {
             $message->to('recipient@example.com')->subject('Test Email');
         });
+
         return 'Email sent';
     });
 });
@@ -422,8 +418,6 @@ Route::get('/popular-routes', [CmsController::class, 'getPublicPopularRoutes']);
 Route::get('/popular-routes/{slug}', [CmsController::class, 'getPublicPopularRoute']);
 Route::post('/popular-routes/{id}/refresh-price', [CmsController::class, 'refreshPopularRoutePrice']);
 
-
-
 Route::post('/save-top-airline', [CmsController::class, 'storeTopAirline']);
 Route::get('/fetch-top-airlines', [CmsController::class, 'getTopAirlines']);
 Route::get('/fetch-top-airline/{id}', [CmsController::class, 'getTopAirline']);
@@ -452,4 +446,4 @@ Route::get('/admin/fetch-reviews', [ReviewController::class, 'index']);
 Route::post('/admin/approve-review/{id}', [ReviewController::class, 'approve']);
 Route::delete('/admin/delete-review/{id}', [ReviewController::class, 'delete']);
 Route::post('at/fare-rules', [FlightController::class, 'prepareAtFareRules']);
-    Route::post('at/free-ssr-baggage', [FlightController::class, 'fetchAtFreeSsrBaggage']);
+Route::post('at/free-ssr-baggage', [FlightController::class, 'fetchAtFreeSsrBaggage']);

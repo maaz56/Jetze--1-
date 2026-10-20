@@ -372,7 +372,7 @@ onUnmounted(() => {
                                 </span>
                             </button>
                             <div class="flex items-center gap-2">
-                                <span :class="['text-[11px] uppercase tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Balance:</span>
+                                <span :class="['text-[11px] tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Balance:</span>
                                 <div :class="['flex items-center font-bold text-xs sm:text-sm', isTransparent ? 'text-white' : 'text-emerald-400']">
                                     <Wallet class="h-3.5 w-3.5 mr-1 shrink-0" />
                                     <span>{{ selectedCurrencySymbol }} {{ formatBalanceAmount(agentLedger?.balance_money?.amount) }}</span>
@@ -394,7 +394,7 @@ onUnmounted(() => {
                             class="hidden md:flex items-center gap-2 border-l px-4 shrink-0 whitespace-nowrap"
                             :class="isTransparent ? 'border-white/20' : 'border-slate-200'"
                         >
-                            <span :class="['text-[11px] uppercase tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
+                            <span :class="['text-[11px] tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
                             <Select v-model="selectedCurrencyCode">
                                 <SelectTrigger :class="['h-8.5 w-[84px] rounded-lg border px-2.5 text-xs font-bold shadow-xs focus:ring-0', isTransparent ? 'border-white/60 bg-white/10 text-white backdrop-blur-md' : 'border-slate-200 bg-white text-slate-700']">
                                     <SelectValue placeholder="Currency" />

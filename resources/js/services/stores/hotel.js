@@ -134,6 +134,38 @@ export const useHotelStore = defineStore("hotel", {
             }
         },
 
+        async reserveHotel(params) {
+            this.isBooking = true;
+            this.errorMessage = "";
+
+            try {
+                const response = await apiService.reserveHotel(params);
+                this.booking = response.data.data || null;
+                return response.data;
+            } catch (error) {
+                this.errorMessage = error.response?.data?.message || "Unable to save this hotel reservation.";
+                throw error;
+            } finally {
+                this.isBooking = false;
+            }
+        },
+
+        async confirmHotelBooking(bookingId, paymentMethod = "wallet") {
+            this.isBooking = true;
+            this.errorMessage = "";
+
+            try {
+                const response = await apiService.confirmHotelBooking(bookingId, paymentMethod);
+                this.booking = response.data.data || null;
+                return response.data;
+            } catch (error) {
+                this.errorMessage = error.response?.data?.message || "Unable to confirm this hotel booking.";
+                throw error;
+            } finally {
+                this.isBooking = false;
+            }
+        },
+
         async fetchHotelBookings(params = {}) {
             const response = await apiService.getHotelBookings(params);
             this.bookings = response.data.data || [];

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HotelBookingPriceSnapshot extends Model
 {
@@ -41,5 +42,10 @@ class HotelBookingPriceSnapshot extends Model
     public function priceQuote(): BelongsTo
     {
         return $this->belongsTo(HotelPriceQuote::class, 'hotel_price_quote_id');
+    }
+
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(HotelPaymentAttempt::class, 'hotel_booking_price_snapshot_id');
     }
 }

@@ -9,6 +9,7 @@ use App\Jobs\FulfilAtNomodPayment;
 use App\Models\FlightBookings;
 use App\Models\PaymentAttempt;
 use App\Models\PaymentWebhookEvent;
+use App\Services\HotelNomodWebhookHandler;
 use App\Services\NomodHostedCheckoutService;
 use App\Services\NomodWebhookSignatureVerifier;
 use App\Services\ProviderBookingEventService;
@@ -26,6 +27,7 @@ class NomodWebhookController extends Controller
         private readonly NomodWebhookSignatureVerifier $signatureVerifier,
         private readonly NomodHostedCheckoutService $nomodHostedCheckoutService,
         private readonly ProviderBookingEventService $providerBookingEventService,
+        private readonly HotelNomodWebhookHandler $hotelWebhookHandler,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -71,6 +73,12 @@ class NomodWebhookController extends Controller
         $eventType = $payload['type'] ?? null;
         if (! is_string($eventId) || $eventId === '' || strlen($eventId) > 128 || ! is_string($eventType) || $eventType === '') {
             return response()->json(['message' => 'Invalid webhook event.'], 400);
+        }
+
+        // Flight and hotel events share signature verification and the public
+        // endpoint, then persist and fulfil through separate domain tables.
+        if ($this->hotelWebhookHandler->matches($payload)) {
+            return $this->hotelWebhookHandler->handle($eventId, $eventType, $payload);
         }
 
         [$event, $isNew] = $this->findOrRecordEvent($eventId, $eventType, $payload);

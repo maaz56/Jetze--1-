@@ -1,59 +1,67 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
 import { useHotelStore } from "@/services/stores/hotel";
-import { computed, onMounted, ref } from "vue";
+import { CalendarDays, Clock3, Hotel, ShieldCheck, Users } from "lucide-vue-next";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
 const router = useRouter();
 const hotelStore = useHotelStore();
 hotelStore.resetCheckout();
+
 const isLoading = ref(true);
 const errorMessage = ref("");
-const prebook = computed(() => hotelStore.getPrebook);
-const booking = computed(() => hotelStore.getBooking);
-const isBooking = computed(() => hotelStore.getIsBooking);
+const remainingSeconds = ref(0);
+const customerDetails = ref([]);
 const email = ref("");
 const phoneNumber = ref("");
-const customerDetails = ref([]);
+let countdownTimer;
+
+const prebook = computed(() => hotelStore.getPrebook);
+const isSavingReservation = computed(() => hotelStore.getIsBooking);
+const isExpired = computed(() => remainingSeconds.value <= 0);
 const finalFare = computed(() => prebook.value?.price_quote?.selling_money || null);
+const roomName = computed(() => {
+  const name = prebook.value?.room?.name;
+  return Array.isArray(name) ? name.filter(Boolean).join(", ") : name || "Selected room";
+});
+const stayNights = computed(() => {
+  const checkIn = prebook.value?.stay?.check_in;
+  const checkOut = prebook.value?.stay?.check_out;
+  return checkIn && checkOut ? Math.max(0, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)) : null;
+});
 
-const formatMoney = (amount) => {
-  if (amount === null || amount === undefined || amount === "") return "Unavailable";
-
-  const money = typeof amount === "object" ? amount : {
-    amount,
-    currency: prebook.value?.room?.currency,
-  };
-
-  return `${money.currency || ""} ${Number(money.amount).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
+const formatMoney = (money) => {
+  if (!money || money.amount === null || money.amount === undefined) return "Unavailable";
+  return `${money.currency || ""} ${Number(money.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 };
 
 const formatPolicy = (policy) => {
-  const charge = policy?.CancellationCharge;
   const type = policy?.ChargeType ? ` (${policy.ChargeType})` : "";
-  return `From ${policy?.FromDate || "the stated date"}: ${charge ?? "—"}${type}`;
+  return `From ${policy?.FromDate || "the stated date"}: ${policy?.CancellationCharge ?? "—"}${type}`;
+};
+
+const formatCountdown = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${String(Math.floor(safeSeconds / 60)).padStart(2, "0")}:${String(safeSeconds % 60).padStart(2, "0")}`;
 };
 
 const makeCustomerDetails = (paxRooms) => (paxRooms || []).map((room) => ({
   customer_names: [
-    ...Array.from({ length: Number(room.Adults || 0) }, () => ({
-      title: "Mr",
-      first_name: "",
-      last_name: "",
-      type: "Adult",
-    })),
-    ...Array.from({ length: Number(room.Children || 0) }, () => ({
-      title: "Mr",
-      first_name: "",
-      last_name: "",
-      type: "Child",
-    })),
+    ...Array.from({ length: Number(room.Adults || 0) }, () => ({ title: "Mr", first_name: "", last_name: "", type: "Adult" })),
+    ...Array.from({ length: Number(room.Children || 0) }, () => ({ title: "Mr", first_name: "", last_name: "", type: "Child" })),
   ],
 }));
+
+const startCountdown = (seconds) => {
+  window.clearInterval(countdownTimer);
+  remainingSeconds.value = Math.max(0, Math.ceil(Number(seconds) || 0));
+  countdownTimer = window.setInterval(() => {
+    remainingSeconds.value = Math.max(0, remainingSeconds.value - 1);
+    if (remainingSeconds.value === 0) window.clearInterval(countdownTimer);
+  }, 1000);
+};
 
 const loadPrebook = async () => {
   const prebookId = route.query.prebook_id;
@@ -64,13 +72,13 @@ const loadPrebook = async () => {
     return;
   }
 
-  hotelStore.resetCheckout();
   errorMessage.value = "";
   isLoading.value = true;
 
   try {
-    await hotelStore.fetchPrebook(prebookId);
+    const response = await hotelStore.fetchPrebook(prebookId);
     customerDetails.value = makeCustomerDetails(prebook.value?.stay?.pax_rooms);
+    startCountdown(response.data?.remaining_seconds);
   } catch (error) {
     errorMessage.value = error.response?.data?.message || "Unable to load the confirmed room.";
   } finally {
@@ -78,133 +86,103 @@ const loadPrebook = async () => {
   }
 };
 
-const submitBooking = async () => {
-  if (!prebook.value) return;
+const submitReservation = async () => {
+  if (!prebook.value || isExpired.value) return;
 
   errorMessage.value = "";
-
   try {
-    await hotelStore.bookHotel({
+    const response = await hotelStore.reserveHotel({
       prebook_id: prebook.value.prebook_id,
       email: email.value,
       phone_number: phoneNumber.value,
       customer_details: customerDetails.value,
     });
+    router.push({ name: "HotelBookingDetails", query: { booking_id: response.data?.booking_id } });
   } catch (error) {
-    errorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Unable to complete this hotel booking.";
+    errorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Unable to save this reservation.";
   }
 };
 
 onMounted(loadPrebook);
+onBeforeUnmount(() => window.clearInterval(countdownTimer));
 </script>
 
 <template>
-  <section class="mx-auto max-w-4xl px-4 py-8 sm:py-12">
-    <div class="mb-6 flex items-center justify-between gap-4">
-      <div>
-        <p class="text-xs font-bold uppercase text-primary">Hotel checkout</p>
-        <h1 class="mt-1 text-2xl font-bold text-gray-950">Review your confirmed room</h1>
-      </div>
-      <Button class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700" @click="router.push({ name: 'HotelSearch' })">
-        Back to search
-      </Button>
-    </div>
-
-    <div v-if="isLoading" class="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm">
-      Confirmed room details are loading...
-    </div>
-
-    <div v-else-if="errorMessage" class="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-800">
-      {{ errorMessage }}
-    </div>
-
-    <div v-else-if="booking" class="rounded-lg border border-emerald-200 bg-emerald-50 p-6">
-      <p class="text-xs font-bold uppercase text-emerald-700">Booking confirmed</p>
-      <h2 class="mt-1 text-2xl font-bold text-emerald-950">Your hotel booking is confirmed.</h2>
-      <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-2">
-        <div><dt class="text-emerald-700">Confirmation number</dt><dd class="font-semibold text-emerald-950">{{ booking.confirmation_number || 'Pending provider confirmation' }}</dd></div>
-        <div><dt class="text-emerald-700">Booking reference</dt><dd class="font-semibold text-emerald-950">{{ booking.booking_reference_id }}</dd></div>
-        <div><dt class="text-emerald-700">Total fare</dt><dd class="font-semibold text-emerald-950">{{ formatMoney(booking.price_snapshot?.selling_money || { amount: booking.total_fare, currency: booking.currency }) }}</dd></div>
-        <div><dt class="text-emerald-700">Hotel confirmation</dt><dd class="font-semibold text-emerald-950">{{ booking.hotel_confirmation_number || 'Will be updated by provider' }}</dd></div>
-      </dl>
-      <Button class="mt-5 rounded bg-primary px-5 py-2 text-sm font-bold text-white hover:bg-primary/90" @click="router.push({ name: 'HotelBookingDetails', query: { booking_id: booking.booking_id } })">
-        View booking voucher
-      </Button>
-    </div>
-
-    <div v-else-if="prebook" class="space-y-5">
-      <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-        Room availability and the latest price have been confirmed by TBO. This confirmation expires at {{ new Date(prebook.expires_at).toLocaleString() }}.
+  <main class="min-h-screen bg-slate-50 py-7 sm:py-10">
+    <section class="mx-auto max-w-6xl px-4 sm:px-6">
+      <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Hotel checkout</p>
+          <h1 class="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">Guest information</h1>
+          <p class="mt-2 text-sm text-slate-500">Your room has been checked with the provider. Add guest details to continue.</p>
+        </div>
+        <Button class="border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" @click="router.push({ name: 'HotelSearch' })">Back to search</Button>
       </div>
 
-      <article class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <p class="text-xs font-bold uppercase text-primary">{{ prebook.hotel.hotel_code }}</p>
-        <h2 class="mt-1 text-xl font-bold text-gray-950">{{ prebook.hotel.name }}</h2>
-        <p v-if="prebook.hotel.city || prebook.hotel.country" class="mt-1 text-sm text-gray-500">
-          {{ [prebook.hotel.city, prebook.hotel.country].filter(Boolean).join(', ') }}
-        </p>
-        <p v-if="prebook.hotel.address" class="mt-1 text-sm text-gray-500">{{ prebook.hotel.address }}</p>
+      <div v-if="isLoading" class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div class="h-[520px] animate-pulse border border-slate-200 bg-white" />
+        <div class="h-72 animate-pulse border border-slate-200 bg-white" />
+      </div>
 
-        <div class="mt-5 border-t border-gray-100 pt-5">
-          <h3 class="font-semibold text-gray-950">{{ Array.isArray(prebook.room.name) ? prebook.room.name.join(', ') : prebook.room.name || 'Selected room' }}</h3>
-          <p v-if="prebook.room.inclusion" class="mt-1 text-sm text-gray-600">{{ prebook.room.inclusion }}</p>
-          <div class="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-            <div><span class="block text-xs font-semibold uppercase text-gray-500">Meal</span>{{ prebook.room.meal_type || 'Not specified' }}</div>
-            <div><span class="block text-xs font-semibold uppercase text-gray-500">Refundable</span>{{ prebook.room.is_refundable ? 'Yes' : 'No' }}</div>
-            <div><span class="block text-xs font-semibold uppercase text-gray-500">Final fare</span><strong class="text-base text-gray-950">{{ formatMoney(finalFare || prebook.room.total_fare) }}</strong></div>
+      <div v-else-if="errorMessage" class="border border-red-200 bg-red-50 p-5 text-sm text-red-800">{{ errorMessage }}</div>
+
+      <div v-else-if="prebook" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div class="space-y-5">
+          <div class="flex items-center justify-between gap-3 border-l-2 px-3 py-2 text-xs" :class="isExpired ? 'border-red-500 bg-red-50 text-red-800' : 'border-amber-500 bg-amber-50 text-amber-900'">
+            <div class="flex items-center gap-1.5 font-medium"><Clock3 class="h-4 w-4" /><span>{{ isExpired ? 'Reservation window expired' : 'Complete details before expiry' }}</span></div>
+            <strong class="border border-current/20 bg-white/60 px-2 py-0.5 font-mono text-sm font-bold tabular-nums">{{ formatCountdown(remainingSeconds) }}</strong>
           </div>
-        </div>
-      </article>
 
-      <article class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 class="font-semibold text-gray-950">Cancellation policy</h2>
-        <ul v-if="prebook.room.cancel_policies?.length" class="mt-3 space-y-2 text-sm text-gray-600">
-          <li v-for="(policy, index) in prebook.room.cancel_policies" :key="index">{{ formatPolicy(policy) }}</li>
-        </ul>
-        <p v-else class="mt-2 text-sm text-gray-500">No cancellation policy was returned by the provider.</p>
-      </article>
+          <form class="overflow-hidden border border-slate-200 bg-white shadow-sm" @submit.prevent="submitReservation">
+            <div class="border-b border-slate-100 px-5 py-5 sm:px-6">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center bg-primary/10 text-primary"><Users class="h-5 w-5" /></div>
+                <div><h2 class="font-bold text-slate-950">Guest details</h2><p class="mt-0.5 text-sm text-slate-500">Enter names exactly as they appear on government-issued identification.</p></div>
+              </div>
+            </div>
 
-      <article v-if="prebook.room.supplements?.flat?.(2)?.length" class="rounded-lg border border-amber-200 bg-amber-50 p-5">
-        <h2 class="font-semibold text-amber-900">Payable at property</h2>
-        <p class="mt-2 text-sm text-amber-800">Any mandatory supplements shown by TBO must be paid directly at the hotel.</p>
-      </article>
+            <div class="space-y-7 px-5 py-6 sm:px-6">
+              <section v-for="(room, roomIndex) in customerDetails" :key="roomIndex" class="border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-3"><h3 class="font-semibold text-slate-900">Room {{ roomIndex + 1 }}</h3><span class="text-xs font-medium text-slate-500">{{ room.customer_names.length }} guest{{ room.customer_names.length === 1 ? '' : 's' }}</span></div>
+                <div v-for="(guest, guestIndex) in room.customer_names" :key="guestIndex" class="mt-4 first:mt-0">
+                  <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Guest {{ guestIndex + 1 }} · {{ guest.type }}</p>
+                  <div class="grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)_minmax(0,1fr)]">
+                    <label class="text-xs font-medium text-slate-600">Title<select v-model="guest.title" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"><option value="Mr">Mr</option><option value="Mrs">Mrs</option><option value="Ms">Ms</option></select></label>
+                    <label class="text-xs font-medium text-slate-600">First name<input v-model.trim="guest.first_name" required type="text" maxlength="100" placeholder="First name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                    <label class="text-xs font-medium text-slate-600">Last name<input v-model.trim="guest.last_name" required type="text" maxlength="100" placeholder="Last name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                  </div>
+                </div>
+              </section>
 
-      <form class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm" @submit.prevent="submitBooking">
-        <h2 class="text-lg font-semibold text-gray-950">Guest details</h2>
-        <p class="mt-1 text-sm text-gray-500">Names must match each room's adults and children from the original search.</p>
+              <section class="border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                <h3 class="font-semibold text-slate-900">Lead guest contact</h3><p class="mt-1 text-sm text-slate-500">We will use these details for the hotel reservation.</p>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label class="text-sm font-medium text-slate-700">Email address<input v-model.trim="email" required type="email" maxlength="255" placeholder="name@example.com" class="mt-1.5 h-11 w-full border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                  <label class="text-sm font-medium text-slate-700">Phone number<input v-model.trim="phoneNumber" required type="tel" maxlength="64" placeholder="+92 ..." class="mt-1.5 h-11 w-full border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                </div>
+              </section>
 
-        <div v-for="(room, roomIndex) in customerDetails" :key="roomIndex" class="mt-5 border-t border-gray-100 pt-5 first:border-t-0 first:pt-0">
-          <h3 class="font-semibold text-gray-900">Room {{ roomIndex + 1 }}</h3>
-          <div v-for="(guest, guestIndex) in room.customer_names" :key="guestIndex" class="mt-3 grid gap-3 rounded border border-gray-100 bg-gray-50 p-3 sm:grid-cols-[110px_1fr_1fr_110px]">
-            <select v-model="guest.title" class="h-10 border border-gray-300 bg-white px-3 text-sm">
-              <option value="Mr">Mr</option>
-              <option value="Mrs">Mrs</option>
-              <option value="Ms">Ms</option>
-            </select>
-            <input v-model.trim="guest.first_name" required type="text" maxlength="100" placeholder="First name" class="h-10 border border-gray-300 bg-white px-3 text-sm" />
-            <input v-model.trim="guest.last_name" required type="text" maxlength="100" placeholder="Last name" class="h-10 border border-gray-300 bg-white px-3 text-sm" />
-            <span class="flex h-10 items-center text-sm font-medium text-gray-600">{{ guest.type }}</span>
-          </div>
-        </div>
-
-        <div class="mt-5 grid gap-4 sm:grid-cols-2">
-          <label class="text-sm font-medium text-gray-700">
-            Email
-            <input v-model.trim="email" required type="email" maxlength="255" class="mt-1 h-10 w-full border border-gray-300 px-3 text-sm" />
-          </label>
-          <label class="text-sm font-medium text-gray-700">
-            Phone number
-            <input v-model.trim="phoneNumber" required type="tel" maxlength="64" class="mt-1 h-10 w-full border border-gray-300 px-3 text-sm" />
-          </label>
+              <div class="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-xs leading-5 text-slate-500">Book now saves your details as a pending reservation. TBO booking happens only after payment.</p>
+                <Button type="submit" class="h-11 bg-primary px-6 text-sm font-bold text-white hover:bg-primary/90" :disabled="isExpired" :is-loading="isSavingReservation">Book now</Button>
+              </div>
+            </div>
+          </form>
         </div>
 
-        <div class="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-xs text-gray-500">Confirming creates a TBO booking and uses the agency's Limit balance.</p>
-          <Button type="submit" class="h-11 rounded bg-primary px-5 text-sm font-bold text-white hover:bg-primary/90" :is-loading="isBooking">
-            Confirm and book
-          </Button>
-        </div>
-      </form>
-    </div>
-  </section>
+        <aside class="space-y-5 lg:sticky lg:top-5">
+          <article class="overflow-hidden border border-slate-200 bg-white shadow-sm">
+            <div class="bg-primary px-5 py-4 text-primary-foreground"><div class="flex items-center gap-2 text-sm font-semibold"><Hotel class="h-5 w-5" /> Your stay</div><h2 class="mt-2 text-lg font-bold">{{ prebook.hotel.name }}</h2><p class="mt-1 text-sm text-primary-foreground/80">{{ [prebook.hotel.city, prebook.hotel.country].filter(Boolean).join(', ') || 'Location details available at booking' }}</p></div>
+            <div class="space-y-4 p-5">
+              <div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Room</p><p class="mt-1 font-semibold text-slate-900">{{ roomName }}</p><p v-if="prebook.room.inclusion" class="mt-1 text-sm text-slate-500">{{ prebook.room.inclusion }}</p></div>
+              <div class="grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm"><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Check-in</p><p class="mt-1 font-medium text-slate-800">{{ prebook.stay.check_in }}</p></div><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Check-out</p><p class="mt-1 font-medium text-slate-800">{{ prebook.stay.check_out }}</p></div><div class="col-span-2 flex items-center gap-2 text-slate-600"><CalendarDays class="h-4 w-4 text-primary" />{{ stayNights }} night{{ stayNights === 1 ? '' : 's' }} · {{ prebook.room.meal_type || 'Meal details unavailable' }}</div></div>
+              <div class="flex items-end justify-between gap-4"><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Total for stay</p><p class="mt-1 text-2xl font-bold text-slate-950">{{ formatMoney(finalFare || { amount: prebook.room.total_fare, currency: prebook.room.currency }) }}</p></div><span class="px-2.5 py-1 text-xs font-semibold" :class="prebook.room.is_refundable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">{{ prebook.room.is_refundable ? 'Refundable' : 'Non-refundable' }}</span></div>
+            </div>
+          </article>
+
+          <article class="border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-center gap-2"><ShieldCheck class="h-5 w-5 text-primary" /><h2 class="font-semibold text-slate-900">Cancellation policy</h2></div><ul v-if="prebook.room.cancel_policies?.length" class="mt-3 space-y-2 text-sm leading-5 text-slate-600"><li v-for="(policy, index) in prebook.room.cancel_policies" :key="index">{{ formatPolicy(policy) }}</li></ul><p v-else class="mt-3 text-sm text-slate-500">No cancellation policy was returned by the provider.</p></article>
+        </aside>
+      </div>
+    </section>
+  </main>
 </template>

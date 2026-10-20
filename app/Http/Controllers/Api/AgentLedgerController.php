@@ -8,6 +8,7 @@ use App\Models\AgentCharge;
 use App\Models\AgentLedgerEntry;
 use App\Models\DepositData;
 use App\Models\FlightBookings;
+use App\Models\HotelBooking;
 use App\Models\OfflineBooking;
 use App\Services\CurrencyConversionService;
 use DB;
@@ -80,6 +81,26 @@ class AgentLedgerController extends Controller
                     'flight_provider',
                     'itinerary_ref as pnr_ref',
                     'agent_id',
+                ]);
+            $hotelBookings = HotelBooking::query()
+                ->join('hotel_booking_price_snapshots', 'hotel_booking_price_snapshots.hotel_booking_id', '=', 'hotel_bookings.id')
+                ->where('hotel_bookings.status', 'confirmed')
+                ->where('hotel_bookings.payment_method', 'wallet')
+                ->when($agentId, fn($q) => $q->where('hotel_bookings.user_id', $agentId))
+                ->when($startDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '>=', $startDate))
+                ->when($endDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '<=', $endDate))
+                ->select([
+                    DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.updated_at) as date'),
+                    'hotel_booking_price_snapshots.aed_amount as debit',
+                    DB::raw('NULL as credit'),
+                    DB::raw('"hotel_booking" as transaction_type'),
+                    'hotel_bookings.uuid as reference_id',
+                    'hotel_bookings.booking_reference_id as details',
+                    DB::raw('hotel_bookings.id as record_id'),
+                    DB::raw('"tbo" as booking_source'),
+                    DB::raw('NULL as flight_provider'),
+                    'hotel_bookings.hotel_confirmation_number as pnr_ref',
+                    'hotel_bookings.user_id as agent_id',
                 ]);
             $offlineBookings = OfflineBooking::query()
                 ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
@@ -206,6 +227,25 @@ class AgentLedgerController extends Controller
                     'flight_provider',
                     'itinerary_ref as pnr_ref',
                 ]);
+            $hotelBookings = HotelBooking::query()
+                ->join('hotel_booking_price_snapshots', 'hotel_booking_price_snapshots.hotel_booking_id', '=', 'hotel_bookings.id')
+                ->where('hotel_bookings.user_id', $agentId)
+                ->where('hotel_bookings.status', 'confirmed')
+                ->where('hotel_bookings.payment_method', 'wallet')
+                ->when($startDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '>=', $startDate))
+                ->when($endDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '<=', $endDate))
+                ->select([
+                    DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.updated_at) as date'),
+                    'hotel_booking_price_snapshots.aed_amount as debit',
+                    DB::raw('NULL as credit'),
+                    DB::raw('"hotel_booking" as transaction_type'),
+                    'hotel_bookings.uuid as reference_id',
+                    'hotel_bookings.booking_reference_id as details',
+                    DB::raw('hotel_bookings.id as record_id'),
+                    DB::raw('"tbo" as booking_source'),
+                    DB::raw('NULL as flight_provider'),
+                    'hotel_bookings.hotel_confirmation_number as pnr_ref',
+                ]);
             $offlineBookings = OfflineBooking::where('agent_id', $agentId)
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
@@ -281,6 +321,7 @@ class AgentLedgerController extends Controller
         // Combine all transactions
         $transactions = $deposits
             ->unionAll($flightBookings)
+            ->unionAll($hotelBookings)
             ->unionAll($adminBookings)
             ->unionAll($agentCharges)
             ->unionAll($voidLedgerEntries)

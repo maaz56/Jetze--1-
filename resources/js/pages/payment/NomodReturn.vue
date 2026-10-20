@@ -7,6 +7,7 @@ import { useRoute, useRouter } from "vue-router";
 const route = useRoute();
 const router = useRouter();
 const paymentAttempt = computed(() => String(route.query.payment_attempt || ""));
+const isHotelPayment = computed(() => String(route.query.payment_type || "") === "hotel");
 const outcome = computed(() => String(route.params.outcome || "success"));
 const payment = ref(null);
 const error = ref("");
@@ -15,41 +16,51 @@ let pollTimer = null;
 let redirectTimer = null;
 let isUnmounted = false;
 
-const isTicketIssued = computed(() => payment.value?.fulfilment_status === "completed");
+const isFulfilmentCompleted = computed(() => payment.value?.fulfilment_status === "completed");
 const needsAttention = computed(() => [
     "failed",
     "reconciliation_required",
     "duplicate_payment_review",
 ].includes(payment.value?.fulfilment_status));
 const isPaymentUnsuccessful = computed(() => ["failed", "cancelled"].includes(payment.value?.status));
-const isFinished = computed(() => isTicketIssued.value
+const unsuccessfulReturn = computed(() => outcome.value !== "success" && payment.value?.status !== "paid");
+const isFinished = computed(() => isFulfilmentCompleted.value
     || needsAttention.value
-    || isPaymentUnsuccessful.value);
+    || isPaymentUnsuccessful.value
+    || unsuccessfulReturn.value);
 const showProgress = computed(() => !error.value && !isFinished.value);
 
 const progressTitle = computed(() => {
-    if (payment.value?.status === "paid") return "Issuing your ticket";
+    if (payment.value?.status === "paid") {
+        return isHotelPayment.value ? "Confirming your hotel booking" : "Issuing your ticket";
+    }
     return "Confirming your payment";
 });
 
 const progressMessage = computed(() => {
     if (payment.value?.status === "paid") {
-        return "Your payment is verified. Please wait while we confirm your booking and issue the ticket.";
+        return isHotelPayment.value
+            ? "Your payment is verified. Please wait while we confirm the reservation with the hotel provider."
+            : "Your payment is verified. Please wait while we confirm your booking and issue the ticket.";
     }
 
     return "Please wait while we securely verify your payment with Nomod.";
 });
 
 const stateHeading = computed(() => {
-    if (isTicketIssued.value) return "Ticket issued";
+    if (isFulfilmentCompleted.value) {
+        return isHotelPayment.value ? "Hotel booking confirmed" : "Ticket issued";
+    }
     if (needsAttention.value) return "Booking confirmation needs attention";
     if (payment.value?.status === "cancelled" || outcome.value === "cancelled") return "Payment was cancelled";
     return "Payment was not completed";
 });
 
 const stateMessage = computed(() => {
-    if (isTicketIssued.value) {
-        return "Your payment has been confirmed and your booking ticket has been issued.";
+    if (isFulfilmentCompleted.value) {
+        return isHotelPayment.value
+            ? "Your payment is confirmed and the hotel reservation has been completed."
+            : "Your payment has been confirmed and your booking ticket has been issued.";
     }
 
     if (needsAttention.value) {
@@ -71,7 +82,9 @@ const loadStatus = async () => {
     }
 
     try {
-        const response = await apiService.getNomodPaymentStatus(paymentAttempt.value);
+        const response = isHotelPayment.value
+            ? await apiService.getHotelNomodPaymentStatus(paymentAttempt.value)
+            : await apiService.getNomodPaymentStatus(paymentAttempt.value);
         payment.value = response.data;
         error.value = "";
 
@@ -83,15 +96,22 @@ const loadStatus = async () => {
         )) {
             redirectTimer = window.setTimeout(() => {
                 if (!isUnmounted) {
-                    router.replace({
-                        name: "BookingsDetails",
-                        query: {
-                            booking_id: response.data.booking_id,
-                            booking_source: "1",
-                            flight_provider: response.data.flight_provider || "at",
-                            flight_mode: "B2C",
-                        },
-                    });
+                    if (isHotelPayment.value) {
+                        router.replace({
+                            name: "HotelBookingDetails",
+                            query: { booking_id: response.data.booking_id },
+                        });
+                    } else {
+                        router.replace({
+                            name: "BookingsDetails",
+                            query: {
+                                booking_id: response.data.booking_id,
+                                booking_source: "1",
+                                flight_provider: response.data.flight_provider || "at",
+                                flight_mode: "B2C",
+                            },
+                        });
+                    }
                 }
             }, 1200);
         }
@@ -156,10 +176,10 @@ onBeforeUnmount(() => {
             <div
                 :class="[
                     'mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full text-xl',
-                    isTicketIssued ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                    isFulfilmentCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
                 ]"
             >
-                {{ isTicketIssued ? '✓' : '!' }}
+                {{ isFulfilmentCompleted ? '✓' : '!' }}
             </div>
             <h1 class="text-2xl font-bold text-slate-900">{{ error ? 'Unable to check payment status' : stateHeading }}</h1>
             <p class="mt-3 text-slate-600">{{ error || stateMessage }}</p>

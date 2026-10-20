@@ -165,6 +165,10 @@ export default {
         return apiClient.get(`/hotels/prebooks/${prebookId}`);
     },
 
+    reserveHotel(params) {
+        return apiClient.post("/hotels/reservations", params);
+    },
+
     bookHotel(params) {
         return apiClient.post("/hotels/book", params);
     },
@@ -175,6 +179,22 @@ export default {
 
     getHotelBooking(bookingId) {
         return apiClient.get(`/hotels/bookings/${bookingId}`);
+    },
+
+    confirmHotelBooking(bookingId, paymentMethod = "wallet") {
+        return apiClient.post(`/hotels/bookings/${bookingId}/confirm`, {
+            payment_method: paymentMethod,
+        });
+    },
+
+    createHotelNomodCheckout(bookingId) {
+        return apiClient.post("/hotels/payments/nomod/checkout", {
+            hotel_booking_id: bookingId,
+        });
+    },
+
+    getHotelNomodPaymentStatus(paymentAttempt) {
+        return apiClient.get(`/hotels/payments/nomod/${paymentAttempt}/status`);
     },
 
     refreshHotelBookingDetails(bookingId) {

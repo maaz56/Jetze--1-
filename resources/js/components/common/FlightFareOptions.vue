@@ -79,7 +79,7 @@ function fareCount(groups) {
                                     <span v-for="code in fareBookingCodes(fare)" :key="code" class="shrink-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-xs font-bold text-slate-600">{{ code }}</span>
                                 </div>
                                 <div v-if="!baggageSummaries(leg.baggagePolicies).some((summary) => summary.actionTab)" class="flex min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 text-slate-600">
-                                    <span v-for="summary in baggageSummaries(leg.baggagePolicies).filter((summary) => summary.label !== 'Carry-on')" :key="summary.label" class="inline-flex items-center gap-1 whitespace-nowrap">
+                                    <span v-for="summary in baggageSummaries(leg.baggagePolicies)" :key="summary.label" class="inline-flex items-center gap-1 whitespace-nowrap">
                                         <Luggage class="h-4 w-4 shrink-0 text-primary" /> {{ summary.label }}: {{ summary.description }}
                                     </span>
                                 </div>

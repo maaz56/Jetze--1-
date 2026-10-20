@@ -15,9 +15,11 @@ Schedule::command('payments:nomod:recover-at-fulfilments')
     ->everyMinute()
     ->withoutOverlapping();
 
+Schedule::command('payments:nomod:recover-tbo-fulfilments')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 Schedule::command('popular-routes:refresh-prices')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->onOneServer();
-
-
