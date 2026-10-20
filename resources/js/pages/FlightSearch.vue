@@ -782,19 +782,18 @@ function flightMatchesAirline(flight) {
         return true;
     }
 
-    const carrierIds =
-        flight?.leg?.flights?.map((leg) => {
-            const carrier = leg?.marketing_carrier;
-            return (
-                carrier?.id ||
-                carrier?.iata ||
-                carrier?.code ||
-                carrier?.name ||
-                null
-            );
-        }) || [];
+    // The airline carousel represents the outbound/first segment carrier.
+    // Do not include an itinerary merely because a later segment uses the
+    // selected airline.
+    const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
+    const carrierId =
+        carrier?.id ||
+        carrier?.iata ||
+        carrier?.code ||
+        carrier?.name ||
+        null;
 
-    return carrierIds.some((id) => selectedAirline.value.includes(id));
+    return carrierId !== null && selectedAirline.value.includes(carrierId);
 }
 
 function getFlightStopsCount(flight) {
