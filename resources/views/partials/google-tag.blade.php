@@ -1,10 +1,13 @@
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-TD685RGLPC"></script>
+@php
+    $isJetzeAe = in_array(strtolower(request()->getHost()), ['jetze.ae', 'www.jetze.ae'], true);
+    $googleAnalyticsId = $isJetzeAe ? 'G-W5M3NMZCW0' : 'G-Q5SVLZ3VZM';
+@endphp
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleAnalyticsId }}"></script>
 <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
 
-    gtag('config', 'G-TD685RGLPC');
-    gtag('config', 'G-W5M3NMZCW0');
+    gtag('config', '{{ $googleAnalyticsId }}');
 </script>

@@ -2,12 +2,10 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
-    <meta name="google-site-verification" content="xrwYF-bJowTWRFAZvUaQ5Jp2JR0M_WKSDXIYJl97OZk">
+    @include('partials.google-site-verification')
     @include('partials.google-tag-manager')
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="google-site-verification" content="MCyUAgAwj_H93nGsfqySYiW-jMAc6arWHpvtKGvGtvc">
-
     <title>Jetze</title>
 
     <link rel="icon" type="image/png" href="/favicon.png?v=5" sizes="354x354">
