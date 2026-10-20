@@ -1,30 +1,9 @@
 <script setup>
-import { onMounted } from 'vue';
-import { useStore } from 'vuex';
-import { 
-    ShieldCheck, 
-    Zap, 
-    Plane, 
-    Headphones 
-} from 'lucide-vue-next';
-
 import Header from '@/components/shared/Header.vue';
-import QuickServices from './Home/QuickServices.vue';
 import OffersSection from './Home/OffersSection.vue';
 import TrustFeaturesCarousel from './Home/TrustFeaturesCarousel.vue';
 import TopFlightRoutesSection from './Home/TopFlightRoutesSection.vue';
-import WhyChooseUs from './Home/WhyChooseUs.vue';
-import TrendingRoutes from './Home/TrendingRoutes.vue';
-import Collections from './Home/Collections.vue';
-import NewsletterSection from './Home/NewsletterSection.vue';
 import Footer from '@/components/common/Footer.vue';
-import { FETCH_POPULAR_ROUTES } from '@/services/store/actions.type';
-
-const store = useStore();
-
-onMounted(() => {
-    store.dispatch('cms/' + FETCH_POPULAR_ROUTES, { per_page: 20 });
-});
 </script>
 
 <template>

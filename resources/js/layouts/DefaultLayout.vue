@@ -1,9 +1,7 @@
 <script setup>
-import Footer from "../components/common/Footer.vue";
 import Nav from "../components/shared/Nav.vue";
-import Header from "../components/shared/Header.vue";
 import WhatsappButton from "@/components/common/WhatsappButton.vue";
-import { onMounted } from "vue";
+import { onBeforeUnmount, onMounted } from "vue";
 import LoginMini from "@/pages/LoginMini.vue";
 import { useStore } from "vuex";
 import { computed } from "vue";
@@ -69,9 +67,32 @@ function testGeolocation() {
   );
 }
 
+let locationTask = null;
+
 onMounted(() => {
-  fetchCountryCode();
-  testGeolocation();
+  // Do not compete with the search form and route rendering on a mobile
+  // device. Location is supplementary data, so collect it once the browser
+  // has an idle period after the page becomes interactive.
+  const loadLocationData = () => {
+    fetchCountryCode();
+    testGeolocation();
+  };
+
+  if ("requestIdleCallback" in window) {
+    locationTask = window.requestIdleCallback(loadLocationData, { timeout: 5000 });
+  } else {
+    locationTask = window.setTimeout(loadLocationData, 2000);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (locationTask === null) return;
+
+  if ("cancelIdleCallback" in window && "requestIdleCallback" in window) {
+    window.cancelIdleCallback(locationTask);
+  } else {
+    window.clearTimeout(locationTask);
+  }
 });
 </script>
 

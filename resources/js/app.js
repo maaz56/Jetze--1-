@@ -1,11 +1,9 @@
 import "flowbite";
-import { createApp } from "vue";
+import { createApp, defineAsyncComponent } from "vue";
 import "./bootstrap";
 import router from "./config/router";
 import store from "./config/store";
 // root component
-import { QuillEditor } from "@vueup/vue-quill";
-import "@vueup/vue-quill/dist/vue-quill.snow.css";
 import { createPinia } from "pinia";
 import Vue3Toasity from "vue3-toastify";
 import "vue3-toastify/dist/index.css";
@@ -30,5 +28,14 @@ app.use(Vue3Toasity, {
   newestOnTop: true,
   transition: "slide",
 });
-app.component("QuillEditor", QuillEditor);
+// The editor is used only by admin CMS screens. Loading it asynchronously keeps
+// its sizeable JavaScript and CSS out of the public home-page download.
+app.component("QuillEditor", defineAsyncComponent(async () => {
+  const [{ QuillEditor }] = await Promise.all([
+    import("@vueup/vue-quill"),
+    import("@vueup/vue-quill/dist/vue-quill.snow.css"),
+  ]);
+
+  return QuillEditor;
+}));
 app.mount("#app");
