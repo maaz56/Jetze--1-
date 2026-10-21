@@ -228,7 +228,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
                             >
                                 <Wallet class="h-5 w-5" />Wallet balance</button
                             >
-                            <!-- <button
+                            <button
                                 type="button"
                                 class="mt-2 flex w-full items-center gap-3 rounded px-3 py-3 text-left text-sm font-semibold"
                                 :class="
@@ -240,7 +240,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
                             >
                                 <CreditCard class="h-5 w-5" />Debit / credit
                                 card
-                            </button> -->
+                            </button>
                         </aside>
                         <div class="p-5 sm:p-6">
                             <div class="flex items-center gap-3">
