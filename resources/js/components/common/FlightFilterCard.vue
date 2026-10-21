@@ -1,25 +1,33 @@
 <script setup>
 import Autocomplete from "@/components/common/Autocomplete.vue";
-import Button from "@/components/ui/button/Button.vue";
-import { Label } from "@/components/ui/label";
-import {
-    NumberField,
-    NumberFieldContent,
-    NumberFieldDecrement,
-    NumberFieldIncrement,
-    NumberFieldInput,
-} from "@/components/ui/number-field";
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { ChevronDownIcon, Search, ArrowLeftRight, ArrowRight, Calendar } from "lucide-vue-next";
+import {
+    ArrowLeftRight,
+    ArrowRight,
+    CalendarDays,
+    ChevronDownIcon,
+    ChevronUp,
+    Minus,
+    Plane,
+    MoveRight,
+    Pencil,
+    PlaneLanding,
+    PlaneTakeoff,
+    Plus,
+    Repeat,
+    Route,
+    Search,
+    Users,
+    X,
+} from "lucide-vue-next";
 import { FETCH_AIRPORTS, FETCH_PNR_DATA } from "@/services/store/actions.type";
 import { computed, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
 import Calender from "./Calender.vue";
-import { CircleArrowDown, Plane } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "@/services/stores/auth";
@@ -36,15 +44,6 @@ const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const headerDefaultAirportCodes = ["PEW","LHE","SKT","ISB","KHI","MUX","GWD"];
 const ONWARD_DATE_MIN_ERROR = "OnwardDate cannot be less than Today";
 
-
-const tabs = [
-    { id: "flights", name: "Flights", icon: Plane },
-    { id: "searchPnr", name: "Search PNR", icon: CircleArrowDown },
-    // { id: "hotels", name: "Hotels", icon: Building2 },
-    // { id: "cars", name: "Car Rental", icon: Car },
-    // { id: "activities", name: "Activities", icon: Compass },
-    // { id: "packages", name: "Packages", icon: Ticket },
-];
 const props = defineProps({
     modelValue: {
         type: Object,
@@ -75,7 +74,7 @@ const props = defineProps({
         default: "default",
     },
 });
-const emit = defineEmits(["update:modelValue", "search"]);
+const emit = defineEmits(["update:modelValue", "search", "compact-change"]);
 
 const createDefaultModel = () => ({
     flightType: "one-way",
@@ -143,6 +142,11 @@ const isDateBeforeToday = (date) => {
     return Boolean(normalizedDate && normalizedDate < todayDate);
 };
 
+const addDays = (date, days) => {
+    const [year, month, day] = normalizeDateValue(date).split("-").map(Number);
+    return getLocalDateString(new Date(year, month - 1, day + days));
+};
+
 function validate() {
     errors.value = {};
     const { flightType, origin, destination, dateRange, multiCityTrips } =
@@ -191,6 +195,12 @@ function validate() {
         if (!dateRange.end) {
             errors.value.end = "End date is required.";
             valid = false;
+        } else if (
+            dateRange.start &&
+            normalizeDateValue(dateRange.end) < normalizeDateValue(dateRange.start)
+        ) {
+            errors.value.end = "Return date cannot be before departure.";
+            valid = false;
         }
     } else if (flightType === "multi-city") {
         errors.value.multiCityTrips = [];
@@ -212,12 +222,6 @@ function validate() {
     return valid;
 }
 const activeTab = ref("flights");
-
-const setActiveTab = (id) => {
-    activeTab.value = id;
-    // Reset PNR field when switching away
-    if (id !== "searchPnr") pnr.value = "";
-};
 
 const handlePnrSearch = async () => {
     if (!pnr.value.trim()) {
@@ -242,24 +246,27 @@ watch(bookingDetails, () => {
                 flight_mode: "B2C",
             },
         });
-    } else {
     }
 });
+
+const isMobileViewport = () => window.innerWidth < 640;
 
 function handleSearch() {
     isSubmit.value = true;
     if (validate()) {
-        // ✅ update v-model
         emit("update:modelValue", localValue.value);
         emit("search", localValue.value);
-
-        // ✅ emit search with latest data
+        // Collapse back to the compact summary on phones once a search runs.
+        if (isMobileViewport() && canCollapse.value) showRoutePreview.value = true;
     }
 }
+
+const isSwapping = ref(false);
 function swapOriginDestination() {
     const previousOrigin = localValue.value.origin;
     localValue.value.origin = localValue.value.destination;
     localValue.value.destination = previousOrigin;
+    isSwapping.value = !isSwapping.value;
 }
 // Hide error for date fields when a valid date is selected (one-way/return)
 watch(
@@ -267,6 +274,11 @@ watch(
     (val) => {
         if (val && !isDateBeforeToday(val) && errors.value.start) {
             errors.value.start = undefined;
+        }
+        // Keep the return date on or after the new departure date.
+        const end = localValue.value.dateRange?.end;
+        if (val && end && normalizeDateValue(end) < normalizeDateValue(val)) {
+            localValue.value.dateRange.end = addDays(val, 1);
         }
     },
 );
@@ -302,12 +314,7 @@ watch(
     () => localValue.value.multiCityTrips.map((t) => t.origin),
     (origins) => {
         origins.forEach((origin, idx) => {
-            if (
-                origin &&
-                errors.value.multiCityTrips &&
-                errors.value.multiCityTrips[idx] &&
-                errors.value.multiCityTrips[idx].origin
-            ) {
+            if (origin && errors.value.multiCityTrips?.[idx]?.origin) {
                 errors.value.multiCityTrips[idx].origin = undefined;
             }
         });
@@ -316,15 +323,20 @@ watch(
 );
 watch(
     () => localValue.value.multiCityTrips.map((t) => t.destination),
-    (destinations) => {
+    (destinations, previous = []) => {
         destinations.forEach((destination, idx) => {
+            if (destination && errors.value.multiCityTrips?.[idx]?.destination) {
+                errors.value.multiCityTrips[idx].destination = undefined;
+            }
+            // Chain legs: a new arrival city becomes the next leg's departure.
+            const nextTrip = localValue.value.multiCityTrips[idx + 1];
             if (
                 destination &&
-                errors.value.multiCityTrips &&
-                errors.value.multiCityTrips[idx] &&
-                errors.value.multiCityTrips[idx].destination
+                destination !== previous[idx] &&
+                nextTrip &&
+                !nextTrip.origin
             ) {
-                errors.value.multiCityTrips[idx].destination = undefined;
+                nextTrip.origin = destination;
             }
         });
     },
@@ -334,14 +346,12 @@ watch(
 // Hide error for multi-city trip date fields
 watch(
     () => localValue.value.multiCityTrips.map((t) => t.date),
-    (dates, _, onCleanup) => {
+    (dates) => {
         dates.forEach((date, idx) => {
             if (
                 date &&
                 !isDateBeforeToday(date) &&
-                errors.value.multiCityTrips &&
-                errors.value.multiCityTrips[idx] &&
-                errors.value.multiCityTrips[idx].date
+                errors.value.multiCityTrips?.[idx]?.date
             ) {
                 errors.value.multiCityTrips[idx].date = undefined;
             }
@@ -383,14 +393,36 @@ const totalTravelers = computed(
         localValue.value.infant,
 );
 const todayDate = getLocalDateString();
+
+const isMultiCity = computed(() => localValue.value.flightType === "multi-city");
+
 const setFlightType = (type) => {
-    localValue.value.flightType = type;
-    if (type === "one-way") {
-        localValue.value.dateRange.end = null;
-    }
+    const previousType = localValue.value.flightType;
+    if (previousType === type) return;
+    const value = localValue.value;
+    errors.value = {};
+
     if (type === "multi-city") {
-        localValue.value.dateRange.start = null;
-        localValue.value.dateRange.end = null;
+        // Carry the current route into the first leg so nothing is retyped.
+        const firstTrip = value.multiCityTrips[0];
+        firstTrip.origin = firstTrip.origin || value.origin || null;
+        firstTrip.destination = firstTrip.destination || value.destination || null;
+        firstTrip.date = firstTrip.date || value.dateRange.start || "";
+        value.dateRange.start = null;
+        value.dateRange.end = null;
+    } else if (previousType === "multi-city") {
+        const firstTrip = value.multiCityTrips[0];
+        value.origin = value.origin || firstTrip.origin || "";
+        value.destination = value.destination || firstTrip.destination || "";
+        value.dateRange.start = value.dateRange.start || firstTrip.date || null;
+    }
+
+    value.flightType = type;
+    if (type === "one-way") {
+        value.dateRange.end = null;
+    }
+    if (type === "return" && !value.dateRange.end && value.dateRange.start) {
+        value.dateRange.end = addDays(value.dateRange.start, 1);
     }
 };
 
@@ -398,45 +430,38 @@ const activateReturnTrip = () => {
     localValue.value.flightType = "return";
     if (!localValue.value.dateRange.end) {
         const startDate = localValue.value.dateRange.start || todayDate;
-        const returnDate = new Date(startDate);
-        returnDate.setDate(returnDate.getDate() + 1);
-        localValue.value.dateRange.end = returnDate.toISOString().split("T")[0];
+        localValue.value.dateRange.end = addDays(startDate, 1);
     }
+};
+
+const removeReturnTrip = () => {
+    setFlightType("one-way");
 };
 
 function resetTravelers() {
     localValue.value.adult = 1;
     localValue.value.child = 0;
     localValue.value.infant = 0;
-    localValue.value.classType = "y";
+    localValue.value.classType = "Y";
 }
 const isPopoverOpen = ref(false);
-const isFlightTypeOpen = ref(false);
 
 const flightTypeOptions = [
-    { value: "return", label: "Round Trip" },
-    { value: "one-way", label: "One Way" },
-    { value: "multi-city", label: "Multi-City" },
+    { value: "return", label: "Round Trip", icon: Repeat },
+    { value: "one-way", label: "One Way", icon: MoveRight },
+    { value: "multi-city", label: "Multi-City", icon: Route },
 ];
 
-const selectedFlightType = computed(() => {
-    return (
-        flightTypeOptions.find(
-            (option) => option.value === localValue.value.flightType,
-        ) || flightTypeOptions[1]
-    );
-});
+const isFlightTypeActive = (type) =>
+    localValue.value.flightType === type ||
+    (type === "return" && localValue.value.flightType === "two-way");
 
-const alternateFlightTypes = computed(() => {
-    return flightTypeOptions.filter(
-        (option) => option.value !== localValue.value.flightType,
-    );
-});
-
-const selectFlightType = (type) => {
-    setFlightType(type);
-    isFlightTypeOpen.value = false;
-};
+const cabinClassOptions = [
+    { value: "Y", labelKey: "economy" },
+    { value: "S", labelKey: "premium_economy" },
+    { value: "C", labelKey: "business" },
+    { value: "F", labelKey: "first class" },
+];
 
 function applyChanges() {
     isPopoverOpen.value = false;
@@ -495,37 +520,62 @@ function clampTravelers() {
 }
 
 function handleAdultChange(val) {
-    // Ensure at least 1 adult
     const maxAllowed = Math.max(1, maxTotal - localValue.value.child);
-
     localValue.value.adult = Math.min(val, maxAllowed);
-
-    // Infants cannot exceed adults
-    if (localValue.value.infant > localValue.value.adult) {
-        localValue.value.infant = localValue.value.adult;
-    }
-
     clampTravelers();
 }
 
 function handleChildChange(val) {
     const maxAllowed = maxTotal - localValue.value.adult;
     localValue.value.child = Math.min(val, maxAllowed);
-
     clampTravelers();
 }
 
 function handleInfantChange(val) {
     const maxAllowed = localValue.value.adult;
     localValue.value.infant = Math.min(val, maxAllowed);
-
     clampTravelers();
 }
 
+const travellerRows = computed(() => [
+    {
+        key: "adult",
+        label: "Adults",
+        hint: "12+ years",
+        min: 1,
+        max: maxAdults.value,
+        onChange: handleAdultChange,
+    },
+    {
+        key: "child",
+        label: "Children",
+        hint: "2–11 years",
+        min: 0,
+        max: maxChildren.value,
+        onChange: handleChildChange,
+    },
+    {
+        key: "infant",
+        label: "Infants",
+        hint: "Under 2 years, on lap",
+        min: 0,
+        max: maxInfants.value,
+        onChange: handleInfantChange,
+    },
+]);
+
+const stepTraveller = (row, delta) => {
+    const next = localValue.value[row.key] + delta;
+    if (next < row.min || next > row.max) return;
+    row.onChange(next);
+};
+
 const addTrip = () => {
     if (localValue.value.multiCityTrips.length >= maxMultiCityTrips) return;
+    const lastTrip =
+        localValue.value.multiCityTrips[localValue.value.multiCityTrips.length - 1];
     localValue.value.multiCityTrips.push({
-        origin: null,
+        origin: lastTrip?.destination || null,
         destination: null,
         date: "",
     });
@@ -533,45 +583,80 @@ const addTrip = () => {
 const removeTrip = (index) => {
     if (localValue.value.multiCityTrips.length > 2) {
         localValue.value.multiCityTrips.splice(index, 1);
+        errors.value.multiCityTrips?.splice(index, 1);
     }
 };
-onMounted(() => {
-    store.dispatch("airport/" + FETCH_AIRPORTS);
-     if (window.innerWidth < 640) {
-    showRoutePreview.value = true;
-  }
-});
 
-const formatTime = (milliseconds) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+const formatShortDate = (date) => {
+    const normalized = normalizeDateValue(date);
+    if (!normalized) return "";
+    const [year, month, day] = normalized.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+    });
 };
 
-const countdown = ref(props.countdown ?? "0");
-watch(
-    () => props.countdown,
-    (newVal) => {
-        countdown.value = newVal ?? "0";
-    },
+const findCityName = (code) => {
+    if (!code || !Array.isArray(airports.value)) return code || "";
+    const match = airports.value.find(
+        (airport) => String(airport?.iata_code || "").toUpperCase() === String(code).toUpperCase(),
+    );
+    return match?.city_name || code;
+};
+
+const selectedFlightTypeLabel = computed(
+    () =>
+        flightTypeOptions.find((option) => isFlightTypeActive(option.value))?.label ||
+        "One Way",
 );
 
-const startCountdown = (remainingTime) => {
-    if (timerInterval.value) clearInterval(timerInterval.value);
-    countdown.value = formatTime(remainingTime);
+const previewSummary = computed(() => {
+    const value = localValue.value;
+    let summary;
+    if (isMultiCity.value) {
+        const trips = value.multiCityTrips;
+        summary = {
+            origin: trips[0]?.origin || route.query.origin || "",
+            destination: trips[trips.length - 1]?.destination || "",
+            dates: [trips[0]?.date, trips[trips.length - 1]?.date]
+                .filter(Boolean)
+                .map(formatShortDate)
+                .join(" – "),
+        };
+    } else {
+        const start = value.dateRange.start || route.query.departure_date;
+        summary = {
+            origin: value.origin || route.query.origin || "",
+            destination: value.destination || route.query.destination || "",
+            dates: [start, value.flightType === "return" ? value.dateRange.end : null]
+                .filter(Boolean)
+                .map(formatShortDate)
+                .join(" – "),
+        };
+    }
+    return {
+        ...summary,
+        originCity: findCityName(summary.origin),
+        destinationCity: findCityName(summary.destination),
+    };
+});
 
-    timerInterval.value = setInterval(() => {
-        remainingTime -= 1000;
-        if (remainingTime <= 0) {
-            clearInterval(timerInterval.value);
-            localStorage.removeItem("previous_search");
-            showDialog.value = true;
-        } else {
-            countdown.value = formatTime(remainingTime);
-        }
-    }, 1000);
-};
+// Only offer the compact bar once there is a route worth summarising.
+const canCollapse = computed(
+    () => Boolean(previewSummary.value.origin && previewSummary.value.destination),
+);
+
+watch(showRoutePreview, (value) => emit("compact-change", value), {
+    immediate: true,
+});
+
+onMounted(() => {
+    store.dispatch("airport/" + FETCH_AIRPORTS);
+    if (isMobileViewport() && canCollapse.value) {
+        showRoutePreview.value = true;
+    }
+});
 </script>
 
 <template>
@@ -582,85 +667,111 @@ const startCountdown = (remainingTime) => {
         ]"
     >
         <div v-if="activeTab === 'flights'">
-            <div v-if="showRoutePreview"
-                class="sm:hidden bg-primary backdrop-blur-md border border-white/20  p-3 flex items-center justify-between gap-2 shadow-md"
-            >
-                <!-- Locations -->
-                <div
-                    class="flex items-center gap-1 text-sm font-medium text-white truncate"
-                >
-                    <span>{{ route.query.origin }}</span>
-                    <ArrowRight class="w-4 h-4 text-gray-300" />
-                    <span>{{ route.query.destination }}</span>
+            <!-- Compact summary; expands into the full form -->
+            <div v-if="showRoutePreview" class="container flight-filter-content">
+                <div class="route-preview">
+                    <button
+                        type="button"
+                        class="route-preview__summary"
+                        @click="showRoutePreview = false"
+                    >
+                        <span class="route-preview__icon">
+                            <Plane class="h-4 w-4" />
+                        </span>
+                        <span class="route-preview__segment route-preview__segment--route">
+                            <span class="route-preview__route">
+                                <span class="truncate">{{ previewSummary.originCity }}</span>
+                                <component
+                                    :is="localValue.flightType === 'return' ? ArrowLeftRight : ArrowRight"
+                                    class="h-4 w-4 shrink-0 text-primary"
+                                />
+                                <span class="truncate">{{ previewSummary.destinationCity }}</span>
+                            </span>
+                            <span class="route-preview__sub">
+                                {{ previewSummary.origin }} – {{ previewSummary.destination }}
+                                · {{ selectedFlightTypeLabel }}
+                            </span>
+                        </span>
+                        <span v-if="previewSummary.dates" class="route-preview__segment">
+                            <span class="route-preview__label">
+                                <CalendarDays class="h-3.5 w-3.5" />
+                                Dates
+                            </span>
+                            <span class="route-preview__value">{{ previewSummary.dates }}</span>
+                        </span>
+                        <span class="route-preview__segment">
+                            <span class="route-preview__label">
+                                <Users class="h-3.5 w-3.5" />
+                                Travellers
+                            </span>
+                            <span class="route-preview__value">
+                                {{ travelersSummary }}, {{ classLabel }}
+                            </span>
+                        </span>
+                        <span class="route-preview__meta">
+                            <span v-if="previewSummary.dates">{{ previewSummary.dates }}</span>
+                            <span v-if="previewSummary.dates" aria-hidden="true">·</span>
+                            <span>{{ travelersSummary }}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{{ classLabel }}</span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="showRoutePreview = false"
+                        class="route-preview__edit"
+                    >
+                        <Pencil class="h-4 w-4" />
+                        <span class="route-preview__edit-text">Modify search</span>
+                    </button>
                 </div>
-
-                <!-- Date -->
-                <div
-                    class="flex items-center gap-1 text-sm font-medium text-white"
-                >
-                    <Calendar class="w-4 h-4 text-gray-300" />
-                    <span>{{ route.query.departure_date}}</span>
-                </div>
-
-                <!-- Change Button -->
-                <button
-                    @click="showRoutePreview = false"
-                    class="text-xs text-white font-semibold px-3 py-1 bg-white/20 rounded-md hover:bg-white/30 transition"
-                >
-                    Change
-                </button>
             </div>
-            <div v-else class="flight-filter-panel py-4 sm:py-5">
 
-                <!-- Flight Search Form -->
-                <div
-                    class="container flight-filter-content"
-                    v-if="
-                        localValue.flightType === 'one-way' ||
-                        localValue.flightType === 'return'
-                    "
-                >
-                    <div class="flight-search-header">
-                        <div class="flight-type-cell">
-                            <Popover v-model:open="isFlightTypeOpen">
-                                <PopoverTrigger as-child>
-                                    <button
-                                        type="button"
-                                        class="flight-type-trigger"
-                                    >
-                                        <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                                            Trip
-                                        </span>
-                                        <span class="flight-type-value flex items-center justify-between gap-3 font-bold text-slate-950">
-                                            {{ selectedFlightType.label }}
-                                            <ChevronDownIcon class="h-4 w-4 text-slate-500" />
-                                        </span>
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent class="w-44 rounded-md border border-slate-200 bg-white p-1 shadow-xl">
-                                    <button
-                                        v-for="option in alternateFlightTypes"
-                                        :key="option.value"
-                                        type="button"
-                                        @click="selectFlightType(option.value)"
-                                        class="w-full rounded px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                                    >
-                                        {{ option.label }}
-                                    </button>
-                                </PopoverContent>
-                            </Popover>
+            <div v-else class="flight-filter-panel py-4 sm:py-5">
+                <div class="container flight-filter-content">
+                    <!-- Trip type -->
+                    <div class="flight-type-bar">
+                        <div class="flight-type-tabs" role="tablist" aria-label="Trip type">
+                            <button
+                                v-for="option in flightTypeOptions"
+                                :key="option.value"
+                                type="button"
+                                role="tab"
+                                :aria-selected="isFlightTypeActive(option.value)"
+                                @click="setFlightType(option.value)"
+                                :class="[
+                                    'flight-type-tab',
+                                    { 'is-active': isFlightTypeActive(option.value) },
+                                ]"
+                            >
+                                <component :is="option.icon" class="h-3.5 w-3.5" />
+                                {{ option.label }}
+                            </button>
                         </div>
-                        <div
-                            :class="[
-                                'flight-fields-grid grid grid-cols-1 items-stretch',
-                                'sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]',
-                            ]"
+                        <button
+                            v-if="canCollapse"
+                            type="button"
+                            class="flight-type-collapse"
+                            @click="showRoutePreview = true"
+                            aria-label="Collapse search form"
                         >
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label
-                                    class="block text-sm font-semibold text-gray-700 sm:mb-1"
-                                >
-                                    FROM
+                            <ChevronUp class="h-4 w-4" />
+                            <span class="flight-type-collapse__text">Collapse</span>
+                        </button>
+                    </div>
+
+                    <!-- Main search row -->
+                    <div
+                        :class="[
+                            'flight-search-card',
+                            isMultiCity ? 'flight-search-card--multicity' : 'flight-search-card--standard',
+                        ]"
+                    >
+                        <template v-if="!isMultiCity">
+                            <div :class="['search-field search-field--from', { 'has-error': errors.origin }]">
+                                <label class="search-field__label">
+                                    <PlaneTakeoff class="h-3.5 w-3.5" />
+                                    From
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.origin"
@@ -676,29 +787,25 @@ const startCountdown = (remainingTime) => {
                                     :auto-fill-defaults="true"
                                     auto-fill-role="origin"
                                     :auto-fill-suggestion-index="0"
-                                    class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    class="w-full"
                                 />
+                                <p v-if="errors.origin" class="search-field__error">
+                                    {{ errors.origin }}
+                                </p>
                                 <button
                                     type="button"
                                     @click="swapOriginDestination"
-                                    class="absolute -right-5 top-1/2 z-10 hidden w-10 h-10 -translate-y-1/2 bg-white text-black border border-gray-200 rounded-full sm:flex items-center justify-center hover:bg-gray-50 transition-colors shadow-md"
+                                    :class="['swap-button', { 'is-swapped': isSwapping }]"
                                     aria-label="Swap origin and destination"
                                 >
-                                    <ArrowLeftRight class="w-5 h-5 text-black" />
+                                    <ArrowLeftRight class="h-4 w-4" />
                                 </button>
-                                <div
-                                    v-if="errors.origin"
-                                    class="text-destructive mt-1 text-xs"
-                                >
-                                    {{ errors.origin }}
-                                </div>
                             </div>
 
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label
-                                    class="block text-sm font-semibold text-gray-700 sm:mb-1"
-                                >
-                                    TO
+                            <div :class="['search-field search-field--to', { 'has-error': errors.destination }]">
+                                <label class="search-field__label">
+                                    <PlaneLanding class="h-3.5 w-3.5" />
+                                    To
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.destination"
@@ -714,263 +821,74 @@ const startCountdown = (remainingTime) => {
                                     :auto-fill-defaults="true"
                                     auto-fill-role="destination"
                                     :auto-fill-suggestion-index="1"
-                                    class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    class="w-full"
                                 />
-                                <div
-                                    v-if="errors.destination"
-                                    class="text-destructive mt-1 text-xs"
-                                >
+                                <p v-if="errors.destination" class="search-field__error">
                                     {{ errors.destination }}
-                                </div>
+                                </p>
                             </div>
 
-                            <div class="filter-booking-cell w-full text-start">
-                                <label
-                                    class="block text-sm font-semibold text-gray-700 mb-1"
-                                >
+                            <div :class="['search-field', { 'has-error': errors.start }]">
+                                <label class="search-field__label">
+                                    <CalendarDays class="h-3.5 w-3.5" />
                                     Departure
                                 </label>
                                 <Calender
                                     ref="departureCalendar"
                                     v-model="localValue.dateRange.start"
-                                    :minValue="new Date().toLocaleDateString('en-CA')"
+                                    :minValue="todayDate"
                                     large-icon
-                                    class="w-full h-10 sm:h-auto"
+                                    class="w-full"
                                 />
-                                <div
-                                    v-if="errors.start"
-                                    class="text-destructive mt-1 text-xs"
-                                >
+                                <p v-if="errors.start" class="search-field__error">
                                     {{ errors.start }}
-                                </div>
+                                </p>
                             </div>
 
-                            <div
-                                class="filter-booking-cell w-full text-start cursor-pointer"
-                                @click="activateReturnTrip"
-                            >
-                                <label
-                                    class="block text-sm font-semibold text-gray-700 mb-1"
-                                >
+                            <div :class="['search-field', { 'has-error': errors.end }]">
+                                <label class="search-field__label">
+                                    <CalendarDays class="h-3.5 w-3.5" />
                                     Return
                                 </label>
-                                <template v-if="localValue.flightType === 'return'">
+                                <template v-if="localValue.flightType === 'return' || localValue.flightType === 'two-way'">
                                     <Calender
                                         v-model="localValue.dateRange.end"
-                                        :minValue="
-                                            localValue.dateRange.start ||
-                                            new Date().toLocaleDateString('en-CA')
-                                        "
+                                        :minValue="localValue.dateRange.start || todayDate"
                                         large-icon
-                                        class="w-full h-10 sm:h-auto"
+                                        class="w-full"
                                     />
+                                    <button
+                                        type="button"
+                                        class="return-clear-button"
+                                        @click.stop="removeReturnTrip"
+                                        aria-label="Remove return date"
+                                    >
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
                                 </template>
                                 <button
                                     v-else
                                     type="button"
-                                    class="min-h-[50px] w-full pt-4 text-left text-xs font-semibold leading-4 text-gray-500"
+                                    class="return-add-button"
+                                    @click="activateReturnTrip"
                                 >
-                                    Tap to add a return date for bigger discounts
+                                    <span class="return-add-button__title">
+                                        <Plus class="h-4 w-4" />
+                                        Add return
+                                    </span>
+                                    <span class="return-add-button__hint">Save more on round trips</span>
                                 </button>
-                                <div
-                                    v-if="errors.end"
-                                    class="text-destructive mt-1 text-xs"
-                                >
+                                <p v-if="errors.end" class="search-field__error">
                                     {{ errors.end }}
-                                </div>
+                                </p>
                             </div>
+                        </template>
 
-                            <div class="filter-booking-cell w-full text-start">
-                                <label
-                                    class="block text-sm font-semibold text-gray-700 mb-1"
-                                >
-                                    Travellers & Class
-                                </label>
-                                <Popover v-model:open="isPopoverOpen">
-                                    <PopoverTrigger as-child>
-                                        <button
-                                            type="button"
-                                            class="w-full h-[60px] flex items-center justify-between bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                                        >
-                                            <div class="text-left">
-                                                <p class="font-bold text-lg">
-                                                    {{ travelersSummary }}
-                                                </p>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ classLabel }}
-                                                </p>
-                                            </div>
-                                            <ChevronDownIcon class="w-4 h-4 opacity-70" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        class="w-80 p-6 rounded-lg border-0 shadow-xl"
-                                    >
-                                        <div class="space-y-6">
-                                            <div class="grid grid-cols-2 gap-2">
-                                                <button
-                                                    @click="localValue.classType = 'Y'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        localValue.classType === 'Y'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("economy") }}
-                                                </button>
-                                                <button
-                                                    @click="localValue.classType = 'S'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        localValue.classType === 'S'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("premium_economy") }}
-                                                </button>
-                                                <button
-                                                    @click="localValue.classType = 'C'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        localValue.classType === 'C'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("business") }}
-                                                </button>
-                                                <button
-                                                    @click="localValue.classType = 'F'"
-                                                    :class="[
-                                                        'py-2 rounded-md text-sm font-medium transition uppercase',
-                                                        localValue.classType === 'F'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                                    ]"
-                                                >
-                                                    {{ $t("first class") }}
-                                                </button>
-                                            </div>
-
-                                            <div class="space-y-5">
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Adult</b> <br>(12 Years)</Label>
-                                                    <NumberField
-                                                        class="w-1/2"
-                                                        id="adult-field"
-                                                        v-model="localValue.adult"
-                                                        :max="maxAdults"
-                                                        @update:modelValue="handleAdultChange"
-                                                    >
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Child</b> <br>(2-11 Years)</Label>
-                                                    <NumberField
-                                                        class="w-1/2"
-                                                        id="child-field"
-                                                        v-model="localValue.child"
-                                                        :min="0"
-                                                        :max="maxChildren"
-                                                        @update:modelValue="handleChildChange"
-                                                    >
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Infant</b> <br>(Under 2 Years)</Label>
-                                                    <NumberField
-                                                        class="w-1/2"
-                                                        id="infant-field"
-                                                        v-model="localValue.infant"
-                                                        :min="0"
-                                                        :max="maxInfants"
-                                                        @update:modelValue="handleInfantChange"
-                                                    >
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                            </div>
-
-                                            <div class="flex justify-between">
-                                                <Button
-                                                    @click="resetTravelers"
-                                                    variant="outline" class="text-sm font-medium text-gray-700 hover:text-white"
-                                                >
-                                                    Reset
-                                                </Button>
-                                                <Button
-                                                    @click="applyChanges"
-                                                    class="px-5 py-1 bg-primary text-primary-foreground rounded-md font-sm"
-                                                >
-                                                    Apply
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
-
-                        <button
-                            @click="handleSearch"
-                            class="flight-search-button"
-                        >
-                            <Search class="w-6 h-6" />
-                            <p class="text-2xl">Search</p>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Multi-City Form -->
-                <div v-else class="container flight-filter-content">
-                    <div class="flight-search-header">
-                        <div class="flight-type-cell">
-                            <Popover v-model:open="isFlightTypeOpen">
-                                <PopoverTrigger as-child>
-                                    <button type="button" class="flight-type-trigger">
-                                        <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                                            Trip
-                                        </span>
-                                        <span class="flight-type-value flex items-center justify-between gap-3 font-bold text-slate-950">
-                                            {{ selectedFlightType.label }}
-                                            <ChevronDownIcon class="h-4 w-4 text-slate-500" />
-                                        </span>
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent class="w-44 rounded-md border border-slate-200 bg-white p-1 shadow-xl">
-                                    <button
-                                        v-for="option in alternateFlightTypes"
-                                        :key="option.value"
-                                        type="button"
-                                        @click="selectFlightType(option.value)"
-                                        class="w-full rounded px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                                    >
-                                        {{ option.label }}
-                                    </button>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-
-                        <div class="flight-fields-grid multicity-fields-grid grid grid-cols-1 items-stretch sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]">
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label class="block text-sm font-semibold text-gray-700 sm:mb-1">
-                                    TRIP 1 FROM
+                        <template v-else>
+                            <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[0]?.origin }]">
+                                <label class="search-field__label">
+                                    <PlaneTakeoff class="h-3.5 w-3.5" />
+                                    Trip 1 · From
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.multiCityTrips[0].origin"
@@ -986,16 +904,17 @@ const startCountdown = (remainingTime) => {
                                     :auto-fill-defaults="true"
                                     auto-fill-role="origin"
                                     :auto-fill-suggestion-index="0"
-                                    class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    class="w-full"
                                 />
-                                <div v-if="errors.multiCityTrips?.[0]?.origin" class="text-destructive mt-1 text-xs">
+                                <p v-if="errors.multiCityTrips?.[0]?.origin" class="search-field__error">
                                     {{ errors.multiCityTrips[0].origin }}
-                                </div>
+                                </p>
                             </div>
 
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label class="block text-sm font-semibold text-gray-700 sm:mb-1">
-                                    TRIP 1 TO
+                            <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[0]?.destination }]">
+                                <label class="search-field__label">
+                                    <PlaneLanding class="h-3.5 w-3.5" />
+                                    Trip 1 · To
                                 </label>
                                 <Autocomplete
                                     v-model="localValue.multiCityTrips[0].destination"
@@ -1011,197 +930,217 @@ const startCountdown = (remainingTime) => {
                                     :auto-fill-defaults="true"
                                     auto-fill-role="destination"
                                     :auto-fill-suggestion-index="1"
-                                    class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    class="w-full"
                                 />
-                                <div v-if="errors.multiCityTrips?.[0]?.destination" class="text-destructive mt-1 text-xs">
+                                <p v-if="errors.multiCityTrips?.[0]?.destination" class="search-field__error">
                                     {{ errors.multiCityTrips[0].destination }}
-                                </div>
+                                </p>
                             </div>
 
-                            <div class="filter-booking-cell w-full text-start">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">
-                                    Trip 1 Date
+                            <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[0]?.date }]">
+                                <label class="search-field__label">
+                                    <CalendarDays class="h-3.5 w-3.5" />
+                                    Trip 1 · Date
                                 </label>
                                 <Calender
                                     v-model="localValue.multiCityTrips[0].date"
                                     :minValue="todayDate"
                                     large-icon
-                                    class="w-full h-10 sm:h-auto"
+                                    class="w-full"
                                 />
-                                <div v-if="errors.multiCityTrips?.[0]?.date" class="text-destructive mt-1 text-xs">
+                                <p v-if="errors.multiCityTrips?.[0]?.date" class="search-field__error">
                                     {{ errors.multiCityTrips[0].date }}
-                                </div>
+                                </p>
                             </div>
+                        </template>
 
-                            <div class="filter-booking-cell w-full text-start">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">
-                                    Travellers & Class
-                                </label>
-                                <Popover v-model:open="isPopoverOpen">
-                                    <PopoverTrigger as-child>
-                                        <button
-                                            type="button"
-                                            class="w-full h-[60px] flex items-center justify-between bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                                        >
-                                            <div class="text-left">
-                                                <p class="font-bold text-lg">{{ travelersSummary }}</p>
-                                                <p class="text-sm text-gray-500">{{ classLabel }}</p>
-                                            </div>
-                                            <ChevronDownIcon class="w-4 h-4 opacity-70" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent class="w-80 p-6 rounded-lg border-0 shadow-xl">
-                                        <div class="space-y-6">
-                                            <div class="grid grid-cols-2 gap-2">
-                                                <button @click="localValue.classType = 'Y'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'Y' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("economy") }}</button>
-                                                <button @click="localValue.classType = 'S'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'S' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("premium_economy") }}</button>
-                                                <button @click="localValue.classType = 'C'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'C' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("business") }}</button>
-                                                <button @click="localValue.classType = 'F'" :class="['py-2 rounded-md text-sm font-medium transition uppercase', localValue.classType === 'F' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">{{ $t("first class") }}</button>
-                                            </div>
+                        <!-- Travellers & cabin (shared by every trip type) -->
+                        <div class="search-field search-field--travellers">
+                            <label class="search-field__label">
+                                <Users class="h-3.5 w-3.5" />
+                                Travellers & Class
+                            </label>
+                            <Popover v-model:open="isPopoverOpen">
+                                <PopoverTrigger as-child>
+                                    <button type="button" class="travellers-trigger">
+                                        <span class="min-w-0 text-left">
+                                            <span class="travellers-trigger__value">{{ travelersSummary }}</span>
+                                            <span class="travellers-trigger__sub">{{ classLabel }}</span>
+                                        </span>
+                                        <ChevronDownIcon
+                                            :class="[
+                                                'h-4 w-4 shrink-0 text-slate-400 transition-transform',
+                                                { 'rotate-180 text-primary': isPopoverOpen },
+                                            ]"
+                                        />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    align="end"
+                                    class="travellers-popover w-[20rem] rounded-xl border border-slate-200 bg-white p-0 shadow-xl"
+                                >
+                                    <div class="travellers-popover__section">
+                                        <h4 class="travellers-popover__heading">Cabin class</h4>
+                                        <div class="cabin-chip-grid">
+                                            <button
+                                                v-for="cabin in cabinClassOptions"
+                                                :key="cabin.value"
+                                                type="button"
+                                                @click="localValue.classType = cabin.value"
+                                                :class="['cabin-chip', { 'is-selected': localValue.classType === cabin.value }]"
+                                            >
+                                                {{ $t(cabin.labelKey) }}
+                                            </button>
+                                        </div>
+                                    </div>
 
-                                            <div class="space-y-5">
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Adult</b> <br>(12 Years)</Label>
-                                                    <NumberField class="w-1/2" id="adult-field-multicity" v-model="localValue.adult" :max="maxAdults" @update:modelValue="handleAdultChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
+                                    <div class="travellers-popover__section">
+                                        <h4 class="travellers-popover__heading">Travellers</h4>
+                                        <div class="space-y-3">
+                                            <div
+                                                v-for="row in travellerRows"
+                                                :key="row.key"
+                                                class="traveller-row"
+                                            >
+                                                <div>
+                                                    <p class="traveller-row__label">{{ row.label }}</p>
+                                                    <p class="traveller-row__hint">{{ row.hint }}</p>
                                                 </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Child</b> <br>(2-11 Years)</Label>
-                                                    <NumberField class="w-1/2" id="child-field-multicity" v-model="localValue.child" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
+                                                <div class="traveller-stepper">
+                                                    <button
+                                                        type="button"
+                                                        :disabled="localValue[row.key] <= row.min"
+                                                        @click="stepTraveller(row, -1)"
+                                                        :aria-label="`Remove one ${row.label.toLowerCase()}`"
+                                                    >
+                                                        <Minus class="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <span class="traveller-stepper__count">{{ localValue[row.key] }}</span>
+                                                    <button
+                                                        type="button"
+                                                        :disabled="localValue[row.key] >= row.max"
+                                                        @click="stepTraveller(row, 1)"
+                                                        :aria-label="`Add one ${row.label.toLowerCase()}`"
+                                                    >
+                                                        <Plus class="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
-                                                <div class="flex justify-between items-center">
-                                                    <Label><b>Infant</b> <br>(Under 2 Years)</Label>
-                                                    <NumberField class="w-1/2" id="infant-field-multicity" v-model="localValue.infant" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
-                                                        <NumberFieldContent>
-                                                            <NumberFieldDecrement />
-                                                            <NumberFieldInput />
-                                                            <NumberFieldIncrement />
-                                                        </NumberFieldContent>
-                                                    </NumberField>
-                                                </div>
-                                            </div>
-
-                                            <div class="flex justify-between">
-                                                <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
-                                                    Reset
-                                                </Button>
-                                                <Button @click="applyChanges" class="px-5 py-1 bg-primary text-primary-foreground rounded-md font-sm">
-                                                    Apply
-                                                </Button>
                                             </div>
                                         </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
+                                        <p class="travellers-popover__note">
+                                            Up to {{ maxTotal }} adults and children. One infant per adult.
+                                        </p>
+                                    </div>
+
+                                    <div class="travellers-popover__actions">
+                                        <button type="button" class="travellers-reset" @click="resetTravelers">
+                                            Reset
+                                        </button>
+                                        <button type="button" class="travellers-apply" @click="applyChanges">
+                                            Done
+                                        </button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
-                        <button @click="handleSearch" class="flight-search-button">
-                            <Search class="w-4 h-4" />
-                            <span class="rtl:text-right ltr:text-left">{{ $t("search") }}</span>
-                        </button>
+                        <div class="search-action">
+                            <button type="button" @click="handleSearch" class="flight-search-button">
+                                <Search class="h-5 w-5" />
+                                <span>{{ $t("search") }}</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="multicity-extra-panel">
-                        <div
-                            v-for="(trip, index) in localValue.multiCityTrips"
-                            :key="index"
-                            v-show="index > 0"
-                            class="multicity-extra-row"
+                    <!-- Additional multi-city legs -->
+                    <div v-if="isMultiCity" class="multicity-legs">
+                        <template v-for="(trip, index) in localValue.multiCityTrips" :key="index">
+                            <div v-if="index > 0" class="multicity-leg">
+                                <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[index]?.origin }]">
+                                    <label class="search-field__label">
+                                        <PlaneTakeoff class="h-3.5 w-3.5" />
+                                        Trip {{ index + 1 }} · From
+                                    </label>
+                                    <Autocomplete
+                                        v-model="trip.origin"
+                                        clear-on-click
+                                        placeholder="Origin"
+                                        :source="airports"
+                                        :excluded-iata-codes="[trip.destination]"
+                                        :search-debounce="300"
+                                        :icon="'MapPin'"
+                                        show-icon
+                                        compact-icon
+                                        :default-suggestions="headerDefaultAirportCodes"
+                                        class="w-full"
+                                    />
+                                    <p v-if="errors.multiCityTrips?.[index]?.origin" class="search-field__error">
+                                        {{ errors.multiCityTrips[index].origin }}
+                                    </p>
+                                </div>
+
+                                <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[index]?.destination }]">
+                                    <label class="search-field__label">
+                                        <PlaneLanding class="h-3.5 w-3.5" />
+                                        Trip {{ index + 1 }} · To
+                                    </label>
+                                    <Autocomplete
+                                        v-model="trip.destination"
+                                        clear-on-click
+                                        placeholder="Destination"
+                                        :icon="'MapPin'"
+                                        show-icon
+                                        compact-icon
+                                        :source="airports"
+                                        :excluded-iata-codes="[trip.origin]"
+                                        :search-debounce="300"
+                                        :default-suggestions="headerDefaultAirportCodes"
+                                        class="w-full"
+                                    />
+                                    <p v-if="errors.multiCityTrips?.[index]?.destination" class="search-field__error">
+                                        {{ errors.multiCityTrips[index].destination }}
+                                    </p>
+                                </div>
+
+                                <div :class="['search-field', { 'has-error': errors.multiCityTrips?.[index]?.date }]">
+                                    <label class="search-field__label">
+                                        <CalendarDays class="h-3.5 w-3.5" />
+                                        Trip {{ index + 1 }} · Date
+                                    </label>
+                                    <Calender
+                                        v-model="trip.date"
+                                        :minValue="localValue.multiCityTrips[index - 1]?.date || todayDate"
+                                        large-icon
+                                        class="w-full"
+                                    />
+                                    <p v-if="errors.multiCityTrips?.[index]?.date" class="search-field__error">
+                                        {{ errors.multiCityTrips[index].date }}
+                                    </p>
+                                </div>
+
+                                <div class="multicity-leg__actions">
+                                    <button
+                                        v-if="index >= 2"
+                                        type="button"
+                                        @click="removeTrip(index)"
+                                        class="multicity-remove-button"
+                                    >
+                                        <X class="h-4 w-4" />
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <button
+                            v-if="localValue.multiCityTrips.length < maxMultiCityTrips"
+                            type="button"
+                            @click="addTrip"
+                            class="multicity-add-button"
                         >
-                            <div class="trip-index-badge">Trip {{ index + 1 }}</div>
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label class="block text-sm font-semibold text-gray-700 sm:mb-1">
-                                    FROM
-                                </label>
-                                <Autocomplete
-                                    v-model="trip.origin"
-                                    clear-on-click
-                                    placeholder="Origin"
-                                    :source="airports"
-                                    :excluded-iata-codes="[trip.destination]"
-                                    :search-debounce="300"
-                                    :icon="'MapPin'"
-                                    show-icon
-                                    compact-icon
-                                    :default-suggestions="headerDefaultAirportCodes"
-                                    class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                                />
-                                <div v-if="errors.multiCityTrips?.[index]?.origin" class="text-destructive mt-1 text-xs">
-                                    {{ errors.multiCityTrips[index].origin }}
-                                </div>
-                            </div>
-
-                            <div class="filter-booking-cell text-start relative w-full">
-                                <label class="block text-sm font-semibold text-gray-700 sm:mb-1">
-                                    TO
-                                </label>
-                                <Autocomplete
-                                    v-model="trip.destination"
-                                    clear-on-click
-                                    placeholder="Destination"
-                                    :icon="'MapPin'"
-                                    show-icon
-                                    compact-icon
-                                    :source="airports"
-                                    :excluded-iata-codes="[trip.origin]"
-                                    :search-debounce="300"
-                                    :default-suggestions="headerDefaultAirportCodes"
-                                    class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                                />
-                                <div v-if="errors.multiCityTrips?.[index]?.destination" class="text-destructive mt-1 text-xs">
-                                    {{ errors.multiCityTrips[index].destination }}
-                                </div>
-                            </div>
-
-                            <div class="filter-booking-cell w-full text-start">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">
-                                    Date
-                                </label>
-                                <Calender
-                                    v-model="trip.date"
-                                    :minValue="localValue.multiCityTrips[index - 1]?.date || todayDate"
-                                    large-icon
-                                    class="w-full h-10 sm:h-auto"
-                                />
-                                <div v-if="errors.multiCityTrips?.[index]?.date" class="text-destructive mt-1 text-xs">
-                                    {{ errors.multiCityTrips[index].date }}
-                                </div>
-                            </div>
-
-                            <div class="multicity-action-cell" aria-hidden="true"></div>
-
-                            <div
-                                v-if="index === 1"
-                                @click="addTrip"
-                                class="multicity-action-cell multicity-add-cell"
-                            >
-                                <button type="button" @click.stop="addTrip">
-                                    Add Another City
-                                </button>
-                            </div>
-                            <button
-                                v-else-if="index >= 2"
-                                type="button"
-                                @click="removeTrip(index)"
-                                :disabled="localValue.multiCityTrips.length <= 2"
-                                class="multicity-remove-button"
-                            >
-                                <span class="text-base leading-none">x</span>
-                                <span>Remove</span>
-                            </button>
-                            <div v-else class="multicity-action-cell" aria-hidden="true"></div>
-                        </div>
+                            <Plus class="h-4 w-4" />
+                            Add another flight
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1241,6 +1180,8 @@ const startCountdown = (remainingTime) => {
 
 <style scoped>
 .flight-filter-shell {
+    --field-columns-standard: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) 9.5rem;
+    --field-columns-multicity: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.15fr) 9.5rem;
     background: linear-gradient(180deg, #f8fafc 0%, hsl(var(--primary) / 0.08) 100%);
 }
 
@@ -1261,310 +1202,879 @@ const startCountdown = (remainingTime) => {
     border-bottom: 1px solid rgba(148, 163, 184, 0.22);
 }
 
-/* Keep the complete flight form—including its Search action—20% narrower than
-   its surrounding header on desktop, without compromising the mobile layout. */
+/* Keep the complete flight form 20% narrower than its surrounding header on
+   desktop, matching the results column below it. */
 .flight-filter-content {
     width: 80%;
 }
 
-.flight-search-header {
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1fr) 138px;
-    align-items: stretch;
-    overflow: hidden;
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
-}
-
-.flight-type-cell {
-    border-right: 1px solid #e5e7eb;
-    background: #f8fafc;
-}
-
-.flight-type-trigger {
+/* ---------- Trip type tabs ---------- */
+.flight-type-bar {
     display: flex;
-    min-height: 76px;
-    width: 100%;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 0.35rem;
-    padding: 0.6rem 1rem;
-    text-align: left;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+.flight-type-tabs {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.2rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.flight-type-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 1.85rem;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flight-type-tab:hover {
+    color: hsl(var(--primary));
+}
+
+.flight-type-tab.is-active {
+    background: #ffffff;
+    color: hsl(var(--primary));
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+.flight-type-collapse {
+    display: inline-flex;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0 0.75rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 700;
     transition: background-color 0.2s ease;
 }
 
-.flight-type-trigger:hover {
-    background: #f1f5f9;
+.flight-type-collapse:hover {
+    background: #cbd5e1;
 }
 
-.flight-type-value {
-    font-size: 1.05rem;
-    line-height: 1.35rem;
+/* On the blue results hero the tabs sit on the gradient itself. */
+.flight-filter-shell--edge-overlap .flight-type-tabs,
+.flight-filter-shell--edge-overlap .flight-type-collapse {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    backdrop-filter: blur(6px);
 }
 
-.flight-fields-grid {
-    min-width: 0;
+.flight-filter-shell--edge-overlap .flight-type-collapse:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
+
+.flight-filter-shell--edge-overlap .flight-type-tab {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.flight-filter-shell--edge-overlap .flight-type-tab:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.flight-filter-shell--edge-overlap .flight-type-tab.is-active {
     background: #ffffff;
+    color: hsl(var(--primary));
+}
+
+/* ---------- Search card ---------- */
+.flight-search-card,
+.multicity-leg {
+    display: grid;
+    align-items: stretch;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.flight-search-card--standard {
+    grid-template-columns: var(--field-columns-standard);
+}
+
+.flight-search-card--multicity,
+.multicity-leg {
+    grid-template-columns: var(--field-columns-multicity);
+}
+
+.search-field {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 4.75rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.55rem 0.9rem;
+    border-right: 1px solid #e2e8f0;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-field:first-child {
+    border-top-left-radius: 0.75rem;
+    border-bottom-left-radius: 0.75rem;
+}
+
+.search-field:hover {
+    background: hsl(var(--primary) / 0.035);
+}
+
+.search-field:focus-within {
+    background: hsl(var(--primary) / 0.05);
+    box-shadow: inset 0 -2px 0 hsl(var(--primary));
+}
+
+.search-field.has-error {
+    background: #fef2f2;
+    box-shadow: inset 0 -2px 0 #ef4444;
+}
+
+.search-field__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.search-field:focus-within .search-field__label {
+    color: hsl(var(--primary));
+}
+
+.search-field__error {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0.5rem;
+    z-index: 20;
+    max-width: calc(100% + 4rem);
+    padding: 0.3rem 0.55rem;
+    border-radius: 0.4rem;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1rem;
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.25);
+    pointer-events: none;
+}
+
+.search-field__error::before {
+    position: absolute;
+    top: -0.25rem;
+    left: 0.75rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    content: "";
+    background: #dc2626;
+    transform: rotate(45deg);
+}
+
+/* Swap control straddles the From / To divider. */
+.swap-button {
+    position: absolute;
+    top: 50%;
+    right: -1.05rem;
+    z-index: 15;
+    display: inline-flex;
+    height: 2.1rem;
+    width: 2.1rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #ffffff;
+    color: hsl(var(--primary));
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    transform: translateY(-50%);
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.swap-button svg {
+    transition: transform 0.3s ease;
+}
+
+.swap-button.is-swapped svg {
+    transform: rotate(180deg);
+}
+
+.swap-button:hover {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: #ffffff;
+}
+
+.search-field--to {
+    padding-left: 1.4rem;
+}
+
+/* Return date: add / clear */
+.return-add-button {
+    display: flex;
+    min-height: 2.75rem;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+}
+
+.return-add-button__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: hsl(var(--primary));
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+}
+
+.return-add-button__hint {
+    color: #94a3b8;
+    font-size: 0.7rem;
+    line-height: 1rem;
+}
+
+.return-clear-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    display: inline-flex;
+    height: 1.4rem;
+    width: 1.4rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #94a3b8;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.return-clear-button:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+/* Travellers */
+.travellers-trigger {
+    display: flex;
+    min-height: 2.75rem;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    outline: none;
+}
+
+.travellers-trigger__value {
+    display: block;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.travellers-trigger__sub {
+    display: block;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.travellers-popover__section {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.travellers-popover__heading {
+    margin-bottom: 0.65rem;
+    color: #0f172a;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.cabin-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.cabin-chip {
+    min-height: 2.25rem;
+    padding: 0.45rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.4rem;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1rem;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.cabin-chip:hover,
+.cabin-chip.is-selected {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.07);
+    color: hsl(var(--primary));
+}
+
+.traveller-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.traveller-row__label {
+    color: #0f172a;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.2rem;
+}
+
+.traveller-row__hint {
+    color: #64748b;
+    font-size: 0.72rem;
+    line-height: 1rem;
+}
+
+.traveller-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.traveller-stepper button {
+    display: inline-flex;
+    height: 1.9rem;
+    width: 1.9rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid hsl(var(--primary) / 0.4);
+    border-radius: 999px;
+    color: hsl(var(--primary));
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.traveller-stepper button:hover:not(:disabled) {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: #ffffff;
+}
+
+.traveller-stepper button:disabled {
+    border-color: #e2e8f0;
+    color: #cbd5e1;
+    cursor: not-allowed;
+}
+
+.traveller-stepper__count {
+    min-width: 1.25rem;
+    color: #0f172a;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.travellers-popover__note {
+    margin-top: 0.85rem;
+    color: #94a3b8;
+    font-size: 0.7rem;
+    line-height: 1rem;
+}
+
+.travellers-popover__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+}
+
+.travellers-reset {
+    color: hsl(var(--primary));
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.travellers-reset:hover {
+    text-decoration: underline;
+}
+
+.travellers-apply {
+    min-height: 2.1rem;
+    padding: 0 1.25rem;
+    border-radius: 0.5rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition: filter 0.2s ease;
+}
+
+.travellers-apply:hover {
+    filter: brightness(1.08);
+}
+
+/* Search button sits inset inside the card. */
+.search-action {
+    display: flex;
+    padding: 0.45rem;
 }
 
 .flight-search-button {
     display: inline-flex;
-    min-height: 76px;
     width: 100%;
     align-items: center;
     justify-content: center;
-    gap: 0.55rem;
+    gap: 0.5rem;
+    border-radius: 0.55rem;
     background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
     color: #ffffff;
-    font-size: 1rem;
+    font-size: 1.05rem;
     font-weight: 800;
-    transition:
-        filter 0.2s ease,
-        transform 0.2s ease;
+    box-shadow: 0 8px 18px hsl(var(--primary) / 0.3);
+    transition: filter 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .flight-search-button:hover {
     filter: brightness(1.06);
+    box-shadow: 0 10px 22px hsl(var(--primary) / 0.38);
 }
 
 .flight-search-button:active {
     transform: translateY(1px);
 }
 
-.multicity-fields-grid .filter-booking-cell:last-child {
-    border-right: 0;
-}
-
-.multicity-extra-panel {
+/* ---------- Multi-city legs ---------- */
+.multicity-legs {
     display: grid;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    gap: 0.6rem;
+    margin-top: 0.6rem;
 }
 
-.multicity-extra-row {
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(0, 1.02fr) minmax(0, 1.28fr) 138px;
-    align-items: stretch;
-    overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.26);
-    border-radius: 8px;
-    background: #ffffff;
+.multicity-leg {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
-.trip-index-badge {
+.multicity-leg__actions {
     display: flex;
+    grid-column: span 2;
     align-items: center;
-    justify-content: center;
-    border-right: 1px solid #e5e7eb;
-    background: #f8fafc;
-    color: #0f172a;
-    font-size: 0.8rem;
-    font-weight: 800;
+    justify-content: flex-end;
+    padding: 0.45rem 0.75rem;
 }
 
 .multicity-remove-button {
     display: inline-flex;
-    min-height: 76px;
+    min-height: 2.25rem;
     align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    border-left: 1px solid #fee2e2;
-    background: #fff7f7;
+    gap: 0.35rem;
+    padding: 0 0.85rem;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
     color: #dc2626;
-    font-size: 0.82rem;
-    font-weight: 700;
-    transition:
-        background-color 0.2s ease,
-        color 0.2s ease;
-}
-
-.multicity-action-cell {
-    display: flex;
-    min-height: 76px;
-    align-items: center;
-    justify-content: center;
-    border-right: 1px solid #e5e7eb;
-}
-
-.multicity-add-cell {
-    cursor: pointer;
-    background: #ecfdf5;
-    color: #047857;
-    font-size: 1rem;
+    font-size: 0.78rem;
     font-weight: 700;
     transition: background-color 0.2s ease;
 }
 
-.multicity-add-cell:hover {
-    background: #d1fae5;
-}
-
-.multicity-add-cell:active {
-    background: #a7f3d0;
-}
-
-.multicity-add-cell button {
-    height: 100%;
-    width: 100%;
-}
-
 .multicity-remove-button:hover {
-    background: #fee2e2;
-    color: #b91c1c;
+    background: #fef2f2;
 }
 
-.multicity-remove-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
+.multicity-add-button {
+    display: inline-flex;
+    min-height: 2.6rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1.5px dashed hsl(var(--primary) / 0.45);
+    border-radius: 0.75rem;
+    background: hsl(var(--primary) / 0.04);
+    color: hsl(var(--primary));
+    font-size: 0.82rem;
+    font-weight: 700;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.filter-booking-cell {
-    @apply relative min-w-0 min-h-[76px] border-b border-gray-200 px-3 py-2 sm:border-b-0 sm:border-r;
+.multicity-add-button:hover {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
 }
 
-.filter-booking-cell:last-child {
-    @apply sm:border-r-0;
+.flight-filter-shell--edge-overlap .multicity-add-button {
+    border-color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
 }
 
-.filter-booking-cell :deep(.min-h-\[110px\]) {
-    min-height: 44px !important;
+.flight-filter-shell--edge-overlap .multicity-add-button:hover {
+    border-color: #ffffff;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* ---------- Compact summary bar ---------- */
+.route-preview {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.4rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+}
+
+.route-preview__summary {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.55rem;
+    text-align: left;
+    transition: background-color 0.2s ease;
+}
+
+.route-preview__summary:hover {
+    background: hsl(var(--primary) / 0.035);
+}
+
+.route-preview__icon {
+    display: inline-flex;
+    height: 2.4rem;
+    width: 2.4rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    margin: 0 0.35rem 0 0.25rem;
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+}
+
+.route-preview__segment {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.2rem 1.1rem;
+    border-left: 1px solid #e2e8f0;
+}
+
+.route-preview__segment--route {
+    flex: 1 1 auto;
+    padding-left: 0.25rem;
+    border-left: 0;
+}
+
+.route-preview__route {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.3rem;
+}
+
+.route-preview__sub {
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.72rem;
+    line-height: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-preview__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1rem;
+    text-transform: uppercase;
+}
+
+.route-preview__value {
+    color: #0f172a;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.2rem;
+    white-space: nowrap;
+}
+
+/* Single-line meta replaces the segments on narrow screens. */
+.route-preview__meta {
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    line-height: 1rem;
+}
+
+.route-preview__edit {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.9rem;
+    padding: 0 1.25rem;
+    border-radius: 0.55rem;
+    background: linear-gradient(135deg, hsl(var(--primary-button-start)) 0%, hsl(var(--primary-button-end)) 100%);
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 800;
+    box-shadow: 0 8px 18px hsl(var(--primary) / 0.3);
+    transition: filter 0.2s ease;
+}
+
+.route-preview__edit:hover {
+    filter: brightness(1.06);
+}
+
+/* ---------- Child component overrides (Autocomplete / Calender) ---------- */
+.search-field :deep(.min-h-\[110px\]) {
+    min-height: 2.75rem !important;
     padding: 0 !important;
 }
 
-.filter-booking-cell :deep(.h-\[110px\]) {
-    height: 44px !important;
-    min-height: 44px !important;
+.search-field :deep(.h-\[110px\]) {
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
 
-.filter-booking-cell :deep(input) {
+.search-field :deep(.dropdown input) {
     padding-left: 0 !important;
     padding-right: 0 !important;
-    padding-top: 1.35rem !important;
-    font-size: 1.05rem !important;
-    line-height: 1.35rem !important;
+    font-size: 1rem !important;
+    line-height: 1.25rem !important;
 }
 
-.filter-booking-cell :deep(.dropdown input) {
-    padding-left: 2rem !important;
-}
-
-.filter-booking-cell :deep(.dropdown span.mb-1) {
+.search-field :deep(.dropdown span.mb-1) {
     display: none;
 }
 
-.filter-booking-cell :deep(.dropdown .pointer-events-none) {
-    padding-top: 0.2rem;
+/* Field labels carry the icons, so drop the large inline ones. */
+.search-field :deep(.dropdown .pointer-events-none) {
+    padding-left: 0;
+    padding-right: 0;
 }
 
-.filter-booking-cell :deep(.dropdown h2) {
-    font-size: 1.08rem;
-    line-height: 1.35rem;
+.search-field :deep(.dropdown .pointer-events-none > svg),
+.search-field :deep(button.h-\[110px\] > svg) {
+    display: none;
 }
 
-.filter-booking-cell :deep(.dropdown p) {
-    margin-top: 0.15rem;
-    font-size: 0.75rem;
-    line-height: 1rem;
+.search-field :deep(.dropdown .pointer-events-none p:first-child) {
+    margin-bottom: 0 !important;
+    color: #0f172a;
+    font-size: 1rem !important;
+    font-weight: 700;
+    line-height: 1.25rem !important;
 }
 
-/* Match the selected city name to the Departure date's primary text size. */
-.filter-booking-cell :deep(.dropdown .pointer-events-none p:first-child) {
-    margin-bottom: 0.5rem !important;
+.search-field :deep(.dropdown .pointer-events-none p + p) {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    color: #64748b;
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+}
+
+.search-field :deep(button.h-\[110px\]) {
+    background: transparent !important;
+}
+
+.search-field :deep(button.h-\[110px\] p:first-child) {
+    color: #0f172a;
     font-size: 1rem !important;
     line-height: 1.25rem !important;
 }
 
-.filter-booking-cell :deep(button.h-\[110px\]) {
-    height: 44px !important;
+.search-field :deep(button.h-\[110px\] p + p) {
+    margin-top: 0 !important;
+    color: #64748b;
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
 }
 
-.filter-booking-cell :deep(button.h-\[110px\] p:first-child) {
-    font-size: 1rem !important;
-    line-height: 1.25rem !important;
-}
-
-.filter-booking-cell label {
-    font-size: 0.7rem;
-    letter-spacing: 0;
-    line-height: 1rem;
-}
-
-.filter-booking-cell button.min-h-\[60px\] {
-    min-height: 44px;
-    padding-top: 0.3rem;
-    font-size: 0.68rem;
-    line-height: 0.95rem;
-}
-
-.filter-booking-cell button.h-\[60px\] {
-    height: 44px;
-}
-
-.filter-booking-cell button.h-\[60px\] p:first-child {
-    font-size: 1rem;
-    line-height: 1.25rem;
-}
-
-.filter-booking-cell button.h-\[60px\] p:last-child {
-    font-size: 0.78rem;
-    line-height: 1rem;
-}
-
-/* Additional responsive utilities if needed */
-@media (max-width: 1024px) {
+/* ---------- Responsive ---------- */
+@media (max-width: 1400px) {
     .flight-filter-content {
         width: 100%;
     }
-
-    .flight-search-header {
-        grid-template-columns: 1fr;
-    }
-
-    .multicity-extra-row {
-        grid-template-columns: 1fr;
-    }
-
-    .flight-type-cell {
-        border-right: 0;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    .flight-type-trigger,
-    .flight-search-button,
-    .multicity-remove-button {
-        min-height: 56px;
-    }
-
-    .trip-index-badge {
-        min-height: 42px;
-        border-right: 0;
-        border-bottom: 1px solid #e5e7eb;
-        justify-content: flex-start;
-        padding: 0 0.85rem;
-    }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 1024px) {
+    .flight-search-card--standard {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .flight-search-card--multicity,
+    .multicity-leg {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .search-field {
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .search-field:first-child {
+        border-bottom-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+
+    .search-field--travellers,
+    .search-action {
+        grid-column: 1 / -1;
+    }
+
+    .flight-search-button {
+        min-height: 3rem;
+    }
+
+    .multicity-leg__actions {
+        grid-column: 1 / -1;
+    }
+
+    .multicity-leg__actions:empty {
+        display: none;
+    }
+
+    .search-field__error {
+        top: auto;
+        bottom: 0.3rem;
+        left: auto;
+        right: 0.5rem;
+        max-width: calc(100% - 1rem);
+        padding: 0.15rem 0.4rem;
+        font-size: 0.65rem;
+    }
+
+    .search-field__error::before {
+        display: none;
+    }
 }
 
 @media (max-width: 640px) {
-    .xs\:flex-row {
-        flex-direction: row;
+    .flight-search-card--standard,
+    .flight-search-card--multicity,
+    .multicity-leg {
+        grid-template-columns: minmax(0, 1fr);
     }
 
-    .xs\:items-center {
-        align-items: center;
+    .search-field {
+        min-height: 4.25rem;
+        border-right: 0;
     }
 
-    .xs\:min-w-\[140px\] {
-        min-width: 140px;
+    .search-field:first-child {
+        border-top-right-radius: 0.75rem;
     }
 
-    .xs\:w-auto {
-        width: auto;
+    .search-field--to {
+        padding-left: 0.9rem;
+    }
+
+    /* Swap sits on the From / To divider, at the right edge. */
+    .swap-button {
+        top: auto;
+        right: 1rem;
+        bottom: -1.05rem;
+        transform: rotate(90deg);
+    }
+
+    .flight-type-tab {
+        padding: 0 0.65rem;
+        font-size: 0.72rem;
+    }
+
+    .flight-type-collapse {
+        width: 2rem;
+        padding: 0;
+    }
+
+    .flight-type-collapse__text {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .route-preview__summary {
+        flex-wrap: wrap;
+        align-content: center;
+        padding: 0.15rem 0;
+    }
+
+    .route-preview__icon {
+        display: none;
+    }
+
+    .route-preview__segment {
+        display: none;
+    }
+
+    .route-preview__segment--route {
+        display: flex;
+        flex-basis: 100%;
+        padding: 0 0.5rem;
+    }
+
+    .route-preview__sub {
+        display: none;
+    }
+
+    .route-preview__meta {
+        display: flex;
+        padding: 0 0.5rem;
+    }
+
+    .route-preview__edit {
+        min-height: 2.6rem;
+        width: 2.6rem;
+        padding: 0;
+    }
+
+    .route-preview__edit-text {
+        display: none;
     }
 }
 </style>

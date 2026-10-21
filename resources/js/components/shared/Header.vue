@@ -128,7 +128,7 @@ const activeTab = ref("flights");
 const tabs = [
     { id: "flights", name: "Flights", iconComponent: Plane, icon: '/plane.png' },
     { id: "hotels", name: "Hotels", iconComponent: Building2, icon: '/residential.png' },
-    { id: "holidays", name: "Holidays", iconComponent: Compass, icon: '/holidays.png', badge: "New" },
+    { id: "holidays", name: "Holidays", iconComponent: Compass, icon: '/holidays.png' },
 ];
 
 const setActiveTab = (tabId) => {
@@ -1034,42 +1034,36 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="relative mx-auto max-w-7xl pt-[28px] sm:pt-[34px]">
-        <!-- Main booking services: Boxed Navigation Bar -->
-         <div class="absolute left-1/2 top-0 z-10 flex -translate-x-1/2 items-stretch rounded-2xl border border-slate-100 bg-white p-1.5 shadow-md sm:p-2">
-            <button
-                v-for="tab in tabs"
-                :key="tab.id"
-                type="button"
-                @click="setActiveTab(tab.id)"
-                :class="[
-                    'relative flex min-w-[78px] flex-col items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:min-w-[112px] sm:px-6 sm:py-3 sm:text-sm',
-                    activeTab === tab.id
-                        ? 'bg-blue-50 text-primary shadow-sm'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-primary',
-                ]"
-            >
+    <div class="relative mx-auto max-w-7xl">
+        <!-- Main booking services: tab strip merged into the top edge of the search card -->
+        <div class="merged-tabs relative z-10 -mb-px flex w-fit max-w-full items-center gap-1 rounded-t-2xl bg-white px-1.5 pb-1 pt-1.5 sm:gap-1.5 sm:rounded-t-3xl sm:px-2.5 sm:pt-2.5">
+            <template v-for="(tab, index) in tabs" :key="tab.id">
                 <span
-                    v-if="tab.badge"
-                    class="absolute right-1 top-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white sm:right-2 sm:text-[9px]"
-                >
-                    {{ tab.badge }}
-                </span>
-                <img :src="tab.icon" :alt="tab.name" class="h-7 w-7 object-contain sm:h-8 sm:w-8" />
-                <span>{{ tab.name }}</span>
-                <span
-                    v-if="activeTab === tab.id"
+                    v-if="index > 0"
                     aria-hidden="true"
-                    class="absolute inset-x-4 -bottom-1 h-0.5 rounded-full bg-primary sm:inset-x-6"
+                    class="h-5 w-px shrink-0 bg-slate-200"
                 ></span>
-            </button>
+                <button
+                    type="button"
+                    @click="setActiveTab(tab.id)"
+                    :class="[
+                        'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold transition-all duration-200 sm:gap-2 sm:px-6 sm:py-2.5 sm:text-sm',
+                        activeTab === tab.id
+                            ? 'bg-primary text-white shadow-md shadow-primary/30'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-primary',
+                    ]"
+                >
+                    <component :is="tab.iconComponent" class="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                    <span>{{ tab.name }}</span>
+                </button>
+            </template>
         </div>
 
         <div
-            class="h-auto overflow-visible rounded-2xl border border-slate-200/80 bg-white shadow-[0_24px_60px_-16px_rgba(15,23,42,0.18)] sm:rounded-3xl"
+            class="h-auto overflow-visible rounded-2xl border border-slate-200/80 bg-white shadow-[0_24px_60px_-16px_rgba(15,23,42,0.18)] rounded-tl-none sm:rounded-3xl sm:rounded-tl-none"
         >
         <!-- Content Area -->
-        <div class="px-4 pb-5 pt-10 sm:px-7 sm:pb-6 sm:pt-11">
+        <div class="px-4 pb-5 pt-4 sm:px-7 sm:pb-6 sm:pt-5">
             <!-- Loading State -->
             <div
                 v-if="isLoading"
@@ -1836,6 +1830,22 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* Inverted corner so the tab strip flows into the card below it. */
+.merged-tabs {
+    overflow: visible;
+}
+
+.merged-tabs::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+    right: -18px;
+    background: radial-gradient(circle at top right, transparent 17.5px, #fff 18px);
+}
+
 .animate-fadeIn {
     animation: fadeIn 0.5s ease-in-out;
 }

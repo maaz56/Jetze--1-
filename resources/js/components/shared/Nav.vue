@@ -272,15 +272,19 @@ onUnmounted(() => {
             <div class="container shared-nav-content mx-auto px-4">
                 <div class="flex items-center justify-between h-20 px-4 lg:px-6">
                 
-                    <!-- Logo without box, using ambient glow when transparent -->
-                    <router-link :to="{ name: 'Home' }" class="flex items-center shrink-0">
+                    <!-- Over the hero, a soft blurred light fades into the sky behind the logo so its colours stay legible -->
+                    <router-link :to="{ name: 'Home' }" class="relative flex items-center shrink-0">
+                        <span
+                            v-if="isTransparent"
+                            aria-hidden="true"
+                            class="pointer-events-none absolute -inset-x-6 -inset-y-3 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.75)_0%,rgba(255,255,255,0.4)_45%,rgba(255,255,255,0)_72%)] blur-md"
+                        ></span>
                         <img 
                             src="/public/assets/logo.png" 
                             alt="Logo" 
                             :class="[
-                                'h-10 w-auto object-contain transition-all duration-300 hover:scale-105 lg:h-11',
+                                'relative h-10 w-auto object-contain transition-transform duration-300 hover:scale-105 lg:h-11',
                                 isHomePage && isTransparent ? 'lg:h-12' : '',
-                                isTransparent ? 'drop-shadow-[0_2px_12px_rgba(255,255,255,0.95)] filter' : ''
                             ]" 
                         />
                     </router-link>

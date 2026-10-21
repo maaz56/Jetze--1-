@@ -3172,6 +3172,7 @@ watch(
     },
     { immediate: true, deep: true },
 );
+const isSearchCompact = ref(false);
 const modelValue = ref({
     flightType: "one-way",
     countdownFor: 0,
@@ -3290,7 +3291,8 @@ watch(isLoggedIn, (newVal) => {
                     <div
                         :class="[
                             'flight-results-search__hero',
-                            modelValue.flightType === 'multi-city' && 'flight-results-search__hero--multicity',
+                            modelValue.flightType === 'multi-city' && !isSearchCompact && 'flight-results-search__hero--multicity',
+                            isSearchCompact && 'flight-results-search__hero--compact',
                         ]"
                     >
                         <div class="flight-results-search__form">
@@ -3298,6 +3300,7 @@ watch(isLoggedIn, (newVal) => {
                                 :countdown="countdown"
                                 v-model="modelValue"
                                 @search="setupFlightsParams"
+                                @compact-change="isSearchCompact = $event"
                                 variant="edge-overlap"
                                 class="w-full"
                             />
@@ -3438,7 +3441,10 @@ watch(isLoggedIn, (newVal) => {
                 <!-- LEFT SIDEBAR FILTERS - Always visible, not accordion -->
                 <aside
                     v-if="hasFlightResults"
-                    class="flight-results-sidebar lg:z-20 lg:w-80 lg:self-start"
+                    :class="[
+                        'flight-results-sidebar lg:z-20 lg:w-80 lg:self-start',
+                        { 'flight-results-sidebar--compact': isSearchCompact },
+                    ]"
                 >
                     <div @wheel.passive="syncFilterScrollWithPage" class="filter-panel lg:max-h-[calc(100dvh-11.25rem)] lg:overflow-y-auto lg:overscroll-contain">
                     <div class="filter-panel-heading">
@@ -5995,15 +6001,45 @@ watch(isLoggedIn, (newVal) => {
 }
 
 .flight-results-search {
-    background: hsl(var(--primary));
+    background: hsl(var(--primary-dark));
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
 }
 
 .flight-results-search__hero {
     position: relative;
     height: 9.75rem;
+    overflow: visible;
     background:
-        linear-gradient(180deg, hsl(var(--primary-dark) / 0.7), transparent),
-        linear-gradient(120deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 58%, hsl(var(--primary-light)) 100%);
+        radial-gradient(48rem 14rem at 88% -30%, hsl(var(--primary-light) / 0.28), transparent 70%),
+        radial-gradient(36rem 12rem at 8% 130%, hsl(var(--primary-dark) / 0.55), transparent 70%),
+        linear-gradient(115deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 100%);
+    transition: height 0.25s ease;
+}
+
+/* Faint dot grid gives the band texture without competing with the form. */
+.flight-results-search__hero::before {
+    position: absolute;
+    inset: 0;
+    content: "";
+    pointer-events: none;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+    background-size: 18px 18px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 100%);
+}
+
+.flight-results-search__hero::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    content: "";
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+}
+
+.flight-results-search__hero--compact {
+    height: 5.25rem;
 }
 
 .flight-results-search__form {
@@ -6348,6 +6384,14 @@ watch(isLoggedIn, (newVal) => {
         position: sticky;
         top: 10.5rem;
         align-self: start;
+    }
+
+    .flight-results-sidebar--compact {
+        top: 6rem;
+    }
+
+    .flight-results-sidebar--compact .filter-panel {
+        max-height: calc(100dvh - 6.75rem);
     }
 
     .filter-panel {
