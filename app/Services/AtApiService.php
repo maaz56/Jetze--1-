@@ -51,7 +51,6 @@ class AtApiService
             'timeout' => self::HTTP_TIMEOUT_SECONDS,
             'connect_timeout' => self::HTTP_CONNECT_TIMEOUT_SECONDS,
         ]);
-        Log::info('AT API CA bundle configured: ' . config('at.ca_bundle'));
         $this->signBaseUrl = config('at.sign_base_url');
         $this->flightBaseUrl = config('at.flight_base_url');
         $this->merchantId = config('at.merchant_id');
@@ -253,7 +252,7 @@ class AtApiService
         if ($fareType === 'DM' && !empty($trips)) {
             return $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl, $onBatch);
         }
-
+        Log::info('ExpressSearch payload: '. json_encode($payload));
         try {
             $request = new Request(
                 'POST',
@@ -262,7 +261,6 @@ class AtApiService
                 json_encode($payload)
             );
 
-            Log::info("express search REquest:".json_encode($payload));
             $expressSearchStartedAt = microtime(true);
             $response = $this->client->send($request);
             $responseBody = json_decode($response->getBody(), true);
@@ -412,10 +410,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
         $this->logGetExpSearchRawPage($page, $mockBody, $pageStatus);
-        Log::info("Mock GetExpSearch page 1 processed.", [
-            'status' => $pageStatus,
-            'trip_count' => count($mockBody['Trips'] ?? []),
-        ]);
+       
         $this->emitSearchBatch($onBatch, $mockBody, $mockBody, 1);
         return $mockBody;
     }
@@ -535,7 +530,6 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
                 ));
             }
 
-            Log::info("GetExpSearch page {$page} processed.", $pageLogContext);
 
             $newBody = $this->removePreviouslySeenJourneys($newBody, $emittedJourneyKeys);
 
@@ -662,7 +656,6 @@ private function logGetExpSearchRawPage(int $page, array $response, string $page
         'code' => $response['Code'] ?? null,
         'trip_counts' => $tripCounts,
     ]);
-    Log::info(json_encode($response));
 
     // Full pages can be several MB; encoding them on every poll delays the stream.
     if (config('app.debug') && env('AT_LOG_RAW_SEARCH_PAGES', false)) {

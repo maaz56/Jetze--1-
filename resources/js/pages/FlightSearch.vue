@@ -331,10 +331,7 @@ const atFareRulesLoading = ref(false);
 const atFareRulesError = ref("");
 const atFareRules = ref(null);
 let lastAtFareRulesKey = "";
-const freeSsrBaggageError = ref("");
 const freeSsrBaggagePoliciesByFare = ref({});
-const freeSsrBaggageLoadingByKey = ref({});
-const freeSsrBaggageRequestIdByKey = ref({});
 const freeSsrBaggageRunId = ref(0);
 const freeSsrBaggageAbortControllers = new Set();
 // Baggage depends on the search, itinerary and selected fares, not just the airline.
@@ -475,9 +472,9 @@ const formatTime = (milliseconds) => {
     const seconds = totalSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
-async function openSooperFlightDetails(
+function openSooperFlightDetails(
     flight,
-    { fetchBaggage = true, activeTab = "flight-details" } = {},
+    { activeTab = "flight-details" } = {},
 ) {
     initializeSelectedFares(flight);
     const savedFares = cardFareSelections[cardFareKey(flight)];
@@ -489,12 +486,8 @@ async function openSooperFlightDetails(
     // });
     flightDetailsActiveTab.value = activeTab;
     isSooperFlihgtDetailsOpen.value = true;
-    // View-details opens may enrich the default fare. Card Book Now opens
-    // intentionally skip SSR so booking is not delayed by baggage retries.
-    await nextTick();
-    if (fetchBaggage) {
-        void fetchFreeSsrBaggage();
-    }
+    // Opening the sheet never calls the backend. AT pricing (and its TUI)
+    // is requested only from View baggage, then reused by Book Now.
 }
 
 function fetchAgent() {
@@ -1662,10 +1655,7 @@ function cardFareLegs(flight, fare, index) {
 }
 
 function openCardFareOptions(flight) {
-    openSooperFlightDetails(flight, {
-        fetchBaggage: true,
-        activeTab: "fare-options",
-    });
+    openSooperFlightDetails(flight, { activeTab: "fare-options" });
 }
 
 function bookCardFare(flight, index = 0, fare = null) {
@@ -2210,16 +2200,11 @@ function selectFares(flightIdx, ref_id) {
     } else {
         selectedFares[flightIdx] = ref_id;
     }
-
-    // Keep the Transition Baggage tab in sync with the fare the traveller
-    // selected. The modal remains independent and fetches only its clicked fare.
-    void fetchFreeSsrBaggage();
 }
 
 function selectFareOption(flightIdx, fare) {
     if (fare?.fare_references?.length === 2) {
         selectedFares.splice(0, 2, ...fare.fare_references);
-        void fetchFreeSsrBaggage();
         return;
     }
 
@@ -2236,7 +2221,7 @@ function isFareOptionSelected(flightIdx, fare) {
     return selectedFares[flightIdx] === fare.ref_id;
 }
 
-/** Load free baggage only while an AT result is open; never during search. */
+/** Load AT free baggage only from View baggage; never during search or on sheet open. */
 const waitForFreeSsrBaggageRetry = (milliseconds) => new Promise(
     (resolve) => setTimeout(resolve, milliseconds),
 );
@@ -2277,67 +2262,6 @@ async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => tr
     }
 
     throw lastError;
-}
-
-async function fetchFreeSsrBaggage() {
-    const provider = String(
-        selectedFlight.value?.provider?.name
-        ?? selectedFlight.value?.provider?.identifier
-        ?? "",
-    ).toLowerCase();
-
-    if (provider !== "at") return;
-
-    const flightRefId = selectedFlight.value?.leg?.ref_id;
-    const searchToken = selectedFlight.value?.quote_search_token;
-    const fareReferences = [...selectedFares].filter(Boolean);
-    if (!flightRefId || !searchToken || fareReferences.length === 0) return;
-
-    const requestKey = `${flightRefId}:${fareReferences.join(",")}`;
-    const runId = freeSsrBaggageRunId.value;
-    // Count in-flight requests per selection so one completion cannot hide
-    // another request's skeleton.
-    // Do not render an earlier response while this fare is being re-queried.
-    fareReferences.forEach((fareRef) => {
-        delete freeSsrBaggagePoliciesByFare.value[fareRef];
-    });
-    const requestId = (freeSsrBaggageRequestIdByKey.value[requestKey] ?? 0) + 1;
-    freeSsrBaggageRequestIdByKey.value[requestKey] = requestId;
-    freeSsrBaggageLoadingByKey.value[requestKey] =
-        (freeSsrBaggageLoadingByKey.value[requestKey] ?? 0) + 1;
-    freeSsrBaggageError.value = "";
-
-    try {
-        const response = await requestFreeSsrBaggageWithRetry({
-            flight_ref_id: flightRefId,
-            fare_references: fareReferences,
-            search_token: searchToken,
-            // GetSPricer can be slow. Always release the skeleton rather than
-            // leaving it pending forever when a request never reaches PHP.
-            timeout: 70000,
-        }, () => (
-            freeSsrBaggageRunId.value === runId
-            && freeSsrBaggageRequestIdByKey.value[requestKey] === requestId
-        ));
-        if (!response) return;
-        const currentKey = `${selectedFlight.value?.leg?.ref_id}:${[...selectedFares].filter(Boolean).join(",")}`;
-        if (freeSsrBaggageRunId.value !== runId || currentKey !== requestKey || freeSsrBaggageRequestIdByKey.value[requestKey] !== requestId) return;
-
-        const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
-        fareReferences.forEach((fareRef) => {
-            freeSsrBaggagePoliciesByFare.value[fareRef] = policies;
-        });
-    } catch (error) {
-        // Inclusions.Baggage remains the safe fallback when AT has no free SSR.
-        freeSsrBaggageError.value = error.response?.data?.message || "Unable to load baggage allowance.";
-    } finally {
-        const remaining = (freeSsrBaggageLoadingByKey.value[requestKey] ?? 1) - 1;
-        if (remaining > 0) {
-            freeSsrBaggageLoadingByKey.value[requestKey] = remaining;
-        } else {
-            delete freeSsrBaggageLoadingByKey.value[requestKey];
-        }
-    }
 }
 
 function cancelPendingFreeSsrBaggageRequests() {
@@ -2748,6 +2672,10 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
 
         const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
         fareBaggageDialog.value.policies = policies;
+        // Reuse this priced result in the side sheet's Baggage tab.
+        fareReferences.forEach((fareRef) => {
+            freeSsrBaggagePoliciesByFare.value[fareRef] = policies;
+        });
         if (!policies.length) fareBaggageDialogError.value = "Please check the baggage section.";
     } catch (error) {
         if (requestId !== fareBaggageDialogRequestId) return;
@@ -2782,17 +2710,6 @@ function hasKnownCheckedBaggage(flightIndex) {
         ),
     );
 }
-
-const isCurrentFreeSsrBaggageLoading = computed(() => {
-    const flightRefId = selectedFlight.value?.leg?.ref_id;
-    const fareReferences = [...selectedFares].filter(Boolean);
-
-    if (!flightRefId || fareReferences.length === 0) return false;
-
-    return Boolean(
-        freeSsrBaggageLoadingByKey.value[`${flightRefId}:${fareReferences.join(",")}`] > 0,
-    );
-});
 
 /** Fetch raw AT FlightInfo only when its Fare Breakdown tab is opened for a new fare selection. */
 async function fetchAtFareBreakdown() {
@@ -5371,17 +5288,7 @@ watch(isLoggedIn, (newVal) => {
 
                                             <!-- Baggage Policies Display -->
                                             <div
-                                                v-if="isCurrentFreeSsrBaggageLoading && String(selectedFlight?.provider?.name || selectedFlight?.provider?.identifier || '').toLowerCase() === 'at'"
-                                                class="space-y-3 p-3 sm:p-4"
-                                            >
-                                                <div class="h-5 w-40 animate-pulse rounded bg-slate-200"></div>
-                                                <div v-for="skeleton in 2" :key="skeleton" class="space-y-2 rounded border border-slate-200 p-3">
-                                                    <div class="h-4 w-28 animate-pulse rounded bg-slate-200"></div>
-                                                    <div class="h-9 w-full animate-pulse rounded bg-slate-100"></div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                v-else-if="
+                                                v-if="
                                                     getSelectedFare(flightIndex)
                                                         ?.baggage_policies
                                                         ?.length > 0

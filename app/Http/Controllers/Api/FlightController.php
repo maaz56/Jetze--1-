@@ -410,11 +410,7 @@ class FlightController extends Controller
                         if (!empty($newBatch['Heartbeat'])) {
                             $emitStartedAt = microtime(true);
                             $emit('search.heartbeat', ['page' => $page]);
-                            Log::info('AT SSE heartbeat emitted.', [
-                                'page' => $page,
-                                'emit_ms' => round((microtime(true) - $emitStartedAt) * 1000, 2),
-                                'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
-                            ]);
+                          
                             return;
                         }
 
@@ -496,20 +492,7 @@ class FlightController extends Controller
                             $cacheWriteMs = round((microtime(true) - $cacheWriteStartedAt) * 1000, 2);
                         }
 
-                        Log::info('AT SSE batch timing.', [
-                            'page' => $page,
-                            'available_trip_count' => $availableTripCount,
-                            'required_trip_count' => $requiredTripCount,
-                            'mapped_flight_count' => count($mappedFlights),
-                            'new_flight_count' => count($newFlights),
-                            'transform_ms' => $transformMs,
-                            'deduplication_ms' => $deduplicationMs,
-                            'progress_emit_ms' => $progressEmitMs,
-                            'flight_emit_ms' => $flightEmitMs,
-                            'cache_write_ms' => $cacheWriteMs,
-                            'batch_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
-                            'elapsed_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
-                        ]);
+                        
                     },
                 );
 
@@ -524,7 +507,7 @@ class FlightController extends Controller
                     'trip_count' => count($result['Trips'] ?? []),
                     'flight_count' => count($emittedFlightKeys),
                 ]);
-                Log::info('AT SSE stream completed.', [
+                Log::info('AT stream completed.', [
                     'flight_count' => count($emittedFlightKeys),
                     'total_ms' => round((microtime(true) - $streamStartedAt) * 1000, 2),
                 ]);
@@ -593,15 +576,12 @@ class FlightController extends Controller
         $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code']);
 
         if (strtoupper((string) data_get($flight, 'provider.identifier')) === 'AT') {
-            $providerPricing = $this->atApiService->priceQuote(
+            // Reuse the TUI priced by View baggage; only price when none is cached.
+            [$providerPricing] = $this->atProviderPricingOnce(
                 $flight,
-                $validated['fare_references'],
-            );
-            $this->cacheAtProviderPricing(
                 $validated['search_token'],
                 $validated['flight_ref_id'],
                 $validated['fare_references'],
-                $providerPricing,
             );
             $fareBreakdown = $this->atFareBreakdownForQuote(
                 $flight,
@@ -855,21 +835,12 @@ class FlightController extends Controller
         ]);
 
         try {
-            $providerPricing = $this->cachedAtProviderPricing(
+            [$providerPricing, $wasPriced] = $this->atProviderPricingOnce(
+                $flight,
                 $validated['search_token'],
                 $validated['flight_ref_id'],
                 $validated['fare_references'],
             );
-
-            if (!$providerPricing) {
-                $providerPricing = $this->atApiService->priceQuote($flight, $validated['fare_references']);
-                $this->cacheAtProviderPricing(
-                    $validated['search_token'],
-                    $validated['flight_ref_id'],
-                    $validated['fare_references'],
-                    $providerPricing,
-                );
-            }
         } catch (\Throwable $exception) {
             Log::error('AT free SSR baggage pricing failed', [
                 'flight_ref_id' => $validated['flight_ref_id'],
@@ -891,11 +862,14 @@ class FlightController extends Controller
             return response()->json(['message' => 'AT could not price this fare for free baggage details.'], 422);
         }
 
-        Log::info('AT free SSR baggage waiting after pricing before SSR request', [
-            'flight_ref_id' => $validated['flight_ref_id'],
-            'delay_seconds' => 3,
-        ]);
-        sleep(3);
+        // Only a freshly priced TUI needs time to settle before AT serves SSR.
+        if ($wasPriced) {
+            Log::info('AT free SSR baggage waiting after pricing before SSR request', [
+                'flight_ref_id' => $validated['flight_ref_id'],
+                'delay_seconds' => 3,
+            ]);
+            sleep(3);
+        }
 
         Log::info('AT free SSR baggage supplier request started', [
             'flight_ref_id' => $validated['flight_ref_id'],
@@ -1223,6 +1197,36 @@ class FlightController extends Controller
             $pricing,
             now()->addMinutes(10),
         );
+    }
+
+    /**
+     * Price an AT fare selection once per search. View baggage and Book Now share
+     * this so GetSPricer runs a single time and its TUI is reused for the quote.
+     *
+     * @return array{0: array, 1: bool} The provider pricing and whether it was priced just now.
+     */
+    private function atProviderPricingOnce(array $flight, string $searchToken, string $flightReference, array $fareReferences): array
+    {
+        $pricing = $this->cachedAtProviderPricing($searchToken, $flightReference, $fareReferences);
+        if ($pricing) {
+            return [$pricing, false];
+        }
+
+        // Book Now can arrive while View baggage is still pricing the same fares.
+        // Wait for that request's TUI instead of starting a second price request.
+        $lockKey = $this->atProviderPricingCacheKey($searchToken, $flightReference, $fareReferences) . '_lock';
+
+        return Cache::lock($lockKey, 120)->block(90, function () use ($flight, $searchToken, $flightReference, $fareReferences) {
+            $pricing = $this->cachedAtProviderPricing($searchToken, $flightReference, $fareReferences);
+            if ($pricing) {
+                return [$pricing, false];
+            }
+
+            $pricing = $this->atApiService->priceQuote($flight, $fareReferences);
+            $this->cacheAtProviderPricing($searchToken, $flightReference, $fareReferences, $pricing);
+
+            return [$pricing, true];
+        });
     }
 
     /** Build AT FlightInfo trips from trusted cached fares, never browser prices or TUI values. */
