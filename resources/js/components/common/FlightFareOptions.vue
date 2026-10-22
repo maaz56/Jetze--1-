@@ -70,6 +70,7 @@ function fareCount(groups) {
                                     <BadgeX v-else class="h-4 w-4" />
                                     {{ fare.is_refundable ? "Refundable" : "Non-refundable" }}
                                 </span>
+                                <span v-if="fare.hold === true" class="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">Hold</span>
                                 <span v-if="fareBasisCode(fare)" class="inline-flex items-center gap-1 text-xs text-slate-500"><Tag class="h-4 w-4" /> {{ fareBasisCode(fare) }}</span>
                             </div>
                             <div v-for="leg in fareLegs(fare, group.index)" :key="leg.index" class="grid min-w-0 grid-cols-[auto_minmax(7rem,0.7fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-sm text-slate-700">
