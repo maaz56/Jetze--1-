@@ -1722,6 +1722,7 @@ function confirmBooking() {
 }
 
 async function saveBooking(type) {
+    return;
     try {
         if (!isLockedCheckoutTotalReady.value) {
             globalError.value = formatLockedCheckoutTotal();
