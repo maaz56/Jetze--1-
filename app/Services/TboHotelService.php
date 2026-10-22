@@ -103,6 +103,7 @@ class TboHotelService
 
     protected function request(string $method, string $endpoint, array $payload = [], ?int $timeout = null): array
     {
+        Log::info($payload);
         $this->ensureConfigured();
 
         $requestId = (string) Str::uuid();
@@ -225,6 +226,7 @@ class TboHotelService
     /** Redact traveller and payment fields while retaining a useful provider payload trace. */
     protected function loggablePayload(string $endpoint, array $payload): array
     {
+        Log::info($payload);
         if ($endpoint !== 'Book') {
             return $payload;
         }
