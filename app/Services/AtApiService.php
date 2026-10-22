@@ -619,6 +619,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
 
 private function logGetExpSearchRawPage(int $page, array $response, string $pageStatus): void
 {
+    Log::info(json_encode($response));
     $trips = $this->extractTrips($response['Trips'] ?? []);
     $tripCounts = [];
 
@@ -1243,7 +1244,8 @@ private function extractTrips($tripsData): array
             'CrossSellAmount' => 0,
         ];
 
-        if ($holdInfo) {
+        // AT hold flow: CreateItinerary HB -> StartPay HB, then StartPay HP on confirm.
+        if ($this->isHoldBooking($params['flight'] ?? [], (array) ($params['fare_reference'] ?? []), $fareType)) {
             $payload['BookingType'] = 'HB';
         }
 
@@ -1681,6 +1683,74 @@ private function extractTrips($tripsData): array
             return null;
         }
     }
+    /**
+     * A booking can be held only when AT returned Hold=true for every selected fare.
+     * DM bookings use a separate multi-trip flow without hold support.
+     */
+    public function isHoldBooking(array $flight, array $fareReferences, ?string $fareType = null): bool
+    {
+        $fareType = strtoupper((string) ($fareType ?: data_get($flight, 'provider.fare_type')));
+        if ($fareType === 'DM' || empty($fareReferences)) {
+            return false;
+        }
+
+        $selectedFares = collect(data_get($flight, 'leg.flights', []))
+            ->flatMap(fn (array $leg) => $leg['fares'] ?? [])
+            ->filter(fn (array $fare) => in_array($fare['ref_id'] ?? null, $fareReferences, true));
+
+        return $selectedFares->count() === count($fareReferences)
+            && $selectedFares->every(fn (array $fare) => ($fare['hold'] ?? false) === true);
+    }
+
+    /**
+     * Hold a reservation created with BookingType HB:
+     * StartPay (HB) -> GetItineraryStatus -> RetrieveBooking.
+     * The ticket is issued later by StartPay (HP) with the same TransactionID.
+     *
+     * @return array{held: bool, start_pay: mixed, itinerary_status: mixed, booking_details: mixed}
+     */
+    public function holdReservation(array $reservation, int $netAmount): array
+    {
+        $startPay = $this->startDepositPayment($reservation, $netAmount, 'HB');
+        $held = is_array($startPay)
+            && ($startPay['status'] ?? true) !== false
+            && in_array((string) ($startPay['Code'] ?? '200'), ['200', '2000'], true);
+
+        if (! $held) {
+            Log::warning('AT hold StartPay (HB) failed.', [
+                'transaction_id' => $reservation['TransactionID'] ?? null,
+                'response' => $startPay,
+            ]);
+
+            return ['held' => false, 'start_pay' => $startPay, 'itinerary_status' => null, 'booking_details' => null];
+        }
+
+        $itineraryStatus = $this->itineraryStatusForReservation($reservation, $startPay);
+        $bookingDetails = $this->getBookingDetails((object) ['pnr' => $reservation['TransactionID'] ?? null]);
+
+        return [
+            'held' => true,
+            'start_pay' => $startPay,
+            'itinerary_status' => $itineraryStatus,
+            'booking_details' => $bookingDetails,
+        ];
+    }
+
+    /** Check GetItineraryStatus for a stored reservation after StartPay (HB or HP). */
+    public function itineraryStatusForReservation(array $reservation, array $paymentResponse = []): ?array
+    {
+        $fareType = strtoupper((string) ($reservation['FareType'] ?? ''));
+        $reservationTui = $fareType === 'DM'
+            ? data_get($reservation, 'BookingResponses.0.TUI')
+            : ($reservation['TUI'] ?? null);
+
+        return $this->getItineraryStatus([
+            'TUI' => $paymentResponse['TUI'] ?? $reservationTui,
+            // The TransactionID must stay the one returned by CreateItinerary.
+            'TransactionID' => $reservation['TransactionID'] ?? $paymentResponse['TransactionID'] ?? null,
+        ]);
+    }
+
     public function getItineraryStatus($paymentResponse)
     {
         try {

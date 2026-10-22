@@ -335,6 +335,8 @@ class AtFlightTransformer
                             $displayCurrency,
                         ),
                         "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
+                        // Only an explicit Hold=true lets AT hold the booking (BookingType HB).
+                        "hold" => ($fare['Hold'] ?? null) === true || strtolower((string) ($fare['Hold'] ?? '')) === 'true',
                         "fare_policies" => [],
                         "passenger_fares" => [
                             [
@@ -519,6 +521,7 @@ class AtFlightTransformer
                     'combined_display_money' => $combinedDisplayMoney,
                     'is_refundable' => ($onwardFare['is_refundable'] ?? false)
                         && ($returnFare['is_refundable'] ?? false),
+                    'hold' => ($onwardFare['hold'] ?? false) && ($returnFare['hold'] ?? false),
                     'baggage_policies' => $onwardFare['baggage_policies'] ?? [],
                     'return_baggage_policies' => $returnFare['baggage_policies'] ?? [],
                 ];

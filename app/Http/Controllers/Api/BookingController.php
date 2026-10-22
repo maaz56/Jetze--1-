@@ -515,6 +515,22 @@ class BookingController extends Controller
                     $itineraryRef = !empty($response['TransactionIDList'])
                         ? implode(',', $response['TransactionIDList'])
                         : $response['TransactionID'];
+
+                    // Holdable fares were created with BookingType HB; place the
+                    // hold now. Non-holdable fares are only saved, and both are
+                    // ticketed later by StartPay (HP) on confirm.
+                    if ($service->isHoldBooking($flightData, (array) $fareRefernce, $request->input('fareType'))) {
+                        $holdAmount = $priceQuote?->provider_amount;
+                        if (is_numeric($holdAmount) && (float) $holdAmount > 0 && floor((float) $holdAmount) === (float) $holdAmount) {
+                            $atHoldResult = $service->holdReservation($response, (int) $holdAmount);
+                        } else {
+                            Log::warning('AT hold skipped: the locked amount is invalid for StartPay.', [
+                                'transaction_id' => $response['TransactionID'],
+                                'provider_amount' => $holdAmount,
+                            ]);
+                        }
+                    }
+
                     $pnrResponse = json_encode($response);
                     $flightData = json_encode($flightData);
                     break;
@@ -696,6 +712,16 @@ class BookingController extends Controller
             $pnrResponse,
             $itineraryRef ?? null,
         );
+
+        if (isset($atHoldResult)) {
+            $this->providerBookingEventService->record(
+                $flightBooking,
+                'at',
+                $atHoldResult['held'] ? 'hold' : 'hold_failed',
+                $atHoldResult,
+                $itineraryRef ?? null,
+            );
+        }
 
 
         // Store travellers
@@ -1407,16 +1433,13 @@ class BookingController extends Controller
                 ], 422);
             }
 
-            $flightData = json_decode((string) $booking->flight_data, true) ?: [];
-            $flight = data_get($flightData, 'original.leg.flights.0')
-                ?? data_get($flightData, 'leg.flights.0');
-
             // Override all payment inputs with trusted booking values.
             $request->merge([
                 'net_amount' => (int) $lockedProviderAmount,
                 'pnrData' => $storedReservation,
                 'FareType' => $storedReservation['FareType'] ?? $request->input('FareType'),
-                'bookingType' => data_get($flight, 'hold_info') === null ? 'HP' : 'HB',
+                // Held (HB) and non-held bookings are both ticketed with HP.
+                'bookingType' => 'HP',
             ]);
 
             Log::info('AT wallet payment using locked booking values', [
@@ -1456,6 +1479,9 @@ class BookingController extends Controller
                     'provider_response' => $res,
                 ], 400);
             }
+
+            // Final step of AT's flow: GetItineraryStatus after StartPay (HP).
+            $res['itinerary_status'] = $atApiService->itineraryStatusForReservation($storedReservation, $res);
         } elseif ($flightProvider === 'hakimi') {
             // Hakimi has already accepted the supplier booking before this
             // payment screen is reached. Wallet payment only confirms the

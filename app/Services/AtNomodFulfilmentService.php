@@ -34,10 +34,11 @@ class AtNomodFulfilmentService
 
         try {
             $reservation = $this->reservationFrom($context['booking']);
+            // Held (HB) and non-held bookings are both ticketed with HP.
             $response = $this->atApiService->startDepositPayment(
                 $reservation,
                 $this->supplierNetAmount($context['attempt']),
-                $this->bookingType($context['booking']),
+                'HP',
             );
         } catch (Throwable $exception) {
             $this->markUncertain($paymentAttemptId, $exception->getMessage());
@@ -59,6 +60,16 @@ class AtNomodFulfilmentService
             );
 
             return;
+        }
+
+        try {
+            // Final step of AT's flow; a status lookup failure must not undo a settled payment.
+            $response['itinerary_status'] = $this->atApiService->itineraryStatusForReservation($reservation, $response);
+        } catch (Throwable $exception) {
+            Log::warning('AT itinerary status lookup failed after StartPay (HP).', [
+                'payment_attempt_id' => $paymentAttemptId,
+                'message' => $exception->getMessage(),
+            ]);
         }
 
         $this->markCompleted($paymentAttemptId, $response);
@@ -236,14 +247,5 @@ class AtNomodFulfilmentService
         }
 
         return (int) $amount;
-    }
-
-    private function bookingType(FlightBookings $booking): string
-    {
-        $flightData = json_decode((string) $booking->flight_data, true) ?: [];
-        $flight = data_get($flightData, 'original.leg.flights.0')
-            ?? data_get($flightData, 'leg.flights.0');
-
-        return data_get($flight, 'hold_info') === null ? 'HP' : 'HB';
     }
 }
