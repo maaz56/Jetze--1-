@@ -852,10 +852,7 @@ class FlightController extends Controller
             ], 502);
         }
 
-        Log::info('AT free SSR baggage pricing completed', [
-            'flight_ref_id' => $validated['flight_ref_id'],
-            'has_priced_tui' => !empty($providerPricing['tui'] ?? null),
-        ]);
+        
         $pricedTui = $providerPricing['tui'] ?? null;
 
         if (!$pricedTui) {
@@ -864,16 +861,11 @@ class FlightController extends Controller
 
         // Only a freshly priced TUI needs time to settle before AT serves SSR.
         if ($wasPriced) {
-            Log::info('AT free SSR baggage waiting after pricing before SSR request', [
-                'flight_ref_id' => $validated['flight_ref_id'],
-                'delay_seconds' => 3,
-            ]);
+           
             sleep(3);
         }
 
-        Log::info('AT free SSR baggage supplier request started', [
-            'flight_ref_id' => $validated['flight_ref_id'],
-        ]);
+        
 
         try {
             $rawResponse = $this->atApiService->getSSR([

@@ -794,7 +794,6 @@ private function extractTrips($tripsData): array
     }
     public function sendPriceRequest($request)
     {
-        Log::info('Sending Price Request with data: ', $request->all());
 
         $accessToken = $this->getAccessToken();
 
@@ -837,7 +836,6 @@ private function extractTrips($tripsData): array
                 'TUI' => $tui,
             ];
         }
-        Log::info('Constructed trips for Price Request: ', $trips);
         $payload = [
             'Trips' => $trips,
             'ClientID' => $accessToken['ClientID'], // you said you'll add this
