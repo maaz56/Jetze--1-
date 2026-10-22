@@ -1296,7 +1296,6 @@ private function extractTrips($tripsData): array
     }
     public function getSSR($request, bool $isPaid = true, int $maxAttempts = 3, int $retryDelaySeconds = 2)
     {
-        Log::info('Getting SSR with data: ', $request);
         $accessToken = $this->getAccessToken();
         Log::info($accessToken);
         $headers = [

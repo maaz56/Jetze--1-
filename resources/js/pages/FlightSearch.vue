@@ -337,7 +337,6 @@ const freeSsrBaggageAbortControllers = new Set();
 // Baggage depends on the search, itinerary and selected fares, not just the airline.
 const freeSsrBaggageCache = new Map();
 // Exactly three attempts: immediate, then after 3 seconds, then after 5 seconds.
-const FREE_SSR_BAGGAGE_RETRY_DELAYS = [0, 3000, 5000];
 const isFareBaggageDialogOpen = ref(false);
 const fareBaggageDialogLoading = ref(false);
 const fareBaggageDialogError = ref("");
@@ -2221,52 +2220,36 @@ function isFareOptionSelected(flightIdx, fare) {
     return selectedFares[flightIdx] === fare.ref_id;
 }
 
-/** Load AT free baggage only from View baggage; never during search or on sheet open. */
-const waitForFreeSsrBaggageRetry = (milliseconds) => new Promise(
-    (resolve) => setTimeout(resolve, milliseconds),
-);
-
-async function requestFreeSsrBaggageWithRetry(payload, shouldContinue = () => true) {
+/**
+ * Load AT free baggage only from View baggage; never during search or on sheet open.
+ * Sent once: the backend already retries AT's SSR store (3 attempts).
+ */
+async function requestFreeSsrBaggage(payload, shouldContinue = () => true) {
     const cacheKey = JSON.stringify([payload.search_token, payload.flight_ref_id, payload.fare_references]);
     if (!shouldContinue()) return null;
     if (freeSsrBaggageCache.has(cacheKey)) return freeSsrBaggageCache.get(cacheKey);
 
-    let lastError;
+    const controller = new AbortController();
+    freeSsrBaggageAbortControllers.add(controller);
 
-    for (const delay of FREE_SSR_BAGGAGE_RETRY_DELAYS) {
-        if (delay > 0) {
-            await waitForFreeSsrBaggageRetry(delay);
+    try {
+        const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
+            ...payload,
+            signal: controller.signal,
+        });
+        // Cache successful responses, including an explicitly empty allowance.
+        // Failures are not cached so a later View baggage click can try again.
+        if (Array.isArray(response?.free_ssr_baggage?.baggage_policies)) {
+            freeSsrBaggageCache.set(cacheKey, response);
         }
-
-        if (!shouldContinue()) return null;
-
-        const controller = new AbortController();
-        freeSsrBaggageAbortControllers.add(controller);
-
-        try {
-            const response = await store.dispatch(`flight/${FETCH_FREE_SSR_BAGGAGE}`, {
-                ...payload,
-                signal: controller.signal,
-            });
-            // Cache successful responses, including an explicitly empty allowance.
-            // Failures and malformed responses must remain retryable.
-            if (Array.isArray(response?.free_ssr_baggage?.baggage_policies)) {
-                freeSsrBaggageCache.set(cacheKey, response);
-            }
-            return response;
-        } catch (error) {
-            lastError = error;
-        } finally {
-            freeSsrBaggageAbortControllers.delete(controller);
-        }
+        return response;
+    } finally {
+        freeSsrBaggageAbortControllers.delete(controller);
     }
-
-    throw lastError;
 }
 
 function cancelPendingFreeSsrBaggageRequests() {
-    // Prevent queued retry attempts from creating a new pricing TUI while the
-    // checkout quote is being created. Abort active browser requests too.
+    // Abort an in-flight View baggage request when the checkout quote starts.
     freeSsrBaggageRunId.value += 1;
     freeSsrBaggageAbortControllers.forEach((controller) => controller.abort());
     freeSsrBaggageAbortControllers.clear();
@@ -2658,7 +2641,7 @@ async function openFareBaggageDialog(fare, flight, flightIndex) {
     }
 
     try {
-        const response = await requestFreeSsrBaggageWithRetry({
+        const response = await requestFreeSsrBaggage({
             flight_ref_id: flightRefId,
             fare_references: fareReferences,
             search_token: searchToken,
