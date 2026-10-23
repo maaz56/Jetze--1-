@@ -205,6 +205,26 @@ const operatingCarrierLabel = (flights) => {
     return [...operatingCarriers.values()].join(", ");
 };
 
+const connectingCarriers = (leg) => {
+    const primaryCarrier = leg?.marketing_carrier;
+    const primaryKey = String(
+        primaryCarrier?.iata || primaryCarrier?.name || "",
+    ).trim().toUpperCase();
+    const carriers = new Map();
+
+    // The first segment is represented by the main logo. Each later segment
+    // belongs to a connection, so expose a different carrier as an overlay.
+    (leg?.segments ?? []).slice(1).forEach((segment) => {
+        const carrier = segment?.marketing_carrier || segment?.operating_carrier;
+        const key = String(carrier?.iata || carrier?.name || "").trim().toUpperCase();
+
+        if (!key || key === primaryKey || carriers.has(key)) return;
+        carriers.set(key, carrier);
+    });
+
+    return [...carriers.values()];
+};
+
 const formatSegmentDuration = (segment) => {
     const raw = segment?.flight_time ?? segment?.flightTime ?? null;
     if (raw === null || raw === undefined) return "";
@@ -586,7 +606,7 @@ const getFlightsByAirline = computed(() => {
             flight?.leg?.flights.some((fare) => {
                 if (selectedAirline.value.length === 0) return true;
                 return selectedAirline.value.includes(
-                    fare.marketing_carrier.iata,
+                    getCarrierIata(fare?.marketing_carrier),
                 );
             })
         );
@@ -694,33 +714,42 @@ watch(
     },
 );
 
+function getCarrierIata(carrier) {
+    const iata = carrier?.iata;
+
+    return typeof iata === "string" && iata.trim() !== ""
+        ? iata.trim().toUpperCase()
+        : null;
+}
+
 const cheapestFlightsByAirline = computed(() => {
     if (!allFlights.value || allFlights.value.length === 0) return [];
     const map = new Map();
 
     allFlights.value.forEach((flight) => {
         const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
-        const airlineId = carrier?.id || carrier?.iata || carrier?.code || carrier?.name;
-        const groupKey = (carrier?.name || carrier?.iata || carrier?.code || String(carrier?.id || ""))
-            .trim().toLowerCase();
+        // A carousel selection must represent a carrier, not a provider or
+        // database record ID. Airline IDs differ between sources, while IATA
+        // identifies the carrier shown to the customer.
+        const airlineIata = getCarrierIata(carrier);
+        const groupKey = airlineIata;
 
-        if (!airlineId || !groupKey) return;
+        if (!airlineIata || !groupKey) return;
 
         const group = map.get(groupKey);
         if (!group) {
-            map.set(groupKey, { flight, airlineIds: [airlineId] });
+            map.set(groupKey, { flight, airlineIatas: [airlineIata] });
         } else {
-            if (!group.airlineIds.includes(airlineId)) group.airlineIds.push(airlineId);
             if (displayFlightPrice(group.flight) > displayFlightPrice(flight)) group.flight = flight;
         }
     });
 
     return Array.from(map.entries())
-        .map(([airlineId, { flight, airlineIds }]) => {
+        .map(([airlineIata, { flight, airlineIatas }]) => {
             const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
             return {
-                airlineId,
-                airlineIds,
+                airlineIata,
+                airlineIatas,
                 flight,
                 name: carrier?.name || carrier?.iata || "Airline",
                 logo: carrier?.logo || carrier?.logo_url,
@@ -736,11 +765,11 @@ const availableAirlines = computed(() => {
     allFlights.value.forEach((flight) => {
         // Try to get airline info from the first leg/segment
         const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
-        if (carrier && (carrier.id || carrier.iata || carrier.code)) {
-            const id = carrier.id || carrier.iata || carrier.code;
-            if (!airlinesMap.has(id)) {
-                airlinesMap.set(id, {
-                    id,
+        const iata = getCarrierIata(carrier);
+        if (iata) {
+            if (!airlinesMap.has(iata)) {
+                airlinesMap.set(iata, {
+                    id: iata,
                     name: carrier.name,
                     logo_url: carrier.logo || carrier.logo_url,
                 });
@@ -762,10 +791,10 @@ function filterByAirline() {
     refreshFilteredFlights();
 }
 
-function filterByCarouselAirline(airlineIds) {
-    selectedAirline.value = airlineIds.some((id) => selectedAirline.value.includes(id))
+function filterByCarouselAirline(airlineIatas) {
+    selectedAirline.value = airlineIatas.some((iata) => selectedAirline.value.includes(iata))
         ? []
-        : [...airlineIds];
+        : [...airlineIatas];
     filterByAirline();
 }
 
@@ -778,14 +807,9 @@ function flightMatchesAirline(flight) {
     // Do not include an itinerary merely because a later segment uses the
     // selected airline.
     const carrier = flight?.leg?.flights?.[0]?.marketing_carrier;
-    const carrierId =
-        carrier?.id ||
-        carrier?.iata ||
-        carrier?.code ||
-        carrier?.name ||
-        null;
+    const carrierIata = getCarrierIata(carrier);
 
-    return carrierId !== null && selectedAirline.value.includes(carrierId);
+    return carrierIata !== null && selectedAirline.value.includes(carrierIata);
 }
 
 function getFlightStopsCount(flight) {
@@ -3775,15 +3799,15 @@ watch(isLoggedIn, (newVal) => {
                             <CarouselContent class="-ml-3">
                                 <CarouselItem
                                     v-for="airline in cheapestFlightsByAirline"
-                                    :key="airline.airlineId"
+                                    :key="airline.airlineIata"
                                     class="basis-full pl-3 sm:basis-1/2 xl:basis-1/4"
                                 >
                                     <button
                                         type="button"
-                                        @click="filterByCarouselAirline(airline.airlineIds)"
+                                        @click="filterByCarouselAirline(airline.airlineIatas)"
                                         :class="[
                                             'flex min-h-[72px] w-full items-center gap-3 rounded border p-3 text-left transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30',
-                                            airline.airlineIds.some((id) => selectedAirline.includes(id))
+                                            airline.airlineIatas.some((iata) => selectedAirline.includes(iata))
                                                 ? 'border-primary bg-primary/5'
                                                 : 'border-gray-200 bg-white',
                                         ]"
@@ -3992,7 +4016,7 @@ watch(isLoggedIn, (newVal) => {
                 >
                     <!-- Leg label + airline -->
                     <div class="flight-leg-airline flex min-w-0 items-center gap-3">
-                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white">
+                        <div class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm">
                             <img
                                 v-if="leg?.marketing_carrier?.logo"
                                 class="h-8 w-8 object-contain"
@@ -4000,6 +4024,23 @@ watch(isLoggedIn, (newVal) => {
                                 :alt="leg?.marketing_carrier?.name"
                             />
                             <PlaneTakeoff v-else class="h-5 w-5 text-primary" />
+                            <div
+                                v-if="connectingCarriers(leg).length"
+                                class="absolute -bottom-2 -right-2 z-10 flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-md ring-1 ring-slate-200"
+                                :title="`Connection operated by ${connectingCarriers(leg).map((carrier) => carrier.name || carrier.iata).join(', ')}`"
+                            >
+                                <img
+                                    v-if="connectingCarriers(leg)[0]?.logo"
+                                    :src="connectingCarriers(leg)[0].logo"
+                                    :alt="`${connectingCarriers(leg)[0]?.name || connectingCarriers(leg)[0]?.iata} connecting airline`"
+                                    class="h-4 w-4 object-contain"
+                                    @error="$event.target.style.display = 'none'"
+                                />
+                                <span
+                                    v-else
+                                    class="text-[8px] font-extrabold leading-none text-slate-600"
+                                >{{ connectingCarriers(leg)[0]?.iata }}</span>
+                            </div>
                         </div>
                         <div class="min-w-0">
                             <p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
