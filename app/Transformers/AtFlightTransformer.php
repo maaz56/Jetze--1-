@@ -628,21 +628,17 @@ class AtFlightTransformer
 
         $airlinesByIata = $this->airlinesByIata($iataCode);
 
-        // AT includes the carrier's display name in AirlineName. IATA alone is
-        // not enough when the airline table contains more than one record for
-        // a code (for example, Scoot and Tigerair), so prefer that name for
-        // every carrier code rather than maintaining code-specific exceptions.
-        if ($airlineName) {
+        // The IATA code is authoritative when it identifies one airline. AT's
+        // AirlineName can represent a validating carrier, while MAC/OAC point
+        // to a different marketing or operating carrier.
+        if ($airlinesByIata->count() === 1) {
+            return $airlinesByIata->first();
+        }
+
+        // Only use AirlineName to disambiguate a genuinely shared IATA code
+        // (for example, Scoot and Tigerair).
+        if ($airlinesByIata->count() > 1 && $airlineName) {
             $airlineByName = $this->firstAirlineMatchingName($airlinesByIata, $airlineName);
-
-            if ($airlineByName) {
-                return $airlineByName;
-            }
-
-            $airlineByName = $this->firstAirlineMatchingName(
-                $this->allNamedAirlines(),
-                $airlineName
-            );
 
             if ($airlineByName) {
                 return $airlineByName;
