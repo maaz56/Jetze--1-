@@ -315,7 +315,7 @@ const timerInterval = ref(null);
 const showDialog = ref(true);
 const isSideSheetOpen = ref(false);
 const isSooperFlihgtDetailsOpen = ref(false);
-const flightDetailsActiveTab = ref("flight-details");
+const flightDetailsActiveTab = ref("fare-options");
 const cardFareSelections = reactive({});
 const selectedFlightId = ref(null);
 const selectedFlight = ref(null);
@@ -473,7 +473,7 @@ const formatTime = (milliseconds) => {
 };
 function openSooperFlightDetails(
     flight,
-    { activeTab = "flight-details" } = {},
+    { activeTab = "fare-options" } = {},
 ) {
     initializeSelectedFares(flight);
     const savedFares = cardFareSelections[cardFareKey(flight)];
@@ -1641,16 +1641,30 @@ function viewCardFareBaggage(flight, index, fare) {
 
 function cardFareLegs(flight, fare, index) {
     if (!fare?.fare_references?.length) {
-        return [{ index, name: fare?.name_class || fare?.name || fare?.class, baggagePolicies: fare?.baggage_policies }];
+        const route = flight?.leg?.flights?.[index];
+        return [{
+            index,
+            name: fare?.name_class || fare?.name || fare?.class,
+            route: fareRouteSummary(route),
+            baggagePolicies: fare?.baggage_policies,
+        }];
     }
     return fare.fare_references.map((reference, legIndex) => {
         const legFare = flight?.leg?.flights?.[legIndex]?.fares?.find((option) => option.ref_id === reference);
         return {
             index: legIndex,
             name: legFare?.name_class || legFare?.name || legFare?.class,
+            route: fareRouteSummary(flight?.leg?.flights?.[legIndex]),
             baggagePolicies: legFare?.baggage_policies ?? (legIndex === 0 ? fare.baggage_policies : fare.return_baggage_policies),
         };
     });
+}
+
+function fareRouteSummary(flight) {
+    const from = flight?.from?.iata || flight?.from?.city?.code || flight?.from?.city?.name;
+    const to = flight?.to?.iata || flight?.to?.city?.code || flight?.to?.city?.name;
+
+    return from && to ? `${from} → ${to}` : "";
 }
 
 function openCardFareOptions(flight) {
@@ -4639,7 +4653,7 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Main Tabs -->
                     <Tabs
                         v-model="flightDetailsActiveTab"
-                        default-value="flight-details"
+                        default-value="fare-options"
                         class="flex min-h-0 flex-1 flex-col"
                     >
                         <!-- Top navigation, modelled after the fare-options sheet. -->

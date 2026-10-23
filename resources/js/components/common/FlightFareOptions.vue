@@ -75,9 +75,12 @@ function fareCount(groups) {
                             </div>
                             <div v-for="leg in fareLegs(fare, group.index)" :key="leg.index" class="grid min-w-0 grid-cols-[auto_minmax(7rem,0.7fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-sm text-slate-700">
                                 <span class="rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">{{ fare.fare_references?.length ? (leg.index === 0 ? "OW" : "RT") : "OW" }}</span>
-                                <div class="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
-                                    <span class="truncate font-bold text-slate-900">{{ leg.name || "Standard fare" }}</span>
-                                    <span v-for="code in fareBookingCodes(fare)" :key="code" class="shrink-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-xs font-bold text-slate-600">{{ code }}</span>
+                                <div class="min-w-0">
+                                    <div class="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                                        <span class="truncate font-bold text-slate-900">{{ leg.name || "Standard fare" }}</span>
+                                        <span v-for="code in fareBookingCodes(fare)" :key="code" class="shrink-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-xs font-bold text-slate-600">{{ code }}</span>
+                                    </div>
+                                    <span v-if="leg.route" class="mt-0.5 block truncate text-xs font-semibold text-slate-500">{{ leg.route }}</span>
                                 </div>
                                 <div v-if="!baggageSummaries(leg.baggagePolicies).some((summary) => summary.actionTab)" class="flex min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 text-slate-600">
                                     <span v-for="summary in baggageSummaries(leg.baggagePolicies)" :key="summary.label" class="inline-flex items-center gap-1 whitespace-nowrap">

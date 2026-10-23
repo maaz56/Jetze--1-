@@ -827,52 +827,12 @@ class FlightController extends Controller
             ];
         }
 
-        // SSR is backed by AT's priced store, not the ExpressSearch store.
-        // SmartPricer -> GetSPricer gives us the store/TUI that the supplier
-        // can use to resolve free inclusions for this exact fare selection.
-        Log::info('AT free SSR baggage pricing started', [
-            'flight_ref_id' => $validated['flight_ref_id'],
-        ]);
-
-        try {
-            [$providerPricing, $wasPriced] = $this->atProviderPricingOnce(
-                $flight,
-                $validated['search_token'],
-                $validated['flight_ref_id'],
-                $validated['fare_references'],
-                true,
-            );
-        } catch (\Throwable $exception) {
-            Log::error('AT free SSR baggage pricing failed', [
-                'flight_ref_id' => $validated['flight_ref_id'],
-                'message' => $exception->getMessage(),
-            ]);
-
-            return response()->json([
-                'message' => 'Baggage allowance could not be retrieved right now. Please try again.',
-            ], 502);
-        }
-
-        
-        $pricedTui = $providerPricing['tui'] ?? null;
-
-        if (!$pricedTui) {
-            return response()->json(['message' => 'AT could not price this fare for free baggage details.'], 422);
-        }
-
-        // Only a freshly priced TUI needs time to settle before AT serves SSR.
-        if ($wasPriced) {
-           
-            sleep(3);
-        }
-
-        
-
         try {
             $rawResponse = $this->atApiService->getSSR([
-                'ref_id' => $pricedTui,
-                'priced_tui' => $pricedTui,
-                'fareType' => $providerPricing['fare_type'] ?? data_get($flight, 'provider.fare_type'),
+                // Free SSR is requested directly from the selected search result,
+                // before any SmartPricer/GetSPricer call.
+                'ref_id' => data_get($flight, 'provider.TUI'),
+                'fareType' => data_get($flight, 'provider.fare_type'),
                 'legs' => $legs,
             ], false, 3, 3);
         } catch (\Throwable $exception) {

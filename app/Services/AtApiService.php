@@ -1328,7 +1328,8 @@ private function extractTrips($tripsData): array
 
             $trips[] = [
                 'Amount' => 0,
-                'Index' => '',
+                // AT's free-SSR request must identify the selected search fare.
+                'Index' => (string) ($leg['selectedFare']['index'] ?? ''),
                 'OrderID' => $index + 1, // keep static or change if needed
                 'TUI' => $this->resolveAncillaryTui($request, $cachedValidationResponse, $index),
             ];
