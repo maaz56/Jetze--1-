@@ -257,6 +257,8 @@ class TboNomodFulfilmentService
                 'payment_method' => HotelPaymentAttempt::PROVIDER_NOMOD,
                 'paid_at' => $booking->paid_at ?? $attempt->paid_at ?? now(),
                 'provider_status_code' => 200,
+                'booking_reference_id' => data_get($response, 'BookingReferenceId')
+                    ?? $booking->booking_reference_id,
                 'confirmation_number' => data_get($response, 'ConfirmationNumber'),
                 'hotel_confirmation_number' => data_get($response, 'HotelConfirmationNumber'),
                 'tbo_response' => $response,
@@ -279,12 +281,15 @@ class TboNomodFulfilmentService
             return;
         }
 
-        $payload = ['PaymentMode' => $booking->prebook->payment_mode];
+        $payload = [];
+        if ($booking->booking_reference_id) {
+            $payload['BookingReferenceId'] = $booking->booking_reference_id;
+        }
         if ($booking->confirmation_number) {
             $payload['ConfirmationNumber'] = $booking->confirmation_number;
-        } elseif ($booking->booking_reference_id) {
-            $payload['BookingReferenceId'] = $booking->booking_reference_id;
-        } else {
+        }
+        $payload['PaymentMode'] = $booking->prebook->payment_mode;
+        if (! $booking->confirmation_number && ! $booking->booking_reference_id) {
             Log::warning('TBO hotel details lookup skipped after Nomod fulfilment.', [
                 'hotel_booking_uuid' => $booking->uuid,
                 'reason' => 'The confirmed booking has no provider reference.',
@@ -325,6 +330,9 @@ class TboNomodFulfilmentService
             $lockedBooking->update([
                 'tbo_booking_detail_response' => $response,
                 'booking_details_checked_at' => now(),
+                'booking_reference_id' => data_get($details, 'BookingReferenceId')
+                    ?? data_get($response, 'BookingReferenceId')
+                    ?? $lockedBooking->booking_reference_id,
                 'confirmation_number' => data_get($details, 'ConfirmationNumber')
                     ?? $lockedBooking->confirmation_number,
                 'hotel_confirmation_number' => data_get($details, 'HotelConfirmationNumber')

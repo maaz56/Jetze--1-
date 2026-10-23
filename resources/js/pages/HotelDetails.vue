@@ -109,6 +109,10 @@ const formatRoomName = (room) => Array.isArray(room?.name)
   ? room.name.filter(Boolean).join(", ")
   : room?.name || "Room option";
 
+const roomPromotions = (room) => Array.isArray(room?.room_promotion)
+  ? room.room_promotion.filter(Boolean)
+  : (room?.room_promotion ? [room.room_promotion] : []);
+
 const isRoomDescriptionExpanded = (room) => expandedRoomDescriptions.value.has(room?.booking_code);
 
 const toggleRoomDescription = (room) => {
@@ -242,10 +246,11 @@ const loadHotelDetails = async () => {
     const response = await hotelStore.fetchHotelDetails({
       search_session_id: searchSessionId,
       hotel_code: hotelCode,
+      booking_code: bookingCode || undefined,
       currency_code: getSelectedCurrencyCode(),
     });
     hotel.value = response.data || null;
-    selectedBookingCode.value = bookingCode;
+    selectedBookingCode.value = response.data?.selected_booking_code || bookingCode;
 
     if (isSelectedRoomPage.value && !selectedRoom.value) {
       errorMessage.value = "The selected room is no longer available. Please choose another room.";
@@ -401,6 +406,9 @@ watch(() => route.fullPath, loadHotelDetails);
                   <span>{{ staySummary }}</span>
                   <span>{{ selectedRoom.meal_type || "Meal details unavailable" }}</span>
                 </div>
+                <div v-if="roomPromotions(selectedRoom).length" class="mt-3 flex flex-wrap gap-2">
+                  <span v-for="promotion in roomPromotions(selectedRoom)" :key="promotion" class="rounded bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{{ promotion }}</span>
+                </div>
                 <p v-if="roomDetails(selectedRoom)?.description" class="mt-4 whitespace-pre-line text-sm leading-6 text-slate-600">{{ roomDetails(selectedRoom).description }}</p>
                 <p v-else class="mt-4 text-sm leading-6 text-slate-500">Additional room description is not available from the provider.</p>
                 <div class="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm text-slate-700">
@@ -515,6 +523,9 @@ watch(() => route.fullPath, loadHotelDetails);
 
                     <div class="min-w-0 p-5">
                       <h3 class="text-lg font-bold text-slate-900">{{ formatRoomName(room) }}</h3>
+                      <div v-if="roomPromotions(room).length" class="mt-2 flex flex-wrap gap-2">
+                        <span v-for="promotion in roomPromotions(room)" :key="promotion" class="rounded bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{{ promotion }}</span>
+                      </div>
                       <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-slate-700">
                         <span v-if="roomDetails(room)?.size">{{ roomDetails(room).size }}</span>
                         <span>{{ staySummary }}</span>

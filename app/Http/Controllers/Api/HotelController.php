@@ -105,8 +105,8 @@ class HotelController extends Controller
             'check_in' => 'required|date|after_or_equal:today',
             'check_out' => 'required|date|after:check_in',
             'guest_nationality' => 'required|string|size:2',
-            'rooms' => 'required|array|min:1|max:8',
-            'rooms.*.adults' => 'required|integer|min:1|max:8',
+            'rooms' => 'required|array|min:1|max:6',
+            'rooms.*.adults' => 'required|integer|min:1|max:6',
             'rooms.*.children' => 'required|integer|min:0|max:4',
             'rooms.*.children_ages' => 'array',
             'filters.refundable' => 'nullable|boolean',
@@ -119,7 +119,11 @@ class HotelController extends Controller
         $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code'] ?? null);
 
         $destination = $validated['destination'];
-        $hotelCodes = collect(['1492068', '1491912', '1407362', '1452394', '1416726']);
+        $hotelCodes = $this->resolveHotelCodes($destination['type'], $destination['value'])
+            ->map(static fn ($hotelCode): string => trim((string) $hotelCode))
+            ->filter()
+            ->unique()
+            ->values();
 
         if ($hotelCodes->isEmpty() && $destination['type'] === 'city') {
             try {
@@ -179,10 +183,17 @@ class HotelController extends Controller
             'IsDetailedResponse' => false,
             'Filters' => [
                 'Refundable' => (bool) data_get($validated, 'filters.refundable', false),
-                'NoOfRooms' => (int) data_get($validated, 'filters.no_of_rooms', 0),
+                'NoOfRooms' => max(1, (int) data_get($validated, 'filters.no_of_rooms', 1)),
                 'MealType' => data_get($validated, 'filters.meal_type', 'All'),
             ],
         ];
+
+        Log::info('TBO Hotel Search Outgoing Request', [
+            'destination_type' => $destination['type'],
+            'destination_code' => $destination['value'],
+            'hotel_code_count' => $hotelCodes->count(),
+            'request' => $tboRequest,
+        ]);
 
         try {
             $tboResponse = $this->tboHotelService->search($tboRequest);
@@ -230,12 +241,13 @@ class HotelController extends Controller
         ], $this->httpStatusForProviderStatus($statusCode));
     }
 
-    /** Load static TBO property information for a hotel in one active search session. */
+    /** Refresh one selected hotel's detailed availability in its active search session. */
     public function details(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'search_session_id' => ['required', 'uuid'],
             'hotel_code' => ['required', 'string', 'max:100'],
+            'booking_code' => ['nullable', 'string', 'max:1024'],
             'language' => ['nullable', 'string', 'size:2'],
             'currency_code' => ['nullable', 'string', 'size:3'],
         ]);
@@ -255,58 +267,144 @@ class HotelController extends Controller
         }
 
         $hotelCode = (string) $validated['hotel_code'];
-        if (! $this->findSearchHotel($session, $hotelCode)) {
+        $requestedBookingCode = isset($validated['booking_code'])
+            ? (string) $validated['booking_code']
+            : null;
+        $currentProviderHotel = $this->findSearchHotel($session, $hotelCode);
+
+        if (! $currentProviderHotel) {
             return response()->json([
                 'message' => 'This hotel is not part of the current search. Please search again.',
             ], 422);
         }
 
         $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code'] ?? null);
-        $searchHotel = $this->normalizeSearchResults($session->tbo_response, $displayCurrency)
-            ->first(fn (array $hotel) => $hotel['hotel_code'] === $hotelCode);
+        $requestedSearchRoom = $requestedBookingCode
+            ? $this->findProviderRoomByBookingCode($currentProviderHotel, $requestedBookingCode)
+            : null;
+        $canReuseDetailedSearch = $requestedBookingCode
+            && ($currentProviderHotel['_DetailedResponse'] ?? false) === true
+            && $requestedSearchRoom;
+        $selectedBookingCode = $canReuseDetailedSearch ? $requestedBookingCode : null;
 
-        if (! $searchHotel) {
+        if ($canReuseDetailedSearch) {
+            $tboResponse = [
+                'Status' => ['Code' => 200, 'Description' => 'Successful'],
+                'HotelResult' => [$currentProviderHotel],
+            ];
+            $detailedHotel = $currentProviderHotel;
+        } else {
+            $detailedSearchRequest = $this->detailedHotelSearchRequest($session, $hotelCode);
+
+            Log::info('TBO Hotel Detailed Search Outgoing Request', [
+                'search_session_id' => $session->uuid,
+                'hotel_code' => $hotelCode,
+                'request' => $detailedSearchRequest,
+            ]);
+
+            try {
+                $tboResponse = $this->tboHotelService->search($detailedSearchRequest);
+            } catch (RuntimeException $e) {
+                return response()->json(['message' => $e->getMessage()], 500);
+            } catch (Throwable $e) {
+                Log::error('Unable to run detailed TBO hotel search', [
+                    'search_session_id' => $session->uuid,
+                    'hotel_code' => $hotelCode,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return response()->json(['message' => 'Current room options could not be loaded. Please try again.'], 502);
+            }
+
+            $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
+            if ($statusCode !== 200) {
+                return response()->json([
+                    'message' => $this->statusMessage($statusCode, data_get($tboResponse, 'Status.Description')),
+                    'provider_status' => data_get($tboResponse, 'Status'),
+                ], $this->httpStatusForProviderStatus($statusCode));
+            }
+
+            $detailedHotel = collect($tboResponse['HotelResult'] ?? [])
+                ->first(fn ($hotel) => is_array($hotel) && (string) ($hotel['HotelCode'] ?? '') === $hotelCode);
+
+            if (! is_array($detailedHotel)) {
+                return response()->json([
+                    'message' => 'No detailed room options were returned for the selected property.',
+                ], 502);
+            }
+
+            if ($requestedSearchRoom) {
+                $selectedDetailedRoom = $this->matchDetailedSearchRoom($requestedSearchRoom, $detailedHotel);
+                $selectedBookingCode = isset($selectedDetailedRoom['BookingCode'])
+                    ? (string) $selectedDetailedRoom['BookingCode']
+                    : null;
+
+                if (! $selectedBookingCode) {
+                    return response()->json([
+                        'message' => 'The selected room is no longer available. Please choose another room.',
+                    ], 422);
+                }
+            }
+
+            // Detailed Search returns fresh booking codes. Save them in the trusted
+            // session so the following PreBook can validate the selected room.
+            $this->storeDetailedSearchHotel($session, $detailedHotel);
+        }
+
+        $searchHotel = $this->normalizeSearchResults($tboResponse, $displayCurrency)
+            ->first(fn (array $hotel) => $hotel['hotel_code'] === $hotelCode);
+        $hotel = TboHotel::where('hotel_code', $hotelCode)->first();
+
+        if (! $searchHotel || ! $hotel) {
             return response()->json([
-                'message' => 'Current room options are unavailable. Please search again.',
+                'message' => 'Current hotel details could not be mapped. Please search again.',
             ], 422);
         }
 
-        try {
-            $tboResponse = $this->tboHotelService->hotelDetails(
-                $hotelCode,
-                strtoupper((string) ($validated['language'] ?? 'EN')),
-                true,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
-        } catch (Throwable $e) {
-            Log::error('Unable to retrieve TBO hotel details', [
-                'search_session_id' => $session->uuid,
-                'hotel_code' => $hotelCode,
-                'message' => $e->getMessage(),
-            ]);
+        $providerHotel = is_array($hotel->raw_response) ? $hotel->raw_response : [];
 
-            return response()->json(['message' => 'Hotel details could not be retrieved right now. Please try again.'], 502);
+        // Static HotelDetails only enriches the selected room with images, size
+        // and description. It must not block a valid availability result because
+        // TBO can return "No Hotels Found" here even when Search has rooms.
+        if ($requestedBookingCode) {
+            try {
+                $hotelDetailsResponse = $this->tboHotelService->hotelDetails(
+                    $hotelCode,
+                    strtoupper((string) ($validated['language'] ?? 'EN')),
+                    true,
+                );
+                $hotelDetailsStatusCode = (int) data_get($hotelDetailsResponse, 'Status.Code', 500);
+
+                if ($hotelDetailsStatusCode === 200) {
+                    $freshProviderHotel = collect($hotelDetailsResponse['HotelDetails'] ?? [])
+                        ->first(fn ($providerResult) => is_array($providerResult)
+                            && (string) ($providerResult['HotelCode'] ?? '') === $hotelCode);
+
+                    if (is_array($freshProviderHotel)) {
+                        $providerHotel = $freshProviderHotel;
+                        $hotel = $this->storeHotelDetails($freshProviderHotel);
+                    } else {
+                        Log::warning('TBO HotelDetails did not contain the selected hotel; using cached hotel content.', [
+                            'search_session_id' => $session->uuid,
+                            'hotel_code' => $hotelCode,
+                        ]);
+                    }
+                } else {
+                    Log::warning('TBO HotelDetails enrichment unavailable; continuing with Search availability.', [
+                        'search_session_id' => $session->uuid,
+                        'hotel_code' => $hotelCode,
+                        'provider_status' => data_get($hotelDetailsResponse, 'Status'),
+                    ]);
+                }
+            } catch (Throwable $e) {
+                Log::warning('Unable to enrich selected room from TBO HotelDetails; using cached hotel content.', [
+                    'search_session_id' => $session->uuid,
+                    'hotel_code' => $hotelCode,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
-        $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
-        if ($statusCode !== 200) {
-            return response()->json([
-                'message' => $this->statusMessage($statusCode, data_get($tboResponse, 'Status.Description')),
-                'provider_status' => data_get($tboResponse, 'Status'),
-            ], $this->httpStatusForProviderStatus($statusCode));
-        }
-
-        $providerHotel = collect($tboResponse['HotelDetails'] ?? [])
-            ->first(fn ($hotel) => is_array($hotel) && (string) ($hotel['HotelCode'] ?? '') === $hotelCode);
-
-        if (! is_array($providerHotel)) {
-            return response()->json([
-                'message' => 'Hotel details were not returned for the selected property.',
-            ], 502);
-        }
-
-        $hotel = $this->storeHotelDetails($providerHotel);
         $roomDetails = $this->normalizeHotelRoomDetails($providerHotel);
         $roomDetailsById = collect($roomDetails)->keyBy('room_id');
         $searchRooms = collect($searchHotel['rooms'])
@@ -319,9 +417,9 @@ class HotelController extends Controller
             ->all();
 
         return response()->json([
-            'message' => 'Hotel details fetched successfully.',
+            'message' => 'Detailed hotel availability fetched successfully.',
             'provider_status' => data_get($tboResponse, 'Status'),
-            'data' => array_merge($this->normalizeHotelDetails($providerHotel, $hotel), [
+            'data' => array_merge($this->normalizeHotelDetails($providerHotel, $hotel), $searchHotel, [
                 'stay' => [
                     'check_in' => $session->check_in?->toDateString(),
                     'check_out' => $session->check_out?->toDateString(),
@@ -329,6 +427,8 @@ class HotelController extends Controller
                 ],
                 'rooms' => $searchRooms,
                 'room_count' => $searchHotel['room_count'],
+                'promotions' => $searchHotel['promotions'],
+                'selected_booking_code' => $selectedBookingCode,
                 'room_details' => $roomDetails,
             ]),
         ]);
@@ -480,8 +580,8 @@ class HotelController extends Controller
             'customer_details' => 'required|array|min:1|max:8',
             'customer_details.*.customer_names' => 'required|array|min:1|max:12',
             'customer_details.*.customer_names.*.title' => 'required|string|in:Mr,Mrs,Ms',
-            'customer_details.*.customer_names.*.first_name' => 'required|string|max:100',
-            'customer_details.*.customer_names.*.last_name' => 'required|string|max:100',
+            'customer_details.*.customer_names.*.first_name' => ['required', 'string', 'min:2', 'max:25', 'regex:/^[A-Za-z]+$/'],
+            'customer_details.*.customer_names.*.last_name' => ['required', 'string', 'min:2', 'max:25', 'regex:/^[A-Za-z]+$/'],
             'customer_details.*.customer_names.*.type' => 'required|string|in:Adult,Child',
         ]);
 
@@ -581,8 +681,8 @@ class HotelController extends Controller
                 'customer_details' => 'required|array|min:1|max:8',
                 'customer_details.*.customer_names' => 'required|array|min:1|max:12',
                 'customer_details.*.customer_names.*.title' => 'required|string|in:Mr,Mrs,Ms',
-                'customer_details.*.customer_names.*.first_name' => 'required|string|max:100',
-                'customer_details.*.customer_names.*.last_name' => 'required|string|max:100',
+                'customer_details.*.customer_names.*.first_name' => ['required', 'string', 'min:2', 'max:25', 'regex:/^[A-Za-z]+$/'],
+                'customer_details.*.customer_names.*.last_name' => ['required', 'string', 'min:2', 'max:25', 'regex:/^[A-Za-z]+$/'],
                 'customer_details.*.customer_names.*.type' => 'required|string|in:Adult,Child',
             ]);
         } catch (ValidationException $e) {
@@ -761,6 +861,18 @@ class HotelController extends Controller
                 ]);
             });
 
+            // TBO can accept a booking even when the Book response is lost. Reconcile by the
+            // booking reference before asking the user to retry or treating it as failed.
+            $this->fetchAndStoreBookingDetailsAfterBooking($booking->fresh(['prebook']));
+            $booking = $booking->fresh();
+
+            if ($booking->status === 'confirmed') {
+                return response()->json([
+                    'message' => 'The booking was confirmed after its provider status was checked.',
+                    'data' => $this->normalizeBooking($booking),
+                ]);
+            }
+
             Log::error('TBO hotel booking request did not receive a response', [
                 'hotel_booking_id' => $booking->uuid,
                 'booking_reference_id' => $booking->booking_reference_id,
@@ -779,6 +891,8 @@ class HotelController extends Controller
             $booking->update([
                 'status' => $isConfirmed ? 'confirmed' : 'failed',
                 'provider_status_code' => $statusCode,
+                'booking_reference_id' => data_get($tboResponse, 'BookingReferenceId')
+                    ?? $booking->booking_reference_id,
                 'confirmation_number' => data_get($tboResponse, 'ConfirmationNumber'),
                 'hotel_confirmation_number' => data_get($tboResponse, 'HotelConfirmationNumber'),
                 'tbo_response' => $tboResponse,
@@ -924,6 +1038,8 @@ class HotelController extends Controller
                 'status' => $isConfirmed ? 'confirmed' : 'failed',
                 'paid_at' => $isConfirmed ? now() : null,
                 'provider_status_code' => $statusCode,
+                'booking_reference_id' => data_get($tboResponse, 'BookingReferenceId')
+                    ?? $booking->booking_reference_id,
                 'confirmation_number' => data_get($tboResponse, 'ConfirmationNumber'),
                 'hotel_confirmation_number' => data_get($tboResponse, 'HotelConfirmationNumber'),
                 'tbo_response' => $tboResponse,
@@ -1095,15 +1211,7 @@ class HotelController extends Controller
             return response()->json(['message' => 'This hotel booking belongs to another user.'], 403);
         }
 
-        $payload = [
-            'PaymentMode' => $booking->prebook->payment_mode,
-        ];
-
-        if ($booking->confirmation_number) {
-            $payload['ConfirmationNumber'] = $booking->confirmation_number;
-        } else {
-            $payload['BookingReferenceId'] = $booking->booking_reference_id;
-        }
+        $payload = $this->bookingDetailRequest($booking);
 
         HotelBookingEvent::create([
             'hotel_prebook_id' => $booking->hotel_prebook_id,
@@ -1168,6 +1276,9 @@ class HotelController extends Controller
         $providerBookingStatus = data_get($details, 'BookingStatus');
         $booking->update([
             'status' => $this->localStatusForProviderBooking($providerBookingStatus, $booking->status),
+            'booking_reference_id' => data_get($details, 'BookingReferenceId')
+                ?? data_get($tboResponse, 'BookingReferenceId')
+                ?? $booking->booking_reference_id,
             'confirmation_number' => data_get($details, 'ConfirmationNumber') ?? $booking->confirmation_number,
             'hotel_confirmation_number' => data_get($details, 'HotelConfirmationNumber') ?? $booking->hotel_confirmation_number,
         ]);
@@ -1318,10 +1429,7 @@ class HotelController extends Controller
             return;
         }
 
-        $payload = [
-            'PaymentMode' => $booking->prebook->payment_mode,
-            'ConfirmationNumber' => $booking->confirmation_number,
-        ];
+        $payload = $this->bookingDetailRequest($booking);
 
         HotelBookingEvent::create([
             'hotel_prebook_id' => $booking->hotel_prebook_id,
@@ -1391,6 +1499,9 @@ class HotelController extends Controller
         $details = data_get($tboResponse, 'BookingDetail', []);
         $booking->update([
             'status' => $this->localStatusForProviderBooking(data_get($details, 'BookingStatus'), $booking->status),
+            'booking_reference_id' => data_get($details, 'BookingReferenceId')
+                ?? data_get($tboResponse, 'BookingReferenceId')
+                ?? $booking->booking_reference_id,
             'confirmation_number' => data_get($details, 'ConfirmationNumber') ?? $booking->confirmation_number,
             'hotel_confirmation_number' => data_get($details, 'HotelConfirmationNumber') ?? $booking->hotel_confirmation_number,
         ]);
@@ -1400,6 +1511,24 @@ class HotelController extends Controller
             'confirmation_number' => $booking->confirmation_number,
             'provider_status' => data_get($tboResponse, 'Status'),
         ]);
+    }
+
+    /** Build TBO's BookingDetail lookup with both provider identifiers. */
+    protected function bookingDetailRequest(HotelBooking $booking): array
+    {
+        $payload = [];
+
+        if ($booking->booking_reference_id) {
+            $payload['BookingReferenceId'] = $booking->booking_reference_id;
+        }
+
+        if ($booking->confirmation_number) {
+            $payload['ConfirmationNumber'] = $booking->confirmation_number;
+        }
+
+        $payload['PaymentMode'] = $booking->prebook->payment_mode;
+
+        return $payload;
     }
 
     protected function resolveHotelCodes(string $type, string $value): Collection
@@ -1569,6 +1698,108 @@ class HotelController extends Controller
         }
 
         return null;
+    }
+
+    /** Build a fresh detailed Search request for only the selected property. */
+    protected function detailedHotelSearchRequest(HotelSearchSession $session, string $hotelCode): array
+    {
+        $request = is_array($session->tbo_request) ? $session->tbo_request : [];
+        $filters = is_array($request['Filters'] ?? null) ? $request['Filters'] : [];
+
+        $request['HotelCodes'] = $hotelCode;
+        $request['IsDetailedResponse'] = true;
+        $filters['NoOfRooms'] = 0;
+        $request['Filters'] = $filters;
+
+        return $request;
+    }
+
+    /** Find one trusted provider room by the opaque booking code shown to the user. */
+    protected function findProviderRoomByBookingCode(array $providerHotel, string $bookingCode): ?array
+    {
+        foreach ($providerHotel['Rooms'] ?? [] as $room) {
+            if (is_array($room)
+                && isset($room['BookingCode'])
+                && hash_equals((string) $room['BookingCode'], $bookingCode)) {
+                return $room;
+            }
+        }
+
+        return null;
+    }
+
+    /** Match an earlier selected offer to its refreshed detailed-search offer. */
+    protected function matchDetailedSearchRoom(array $selectedRoom, array $detailedHotel): ?array
+    {
+        $rooms = collect($detailedHotel['Rooms'] ?? [])->filter(fn ($room) => is_array($room));
+        $selectedRoomId = $this->normalizeRoomId(
+            $selectedRoom['TBORoomID'] ?? null,
+            $selectedRoom['RoomID'] ?? null,
+        );
+        $selectedMeal = (string) ($selectedRoom['MealType'] ?? '');
+        $selectedInclusion = (string) ($selectedRoom['Inclusion'] ?? '');
+
+        if ($selectedRoomId !== null) {
+            $sameRoomId = $rooms->filter(fn (array $room): bool => $this->normalizeRoomId(
+                $room['TBORoomID'] ?? null,
+                $room['RoomID'] ?? null,
+            ) === $selectedRoomId);
+
+            $sameOffer = $sameRoomId->first(fn (array $room): bool =>
+                (string) ($room['MealType'] ?? '') === $selectedMeal
+                && (string) ($room['Inclusion'] ?? '') === $selectedInclusion
+            );
+
+            if (is_array($sameOffer)) {
+                return $sameOffer;
+            }
+
+            $roomIdMatch = $sameRoomId->first();
+            if (is_array($roomIdMatch)) {
+                return $roomIdMatch;
+            }
+        }
+
+        $selectedName = json_encode($selectedRoom['Name'] ?? [], JSON_UNESCAPED_UNICODE);
+
+        return $rooms->first(fn (array $room): bool =>
+            json_encode($room['Name'] ?? [], JSON_UNESCAPED_UNICODE) === $selectedName
+            && (string) ($room['MealType'] ?? '') === $selectedMeal
+        );
+    }
+
+    /**
+     * Replace the selected property's fast result with its detailed result.
+     * This keeps the room and booking-code allow-list used by PreBook current.
+     */
+    protected function storeDetailedSearchHotel(HotelSearchSession $session, array $detailedHotel): void
+    {
+        $detailedHotel['_DetailedResponse'] = true;
+        $hotelCode = (string) ($detailedHotel['HotelCode'] ?? '');
+
+        DB::transaction(function () use ($session, $detailedHotel, $hotelCode): void {
+            $lockedSession = HotelSearchSession::query()->lockForUpdate()->findOrFail($session->id);
+            $response = is_array($lockedSession->tbo_response) ? $lockedSession->tbo_response : [];
+            $hotelResults = is_array($response['HotelResult'] ?? null) ? $response['HotelResult'] : [];
+            $wasReplaced = false;
+
+            foreach ($hotelResults as $index => $hotelResult) {
+                if (is_array($hotelResult) && (string) ($hotelResult['HotelCode'] ?? '') === $hotelCode) {
+                    $hotelResults[$index] = $detailedHotel;
+                    $wasReplaced = true;
+                    break;
+                }
+            }
+
+            if (! $wasReplaced) {
+                $hotelResults[] = $detailedHotel;
+            }
+
+            $response['HotelResult'] = array_values($hotelResults);
+            $lockedSession->update(['tbo_response' => $response]);
+        });
+
+        $session->refresh();
     }
 
     /** Persist static provider property information for later searches and detail views. */
@@ -1778,6 +2009,7 @@ class HotelController extends Controller
             ),
             'booking_code' => $room['BookingCode'] ?? null,
             'inclusion' => $room['Inclusion'] ?? null,
+            'day_rates' => $room['DayRates'] ?? [],
             'total_fare' => $totalFare,
             'total_tax' => $totalTax,
             'display_money' => $this->convertSearchMoney($totalFare, $currency, $displayCurrency),
@@ -1785,6 +2017,7 @@ class HotelController extends Controller
             'extra_guest_charges' => isset($room['ExtraGuestCharges']) ? (float) $room['ExtraGuestCharges'] : null,
             'recommended_selling_rate' => $room['RecommendedSellingRate'] ?? null,
             'room_promotion' => $room['RoomPromotion'] ?? [],
+            'rate_conditions' => $room['RateConditions'] ?? [],
             'bedding_group' => $room['BeddingGroup'] ?? null,
             'meal_type' => $room['MealType'] ?? null,
             'is_refundable' => (bool) ($room['IsRefundable'] ?? false),
@@ -1923,6 +2156,7 @@ class HotelController extends Controller
             ->first();
         $room = is_array($providerRoom) ? $providerRoom : $prebook->search_room;
         $room['Currency'] = $providerHotel['Currency'] ?? $room['Currency'] ?? null;
+        $room['RateConditions'] = $providerHotel['RateConditions'] ?? $room['RateConditions'] ?? [];
 
         return $room;
     }

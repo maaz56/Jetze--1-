@@ -1,5 +1,6 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
+import CountryDropdown from "@/components/common/CountryDropdown.vue";
 import { useHotelStore } from "@/services/stores/hotel";
 import {
   CalendarDays,
@@ -8,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Globe2,
   Hotel,
   MapPin,
   Minus,
@@ -69,8 +71,9 @@ const heroBackground = {
   backgroundImage: "linear-gradient(180deg, rgba(10, 20, 40, 0.35), rgba(10, 20, 40, 0.15) 55%, transparent), linear-gradient(120deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 55%, hsl(var(--primary-light)) 100%)",
 };
 
-const MAX_ADULTS_PER_ROOM = 10;
-const MAX_CHILDREN_PER_ROOM = 6;
+const MAX_ROOMS = 6;
+const MAX_ADULTS_PER_ROOM = 6;
+const MAX_CHILDREN_PER_ROOM = 4;
 
 const destinationQuery = ref("");
 const selectedDestination = ref(null);
@@ -80,9 +83,7 @@ const checkIn = ref(formatDateInput(tomorrow));
 const checkOut = ref(formatDateInput(dayAfterTomorrow));
 const checkInInput = ref(null);
 const checkOutInput = ref(null);
-// Nationality is no longer editable from the search bar; kept as a fixed
-// default so the existing search payload contract is unchanged.
-const guestNationality = ref("PK");
+const guestNationality = ref("");
 const rooms = ref([
   {
     adults: 1,
@@ -221,6 +222,10 @@ const selectDestination = (suggestion) => {
 };
 
 const addRoom = () => {
+  if (rooms.value.length >= MAX_ROOMS) {
+    return;
+  }
+
   rooms.value.push({
     adults: 1,
     children_ages: [],
@@ -261,7 +266,7 @@ const updateChildAge = (room, childIndex, value) => {
 
 const childAgeOptions = [
   { label: "Under 1", value: 0 },
-  ...Array.from({ length: 12 }, (_, index) => ({ label: String(index + 1), value: index + 1 })),
+  ...Array.from({ length: 18 }, (_, index) => ({ label: String(index + 1), value: index + 1 })),
 ];
 
 const closeGuestsPanel = () => {
@@ -307,6 +312,12 @@ const searchHotels = async () => {
     return;
   }
 
+  if (!guestNationality.value) {
+    hotelStore.resetSearch();
+    formErrorMessage.value = "Select the guest nationality.";
+    return;
+  }
+
   try {
     expandedHotelCodes.value = new Set();
     selectedBookingCode.value = "";
@@ -328,15 +339,12 @@ const searchHotels = async () => {
       })),
       filters: {
         refundable: false,
-        no_of_rooms: 0,
+        no_of_rooms: Math.max(1, rooms.value.length),
         meal_type: "All",
       },
       currency_code: getSelectedCurrencyCode(),
     });
 
-    void Promise.all(hotelResults.value
-      .filter((hotelItem) => !hotelImages(hotelItem).length)
-      .map((hotelItem) => loadHotelRoomDetails(hotelItem)));
   } catch (error) {
     formErrorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Hotel search failed. Please try again.";
   }
@@ -450,7 +458,22 @@ const hasChosenRoom = (hotelItem) => Boolean(roomChoices.value[String(hotelItem.
 const isChosenRoom = (hotelItem, room) => roomChoiceForHotel(hotelItem)?.booking_code === room?.booking_code;
 
 const selectChosenRoom = (hotelItem) => {
-  selectRoom(roomChoiceForHotel(hotelItem));
+  const room = roomChoiceForHotel(hotelItem);
+
+  if (!searchSessionId.value || !hotelItem?.hotel_code || !room?.booking_code) {
+    formErrorMessage.value = "This room is unavailable. Please search again.";
+    return;
+  }
+
+  selectRoom(room);
+  router.push({
+    name: "HotelRoomDetails",
+    query: {
+      search_session_id: searchSessionId.value,
+      hotel_code: hotelItem.hotel_code,
+      booking_code: room.booking_code,
+    },
+  });
 };
 
 const isSelectedRoom = (room) => selectedBookingCode.value && room?.booking_code === selectedBookingCode.value;
@@ -623,7 +646,7 @@ const loadSearchFromRoute = async (query = route.query) => {
   destinationQuery.value = String(destinationLabel);
   checkIn.value = query.check_in ? String(query.check_in) : checkIn.value;
   checkOut.value = query.check_out ? String(query.check_out) : checkOut.value;
-  guestNationality.value = query.guest_nationality ? String(query.guest_nationality).toUpperCase() : guestNationality.value;
+  guestNationality.value = query.guest_nationality ? String(query.guest_nationality).toLowerCase() : guestNationality.value;
 
   const parsedRooms = parseRoomsQuery(query.rooms);
   if (parsedRooms) {
@@ -745,7 +768,22 @@ watch(
               </div>
             </div>
 
-            <div ref="guestsPanelRef" class="relative p-4 sm:p-5 lg:col-span-3 lg:py-4">
+            <div class="p-4 sm:p-5 lg:col-span-2 lg:py-4">
+              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
+                <Globe2 class="h-3.5 w-3.5" />
+                Nationality
+              </label>
+              <div class="hotel-nationality-select mt-2">
+                <CountryDropdown
+                  v-model="guestNationality"
+                  key-value="code"
+                  placeholder="Select nationality"
+                  trigger-class="!h-11 !rounded !border-transparent !bg-slate-50 !px-3 !text-sm !font-bold !text-slate-900 hover:!bg-white"
+                />
+              </div>
+            </div>
+
+            <div ref="guestsPanelRef" class="relative p-4 sm:p-5 lg:col-span-2 lg:py-4">
               <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
                 <Users class="h-3.5 w-3.5" />
                 Rooms &amp; guests
@@ -793,7 +831,7 @@ watch(
                   <div class="flex items-center justify-between py-2">
                     <div>
                       <p class="text-sm text-gray-900">Children</p>
-                      <p class="text-xs text-gray-500">0 - 12 Years</p>
+                      <p class="text-xs text-gray-500">0 - 18 Years</p>
                     </div>
                     <div class="flex items-center gap-3">
                       <button
@@ -836,7 +874,7 @@ watch(
                 </div>
 
                 <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
-                  <button type="button" class="flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700" @click="addRoom">
+                  <button type="button" class="flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40" :disabled="rooms.length >= MAX_ROOMS" @click="addRoom">
                     <Plus class="h-4 w-4" />
                     Add Another Room
                   </button>
@@ -851,7 +889,7 @@ watch(
               </div>
             </div>
 
-            <div class="flex items-center p-4 sm:p-5 lg:col-span-2 lg:p-3">
+            <div class="flex items-center p-4 sm:p-5 lg:col-span-1 lg:p-3">
               <Button type="submit" class="h-12 w-full rounded border-0 bg-[linear-gradient(180deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] px-6 text-base font-bold text-white shadow-lg shadow-primary/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-70 lg:h-14" :is-loading="isSearching">
                 <Search class="h-5 w-5" />
                 Search
@@ -1100,6 +1138,9 @@ watch(
                   </div>
                   <div class="min-w-auto">
                     <p class="truncate w-64 text-sm font-bold">{{ formatRoomName(room) }}</p>
+                    <div v-if="room.room_promotion?.length" class="mt-1 flex w-64 flex-wrap gap-1">
+                      <span v-for="promotion in room.room_promotion" :key="promotion" class="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">{{ promotion }}</span>
+                    </div>
                     <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 w-64 text-xs text-gray-600">
                       <span>{{ formatMeal(room.meal_type) }}</span>
                       <span>{{ room.is_refundable ? "Refundable" : "Non-refundable" }}</span>

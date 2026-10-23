@@ -30,6 +30,10 @@ const props = defineProps({
   leftIcon: {
     type: String,
     required: false
+  },
+  triggerClass: {
+    type: String,
+    default: ""
   }
 })
 const emit = defineEmits(['update:modelValue']);
@@ -84,7 +88,7 @@ const filteredCountries = computed(() => {
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child class="hover:text-black">
-      <Button variant="outline" class="!bg-white flex gap-2 w-full items-center justify-start h-10 px-3 relative">
+      <Button type="button" variant="outline" :class="['!bg-white flex gap-2 w-full items-center justify-start h-10 px-3 relative', props.triggerClass]">
         <img v-if="props.leftIcon" :src="props.leftIcon" class="w-5 h-5 opacity-70 mr-2" alt="icon" />
         <span class="flex items-center" v-if="selectedCountry?.name">
               <img :src="selectedCountry?.flag" class="w-[20px] h-[15px] mr-1 object-fit" :alt="`${selectedCountry.label} flag`"/>  {{ selectedCountry?.name }}

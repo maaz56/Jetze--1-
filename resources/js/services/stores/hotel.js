@@ -103,6 +103,15 @@ export const useHotelStore = defineStore("hotel", {
             try {
                 const response = await apiService.getHotelDetails(params);
                 this.hotelDetails = response.data.data || null;
+
+                if (this.hotelDetails?.hotel_code) {
+                    this.hotels = this.hotels.map((hotel) => (
+                        String(hotel.hotel_code) === String(this.hotelDetails.hotel_code)
+                            ? { ...hotel, ...this.hotelDetails }
+                            : hotel
+                    ));
+                }
+
                 return response.data;
             } catch (error) {
                 this.hotelDetails = null;

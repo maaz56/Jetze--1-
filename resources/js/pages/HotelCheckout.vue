@@ -22,6 +22,9 @@ const prebook = computed(() => hotelStore.getPrebook);
 const isSavingReservation = computed(() => hotelStore.getIsBooking);
 const isExpired = computed(() => remainingSeconds.value <= 0);
 const finalFare = computed(() => prebook.value?.price_quote?.selling_money || null);
+const supplements = computed(() => (prebook.value?.room?.supplements || [])
+  .flat(2)
+  .filter((supplement) => supplement && typeof supplement === "object"));
 const roomName = computed(() => {
   const name = prebook.value?.room?.name;
   return Array.isArray(name) ? name.filter(Boolean).join(", ") : name || "Selected room";
@@ -40,6 +43,14 @@ const formatMoney = (money) => {
 const formatPolicy = (policy) => {
   const type = policy?.ChargeType ? ` (${policy.ChargeType})` : "";
   return `From ${policy?.FromDate || "the stated date"}: ${policy?.CancellationCharge ?? "—"}${type}`;
+};
+
+const formatSupplement = (supplement) => {
+  const amount = supplement?.Price !== undefined && supplement?.Price !== null
+    ? `${supplement.Currency || ""} ${Number(supplement.Price).toLocaleString()}`.trim()
+    : "Amount as advised by the hotel";
+
+  return `${supplement.Description || "Supplement"}: ${amount}${supplement.Type === "AtProperty" ? " (payable at property)" : ""}`;
 };
 
 const formatCountdown = (seconds) => {
@@ -148,8 +159,8 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer));
                   <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Guest {{ guestIndex + 1 }} · {{ guest.type }}</p>
                   <div class="grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)_minmax(0,1fr)]">
                     <label class="text-xs font-medium text-slate-600">Title<select v-model="guest.title" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"><option value="Mr">Mr</option><option value="Mrs">Mrs</option><option value="Ms">Ms</option></select></label>
-                    <label class="text-xs font-medium text-slate-600">First name<input v-model.trim="guest.first_name" required type="text" maxlength="100" placeholder="First name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
-                    <label class="text-xs font-medium text-slate-600">Last name<input v-model.trim="guest.last_name" required type="text" maxlength="100" placeholder="Last name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                    <label class="text-xs font-medium text-slate-600">First name<input v-model.trim="guest.first_name" required type="text" minlength="2" maxlength="25" pattern="[A-Za-z]+" title="Use 2 to 25 letters only." placeholder="First name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
+                    <label class="text-xs font-medium text-slate-600">Last name<input v-model.trim="guest.last_name" required type="text" minlength="2" maxlength="25" pattern="[A-Za-z]+" title="Use 2 to 25 letters only." placeholder="Last name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
                   </div>
                 </div>
               </section>
@@ -181,6 +192,8 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer));
           </article>
 
           <article class="border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-center gap-2"><ShieldCheck class="h-5 w-5 text-primary" /><h2 class="font-semibold text-slate-900">Cancellation policy</h2></div><ul v-if="prebook.room.cancel_policies?.length" class="mt-3 space-y-2 text-sm leading-5 text-slate-600"><li v-for="(policy, index) in prebook.room.cancel_policies" :key="index">{{ formatPolicy(policy) }}</li></ul><p v-else class="mt-3 text-sm text-slate-500">No cancellation policy was returned by the provider.</p></article>
+          <article v-if="prebook.room.rate_conditions?.length" class="border border-slate-200 bg-white p-5 shadow-sm"><h2 class="font-semibold text-slate-900">Rate conditions</h2><ul class="mt-3 space-y-2 text-sm leading-5 text-slate-700"><li v-for="(condition, index) in prebook.room.rate_conditions" :key="index">{{ condition }}</li></ul></article>
+          <article v-if="supplements.length" class="border border-amber-200 bg-amber-50 p-5 shadow-sm"><h2 class="font-semibold text-slate-900">Mandatory or optional charges</h2><p class="mt-1 text-xs leading-5 text-slate-600">These provider charges may be payable directly at the hotel.</p><ul class="mt-3 space-y-2 text-sm leading-5 text-slate-700"><li v-for="(supplement, index) in supplements" :key="index">{{ formatSupplement(supplement) }}</li></ul></article>
         </aside>
       </div>
     </section>
