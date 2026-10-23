@@ -111,6 +111,11 @@ class AtFlightTransformer
                             (int) $segmentIndex,
                             $marketingCarrierCode,
                         );
+                        $validatingCarrierCode = $this->carrierCodeForSegment(
+                            $flight['VAC'] ?? null,
+                            (int) $segmentIndex,
+                            $marketingCarrierCode,
+                        );
                         
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
@@ -124,6 +129,7 @@ class AtFlightTransformer
                             "cabin_class" => $flight['Cabin'] ?? 'E',
                             "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
                             "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
+                            "validating_carrier" => $this->buildCarrier($validatingCarrierCode, $carrierName),
                         ];
 
                         $deptAirport = $fields[3] ?? $deptAirport;
@@ -147,6 +153,11 @@ class AtFlightTransformer
                             0,
                             $this->carrierCodeForSegment($flight['OAC'] ?? null, (int) $connectionIndex, $marketingCarrierCode),
                         );
+                        $validatingCarrierCode = $this->carrierCodeForSegment(
+                            $seg['VAC'] ?? null,
+                            0,
+                            $this->carrierCodeForSegment($flight['VAC'] ?? null, (int) $connectionIndex, $marketingCarrierCode),
+                        );
                         
                         $segments[] = [
                             "ref_id" => (string) \Str::uuid(),
@@ -160,6 +171,7 @@ class AtFlightTransformer
                             "cabin_class" => $seg['Cabin'] ?? 'E',
                             "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
                             "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
+                            "validating_carrier" => $this->buildCarrier($validatingCarrierCode, $carrierName),
                         ];
                         $deptAirport = $seg['Airport'];
                     }
@@ -173,6 +185,11 @@ class AtFlightTransformer
                     );
                     $operatingCarrierCode = $this->carrierCodeForSegment(
                         $flight['OAC'] ?? null,
+                        $mainSegmentIndex,
+                        $marketingCarrierCode,
+                    );
+                    $validatingCarrierCode = $this->carrierCodeForSegment(
+                        $flight['VAC'] ?? null,
                         $mainSegmentIndex,
                         $marketingCarrierCode,
                     );
@@ -190,6 +207,7 @@ class AtFlightTransformer
                         "cabin_class" => $flight['Cabin'] ?? 'E',
                         "marketing_carrier" => $this->buildCarrier($marketingCarrierCode, $carrierName),
                         "operating_carrier" => $this->buildCarrier($operatingCarrierCode, $carrierName),
+                        "validating_carrier" => $this->buildCarrier($validatingCarrierCode, $carrierName),
                     ];
                 }
 
@@ -404,6 +422,7 @@ class AtFlightTransformer
                     "change_of_plane" => $connections > 0,
                     "marketing_carrier" => $segments[0]['marketing_carrier'],
                     "operating_carrier" => $segments[0]['operating_carrier'],
+                    "validating_carrier" => $segments[0]['validating_carrier'],
                     "is_refundable" => $fares[0]['is_refundable'],
                     "flight_number" => $segments[0]['flight_number']
                 ];
@@ -601,7 +620,7 @@ class AtFlightTransformer
 
         return [
             "iata" => $iataCode,
-            "name" => $this->carrierDisplayName($iataCode, $airlineName, $airline),
+            "name" => $this->carrierDisplayName($iataCode, $airline),
             "logo" => $airline?->logo_url ?: $this->duffelLogoUrl($iataCode),
         ];
     }
@@ -660,28 +679,11 @@ class AtFlightTransformer
         });
     }
 
-    private function carrierDisplayName(?string $iataCode, ?string $airlineName, ?Airline $airline): ?string
+    private function carrierDisplayName(?string $iataCode, ?Airline $airline): ?string
     {
-        if ($airlineName) {
-            return $this->airlineMatchesName($airline, $airlineName)
-                ? $airline->name
-                : $airlineName;
-        }
-
+        // AirlineName in AT may describe the validating carrier. It is used
+        // only to resolve a shared IATA code, never as the display name.
         return $airline?->name ?? $iataCode;
-    }
-
-    private function airlineMatchesName(?Airline $airline, string $airlineName): bool
-    {
-        if (!$airline) {
-            return false;
-        }
-
-        $name = $this->normalizeNameForComparison($airline->name ?? null);
-        $needle = $this->normalizeNameForComparison($airlineName);
-
-        return $name !== ''
-            && ($name === $needle || str_contains($name, $needle) || str_contains($needle, $name));
     }
 
     private function airlineNameForSegment(array $flight, int $segmentIndex = 0): ?string
