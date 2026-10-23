@@ -840,6 +840,7 @@ class FlightController extends Controller
                 $validated['search_token'],
                 $validated['flight_ref_id'],
                 $validated['fare_references'],
+                true,
             );
         } catch (\Throwable $exception) {
             Log::error('AT free SSR baggage pricing failed', [
@@ -1197,7 +1198,7 @@ class FlightController extends Controller
      *
      * @return array{0: array, 1: bool} The provider pricing and whether it was priced just now.
      */
-    private function atProviderPricingOnce(array $flight, string $searchToken, string $flightReference, array $fareReferences): array
+    private function atProviderPricingOnce(array $flight, string $searchToken, string $flightReference, array $fareReferences, bool $skipTravelerChecklist = false): array
     {
         $pricing = $this->cachedAtProviderPricing($searchToken, $flightReference, $fareReferences);
         if ($pricing) {
@@ -1208,13 +1209,13 @@ class FlightController extends Controller
         // Wait for that request's TUI instead of starting a second price request.
         $lockKey = $this->atProviderPricingCacheKey($searchToken, $flightReference, $fareReferences) . '_lock';
 
-        return Cache::lock($lockKey, 120)->block(90, function () use ($flight, $searchToken, $flightReference, $fareReferences) {
+        return Cache::lock($lockKey, 120)->block(90, function () use ($flight, $searchToken, $flightReference, $fareReferences, $skipTravelerChecklist) {
             $pricing = $this->cachedAtProviderPricing($searchToken, $flightReference, $fareReferences);
             if ($pricing) {
                 return [$pricing, false];
             }
 
-            $pricing = $this->atApiService->priceQuote($flight, $fareReferences);
+            $pricing = $this->atApiService->priceQuote($flight, $fareReferences, $skipTravelerChecklist);
             $this->cacheAtProviderPricing($searchToken, $flightReference, $fareReferences, $pricing);
 
             return [$pricing, true];

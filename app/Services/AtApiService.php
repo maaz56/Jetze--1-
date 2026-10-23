@@ -812,9 +812,10 @@ private function extractTrips($tripsData): array
         */
 
         $tripType = $this->resolveFareType($request->all());
+        $skipTravelerChecklist = (bool) $request->input('skip_traveler_checklist', false);
 
         if ($tripType === 'DM') {
-            return $this->sendDmMultiCityPriceRequests($request, $accessToken, $headers, $priceRequestUrl, $tripType);
+            return $this->sendDmMultiCityPriceRequests($request, $accessToken, $headers, $priceRequestUrl, $tripType, $skipTravelerChecklist);
         }
 
         $tui = $request->input('ref_id'); // main ref_id
@@ -860,7 +861,7 @@ private function extractTrips($tripsData): array
             $responseBody = json_decode($response->getBody(), true);
 
             Log::info('Price Request response: ', $responseBody);
-            $response = $this->getPricer($responseBody);
+            $response = $this->getPricer($responseBody, $skipTravelerChecklist);
             return $response;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -984,7 +985,7 @@ private function extractTrips($tripsData): array
     /**
      * Reprice the selected AT fares and return only the booking values for a quote.
      */
-    public function priceQuote(array $flight, array $fareReferences): array
+    public function priceQuote(array $flight, array $fareReferences, bool $skipTravelerChecklist = false): array
     {
         $selectedFares = array_flip($fareReferences);
         $legs = [];
@@ -1014,6 +1015,7 @@ private function extractTrips($tripsData): array
             'flight_provider' => 'AT',
             'provider' => 'AT',
             'fareType' => data_get($flight, 'provider.fare_type'),
+            'skip_traveler_checklist' => $skipTravelerChecklist,
             'legs' => $legs,
         ]);
         $pricingResponse = $this->sendPriceRequest($pricingRequest);
@@ -1037,7 +1039,7 @@ private function extractTrips($tripsData): array
         ];
     }
 
-    public function getPricer($request)
+    public function getPricer($request, bool $skipTravelerChecklist = false)
     {
         $accessToken = $this->getAccessToken();
         // Log::info($accessToken);
@@ -1074,7 +1076,9 @@ private function extractTrips($tripsData): array
                 Log::warning('Price request did not return TUI. Response: ');
                 return null;
             }
-            $this->travelerCheckList($responseBody);
+            if (! $skipTravelerChecklist) {
+                $this->travelerCheckList($responseBody);
+            }
             return $responseBody;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -1596,7 +1600,8 @@ private function extractTrips($tripsData): array
             'BrowserKey' => $this->browserKey,
             'ClientID' => $clientId,
             'TUI' => $TUI,
-            'Hold' => false,
+            // StartPay HB places the hold; HP issues the ticket.
+            'Hold' => $bookingType === 'HB',
             'Promo' => null,
             'PaymentType' => '',
             'BankCode' => '',
@@ -2494,7 +2499,7 @@ private function extractTrips($tripsData): array
         ];
     }
 
-    private function sendDmMultiCityPriceRequests($request, array $accessToken, array $headers, string $priceRequestUrl, string $tripType): ?array
+    private function sendDmMultiCityPriceRequests($request, array $accessToken, array $headers, string $priceRequestUrl, string $tripType, bool $skipTravelerChecklist = false): ?array
     {
         $legs = $request->input('legs', []);
         $tuis = $this->normalizeDmTuiList($request->input('ref_id'));
@@ -2554,7 +2559,7 @@ private function extractTrips($tripsData): array
                 Log::info('DM SmartPricer response for selected fare ' . ($index + 1) . ': ', $responseBody);
 
                 $smartPricerResponses[] = $responseBody;
-                $pricedResponse = $this->getPricer($responseBody);
+                $pricedResponse = $this->getPricer($responseBody, $skipTravelerChecklist);
 
                 if (!$pricedResponse) {
                     Log::warning('DM GetSPricer returned empty response for selected fare ' . ($index + 1));
