@@ -34,14 +34,14 @@ const togglePasswordVisibility = () => {
         </div>
         <input v-model="modelValue" v-bind="$attrs" :type="props.type === 'password' && showPassword ? 'text' : props.type
             " :class="cn(
-                'flex h-10 text-gray-800 w-full rounded-md transition-all duration-75 border border-muted hover:border-2 hover:border-primary/10  px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                'flex h-11 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50',
                 props.leftIcon ? 'pl-9' : '',
                 props.class,
                 props.type === 'password' ? 'rounded-r-none' : '',
             )
                 " />
         <Button v-if="props.type === 'password'" type="button" variant="outline"
-            class="inset-y-0 right-0 flex items-center px-3 bg-white border rounded-r-lg h-full rounded-l-none"
+            class="inset-y-0 right-0 flex items-center px-3 bg-background border border-l-0 border-input rounded-r h-full rounded-l-none"
             @click="togglePasswordVisibility">
             <EyeIcon v-if="!showPassword" class="w-5 h-5 text-muted-foreground" />
             <EyeOffIcon v-else class="w-5 h-5 text-muted-foreground" />

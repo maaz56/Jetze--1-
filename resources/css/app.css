@@ -15,13 +15,13 @@ html{
    
     :root {
    --background: 0 0% 100%;
-  --foreground: 44 25% 15%;
+  --foreground: 222.2 47.4% 11.2%;
 
-  --card: 0 0% 99%;
-  --card-foreground: 44 25% 15%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 47.4% 11.2%;
 
-  --popover: 0 0% 99%;
-  --popover-foreground: 44 25% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 47.4% 11.2%;
 
   /* Slightly brighter, bluer evolution of the hotel-search brand blue. */
   --primary: 211 65% 50%;
@@ -33,44 +33,44 @@ html{
 
   /* Secondary — white */
   --secondary: 0 0% 100%;
-  --secondary-foreground: 44 20% 15%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
 
-  /* Muted — now derived from primary (desaturated + lighter) */
-  --muted: 1.1 15% 88%;
-  --muted-foreground: 1.1 25% 30%;
+  /* Muted — neutral cool slate grey */
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
 
-  /* Accent — white */
-  --accent: 0 0% 100%;
-  --accent-foreground: 44 20% 15%;
+  /* Accent — soft slate */
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
 
   /* Destructive (red family kept but aligned saturation/lights) */
   --destructive: 0 70% 48%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Background utility shade derived from foreground family */
-  --background-az: 44 20% 94%;
+  /* Background utility shade */
+  --background-az: 210 40% 98%;
 
-  /* Border, input, ring — tuned to primary system */
-  --border: 1.1 20% 80%;
-  --input: 1.1 20% 80%;
+  /* Border, input, ring — clean slate grey */
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
   --ring: 211 65% 50%;
 
-  --radius: 0.5rem;
+  --radius: 4px;
     
-        /* Global Font Sizes */
-        --text-xs: 0.5625rem; /* 9px */
-        --text-sm: 0.6875rem; /* 11px */
-        --text-base: 0.8125rem; /* 13px */
-        --text-lg: 0.9375rem; /* 15px */
-        --text-xl: 1.0625rem; /* 17px */
-        --text-2xl: 1.3125rem; /* 21px */
-        --text-3xl: 1.6875rem; /* 27px */
-        --text-4xl: 2.0625rem; /* 33px */
-        --text-5xl: 2.8125rem; /* 45px */
-        --text-6xl: 3.5625rem; /* 57px */
-        --text-7xl: 4.3125rem; /* 69px */
-        --text-8xl: 5.8125rem; /* 93px */
-         --text-9xl: 7.8125rem; /* 125px */ --chart-1: 12 76% 61%; --chart-2: 173 58% 39%; --chart-3: 197 37% 24%; --chart-4: 43 74% 66%; --chart-5: 27 87% 67%;
+        /* Global Font Sizes - aligned to standard hierarchy */
+        --text-xs: 0.75rem; /* 12px caption */
+        --text-sm: 0.8125rem; /* 13px caption/subtext */
+        --text-base: 0.9375rem; /* 15px body */
+        --text-lg: 1rem; /* 16px body/prominent */
+        --text-xl: 1.25rem; /* 20px section */
+        --text-2xl: 1.375rem; /* 22px section */
+        --text-3xl: 1.75rem; /* 28px title */
+        --text-4xl: 2rem; /* 32px title */
+        --text-5xl: 2.5rem; /* 40px */
+        --text-6xl: 3rem; /* 48px */
+        --text-7xl: 3.5rem; /* 56px */
+        --text-8xl: 4.5rem; /* 72px */
+        --text-9xl: 5.5rem; /* 88px */ --chart-1: 12 76% 61%; --chart-2: 173 58% 39%; --chart-3: 197 37% 24%; --chart-4: 43 74% 66%; --chart-5: 27 87% 67%;
     }
 
     .dark {
@@ -170,7 +170,42 @@ html{
     }
 }
 
-@layer components {
+@layer utilities {
+    .text-title {
+        font-size: 1.875rem; /* 30px: 28-32px */
+        line-height: 2.25rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+    }
+    .text-section {
+        font-size: 1.375rem; /* 22px: 20-24px */
+        line-height: 1.75rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+    }
+    .text-body {
+        font-size: 0.9375rem; /* 15px: 14-16px */
+        line-height: 1.5rem;
+        font-weight: 400;
+    }
+    .text-caption {
+        font-size: 0.8125rem; /* 13px: 12-13px */
+        line-height: 1.125rem;
+        font-weight: 400;
+    }
+    .text-price {
+        font-size: 1.5rem; /* 24px */
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .booking-container {
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
   .admin-icon-primary {
     @apply text-primary;
   }
@@ -194,7 +229,6 @@ html{
   .admin-sidebar-icon-active {
     @apply text-primary-foreground;
   }
-}
 
 /* iOS Toast Look */
 .Toastify__toast {

@@ -55,10 +55,18 @@ export default {
                 xl: "1.25rem",  // 20px
             },
             borderRadius: {
-                xl: "0.75rem",
-                lg: "0.5rem",
-                md: "0.375rem",
-                sm: "0.25rem",
+                none: "0px",
+                sm: "2px",
+                DEFAULT: "4px",
+                md: "4px",
+                lg: "4px",
+                xl: "6px",
+                "2xl": "6px",
+                "3xl": "6px",
+                full: "9999px",
+            },
+            maxWidth: {
+                booking: "1200px",
             },
     		colors: {
     			border: 'hsl(var(--border))',
@@ -106,10 +114,11 @@ export default {
     			}
     		},
     		borderRadius: {
-    			xl: 'calc(var(--radius) + 4px)',
-    			lg: 'var(--radius)',
-    			md: 'calc(var(--radius) - 2px)',
-    			sm: 'calc(var(--radius) - 4px)'
+    			xl: '6px',
+    			lg: '4px',
+    			md: '4px',
+    			sm: '2px',
+    			DEFAULT: '4px'
     		},
     		keyframes: {
     			'accordion-down': {

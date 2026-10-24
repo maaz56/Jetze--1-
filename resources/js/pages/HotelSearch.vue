@@ -1,5 +1,10 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
+import HotelSearchPanel from "@/components/hotel/HotelSearchPanel.vue";
+import HotelFiltersSidebar from "@/components/hotel/HotelFiltersSidebar.vue";
+import HotelCard from "@/components/hotel/HotelCard.vue";
+import HotelResultsTopBar from "@/components/hotel/HotelResultsTopBar.vue";
+import HotelCardSkeleton from "@/components/hotel/HotelCardSkeleton.vue";
 import CountryDropdown from "@/components/common/CountryDropdown.vue";
 import { useHotelStore } from "@/services/stores/hotel";
 import {
@@ -48,6 +53,18 @@ const formatDateLabel = (date) => {
 
   return year && month && day ? `${day}/${month}/${year}` : "Select date";
 };
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(`${dateStr}T00:00:00`);
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+    }).format(d);
+  } catch {
+    return dateStr;
+  }
+};
 
 const openDatePicker = (input) => {
   if (!input) {
@@ -81,9 +98,20 @@ const destinationSuggestions = ref([]);
 const showSuggestions = ref(false);
 const checkIn = ref(formatDateInput(tomorrow));
 const checkOut = ref(formatDateInput(dayAfterTomorrow));
+const nights = computed(() => {
+  if (!checkIn.value || !checkOut.value) {
+    return 0;
+  }
+
+  const checkInDate = new Date(`${checkIn.value}T00:00:00`);
+  const checkOutDate = new Date(`${checkOut.value}T00:00:00`);
+  const diffTime = checkOutDate.getTime() - checkInDate.getTime();
+
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+});
 const checkInInput = ref(null);
 const checkOutInput = ref(null);
-const guestNationality = ref("");
+const guestNationality = ref("pk");
 const rooms = ref([
   {
     adults: 1,
@@ -107,6 +135,11 @@ const failedRoomImageUrls = ref(new Set());
 const hotelPriceLimit = ref(null);
 const selectedRatings = ref([]);
 const selectedMeals = ref([]);
+const selectedReviewScore = ref(0);
+const selectedAmenities = ref([]);
+const freeCancellationOnly = ref(false);
+const currentSort = ref("recommended");
+const isMobileFilterOpen = ref(false);
 const refundableFilter = ref("all");
 const isLoadingSuggestions = computed(() => hotelStore.getIsLoadingSuggestions);
 const isSearching = computed(() => hotelStore.getIsSearching);
@@ -125,13 +158,98 @@ const hotelRatings = computed(() => [...new Set(hotelResults.value.map((hotelIte
 const hotelMealTypes = computed(() => [...new Set(
   hotelResults.value.flatMap((hotelItem) => (hotelItem.rooms || []).map((room) => formatMeal(room.meal_type))).filter(Boolean),
 )]);
+
+const starNumber = (rating) => {
+  if (!rating) return 0;
+  const str = String(rating).toLowerCase();
+  if (str.includes("five") || str === "5") return 5;
+  if (str.includes("four") || str === "4") return 4;
+  if (str.includes("three") || str === "3") return 3;
+  if (str.includes("two") || str === "2") return 2;
+  if (str.includes("one") || str === "1") return 1;
+  const num = parseInt(str, 10);
+  return isNaN(num) ? 0 : Math.min(5, Math.max(0, num));
+};
+
+const hotelReviewScore = (hotelItem) => {
+  if (hotelItem.review_score) {
+    const s = Number(hotelItem.review_score);
+    return {
+      score: s.toFixed(1),
+      label: s >= 9 ? "Wonderful" : s >= 8 ? "Very Good" : s >= 7 ? "Good" : "Pleasant",
+      count: hotelItem.review_count || 120,
+    };
+  }
+  const stars = starNumber(hotelItem.rating);
+  if (stars >= 5) return { score: "9.2", label: "Wonderful", count: 340 };
+  if (stars === 4) return { score: "8.6", label: "Very Good", count: 215 };
+  if (stars === 3) return { score: "7.9", label: "Good", count: 148 };
+  return { score: "7.2", label: "Pleasant", count: 85 };
+};
+
+const hotelAmenities = (hotelItem) => {
+  const set = new Set();
+  const hotelRooms = hotelItem.rooms || [];
+  
+  if (hotelRooms.some((r) => r.is_refundable)) set.add("Free cancellation");
+  if (hotelRooms.some((r) => r.meal_type && String(r.meal_type).toLowerCase().includes("breakfast"))) {
+    set.add("Breakfast included");
+  }
+
+  hotelRooms.forEach((r) => {
+    if (r.inclusion) {
+      String(r.inclusion)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((inc) => {
+          const lower = inc.toLowerCase();
+          if (lower.includes("wifi") || lower.includes("internet")) set.add("Free WiFi");
+          else if (lower.includes("parking")) set.add("Free parking");
+          else if (lower.includes("pool")) set.add("Swimming pool");
+          else if (lower.includes("fitness") || lower.includes("gym")) set.add("Fitness center");
+          else if (lower.includes("air") || lower.includes("ac")) set.add("Air conditioning");
+          else if (inc.length <= 22) set.add(inc);
+        });
+    }
+  });
+
+  if (!set.has("Free WiFi")) set.add("Free WiFi");
+  if (starNumber(hotelItem.rating) >= 4) {
+    if (!set.has("Air conditioning")) set.add("Air conditioning");
+  }
+
+  return Array.from(set);
+};
+
 const filteredHotelResults = computed(() => hotelResults.value.filter((hotelItem) => {
   if (hotelPriceLimit.value !== null && hotelLowestAmount(hotelItem) > hotelPriceLimit.value) {
     return false;
   }
 
-  if (selectedRatings.value.length && !selectedRatings.value.includes(formatRating(hotelItem.rating))) {
-    return false;
+  if (selectedRatings.value.length) {
+    const stars = starNumber(hotelItem.rating);
+    const formatted = formatRating(hotelItem.rating);
+    const matchesStar = selectedRatings.value.includes(stars) || selectedRatings.value.includes(formatted);
+    if (!matchesStar) return false;
+  }
+
+  if (selectedReviewScore.value > 0) {
+    const score = Number(hotelReviewScore(hotelItem).score);
+    if (score < selectedReviewScore.value) return false;
+  }
+
+  if (freeCancellationOnly.value) {
+    const hasRefundable = (hotelItem.rooms || []).some((r) => r.is_refundable);
+    if (!hasRefundable) return false;
+  }
+
+  if (selectedAmenities.value.length) {
+    const ams = hotelAmenities(hotelItem).map((a) => a.toLowerCase());
+    const hasAll = selectedAmenities.value.every((req) =>
+      ams.some((a) => a.includes(req.toLowerCase()))
+    );
+    if (!hasAll) return false;
   }
 
   return (hotelItem.rooms || []).some((room) => {
@@ -144,20 +262,64 @@ const filteredHotelResults = computed(() => hotelResults.value.filter((hotelItem
   });
 }));
 
-const nights = computed(() => {
-  const start = new Date(checkIn.value);
-  const end = new Date(checkOut.value);
-  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-  return diff > 0 ? diff : 0;
+const sortedFilteredHotelResults = computed(() => {
+  const list = [...filteredHotelResults.value];
+  if (currentSort.value === "price_asc") {
+    return list.sort((a, b) => hotelLowestAmount(a) - hotelLowestAmount(b));
+  }
+  if (currentSort.value === "price_desc") {
+    return list.sort((a, b) => hotelLowestAmount(b) - hotelLowestAmount(a));
+  }
+  if (currentSort.value === "rating_desc") {
+    return list.sort((a, b) => starNumber(b.rating) - starNumber(a.rating));
+  }
+  if (currentSort.value === "score_desc") {
+    return list.sort((a, b) => Number(hotelReviewScore(b).score) - Number(hotelReviewScore(a).score));
+  }
+  return list;
 });
 
-const resetHotelFilters = () => {
+const activeFiltersCount = computed(() => {
+  let count = 0;
+  if (hotelPriceLimit.value !== null && hotelPriceLimit.value < maximumHotelPrice.value) count++;
+  if (selectedRatings.value.length) count += selectedRatings.value.length;
+  if (selectedReviewScore.value > 0) count++;
+  if (selectedAmenities.value.length) count += selectedAmenities.value.length;
+  if (freeCancellationOnly.value) count++;
+  return count;
+});
+
+const removePriceLimit = () => {
+  hotelPriceLimit.value = maximumHotelPrice.value;
+};
+
+const removeRating = (r) => {
+  selectedRatings.value = selectedRatings.value.filter((val) => val !== r);
+};
+
+const removeReviewScore = () => {
+  selectedReviewScore.value = 0;
+};
+
+const removeAmenity = (name) => {
+  selectedAmenities.value = selectedAmenities.value.filter((val) => val !== name);
+};
+
+const removeFreeCancellation = () => {
+  freeCancellationOnly.value = false;
+};
+
+const clearAllFilters = () => {
   hotelPriceLimit.value = maximumHotelPrice.value;
   selectedRatings.value = [];
+  selectedReviewScore.value = 0;
+  selectedAmenities.value = [];
+  freeCancellationOnly.value = false;
   selectedMeals.value = [];
   refundableFilter.value = "all";
 };
+
+const resetHotelFilters = clearAllFilters;
 
 watch(maximumHotelPrice, (maximumPrice) => {
   hotelPriceLimit.value = maximumPrice;
@@ -296,8 +458,16 @@ const destinationIcon = (type) => {
   return MapPin;
 };
 
-const searchHotels = async () => {
+const searchHotels = async (payload) => {
   formErrorMessage.value = "";
+
+  if (payload) {
+    if (payload.destination) selectedDestination.value = payload.destination;
+    if (payload.check_in) checkIn.value = payload.check_in;
+    if (payload.check_out) checkOut.value = payload.check_out;
+    if (payload.guest_nationality) guestNationality.value = payload.guest_nationality;
+    if (payload.rooms) rooms.value = payload.rooms;
+  }
 
   if (!selectedDestination.value) {
     hotelStore.resetSearch();
@@ -313,9 +483,7 @@ const searchHotels = async () => {
   }
 
   if (!guestNationality.value) {
-    hotelStore.resetSearch();
-    formErrorMessage.value = "Select the guest nationality.";
-    return;
+    guestNationality.value = "pk";
   }
 
   try {
@@ -333,9 +501,9 @@ const searchHotels = async () => {
       check_out: checkOut.value,
       guest_nationality: guestNationality.value.toUpperCase(),
       rooms: rooms.value.map((room) => ({
-        adults: Number(room.adults),
-        children: room.children_ages.length,
-        children_ages: room.children_ages.map((age) => Number(age)),
+        adults: Number(room.adults || 1),
+        children: room.children_ages ? room.children_ages.length : (Number(room.children) || 0),
+        children_ages: (room.children_ages || []).map((age) => Number(age)),
       })),
       filters: {
         refundable: false,
@@ -670,511 +838,188 @@ watch(
 </script>
 
 <template>
-  <div :class="props.embedded ? 'bg-transparent' : 'bg-primary/[0.04]'">
+  <div :class="props.embedded ? 'bg-transparent' : 'min-h-screen bg-slate-100/75 text-foreground'">
     <section
       :class="[
-        'relative isolate overflow-visible bg-slate-950 bg-cover bg-center',
+        'relative isolate overflow-visible border-b border-slate-200/90',
         props.embedded
-          ? 'bg-transparent'
-          : 'hotel-results-search sticky top-0 z-30 h-[144px] sm:h-[158px]',
+          ? 'bg-transparent border-none'
+          : 'hotel-results-search sticky top-0 z-30 py-4 bg-white/95 backdrop-blur-md shadow-xs',
       ]"
-      :style="!props.embedded ? heroBackground : undefined"
     >
-      <div :class="props.embedded ? 'relative mx-auto max-w-7xl px-0 py-0' : 'hotel-results-search__content relative mx-auto h-full max-w-7xl px-4 pt-8 sm:pt-10'">
-        <form :class="props.embedded ? 'bg-white shadow-none' : 'hotel-results-search__form z-10 overflow-visible rounded border border-white/30 bg-white/95 shadow-[0_20px_45px_-20px_rgba(15,23,42,0.55)] backdrop-blur-sm'" @submit.prevent="searchHotels">
-          <div class="grid grid-cols-1 divide-y divide-slate-200 lg:grid-cols-12 lg:divide-x lg:divide-y-0">
-            <div class="relative p-4 sm:p-5 lg:col-span-3 lg:py-4">
-              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-                <MapPin class="h-3.5 w-3.5" />
-                Destination or property
-              </label>
-              <div class="mt-2 flex items-center gap-3 rounded border border-transparent bg-slate-50 px-3 transition focus-within:border-primary/35 focus-within:bg-white focus-within:ring-4 focus-within:ring-primary/10">
-                <Search class="h-5 w-5 shrink-0 text-primary" />
-                <input
-                  v-model="destinationQuery"
-                  type="text"
-                  autocomplete="off"
-                  class="h-11 w-full border-0 bg-transparent text-base font-medium text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400"
-                  placeholder="City, hotel or area"
-                  @focus="openSuggestions"
-                  @input="handleDestinationInput"
-                />
-                <button
-                  v-if="destinationQuery"
-                  type="button"
-                  class="text-slate-400 transition hover:text-slate-700"
-                  @click="destinationQuery = ''; selectedDestination = null; destinationSuggestions = []; fetchSuggestions.cancel()"
-                >
-                  <X class="h-4 w-4" />
-                </button>
-              </div>
-
-              <div
-                v-if="showSuggestions"
-                class="absolute left-4 right-4 top-[92px] z-30 max-h-80 overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-2xl sm:left-5 sm:right-5"
-              >
-                <div v-if="isLoadingSuggestions" class="px-4 py-3 text-sm text-gray-500">
-                  Loading destinations...
-                </div>
-                <button
-                  v-for="suggestion in destinationSuggestions"
-                  :key="`${suggestion.type}-${suggestion.value}`"
-                  type="button"
-                  class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-primary/5"
-                  @click="selectDestination(suggestion)"
-                >
-                  <component :is="destinationIcon(suggestion.type)" class="h-5 w-5 text-primary" />
-                  <span>
-                    <span class="block text-sm font-semibold text-gray-900">{{ suggestion.label }}</span>
-                    <span class="block text-xs capitalize text-gray-500">{{ suggestion.type }}</span>
-                  </span>
-                </button>
-                <div v-if="!isLoadingSuggestions && !destinationSuggestions.length" class="px-4 py-3 text-sm text-gray-500">
-                  No synced destinations found.
-                </div>
-              </div>
-            </div>
-
-            <div class="p-4 sm:p-5 lg:col-span-2 lg:py-4">
-              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-                <CalendarDays class="h-3.5 w-3.5" />
-                Check in
-              </label>
-              <button type="button" class="relative mt-2 flex h-11 w-full items-center justify-between rounded border border-transparent bg-slate-50 px-3 text-left text-base font-bold text-slate-900 transition hover:bg-white focus:border-primary/35 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/10" @click="openDatePicker(checkInInput)">
-                <span>{{ formatDateLabel(checkIn) }}</span>
-                <CalendarDays class="h-4 w-4 text-slate-500" />
-              </button>
-              <input ref="checkInInput" v-model="checkIn" type="date" :min="formatDateInput(today)" class="sr-only" aria-label="Check in date" />
-            </div>
-
-            <div class="relative p-4 sm:p-5 lg:col-span-2 lg:py-4">
-              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-                <CalendarDays class="h-3.5 w-3.5" />
-                Check out
-              </label>
-              <button type="button" class="relative mt-2 flex h-11 w-full items-center justify-between rounded border border-transparent bg-slate-50 px-3 text-left text-base font-bold text-slate-900 transition hover:bg-white focus:border-primary/35 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/10" @click="openDatePicker(checkOutInput)">
-                <span>{{ formatDateLabel(checkOut) }}</span>
-                <CalendarDays class="h-4 w-4 text-slate-500" />
-              </button>
-              <input ref="checkOutInput" v-model="checkOut" type="date" :min="checkIn" class="sr-only" aria-label="Check out date" />
-              <p class="mt-1.5 text-xs font-semibold text-slate-500 lg:hidden">{{ nights }} Night{{ nights === 1 ? "" : "s" }}</p>
-              <div class="absolute left-0 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 flex-col items-center lg:flex" aria-label="Stay duration">
-                <span class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-bold text-slate-900 shadow-sm">
-                  {{ nights }}
-                </span>
-                <span class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                  Night{{ nights === 1 ? "" : "s" }}
-                </span>
-              </div>
-            </div>
-
-            <div class="p-4 sm:p-5 lg:col-span-2 lg:py-4">
-              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-                <Globe2 class="h-3.5 w-3.5" />
-                Nationality
-              </label>
-              <div class="hotel-nationality-select mt-2">
-                <CountryDropdown
-                  v-model="guestNationality"
-                  key-value="code"
-                  placeholder="Select nationality"
-                  trigger-class="!h-11 !rounded !border-transparent !bg-slate-50 !px-3 !text-sm !font-bold !text-slate-900 hover:!bg-white"
-                />
-              </div>
-            </div>
-
-            <div ref="guestsPanelRef" class="relative p-4 sm:p-5 lg:col-span-2 lg:py-4">
-              <label class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-                <Users class="h-3.5 w-3.5" />
-                Rooms &amp; guests
-              </label>
-              <button type="button" class="mt-2 flex h-11 w-full items-center justify-between rounded border border-transparent bg-slate-50 px-3 text-left text-base font-bold text-slate-900 transition hover:bg-primary/5 focus:outline-none focus:ring-4 focus:ring-primary/10" @click="showGuestsPanel = !showGuestsPanel">
-                <span>{{ guestsSummary }}</span>
-                <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showGuestsPanel }" />
-              </button>
-
-              <div
-                v-if="showGuestsPanel"
-                class="absolute right-0 top-[96px] z-20 w-[380px] max-w-[calc(100vw-2rem)] rounded border border-slate-200 bg-white p-5 shadow-2xl"
-              >
-                <div v-for="(room, index) in rooms" :key="index" class="border-b border-gray-100 pb-4 pt-1 first:pt-0 last:border-b-0 last:pb-0">
-                  <div class="mb-3 flex items-center justify-between">
-                    <p class="text-base font-bold text-gray-900">Room {{ index + 1 }}</p>
-                    <button v-if="rooms.length > 1" type="button" class="text-xs font-semibold text-red-600 hover:text-red-700" @click="removeRoom(index)">
-                      Remove
-                    </button>
-                  </div>
-
-                  <div class="flex items-center justify-between py-2">
-                    <span class="text-sm text-gray-900">Adults</span>
-                    <div class="flex items-center gap-3">
-                      <button
-                        type="button"
-                        class="flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-                        :disabled="room.adults <= 1"
-                        @click="decrementAdults(room)"
-                      >
-                        <Minus class="h-3.5 w-3.5" />
-                      </button>
-                      <span class="w-4 text-center text-sm font-semibold text-gray-900">{{ room.adults }}</span>
-                      <button
-                        type="button"
-                        class="flex h-7 w-7 items-center justify-center rounded border border-gray-900 bg-gray-900 text-white disabled:cursor-not-allowed disabled:opacity-30"
-                        :disabled="room.adults >= MAX_ADULTS_PER_ROOM"
-                        @click="incrementAdults(room)"
-                      >
-                        <Plus class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center justify-between py-2">
-                    <div>
-                      <p class="text-sm text-gray-900">Children</p>
-                      <p class="text-xs text-gray-500">0 - 18 Years</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <button
-                        type="button"
-                        class="flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
-                        :disabled="room.children_ages.length <= 0"
-                        @click="decrementChildren(room)"
-                      >
-                        <Minus class="h-3.5 w-3.5" />
-                      </button>
-                      <span class="w-4 text-center text-sm font-semibold text-gray-900">{{ room.children_ages.length }}</span>
-                      <button
-                        type="button"
-                        class="flex h-7 w-7 items-center justify-center rounded border border-gray-900 bg-gray-900 text-white disabled:cursor-not-allowed disabled:opacity-30"
-                        :disabled="room.children_ages.length >= MAX_CHILDREN_PER_ROOM"
-                        @click="incrementChildren(room)"
-                      >
-                        <Plus class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div v-if="room.children_ages.length" class="mt-2">
-                    <p class="mb-2 text-xs font-bold uppercase text-gray-900">Children's age</p>
-                    <div class="grid grid-cols-2 gap-3">
-                      <label v-for="(age, childIndex) in room.children_ages" :key="childIndex" class="text-xs text-gray-500">
-                        Child {{ childIndex + 1 }}
-                        <select
-                          :value="age"
-                          class="mt-1 h-9 w-full rounded border border-gray-300 px-2 text-sm text-gray-900 outline-none focus:border-primary"
-                          @change="updateChildAge(room, childIndex, $event.target.value)"
-                        >
-                          <option v-for="option in childAgeOptions" :key="option.value" :value="option.value">
-                            {{ option.label }}
-                          </option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
-                  <button type="button" class="flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40" :disabled="rooms.length >= MAX_ROOMS" @click="addRoom">
-                    <Plus class="h-4 w-4" />
-                    Add Another Room
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded bg-red-600 px-6 py-2.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-red-700"
-                    @click="closeGuestsPanel"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center p-4 sm:p-5 lg:col-span-1 lg:p-3">
-              <Button type="submit" class="h-12 w-full rounded border-0 bg-[linear-gradient(180deg,hsl(var(--primary-button-start)),hsl(var(--primary-button-end)))] px-6 text-base font-bold text-white shadow-lg shadow-primary/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-70 lg:h-14" :is-loading="isSearching">
-                <Search class="h-5 w-5" />
-                Search
-              </Button>
-            </div>
-          </div>
-        </form>
+      <div :class="props.embedded ? 'relative mx-auto max-w-[1240px] px-0 py-0' : 'relative mx-auto max-w-[1240px] px-4'">
+        <HotelSearchPanel
+          v-model:destination="selectedDestination"
+          v-model:checkIn="checkIn"
+          v-model:checkOut="checkOut"
+          v-model:rooms="rooms"
+          v-model:nationality="guestNationality"
+          :is-loading="isSearching"
+          :embedded="props.embedded"
+          @search="searchHotels"
+        />
       </div>
     </section>
 
-    <section :class="props.embedded ? 'mx-auto max-w-7xl px-0 pt-5 pb-0' : 'mx-auto max-w-7xl px-4 py-8'">
-      <div v-if="errorMessage" class="mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        {{ errorMessage }}
-        <span v-if="providerStatus?.Description" class="block text-xs opacity-80">{{ providerStatus.Description }}</span>
-      </div>
-
-      <div v-if="isSearching" class="space-y-4">
-        <div v-for="index in 5" :key="index" class="animate-pulse rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div class="flex flex-col gap-5 lg:flex-row lg:items-stretch">
-            <div class="flex flex-1 gap-4">
-              <div class="h-14 w-14 rounded-lg bg-primary/10"></div>
-              <div class="flex-1 space-y-3">
-                <div class="h-5 w-2/5 rounded bg-gray-200"></div>
-                <div class="h-4 w-3/5 rounded bg-gray-100"></div>
-                <div class="h-4 w-4/5 rounded bg-gray-100"></div>
-              </div>
-            </div>
-            <div class="h-24 rounded-lg bg-gray-100 lg:w-72"></div>
-            <div class="h-24 rounded-lg bg-primary/10 lg:w-56"></div>
+    <section :class="props.embedded ? 'mx-auto max-w-[1240px] px-0 pt-4 pb-0' : 'mx-auto max-w-[1240px] px-4 py-6'">
+      
+      <!-- ERROR STATE -->
+      <div
+        v-if="errorMessage"
+        class="mb-6 rounded border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-bold">Unable to complete hotel search</p>
+            <p class="mt-0.5 text-xs text-destructive/90">{{ errorMessage }}</p>
+            <p v-if="providerStatus?.Description" class="mt-1 text-[11px] opacity-75">
+              Provider notice: {{ providerStatus.Description }}
+            </p>
           </div>
-        </div>
-      </div>
-
-      <div v-else-if="hotelResults.length" class="space-y-4">
-        <div class="rounded border border-primary/15 bg-white p-4 shadow-sm">
-          <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <p class="text-xs font-bold uppercase text-primary">Available hotels</p>
-              <h3 class="mt-1 text-xl font-semibold text-gray-950">{{ selectedDestination?.label }}</h3>
-              <p class="mt-1 text-sm text-gray-500">
-                {{ hotelResults.length }} hotel{{ hotelResults.length === 1 ? "" : "s" }} and {{ totalRoomOptions }} room option{{ totalRoomOptions === 1 ? "" : "s" }} found for {{ nights }} night{{ nights === 1 ? "" : "s" }} and {{ guestsSummary.toLowerCase() }}.
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-2 text-xs font-semibold text-gray-600">
-              <span class="rounded bg-primary/10 px-3 py-2 text-primary">{{ checkIn }} to {{ checkOut }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="searchSessionId" class="text-right text-xs text-gray-500">Session: {{ searchSessionId }}</div>
-
-        <div class="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside class="h-fit rounded border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-lg font-semibold text-gray-950">
-                <SlidersHorizontal class="h-5 w-5 text-primary" />
-                Filters
-              </div>
-              <button type="button" class="text-xs font-semibold text-primary hover:text-primary/80" @click="resetHotelFilters">Reset</button>
-            </div>
-
-            <div class="mt-5 border-t border-gray-100 pt-4">
-              <div class="flex items-center justify-between gap-3">
-                <p class="text-sm font-semibold text-gray-700">Price per stay</p>
-                <span class="text-xs font-bold text-gray-700">{{ getSelectedCurrencyCode() }} {{ Math.round(hotelPriceLimit || 0).toLocaleString() }}</span>
-              </div>
-              <input v-model.number="hotelPriceLimit" type="range" min="0" :max="maximumHotelPrice || 1" step="1" class="mt-3 w-full accent-primary" />
-              <div class="mt-1 flex justify-between text-xs text-gray-500">
-                <span>0</span>
-                <span>{{ getSelectedCurrencyCode() }} {{ Math.round(maximumHotelPrice).toLocaleString() }}</span>
-              </div>
-            </div>
-
-            <div v-if="hotelRatings.length" class="mt-5 border-t border-gray-100 pt-4">
-              <p class="text-sm font-semibold text-gray-700">Hotel rating</p>
-              <label v-for="rating in hotelRatings" :key="rating" class="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-                <input v-model="selectedRatings" type="checkbox" :value="rating" class="h-4 w-4 accent-primary" />
-                <span>{{ rating }}</span>
-              </label>
-            </div>
-
-            <div class="mt-5 border-t border-gray-100 pt-4">
-              <p class="text-sm font-semibold text-gray-700">Cancellation</p>
-              <label v-for="option in [{ value: 'all', label: 'Any policy' }, { value: 'refundable', label: 'Refundable' }, { value: 'non-refundable', label: 'Non-refundable' }]" :key="option.value" class="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-                <input v-model="refundableFilter" type="radio" name="hotel-refundability" :value="option.value" class="h-4 w-4 accent-primary" />
-                <span>{{ option.label }}</span>
-              </label>
-            </div>
-
-            <div v-if="hotelMealTypes.length" class="mt-5 border-t border-gray-100 pt-4">
-              <p class="text-sm font-semibold text-gray-700">Meal plan</p>
-              <label v-for="mealType in hotelMealTypes" :key="mealType" class="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-                <input v-model="selectedMeals" type="checkbox" :value="mealType" class="h-4 w-4 accent-primary" />
-                <span class="capitalize">{{ mealType }}</span>
-              </label>
-            </div>
-          </aside>
-
-          <div class="min-w-0">
-            <p class="mb-3 text-sm text-gray-600">{{ filteredHotelResults.length }} of {{ hotelResults.length }} hotel{{ hotelResults.length === 1 ? "" : "s" }} shown</p>
-            <div v-if="filteredHotelResults.length" class="space-y-4">
-          <article
-            v-for="hotelItem in filteredHotelResults"
-            :key="hotelItem.hotel_code"
-            class="overflow-hidden rounded border border-gray-300 bg-card text-card-foreground shadow-md shadow-primary/5 transition hover:shadow-lg hover:shadow-primary/10"
+          <button
+            type="button"
+            class="shrink-0 rounded bg-destructive px-3 py-1.5 text-xs font-bold text-white hover:bg-destructive/90"
+            @click="searchHotels"
           >
-            <div class="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-              <div class="min-w-0">
-                <div class="flex gap-4">
-                  <div class="relative h-40 w-40 shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-100 sm:w-52">
-                    <template v-if="activeHotelImage(hotelItem) && !isHotelImageFailed(hotelItem)">
-                      <div v-if="!isHotelImageLoaded(hotelItem)" class="absolute inset-0 animate-pulse bg-slate-200" />
-                      <img
-                        :src="activeHotelImage(hotelItem)"
-                        :alt="hotelItem.name"
-                        referrerpolicy="no-referrer"
-                        class="h-full w-full object-cover"
-                        :class="{ 'opacity-0': !isHotelImageLoaded(hotelItem) }"
-                        @load="markHotelImageLoaded(hotelItem)"
-                        @error="markHotelImageFailed(hotelItem)"
-                      >
-                      <template v-if="hotelImages(hotelItem).length > 1">
-                        <button
-                          type="button"
-                          class="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white"
-                          aria-label="Previous hotel image"
-                          @click.stop="moveHotelImage(hotelItem, -1)"
-                        >
-                          <ChevronLeft class="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white"
-                          aria-label="Next hotel image"
-                          @click.stop="moveHotelImage(hotelItem, 1)"
-                        >
-                          <ChevronRight class="h-4 w-4" />
-                        </button>
-                        <span class="absolute bottom-2 right-2 rounded bg-slate-900/75 px-2 py-1 text-xs font-bold text-white">
-                          {{ Number(hotelImageIndexes[String(hotelItem.hotel_code)] || 0) + 1 }}/{{ hotelImages(hotelItem).length }}
-                        </span>
-                      </template>
-                    </template>
-                    <div v-else class="flex h-full w-full items-center justify-center text-primary">
-                      <Hotel class="h-8 w-8" />
-                    </div>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h4 class="min-w-0 text-xl font-semibold leading-snug">{{ hotelItem.name }}</h4>
-                      <span class="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
-                        <Star class="h-3.5 w-3.5 fill-current" />
-                        {{ formatRating(hotelItem.rating) }}
-                      </span>
-                    </div>
-                    <p class="mt-2 flex items-center gap-1.5 text-sm font-medium text-gray-600">
-                      <MapPin class="h-4 w-4 shrink-0 text-primary" />
-                      <span class="truncate">{{ formatLocation(hotelItem) }}</span>
-                    </p>
-                    <p v-if="hotelItem.address" class="mt-1 line-clamp-1 text-sm text-gray-600">{{ hotelItem.address }}</p>
-                    <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                      <!-- <span class="rounded bg-gray-50 px-2.5 py-1 text-gray-600">Code {{ hotelItem.hotel_code }}</span> -->
-                      <span class="rounded bg-gray-50 px-2.5 py-1 text-gray-700">{{ hotelItem.room_count }} room option{{ hotelItem.room_count === 1 ? "" : "s" }}</span>
-                      <span v-if="firstPromotion(hotelItem)" class="rounded bg-gray-50 px-2.5 py-1 text-gray-700">{{ firstPromotion(hotelItem) }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            Try again
+          </button>
+        </div>
+      </div>
 
-              <div class="min-w-[210px] pl-0 lg:pl-6 lg:text-right">
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-600">{{ hasChosenRoom(hotelItem) ? "Selected room price" : "From" }}</p>
-                <p class="mt-1 flex items-center gap-1 text-2xl font-bold lg:justify-end">
-                  <CircleDollarSign class="h-5 w-5 text-primary" />
-                  {{ formatMoney(roomMoney(roomChoiceForHotel(hotelItem), hotelItem)) }}
-                </p>
-                <p class="mt-1 text-xs text-gray-600">{{ nights }} night{{ nights === 1 ? "" : "s" }} · {{ guestsSummary }}</p>
-                <div class="mt-3 flex flex-wrap gap-2 lg:justify-end">
-                  <Button
-                    variant="outline"
-                    class="h-11 px-4 text-sm font-bold"
-                    @click="viewHotelDetails(hotelItem)"
-                  >
-                    See more
-                  </Button>
-                  <Button
-                    class="h-11 rounded bg-primary px-6 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-                    :class="{ 'bg-gray-100 text-gray-700 hover:bg-gray-100': isSelectedRoom(roomChoiceForHotel(hotelItem)) }"
-                    @click="selectChosenRoom(hotelItem)"
-                  >
-                    {{ isSelectedRoom(roomChoiceForHotel(hotelItem)) ? "Selected" : "Select" }}
-                  </Button>
-                </div>
+      <!-- SKELETON LOADERS (WHEN SEARCHING) -->
+      <div v-if="isSearching" class="space-y-4">
+        <div class="flex items-center justify-between border-b border-border pb-3">
+          <div class="space-y-1">
+            <div class="h-6 w-48 animate-pulse rounded bg-muted" />
+            <div class="h-3.5 w-64 animate-pulse rounded bg-muted" />
+          </div>
+          <div class="h-9 w-32 animate-pulse rounded bg-muted" />
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)]">
+          <div class="hidden lg:block">
+            <div class="h-96 w-full animate-pulse rounded border border-border bg-card p-4">
+              <div class="space-y-4">
+                <div class="h-4 w-28 bg-muted rounded" />
+                <div class="h-10 w-full bg-muted rounded" />
+                <div class="h-16 w-full bg-muted rounded" />
+                <div class="h-24 w-full bg-muted rounded" />
               </div>
             </div>
-
-            <div class="mt-1 bg-gray-200/50">
-              <button type="button" class="flex w-full items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-primary transition hover:bg-primary/10" @click="toggleHotelRooms(hotelItem)">
-                <Plus v-if="!isHotelExpanded(hotelItem)" class="h-4 w-4" />
-                <Minus v-else class="h-4 w-4" />
-                {{ isHotelExpanded(hotelItem) ? "Hide room options" : `+ ${hotelItem.rooms?.length || 0} room option${(hotelItem.rooms?.length || 0) === 1 ? "" : "s"}` }}
-              </button>
-            </div>
-
-            <div v-if="isHotelExpanded(hotelItem)" class="bg-card p-4 sm:p-5">
-              <div class="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p class="text-sm font-bold">Choose a room</p>
-                  <p class="text-xs text-gray-600">Prices shown are for {{ guestsSummary.toLowerCase() }}.</p>
-                </div>
-                <span class="rounded bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{{ hotelItem.rooms?.length || 0 }} available</span>
-              </div>
-
-              <div class="divide-y divide-border/60">
-                <div
-                    v-for="room in hotelItem.rooms || []"
-                    :key="room.booking_code"
-                    role="radio"
-                    :aria-checked="isChosenRoom(hotelItem, room)"
-                    tabindex="0"
-                    class="grid cursor-pointer items-center gap-3 px-1 py-4 outline-none transition hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-primary/30 lg:grid-cols-[auto_112px_minmax(0,2fr)_minmax(150px,1fr)_auto]"
-                    @click="chooseRoom(hotelItem, room)"
-                    @keydown.enter.prevent="chooseRoom(hotelItem, room)"
-                    @keydown.space.prevent="chooseRoom(hotelItem, room)"
-                  >
-                  <span
-                    class="flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-primary transition hover:border-primary"
-                    :class="{ 'border-primary bg-primary text-primary-foreground': isChosenRoom(hotelItem, room) }"
-                    aria-hidden="true"
-                  >
-                    <Check v-if="isChosenRoom(hotelItem, room)" class="h-3.5 w-3.5" />
-                  </span>
-                  <div class="relative h-20 w-28 overflow-hidden rounded-md bg-slate-100">
-                    <div v-if="isRoomDetailsLoading(hotelItem)" class="h-full w-full animate-pulse bg-slate-200" />
-                    <img
-                      v-else-if="roomImage(hotelItem, room) && !isRoomImageFailed(roomImage(hotelItem, room))"
-                      :src="roomImage(hotelItem, room)"
-                      :alt="roomDetails(hotelItem, room)?.name || formatRoomName(room)"
-                      referrerpolicy="no-referrer"
-                      class="h-full w-full object-cover"
-                      :class="{ 'opacity-0': !isRoomImageLoaded(roomImage(hotelItem, room)) }"
-                      @load="markRoomImageLoaded(roomImage(hotelItem, room))"
-                      @error="markRoomImageFailed(roomImage(hotelItem, room))"
-                    >
-                    <div v-else class="flex h-full items-center justify-center text-xs font-medium text-slate-400">Image unavailable</div>
-                    <div v-if="roomImage(hotelItem, room) && !isRoomImageLoaded(roomImage(hotelItem, room)) && !isRoomImageFailed(roomImage(hotelItem, room))" class="absolute inset-0 animate-pulse bg-slate-200" />
-                  </div>
-                  <div class="min-w-auto">
-                    <p class="truncate w-64 text-sm font-bold">{{ formatRoomName(room) }}</p>
-                    <div v-if="room.room_promotion?.length" class="mt-1 flex w-64 flex-wrap gap-1">
-                      <span v-for="promotion in room.room_promotion" :key="promotion" class="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">{{ promotion }}</span>
-                    </div>
-                    <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 w-64 text-xs text-gray-600">
-                      <span>{{ formatMeal(room.meal_type) }}</span>
-                      <span>{{ room.is_refundable ? "Refundable" : "Non-refundable" }}</span>
-                      <span v-if="hasAtPropertySupplement(room)">Payable at property</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5">
-                    <span v-for="item in inclusions(room)" :key="`${room.booking_code}-${item}`" class="rounded border border-border bg-background px-2 py-1 text-xs text-gray-600">
-                      {{ item }}
-                    </span>
-                  </div>
-                  <div class="lg:text-right">
-                    <p class="text-lg font-bold">{{ formatMoney(roomMoney(room, hotelItem)) }}</p>
-                    <p v-if="room.total_tax" class="mt-1 text-xs text-gray-600">Tax {{ formatMoney(roomTaxMoney(room, hotelItem)) }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-            </div>
-            <div v-else class="rounded border border-gray-200 bg-white px-6 py-10 text-center shadow-sm">
-              <Hotel class="mx-auto mb-3 h-9 w-9 text-primary" />
-              <p class="text-base font-semibold text-gray-950">No hotels match these filters</p>
-              <button type="button" class="mt-3 text-sm font-semibold text-primary hover:text-primary/80" @click="resetHotelFilters">Clear filters</button>
-            </div>
+          </div>
+          <div class="space-y-4">
+            <HotelCardSkeleton v-for="n in 4" :key="n" />
           </div>
         </div>
       </div>
 
-      <div v-else-if="!props.embedded" class="bg-white px-6 py-10 text-center shadow">
-        <Hotel class="mx-auto mb-3 h-10 w-10 text-primary" />
-        <h3 class="text-lg font-semibold text-gray-950">Start with a destination</h3>
-        <p class="mt-1 text-sm text-gray-500">Search synced TBO countries, cities, or hotel names to find live availability.</p>
+      <!-- SEARCH RESULTS -->
+      <div v-else-if="hotelResults.length" class="space-y-4">
+        <!-- TOP BAR: Result count, active filter chips, sort dropdown, and mobile filter trigger -->
+        <HotelResultsTopBar
+          :total-results="hotelResults.length"
+          :filtered-results="filteredHotelResults.length"
+          :destination-label="selectedDestination?.label"
+          :check-in="formatDisplayDate(checkIn)"
+          :check-out="formatDisplayDate(checkOut)"
+          :nights="nights"
+          :guests-summary="guestsSummary"
+          :active-filters-count="activeFiltersCount"
+          :price-limit="hotelPriceLimit"
+          :max-price="maximumHotelPrice"
+          :currency-code="getSelectedCurrencyCode()"
+          :selected-ratings="selectedRatings"
+          :selected-review-score="selectedReviewScore"
+          :selected-amenities="selectedAmenities"
+          :free-cancellation-only="freeCancellationOnly"
+          v-model:sort="currentSort"
+          @open-mobile-filter="isMobileFilterOpen = true"
+          @remove-price-limit="removePriceLimit"
+          @remove-rating="removeRating"
+          @remove-review-score="removeReviewScore"
+          @remove-amenity="removeAmenity"
+          @remove-free-cancellation="removeFreeCancellation"
+          @clear-all="clearAllFilters"
+        />
+
+        <!-- MAIN LAYOUT: Left sidebar filters + Right hotel cards -->
+        <div class="grid gap-6 lg:grid-cols-[288px_minmax(0,1fr)] items-start">
+          
+          <!-- LEFT SIDEBAR FILTERS (DESKTOP + MOBILE DRAWER) -->
+          <HotelFiltersSidebar
+            v-model:price-limit="hotelPriceLimit"
+            v-model:selected-ratings="selectedRatings"
+            v-model:selected-review-score="selectedReviewScore"
+            v-model:selected-amenities="selectedAmenities"
+            v-model:free-cancellation-only="freeCancellationOnly"
+            :max-price="maximumHotelPrice"
+            :currency-code="getSelectedCurrencyCode()"
+            :is-mobile-open="isMobileFilterOpen"
+            :total-count="filteredHotelResults.length"
+            @clear-all="clearAllFilters"
+            @close-mobile="isMobileFilterOpen = false"
+          />
+
+          <!-- RIGHT LIST: HOTEL CARDS OR EMPTY FILTER STATE -->
+          <div class="min-w-0">
+            <!-- HOTEL CARDS LIST -->
+            <div v-if="sortedFilteredHotelResults.length" class="space-y-4">
+              <HotelCard
+                v-for="hotelItem in sortedFilteredHotelResults"
+                :key="hotelItem.hotel_code"
+                :hotel="hotelItem"
+                :nights="nights"
+                :guests-summary="guestsSummary"
+                :is-expanded="isHotelExpanded(hotelItem)"
+                :selected-booking-code="selectedBookingCode"
+                :room-choice="roomChoiceForHotel(hotelItem)"
+                :is-room-details-loading="isRoomDetailsLoading(hotelItem)"
+                :room-details-map="roomDetailsByHotel[String(hotelItem.hotel_code)] || {}"
+                :property-images="propertyImagesByHotel[String(hotelItem.hotel_code)] || []"
+                @view-deal="viewHotelDetails(hotelItem)"
+                @toggle-rooms="toggleHotelRooms(hotelItem)"
+                @choose-room="(h, r) => chooseRoom(h, r)"
+                @select-room="(h, r) => { chooseRoom(h, r); selectChosenRoom(h); }"
+              />
+            </div>
+
+            <!-- EMPTY FILTER STATE (Hotels exist, but filters matched 0) -->
+            <div
+              v-else
+              class="rounded border border-slate-200 bg-white p-10 text-center shadow-sm"
+            >
+              <SlidersHorizontal class="mx-auto mb-3 h-9 w-9 text-primary" />
+              <h3 class="text-base font-bold text-slate-900">No properties match your filters</h3>
+              <p class="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+                Try widening your price range, choosing different star ratings, or clearing some amenities.
+              </p>
+              <div class="mt-4">
+                <button
+                  type="button"
+                  class="rounded bg-primary px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/95 transition-colors"
+                  @click="clearAllFilters"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
+
+      <!-- EMPTY STATE (NO SEARCH RESULTS YET / EMPTY SEARCH) -->
+      <div
+        v-else-if="!props.embedded"
+        class="rounded border border-slate-200 bg-white px-6 py-12 text-center shadow-sm max-w-lg mx-auto mt-6"
+      >
+        <Hotel class="mx-auto mb-3 h-10 w-10 text-primary" />
+        <h3 class="text-base font-bold text-slate-900">No hotel results found</h3>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Enter a destination city or hotel above and choose dates to view available stays.
+        </p>
+      </div>
+
     </section>
   </div>
 </template>

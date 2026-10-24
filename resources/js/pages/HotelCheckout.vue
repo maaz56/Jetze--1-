@@ -1,7 +1,23 @@
 <script setup>
 import Button from "@/components/ui/button/Button.vue";
+import HotelStepIndicator from "@/components/hotel/HotelStepIndicator.vue";
 import { useHotelStore } from "@/services/stores/hotel";
-import { CalendarDays, Clock3, Hotel, ShieldCheck, Users } from "lucide-vue-next";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  Clock3,
+  CreditCard,
+  Hotel,
+  Info,
+  Lock,
+  Mail,
+  Phone,
+  ShieldCheck,
+  User,
+  Users,
+} from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -22,22 +38,32 @@ const prebook = computed(() => hotelStore.getPrebook);
 const isSavingReservation = computed(() => hotelStore.getIsBooking);
 const isExpired = computed(() => remainingSeconds.value <= 0);
 const finalFare = computed(() => prebook.value?.price_quote?.selling_money || null);
-const supplements = computed(() => (prebook.value?.room?.supplements || [])
-  .flat(2)
-  .filter((supplement) => supplement && typeof supplement === "object"));
+const supplements = computed(() =>
+  (prebook.value?.room?.supplements || [])
+    .flat(2)
+    .filter((supplement) => supplement && typeof supplement === "object"),
+);
 const roomName = computed(() => {
   const name = prebook.value?.room?.name;
-  return Array.isArray(name) ? name.filter(Boolean).join(", ") : name || "Selected room";
+  return Array.isArray(name)
+    ? name.filter(Boolean).join(", ")
+    : name || "Selected room";
 });
 const stayNights = computed(() => {
   const checkIn = prebook.value?.stay?.check_in;
   const checkOut = prebook.value?.stay?.check_out;
-  return checkIn && checkOut ? Math.max(0, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)) : null;
+  return checkIn && checkOut
+    ? Math.max(0, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000))
+    : 1;
 });
 
 const formatMoney = (money) => {
-  if (!money || money.amount === null || money.amount === undefined) return "Unavailable";
-  return `${money.currency || ""} ${Number(money.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  if (!money || money.amount === null || money.amount === undefined)
+    return "Unavailable";
+  return `${money.currency || ""} ${Number(money.amount).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 const formatPolicy = (policy) => {
@@ -46,24 +72,40 @@ const formatPolicy = (policy) => {
 };
 
 const formatSupplement = (supplement) => {
-  const amount = supplement?.Price !== undefined && supplement?.Price !== null
-    ? `${supplement.Currency || ""} ${Number(supplement.Price).toLocaleString()}`.trim()
-    : "Amount as advised by the hotel";
+  const amount =
+    supplement?.Price !== undefined && supplement?.Price !== null
+      ? `${supplement.Currency || ""} ${Number(supplement.Price).toLocaleString()}`.trim()
+      : "Amount as advised by the hotel";
 
-  return `${supplement.Description || "Supplement"}: ${amount}${supplement.Type === "AtProperty" ? " (payable at property)" : ""}`;
+  return `${supplement.Description || "Supplement"}: ${amount}${
+    supplement.Type === "AtProperty" ? " (payable at property)" : ""
+  }`;
 };
 
 const formatCountdown = (seconds) => {
   const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
-  return `${String(Math.floor(safeSeconds / 60)).padStart(2, "0")}:${String(safeSeconds % 60).padStart(2, "0")}`;
+  return `${String(Math.floor(safeSeconds / 60)).padStart(2, "0")}:${String(
+    safeSeconds % 60,
+  ).padStart(2, "0")}`;
 };
 
-const makeCustomerDetails = (paxRooms) => (paxRooms || []).map((room) => ({
-  customer_names: [
-    ...Array.from({ length: Number(room.Adults || 0) }, () => ({ title: "Mr", first_name: "", last_name: "", type: "Adult" })),
-    ...Array.from({ length: Number(room.Children || 0) }, () => ({ title: "Mr", first_name: "", last_name: "", type: "Child" })),
-  ],
-}));
+const makeCustomerDetails = (paxRooms) =>
+  (paxRooms || []).map((room) => ({
+    customer_names: [
+      ...Array.from({ length: Number(room.Adults || 0) }, () => ({
+        title: "Mr",
+        first_name: "",
+        last_name: "",
+        type: "Adult",
+      })),
+      ...Array.from({ length: Number(room.Children || 0) }, () => ({
+        title: "Mr",
+        first_name: "",
+        last_name: "",
+        type: "Child",
+      })),
+    ],
+  }));
 
 const startCountdown = (seconds) => {
   window.clearInterval(countdownTimer);
@@ -78,7 +120,8 @@ const loadPrebook = async () => {
   const prebookId = route.query.prebook_id;
 
   if (!prebookId || typeof prebookId !== "string") {
-    errorMessage.value = "No confirmed hotel room was supplied. Please return to hotel search.";
+    errorMessage.value =
+      "No confirmed hotel room was supplied. Please return to hotel search.";
     isLoading.value = false;
     return;
   }
@@ -91,7 +134,8 @@ const loadPrebook = async () => {
     customerDetails.value = makeCustomerDetails(prebook.value?.stay?.pax_rooms);
     startCountdown(response.data?.remaining_seconds);
   } catch (error) {
-    errorMessage.value = error.response?.data?.message || "Unable to load the confirmed room.";
+    errorMessage.value =
+      error.response?.data?.message || "Unable to load the confirmed room.";
   } finally {
     isLoading.value = false;
   }
@@ -108,9 +152,15 @@ const submitReservation = async () => {
       phone_number: phoneNumber.value,
       customer_details: customerDetails.value,
     });
-    router.push({ name: "HotelBookingDetails", query: { booking_id: response.data?.booking_id } });
+    router.push({
+      name: "HotelBookingDetails",
+      query: { booking_id: response.data?.booking_id },
+    });
   } catch (error) {
-    errorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Unable to save this reservation.";
+    errorMessage.value =
+      hotelStore.getErrorMessage ||
+      error.response?.data?.message ||
+      "Unable to save this reservation.";
   }
 };
 
@@ -119,83 +169,374 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer));
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-50 py-7 sm:py-10">
-    <section class="mx-auto max-w-6xl px-4 sm:px-6">
-      <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <HotelStepIndicator :current-step="2" />
+
+  <main class="min-h-screen bg-slate-100/75 py-6 sm:py-8">
+    <div class="mx-auto w-full max-w-booking px-4 sm:px-6">
+      <!-- Top Bar -->
+      <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Hotel checkout</p>
-          <h1 class="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">Guest information</h1>
-          <p class="mt-2 text-sm text-slate-500">Your room has been checked with the provider. Add guest details to continue.</p>
+          <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Guest Information
+          </h1>
+          <p class="mt-1 text-xs text-muted-foreground">
+            Please enter guest details exactly as shown on government IDs or passports.
+          </p>
         </div>
-        <Button class="border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" @click="router.push({ name: 'HotelSearch' })">Back to search</Button>
+        <Button
+          variant="outline"
+          class="h-9 gap-1.5 text-xs font-semibold"
+          @click="router.push({ name: 'HotelSearch' })"
+        >
+          <ArrowLeft class="h-3.5 w-3.5" />
+          Back to search
+        </Button>
       </div>
 
-      <div v-if="isLoading" class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div class="h-[520px] animate-pulse border border-slate-200 bg-white" />
-        <div class="h-72 animate-pulse border border-slate-200 bg-white" />
+      <!-- Loading Skeleton -->
+      <div v-if="isLoading" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div class="space-y-4">
+          <div class="h-14 rounded bg-muted animate-pulse" />
+          <div class="h-64 rounded bg-muted animate-pulse" />
+          <div class="h-44 rounded bg-muted animate-pulse" />
+        </div>
+        <div class="h-96 rounded bg-muted animate-pulse" />
       </div>
 
-      <div v-else-if="errorMessage" class="border border-red-200 bg-red-50 p-5 text-sm text-red-800">{{ errorMessage }}</div>
+      <!-- Error Message -->
+      <div
+        v-else-if="errorMessage"
+        class="rounded border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive"
+      >
+        <div class="flex items-center gap-2 font-bold">
+          <AlertCircle class="h-4 w-4" />
+          <span>Notice</span>
+        </div>
+        <p class="mt-1">{{ errorMessage }}</p>
+        <Button class="mt-4 h-9 text-xs" @click="router.push({ name: 'HotelSearch' })">
+          Return to hotel search
+        </Button>
+      </div>
 
-      <div v-else-if="prebook" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div class="space-y-5">
-          <div class="flex items-center justify-between gap-3 border-l-2 px-3 py-2 text-xs" :class="isExpired ? 'border-red-500 bg-red-50 text-red-800' : 'border-amber-500 bg-amber-50 text-amber-900'">
-            <div class="flex items-center gap-1.5 font-medium"><Clock3 class="h-4 w-4" /><span>{{ isExpired ? 'Reservation window expired' : 'Complete details before expiry' }}</span></div>
-            <strong class="border border-current/20 bg-white/60 px-2 py-0.5 font-mono text-sm font-bold tabular-nums">{{ formatCountdown(remainingSeconds) }}</strong>
+      <!-- Main Two-Column Layout -->
+      <div v-else-if="prebook" class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <!-- Left Column: Forms -->
+        <div class="space-y-6">
+          <!-- Countdown Warning Banner -->
+          <div
+            class="flex items-center justify-between gap-3 rounded border p-3.5 text-xs"
+            :class="
+              isExpired
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : 'border-chart-4/40 bg-chart-4/10 text-foreground'
+            "
+          >
+            <div class="flex items-center gap-2 font-medium">
+              <Clock3 class="h-4 w-4 shrink-0 text-primary" />
+              <span>
+                {{
+                  isExpired
+                    ? "Reservation window expired. Please reselect your room."
+                    : "Room held at live price. Complete details within:"
+                }}
+              </span>
+            </div>
+            <span class="rounded bg-background px-2.5 py-1 font-mono text-xs font-bold shadow-xs tabular-nums border border-border">
+              {{ formatCountdown(remainingSeconds) }}
+            </span>
           </div>
 
-          <form class="overflow-hidden border border-slate-200 bg-white shadow-sm" @submit.prevent="submitReservation">
-            <div class="border-b border-slate-100 px-5 py-5 sm:px-6">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center bg-primary/10 text-primary"><Users class="h-5 w-5" /></div>
-                <div><h2 class="font-bold text-slate-950">Guest details</h2><p class="mt-0.5 text-sm text-slate-500">Enter names exactly as they appear on government-issued identification.</p></div>
+          <!-- Guest Details Form -->
+          <form class="space-y-6" @submit.prevent="submitReservation">
+            <!-- Rooms & Guests Input Cards -->
+            <div
+              v-for="(room, roomIndex) in customerDetails"
+              :key="roomIndex"
+              class="rounded border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm"
+            >
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-black text-white shadow-xs">
+                    {{ roomIndex + 1 }}
+                  </span>
+                  <h2 class="text-base font-extrabold text-slate-900">Room {{ roomIndex + 1 }} Guests</h2>
+                </div>
+                <span class="rounded bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                  {{ room.customer_names.length }} guest{{ room.customer_names.length === 1 ? '' : 's' }}
+                </span>
+              </div>
+
+              <div class="mt-4 space-y-4">
+                <div
+                  v-for="(guest, guestIndex) in room.customer_names"
+                  :key="guestIndex"
+                  class="rounded border border-slate-200 bg-slate-50/90 p-4"
+                >
+                  <p class="mb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Guest {{ guestIndex + 1 }} · {{ guest.type }}
+                  </p>
+
+                  <div class="grid gap-3 sm:grid-cols-[100px_minmax(0,1fr)_minmax(0,1fr)]">
+                    <!-- Title Selection -->
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1">
+                        Title
+                      </label>
+                      <select
+                        v-model="guest.title"
+                        class="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                      >
+                        <option value="Mr">Mr</option>
+                        <option value="Mrs">Mrs</option>
+                        <option value="Ms">Ms</option>
+                      </select>
+                    </div>
+
+                    <!-- First Name -->
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1">
+                        First Name <span class="text-destructive">*</span>
+                      </label>
+                      <input
+                        v-model.trim="guest.first_name"
+                        required
+                        type="text"
+                        minlength="2"
+                        maxlength="25"
+                        pattern="[A-Za-z]+"
+                        title="Use 2 to 25 English letters only."
+                        placeholder="e.g. John"
+                        class="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-muted-foreground/60 transition focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                      />
+                    </div>
+
+                    <!-- Last Name -->
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1">
+                        Last Name <span class="text-destructive">*</span>
+                      </label>
+                      <input
+                        v-model.trim="guest.last_name"
+                        required
+                        type="text"
+                        minlength="2"
+                        maxlength="25"
+                        pattern="[A-Za-z]+"
+                        title="Use 2 to 25 English letters only."
+                        placeholder="e.g. Smith"
+                        class="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-muted-foreground/60 transition focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="space-y-7 px-5 py-6 sm:px-6">
-              <section v-for="(room, roomIndex) in customerDetails" :key="roomIndex" class="border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-                <div class="mb-4 flex items-center justify-between gap-3"><h3 class="font-semibold text-slate-900">Room {{ roomIndex + 1 }}</h3><span class="text-xs font-medium text-slate-500">{{ room.customer_names.length }} guest{{ room.customer_names.length === 1 ? '' : 's' }}</span></div>
-                <div v-for="(guest, guestIndex) in room.customer_names" :key="guestIndex" class="mt-4 first:mt-0">
-                  <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Guest {{ guestIndex + 1 }} · {{ guest.type }}</p>
-                  <div class="grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)_minmax(0,1fr)]">
-                    <label class="text-xs font-medium text-slate-600">Title<select v-model="guest.title" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"><option value="Mr">Mr</option><option value="Mrs">Mrs</option><option value="Ms">Ms</option></select></label>
-                    <label class="text-xs font-medium text-slate-600">First name<input v-model.trim="guest.first_name" required type="text" minlength="2" maxlength="25" pattern="[A-Za-z]+" title="Use 2 to 25 letters only." placeholder="First name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
-                    <label class="text-xs font-medium text-slate-600">Last name<input v-model.trim="guest.last_name" required type="text" minlength="2" maxlength="25" pattern="[A-Za-z]+" title="Use 2 to 25 letters only." placeholder="Last name" class="mt-1 h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
-                  </div>
-                </div>
-              </section>
-
-              <section class="border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-                <h3 class="font-semibold text-slate-900">Lead guest contact</h3><p class="mt-1 text-sm text-slate-500">We will use these details for the hotel reservation.</p>
-                <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label class="text-sm font-medium text-slate-700">Email address<input v-model.trim="email" required type="email" maxlength="255" placeholder="name@example.com" class="mt-1.5 h-11 w-full border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
-                  <label class="text-sm font-medium text-slate-700">Phone number<input v-model.trim="phoneNumber" required type="tel" maxlength="64" placeholder="+92 ..." class="mt-1.5 h-11 w-full border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"></label>
-                </div>
-              </section>
-
-              <div class="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs leading-5 text-slate-500">Book now saves your details as a pending reservation. TBO booking happens only after payment.</p>
-                <Button type="submit" class="h-11 bg-primary px-6 text-sm font-bold text-white hover:bg-primary/90" :disabled="isExpired" :is-loading="isSavingReservation">Book now</Button>
+            <!-- Lead Guest Contact Section -->
+            <div class="rounded border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm">
+              <div class="border-b border-slate-100 pb-3.5">
+                <h2 class="text-base font-extrabold text-slate-900">Lead Guest Contact Details</h2>
+                <p class="mt-0.5 text-xs text-muted-foreground">
+                  Your booking confirmation voucher and updates will be sent to this email.
+                </p>
               </div>
+
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <!-- Email -->
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">
+                    Email Address <span class="text-destructive">*</span>
+                  </label>
+                  <div class="relative">
+                    <Mail class="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      v-model.trim="email"
+                      required
+                      type="email"
+                      maxlength="255"
+                      placeholder="name@example.com"
+                      class="h-11 w-full rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-muted-foreground/60 transition focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                    />
+                  </div>
+                  <p class="mt-1 text-[11px] text-muted-foreground">We'll send your booking confirmation voucher here.</p>
+                </div>
+
+                <!-- Phone -->
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">
+                    Phone Number <span class="text-destructive">*</span>
+                  </label>
+                  <div class="relative">
+                    <Phone class="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      v-model.trim="phoneNumber"
+                      required
+                      type="tel"
+                      maxlength="64"
+                      placeholder="+92 300 1234567"
+                      class="h-11 w-full rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-muted-foreground/60 transition focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                    />
+                  </div>
+                  <p class="mt-1 text-[11px] text-muted-foreground">For critical updates and property check-in coordination.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trust Signals & Guarantee -->
+            <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+              <div class="flex items-start gap-3">
+                <Lock class="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div class="text-xs">
+                  <p class="font-extrabold text-slate-900">Secure 256-Bit SSL Encrypted Checkout</p>
+                  <p class="mt-0.5 text-slate-600">
+                    Your personal information is encrypted and transmitted securely. We adhere to PCI-DSS payment compliance standards.
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[11px] text-muted-foreground">
+                <span class="font-bold text-slate-800">Accepted payment options:</span>
+                <span class="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">Visa</span>
+                <span class="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">Mastercard</span>
+                <span class="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">Jetze Wallet</span>
+              </div>
+            </div>
+
+            <!-- Submit CTA -->
+            <div class="flex flex-col gap-3 rounded border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-xs text-muted-foreground">
+                By continuing, you agree to the property cancellation policy and terms of service.
+              </p>
+              <Button
+                type="submit"
+                class="h-12 px-8 text-sm font-bold shrink-0 shadow-md shadow-primary/20"
+                :disabled="isExpired || isSavingReservation"
+                :is-loading="isSavingReservation"
+              >
+                {{ isSavingReservation ? "Saving reservation..." : "Proceed to payment" }}
+              </Button>
             </div>
           </form>
         </div>
 
-        <aside class="space-y-5 lg:sticky lg:top-5">
-          <article class="overflow-hidden border border-slate-200 bg-white shadow-sm">
-            <div class="bg-primary px-5 py-4 text-primary-foreground"><div class="flex items-center gap-2 text-sm font-semibold"><Hotel class="h-5 w-5" /> Your stay</div><h2 class="mt-2 text-lg font-bold">{{ prebook.hotel.name }}</h2><p class="mt-1 text-sm text-primary-foreground/80">{{ [prebook.hotel.city, prebook.hotel.country].filter(Boolean).join(', ') || 'Location details available at booking' }}</p></div>
-            <div class="space-y-4 p-5">
-              <div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Room</p><p class="mt-1 font-semibold text-slate-900">{{ roomName }}</p><p v-if="prebook.room.inclusion" class="mt-1 text-sm text-slate-500">{{ prebook.room.inclusion }}</p></div>
-              <div class="grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm"><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Check-in</p><p class="mt-1 font-medium text-slate-800">{{ prebook.stay.check_in }}</p></div><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Check-out</p><p class="mt-1 font-medium text-slate-800">{{ prebook.stay.check_out }}</p></div><div class="col-span-2 flex items-center gap-2 text-slate-600"><CalendarDays class="h-4 w-4 text-primary" />{{ stayNights }} night{{ stayNights === 1 ? '' : 's' }} · {{ prebook.room.meal_type || 'Meal details unavailable' }}</div></div>
-              <div class="flex items-end justify-between gap-4"><div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Total for stay</p><p class="mt-1 text-2xl font-bold text-slate-950">{{ formatMoney(finalFare || { amount: prebook.room.total_fare, currency: prebook.room.currency }) }}</p></div><span class="px-2.5 py-1 text-xs font-semibold" :class="prebook.room.is_refundable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">{{ prebook.room.is_refundable ? 'Refundable' : 'Non-refundable' }}</span></div>
+        <!-- Right Column: Sticky Booking Summary -->
+        <aside class="space-y-4 lg:sticky lg:top-16">
+          <article class="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+            <!-- Property Header -->
+            <div class="bg-primary p-5 text-white">
+              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/80">
+                <Hotel class="h-4 w-4" />
+                <span>Your Stay</span>
+              </div>
+              <h2 class="mt-1 text-base font-black text-white leading-snug">
+                {{ prebook.hotel.name }}
+              </h2>
+              <p class="mt-0.5 text-xs text-white/80">
+                {{ [prebook.hotel.city, prebook.hotel.country].filter(Boolean).join(", ") }}
+              </p>
+            </div>
+
+            <!-- Stay Specs -->
+            <div class="space-y-4 p-4 text-xs">
+              <!-- Dates & Nights -->
+              <div class="grid grid-cols-2 gap-2 border-b border-border pb-3">
+                <div>
+                  <span class="text-muted-foreground">Check-in</span>
+                  <p class="mt-0.5 font-bold text-foreground">{{ prebook.stay.check_in }}</p>
+                </div>
+                <div>
+                  <span class="text-muted-foreground">Check-out</span>
+                  <p class="mt-0.5 font-bold text-foreground">{{ prebook.stay.check_out }}</p>
+                </div>
+                <div class="col-span-2 pt-1 flex items-center gap-1.5 text-muted-foreground">
+                  <CalendarDays class="h-3.5 w-3.5 text-primary" />
+                  <span>{{ stayNights }} night{{ stayNights === 1 ? '' : 's' }} stay</span>
+                </div>
+              </div>
+
+              <!-- Room Details -->
+              <div class="border-b border-border pb-3">
+                <span class="text-muted-foreground">Reserved room</span>
+                <p class="mt-0.5 font-bold text-foreground">{{ roomName }}</p>
+                <p v-if="prebook.room.meal_type" class="mt-0.5 text-muted-foreground">
+                  {{ prebook.room.meal_type }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  <span
+                    class="rounded-sm px-2 py-0.5 text-[11px] font-semibold"
+                    :class="
+                      prebook.room.is_refundable
+                        ? 'bg-chart-2/10 text-chart-2 border border-chart-2/30'
+                        : 'bg-muted text-muted-foreground border border-border'
+                    "
+                  >
+                    {{ prebook.room.is_refundable ? "Free cancellation available" : "Non-refundable" }}
+                  </span>
+                  <span
+                    v-if="prebook.room.inclusion"
+                    class="rounded-sm border border-border bg-muted/60 px-2 py-0.5 text-[11px] text-foreground"
+                  >
+                    {{ prebook.room.inclusion }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Price Breakdown -->
+              <div class="space-y-2 border-b border-border pb-3">
+                <div class="flex justify-between text-muted-foreground">
+                  <span>Room rate ({{ stayNights }} night{{ stayNights === 1 ? '' : 's' }})</span>
+                  <span class="font-medium text-foreground">
+                    {{ formatMoney(finalFare || { amount: prebook.room.total_fare, currency: prebook.room.currency }) }}
+                  </span>
+                </div>
+                <div class="flex items-baseline justify-between pt-1">
+                  <span class="text-sm font-bold text-foreground">Total fare to pay</span>
+                  <span class="text-xl font-bold text-foreground">
+                    {{ formatMoney(finalFare || { amount: prebook.room.total_fare, currency: prebook.room.currency }) }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-muted-foreground">
+                  Includes all mandatory taxes and carrier charges
+                </p>
+              </div>
+
+              <!-- Cancellation policy note -->
+              <div>
+                <div class="flex items-center gap-1.5 font-bold text-foreground">
+                  <ShieldCheck class="h-4 w-4 text-chart-2" />
+                  <span>Cancellation terms</span>
+                </div>
+                <ul
+                  v-if="prebook.room.cancel_policies?.length"
+                  class="mt-2 space-y-1.5 text-muted-foreground"
+                >
+                  <li
+                    v-for="(policy, index) in prebook.room.cancel_policies"
+                    :key="index"
+                    class="leading-relaxed"
+                  >
+                    {{ formatPolicy(policy) }}
+                  </li>
+                </ul>
+                <p v-else class="mt-2 text-muted-foreground">
+                  Refer to voucher conditions for cancellation charges.
+                </p>
+              </div>
+
+              <!-- Mandatory or Optional Supplements -->
+              <div v-if="supplements.length" class="rounded border border-chart-4/30 bg-chart-4/10 p-3">
+                <p class="font-bold text-foreground">Property charges / Supplements</p>
+                <p class="mt-0.5 text-[11px] text-muted-foreground">Payable directly at the hotel:</p>
+                <ul class="mt-1.5 space-y-1 text-muted-foreground">
+                  <li v-for="(supplement, index) in supplements" :key="index">
+                    {{ formatSupplement(supplement) }}
+                  </li>
+                </ul>
+              </div>
             </div>
           </article>
-
-          <article class="border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-center gap-2"><ShieldCheck class="h-5 w-5 text-primary" /><h2 class="font-semibold text-slate-900">Cancellation policy</h2></div><ul v-if="prebook.room.cancel_policies?.length" class="mt-3 space-y-2 text-sm leading-5 text-slate-600"><li v-for="(policy, index) in prebook.room.cancel_policies" :key="index">{{ formatPolicy(policy) }}</li></ul><p v-else class="mt-3 text-sm text-slate-500">No cancellation policy was returned by the provider.</p></article>
-          <article v-if="prebook.room.rate_conditions?.length" class="border border-slate-200 bg-white p-5 shadow-sm"><h2 class="font-semibold text-slate-900">Rate conditions</h2><ul class="mt-3 space-y-2 text-sm leading-5 text-slate-700"><li v-for="(condition, index) in prebook.room.rate_conditions" :key="index">{{ condition }}</li></ul></article>
-          <article v-if="supplements.length" class="border border-amber-200 bg-amber-50 p-5 shadow-sm"><h2 class="font-semibold text-slate-900">Mandatory or optional charges</h2><p class="mt-1 text-xs leading-5 text-slate-600">These provider charges may be payable directly at the hotel.</p><ul class="mt-3 space-y-2 text-sm leading-5 text-slate-700"><li v-for="(supplement, index) in supplements" :key="index">{{ formatSupplement(supplement) }}</li></ul></article>
         </aside>
       </div>
-    </section>
+    </div>
   </main>
 </template>
