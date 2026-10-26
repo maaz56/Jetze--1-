@@ -323,6 +323,18 @@ class BookingController extends Controller
      */
     private function atStartPayCompleted(array $response): bool
     {
+        // Payment callbacks may wrap the supplier payload in a `response` key.
+        $response = is_array($response['response'] ?? null)
+            ? $response['response']
+            : $response;
+
+        // AT uses 6033 to acknowledge that StartPay has accepted the booking
+        // and it is being processed. This is a successful acknowledgement,
+        // not a payment failure.
+        if ((string) ($response['Code'] ?? '') === '6033') {
+            return true;
+        }
+
         $messages = $response['Msg'] ?? $response['message'] ?? [];
 
         foreach ((array) $messages as $message) {
@@ -346,6 +358,7 @@ class BookingController extends Controller
 
         $pnrResponse = null;
         $airlinePnr = null;
+        $transactionId = null;
         $cacheKeyPrefix = auth()->id() ? 'flights_' . auth()->id() : 'flights_' . session()->getId();
         $flightData = $request['flight'];
         $fareRefernce = $request['fare_reference'];
@@ -535,6 +548,9 @@ class BookingController extends Controller
                     $crsPnr = data_get($response, 'Trips.0.Journey.0.Segments.0.Flight.CRSPNR');
                     $crsPnr = is_string($crsPnr) ? trim($crsPnr) : null;
 
+                    // RetrieveBooking only accepts this ID, not the PNR.
+                    $transactionId = (string) $response['TransactionID'];
+
                     $itineraryRef = $crsPnr ?: (!empty($response['TransactionIDList'])
                         ? implode(',', $response['TransactionIDList'])
                         : $response['TransactionID']);
@@ -546,12 +562,25 @@ class BookingController extends Controller
                         $holdAmount = $priceQuote?->provider_amount;
                         if (is_numeric($holdAmount) && (float) $holdAmount > 0 && floor((float) $holdAmount) === (float) $holdAmount) {
                             $atHoldResult = $service->holdReservation($response, (int) $holdAmount);
+
+                            // CreateItinerary has no CRSPNR yet; RetrieveBooking
+                            // after the hold returns it, so prefer that PNR.
+                            $heldCrsPnr = $this->atCrsPnr($atHoldResult['booking_details'] ?? null);
+                            if ($heldCrsPnr) {
+                                $itineraryRef = $heldCrsPnr;
+                            }
+                            $airlinePnr = $this->atAirlinePnr($atHoldResult['booking_details'] ?? null);
                         } else {
                             Log::warning('AT hold skipped: the locked amount is invalid for StartPay.', [
                                 'transaction_id' => $response['TransactionID'],
                                 'provider_amount' => $holdAmount,
                             ]);
                         }
+                    } else {
+                        // A non-hold booking must not call StartPay until its
+                        // payment is confirmed. Keep CreateItinerary's
+                        // transaction ID as the supplier-payment fallback.
+                        $localPnr = (string) $response['TransactionID'];
                     }
 
                     $pnrResponse = json_encode($response);
@@ -694,6 +723,7 @@ class BookingController extends Controller
             'flight_data' => $flightData ?? '{}', // must never be null
             'pnr_response' => $pnrResponse, // must never be null
             'pnr' => $localPnr ?? null,
+            'transaction_id' => $transactionId,
             'airline_pnr' => $airlinePnr ?? null,
             'sector' => $sector,
             'travel_date' => $travelDate,
@@ -987,6 +1017,7 @@ class BookingController extends Controller
             return FlightBookings::query()
                 ->where('itinerary_ref', $request->pnr)
                 ->orWhere('pnr', $request->pnr)
+                ->orWhere('transaction_id', $request->pnr)
                 ->first();
         }
 
@@ -996,6 +1027,13 @@ class BookingController extends Controller
     /** AT's RetrieveBooking endpoint expects TransactionID rather than CRSPNR. */
     private function atTransactionId(?FlightBookings $booking): ?string
     {
+        // `pnr` is overwritten with the airline PNR on confirm, so it cannot
+        // be used here; read the stored transaction ID instead.
+        $storedTransactionId = trim((string) ($booking?->transaction_id ?? ''));
+        if ($storedTransactionId !== '') {
+            return $storedTransactionId;
+        }
+
         $response = json_decode((string) ($booking?->pnr_response ?? ''), true);
         $transactionId = is_array($response) ? ($response['TransactionID'] ?? null) : null;
 
@@ -1007,9 +1045,18 @@ class BookingController extends Controller
     /** Pull the customer-facing CRS PNR from AT's RetrieveBooking response. */
     private function atCrsPnr(mixed $pnrData): ?string
     {
-        $crsPnr = data_get($pnrData, 'bookingDetails.Trips.0.Journey.0.Segments.0.Flight.CRSPNR');
+        $crsPnr = data_get($pnrData, 'bookingDetails.Trips.0.Journey.0.Segments.0.Flight.CRSPNR')
+            ?? data_get($pnrData, 'bookingDetails.Trips.0.Journey.0.Segments.0.Flight.CSRPNR');
 
         return is_string($crsPnr) && trim($crsPnr) !== '' ? trim($crsPnr) : null;
+    }
+
+    /** Pull AT's airline PNR from RetrieveBooking for the booking record. */
+    private function atAirlinePnr(mixed $pnrData): ?string
+    {
+        $airlinePnr = data_get($pnrData, 'bookingDetails.Trips.0.Journey.0.Segments.0.Flight.AirlinePNR');
+
+        return is_string($airlinePnr) && trim($airlinePnr) !== '' ? trim($airlinePnr) : null;
     }
 
     public function getMyTravellers(Request $request)
@@ -1134,8 +1181,14 @@ class BookingController extends Controller
             $pnrData = $atApiService->getBookingDetails($atRequest);
 
             $crsPnr = $this->atCrsPnr($pnrData);
-            if ($booking && $crsPnr) {
-                $booking->itinerary_ref = $crsPnr;
+            $airlinePnr = $this->atAirlinePnr($pnrData);
+            if ($booking && ($crsPnr || $airlinePnr)) {
+                if ($crsPnr) {
+                    $booking->itinerary_ref = $crsPnr;
+                }
+                if ($airlinePnr) {
+                    $booking->airline_pnr = $airlinePnr;
+                }
                 $booking->save();
             }
         } else if (strtolower((string) $request->flight_provider) === 'hakimi') {

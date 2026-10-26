@@ -36,7 +36,7 @@ import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
-import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
+import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice, sumMoney } from "@/lib/utils";
 
 import {
     FETCH_BOOKING_DATA,
@@ -120,15 +120,37 @@ function formatLockedBookingAmount() {
     );
 }
 
-/** Format an individual selected fare with the converted data saved on the booking. */
-function formatSelectedFareMoney(fare) {
-    const money = fare?.display_money;
+/** Each booked leg with its selected fare, from the saved flight data. */
+const bookedFareLegs = computed(() => {
+    const booking = bookingDetails.value?.[0];
+    const fareReference = parseFlightData(booking?.fare_reference);
+    const fareRefs = Array.isArray(fareReference) ? fareReference : [fareReference];
 
-    if (money?.currency && Number.isFinite(Number(money.amount))) {
-        return formatAmountWithCurrency(money.amount, money.currency);
-    }
+    return (parseFlightData(booking?.flight_data)?.leg?.flights ?? []).flatMap((leg) =>
+        (leg?.fares ?? [])
+            .filter((fare) => fareRefs.includes(fare.ref_id))
+            .map((fare) => ({ leg, fare })),
+    );
+});
 
-    return formatLockedBookingAmount();
+/** Route across all booked legs, e.g. "DXB → DEL → DXB". */
+const bookedFareRoute = computed(() => {
+    const legs = bookedFareLegs.value.map(({ leg }) => leg);
+    if (!legs.length) return '';
+
+    return [
+        legs[0].segments?.[0]?.from?.iata,
+        ...legs.map((leg) => leg.segments?.[leg.segments.length - 1]?.to?.iata),
+    ].join(' → ');
+});
+
+/** Sum the outbound and return fares; AT combined return fares are usually 0. */
+function formatBookedFaresMoney() {
+    const money = sumMoney(bookedFareLegs.value.map(({ fare }) => fare?.display_money));
+
+    return money
+        ? formatAmountWithCurrency(money.amount, money.currency)
+        : formatLockedBookingAmount();
 }
 
 /** Format a zero add-on amount in the same locked booking currency. */
@@ -170,31 +192,31 @@ const modifyRequestData = computed(() => store.getters["modifyRequest/requestDat
 const now = ref(Date.now())
 
 onMounted(() => {
-  setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
+    setInterval(() => {
+        now.value = Date.now()
+    }, 1000)
 })
 
 const getRemainingTime = (expiry) => {
-  if (!expiry) return 'N/A'
+    if (!expiry) return 'N/A'
 
-  // Parse expiry and get difference
-  const expiryTime = new Date(expiry.replace(' ', 'T')).getTime()
-  const diff = expiryTime - now.value
-  if (diff <= 0) return 'Expired'
+    // Parse expiry and get difference
+    const expiryTime = new Date(expiry.replace(' ', 'T')).getTime()
+    const diff = expiryTime - now.value
+    if (diff <= 0) return 'Expired'
 
-  // Calculate days, hours, minutes, seconds
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+    // Calculate days, hours, minutes, seconds
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
 
-  let result = ''
-  if (days > 0) result += `${days}d `
-  if (hours > 0 || days > 0) result += `${hours}h `
-  result += `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+    let result = ''
+    if (days > 0) result += `${days}d `
+    if (hours > 0 || days > 0) result += `${hours}h `
+    result += `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 
-  return result
+    return result
 }
 function openModifyRequestDialog() {
     modifyDialogOpen.value = true;
@@ -607,17 +629,17 @@ function calculateTotalFare(fare) {
     return total;
 }
 function calculateGrandTotal() {
-  let total = 0;
+    let total = 0;
 
-  flightData.value?.leg?.flights?.forEach((flightItem, flightIndex) => {
-    flightItem?.fares?.forEach(fare => {
-      if (selectedFares.value.includes(fare.ref_id)) {
-        total += calculateTotalFare(fare);
-      }
+    flightData.value?.leg?.flights?.forEach((flightItem, flightIndex) => {
+        flightItem?.fares?.forEach(fare => {
+            if (selectedFares.value.includes(fare.ref_id)) {
+                total += calculateTotalFare(fare);
+            }
+        });
     });
-  });
-  const addOnesAmount = parseFloat(bookingDetails?.value?.[0]?.add_ones_amount || 0) || 0;
-  return total + addOnesAmount;
+    const addOnesAmount = parseFloat(bookingDetails?.value?.[0]?.add_ones_amount || 0) || 0;
+    return total + addOnesAmount;
 }
 function parseSooperResponse() {
     try {
@@ -784,20 +806,20 @@ const getOtherSSR = () => {
     try {
         const pnr = pnrDetails.value;
         if (!pnr) return [];
-        
+
         const specialReqs = pnr?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo?.SpecialReqDetails;
         if (!specialReqs || !Array.isArray(specialReqs)) return [];
-        
+
         const ssrReq = specialReqs.find(req => req.SpecialServiceRequests?.SpecialServiceRequest);
         if (!ssrReq) return [];
-        
+
         const allSSR = Array.isArray(ssrReq.SpecialServiceRequests.SpecialServiceRequest)
             ? ssrReq.SpecialServiceRequests.SpecialServiceRequest
             : [ssrReq.SpecialServiceRequests.SpecialServiceRequest];
-        
+
         // Filter out baggage-related SSR
-        return allSSR.filter(ssr => 
-            !ssr['@attributes']?.SSRCode?.includes('XB') && 
+        return allSSR.filter(ssr =>
+            !ssr['@attributes']?.SSRCode?.includes('XB') &&
             !ssr['@attributes']?.ItemCode?.includes('BAG')
         );
     } catch (e) {
@@ -808,7 +830,7 @@ const getOtherSSR = () => {
 
 const getStatusClass = (status) => {
     const baseClass = 'px-2 py-1 text-xs font-medium rounded-full ';
-    switch(status?.toLowerCase()) {
+    switch (status?.toLowerCase()) {
         case 'held':
             return baseClass + 'bg-yellow-100 text-yellow-800 print:bg-transparent print:text-gray-800';
         case 'confirmed':
@@ -833,7 +855,7 @@ const getAllSSR = () => {
     try {
         const pnr = pnrDetails.value;
         if (!pnr) return null;
-        
+
         return pnr?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo?.SpecialReqDetails;
     } catch (e) {
         console.error('Error getting SSR:', e);
@@ -845,26 +867,26 @@ const getAllSSR = () => {
 const getPassengerName = (travelerRefRPH) => {
     try {
         if (!travelerRefRPH || !pnrDetails.value) return 'Unknown';
-        
+
         // Navigate to the TravelerInfo.AirTraveler array
         const travelerInfo = pnrDetails.value?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo;
-        
+
         if (!travelerInfo?.AirTraveler || !Array.isArray(travelerInfo.AirTraveler)) {
             return 'Unknown';
         }
-        
+
         // Find the traveler with matching TravelerRefNumber.RPH
-        const traveler = travelerInfo.AirTraveler.find(t => 
+        const traveler = travelerInfo.AirTraveler.find(t =>
             t.TravelerRefNumber?.['@attributes']?.RPH === travelerRefRPH
         );
-        
+
         if (traveler?.PersonName) {
             const title = traveler.PersonName.NameTitle || '';
             const givenName = traveler.PersonName.GivenName || '';
             const surname = traveler.PersonName.Surname || '';
             return `${title} ${givenName} ${surname}`.trim();
         }
-        
+
         return `Passenger (${travelerRefRPH.substring(0, 8)}...)`;
     } catch (e) {
         console.error('Error getting passenger name:', e);
@@ -876,31 +898,31 @@ const getPassengerName = (travelerRefRPH) => {
 const getPassengerNameWithType = (travelerRefRPH) => {
     try {
         if (!travelerRefRPH || !pnrDetails.value) return 'Unknown';
-        
+
         const travelerInfo = pnrDetails.value?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo;
-        
+
         if (!travelerInfo?.AirTraveler || !Array.isArray(travelerInfo.AirTraveler)) {
             return 'Unknown';
         }
-        
-        const traveler = travelerInfo.AirTraveler.find(t => 
+
+        const traveler = travelerInfo.AirTraveler.find(t =>
             t.TravelerRefNumber?.['@attributes']?.RPH === travelerRefRPH
         );
-        
+
         if (traveler?.PersonName) {
             const title = traveler.PersonName.NameTitle || '';
             const givenName = traveler.PersonName.GivenName || '';
             const surname = traveler.PersonName.Surname || '';
             const passengerType = traveler['@attributes']?.PassengerTypeCode || '';
-            
+
             let typeLabel = '';
             if (passengerType === 'ADT') typeLabel = '(Adult)';
             else if (passengerType === 'CHD') typeLabel = '(Child)';
             else if (passengerType === 'INF') typeLabel = '(Infant)';
-            
+
             return `${title} ${givenName} ${surname} ${typeLabel}`.trim();
         }
-        
+
         return `Passenger (${travelerRefRPH.substring(0, 8)}...)`;
     } catch (e) {
         console.error('Error getting passenger name:', e);
@@ -912,11 +934,11 @@ const getPassengerNameWithType = (travelerRefRPH) => {
 const getTravelerMap = () => {
     try {
         const travelerInfo = pnrDetails.value?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo;
-        
+
         if (!travelerInfo?.AirTraveler || !Array.isArray(travelerInfo.AirTraveler)) {
             return new Map();
         }
-        
+
         const travelerMap = new Map();
         travelerInfo.AirTraveler.forEach(traveler => {
             const rph = traveler.TravelerRefNumber?.['@attributes']?.RPH;
@@ -932,7 +954,7 @@ const getTravelerMap = () => {
                 });
             }
         });
-        
+
         return travelerMap;
     } catch (e) {
         console.error('Error creating traveler map:', e);
@@ -993,25 +1015,25 @@ const getBaggageSSR = () => {
     try {
         const pnr = pnrDetails.value;
         if (!pnr) return [];
-        
+
         const travelerInfo = pnr?.Body?.ReadResponse?.ReadResult?.AirReservation?.TravelerInfo;
         const specialReqs = travelerInfo?.SpecialReqDetails;
-        
+
         if (!specialReqs || !Array.isArray(specialReqs)) return [];
-        
+
         const ssrReq = specialReqs.find(req => req.SpecialServiceRequests?.SpecialServiceRequest);
         if (!ssrReq) return [];
-        
+
         const allSSR = Array.isArray(ssrReq.SpecialServiceRequests.SpecialServiceRequest)
             ? ssrReq.SpecialServiceRequests.SpecialServiceRequest
             : [ssrReq.SpecialServiceRequests.SpecialServiceRequest];
-        
+
         // Filter for baggage-related SSR (XB30, etc.)
-        const baggageSSR = allSSR.filter(ssr => 
-            ssr['@attributes']?.SSRCode?.includes('XB') || 
+        const baggageSSR = allSSR.filter(ssr =>
+            ssr['@attributes']?.SSRCode?.includes('XB') ||
             ssr['@attributes']?.ItemCode?.includes('BAG')
         );
-        
+
         // Enrich with passenger names
         const travelerMap = getTravelerMap();
         return baggageSSR.map(ssr => {
@@ -1060,9 +1082,9 @@ onMounted(() => {
 
 <template>
     <section>
-        
 
-        <div  class="max-w-7xl mx-auto min-h-screen bg-gray-100 p-4">
+
+        <div class="max-w-7xl mx-auto min-h-screen bg-gray-100 p-4">
             <!-- Action Buttons -->
             <div v-if="route?.query?.booking_source == 1">
                 <div v-for="booking in bookingDetails" :key="booking?.id"
@@ -1081,79 +1103,79 @@ onMounted(() => {
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         Modify Request
                     </button>
-                    <button :disabled="(bookingDetails?.[0]?.status === 'ticketed') || (bookingDetails?.[0]?.status === 'canceled')" @click="goToPaymentView"
+                    <button
+                        :disabled="(bookingDetails?.[0]?.status === 'ticketed') || (bookingDetails?.[0]?.status === 'canceled')"
+                        @click="goToPaymentView"
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <DollarSign class="h-4 w-4" />
                         Pay Now
                     </button>
                     <button
-                            :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(booking?.status.toLowerCase())"
-                            @click="isDialogOpen = true"
-                            class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            Cancel Booking
-                        </button>
+                        :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(booking?.status.toLowerCase())"
+                        @click="isDialogOpen = true"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Cancel Booking
+                    </button>
                     <button @click="toggleChatOpen"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2">
                         <ChatBubbleIcon class="h-4 w-4" />
                         Chat
                     </button>
-                    
+
                 </div>
                 <div v-if="isDialogOpen"
-                            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-                            @click.self="isDialogOpen = false">
-                            <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
-                                <div class="flex items-start justify-between mb-4">
-                                    <h3 class="text-lg font-medium text-gray-900">
-                                        Cancel Booking
-                                    </h3>
-                                    <button @click="isDialogOpen = false"
-                                        class="text-gray-400 hover:text-gray-500 focus:outline-none">
-                                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
+                    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                    @click.self="isDialogOpen = false">
+                    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+                        <div class="flex items-start justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">
+                                Cancel Booking
+                            </h3>
+                            <button @click="isDialogOpen = false"
+                                class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
 
-                                <div class="mt-2">
-                                    <p class="text-sm text-gray-500">
-                                        Are you sure you want to cancel this
-                                        booking? This action cannot be undone.
-                                    </p>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                Are you sure you want to cancel this
+                                booking? This action cannot be undone.
+                            </p>
 
-                                    <div v-if="error" class="mt-3 p-3 bg-red-100 text-red-700 rounded-md text-sm">
-                                        {{ error }}
-                                    </div>
-                                </div>
-
-                                <div class="mt-6 flex justify-end space-x-3">
-                                    <button @click="isDialogOpen = false"
-                                        class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                                        Cancel
-                                    </button>
-                                    <button @click="handleCancelBooking"
-                                        class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                        Confirm Cancellation
-                                    </button>
-                                </div>
+                            <div v-if="error" class="mt-3 p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                                {{ error }}
                             </div>
                         </div>
-                <ATFlowLoader
-                    v-if="isLoading"
-                    title="Loading booking details"
+
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button @click="isDialogOpen = false"
+                                class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                Cancel
+                            </button>
+                            <button @click="handleCancelBooking"
+                                class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                Confirm Cancellation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <ATFlowLoader v-if="isLoading" title="Loading booking details"
                     message="We are refreshing the AT booking, PNR, and customer fare details."
-                    :steps="['Booking', 'PNR', 'Details']"
-                />
+                    :steps="['Booking', 'PNR', 'Details']" />
                 <!-- Main Content with Chat Sidebar -->
-                <div class="flex gap-4" >
+                <div class="flex gap-4">
                     <!-- Print Section - Main Content -->
                     <div :class="isChatOpen && modifyRequestData ? 'w-8/12' : 'w-full'" id="print-section">
                         <div v-for="booking in bookingDetails" :key="booking.id"
                             class="bg-white rounded-lg shadow-sm overflow-hidden mb-4 print:shadow-none print:border print:border-gray-300 print:mb-0 print:rounded-none">
 
                             <!-- Header - Professional Design -->
-                            <div class="p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
+                            <div
+                                class="p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
                                 <div class="flex justify-between items-center">
                                     <!-- Logo -->
                                     <div class="w-1/4">
@@ -1161,43 +1183,53 @@ onMounted(() => {
                                     </div>
 
                                     <!-- Agency Info -->
-                                    <div class="w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
-            <h1 class="text-2xl font-extrabold tracking-tight print:text-gray-900 mb-1">E-TICKET RECEIPT</h1>
-            
-            <div class="mt-2">
-                <p class="text-sm print:text-gray-700 mb-1">
-                    <span class="font-medium">Status:</span>
-                    <span :class="{
-                        'text-green-600 font-bold': booking.status === 'booked',
-                        'text-yellow-600 font-bold': booking.status === 'pending',
-                        'text-red-600 font-bold': booking.status === 'cancelled' || booking.status === 'failed',
-                        'text-blue-600 font-bold': booking.status === 'confirmed',
-                        'capitalize font-semibold print:text-gray-900': true
-                    }">{{ booking.status }}</span>
-                </p>
-                
-                <div v-if="booking.status === 'booked'" class="text-sm opacity-90 print:text-gray-700 mt-1">
-                    <span class="font-medium">Expiry Time: </span>
-<span
-    class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
+                                    <div
+                                        class="w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
+                                        <h1 class="text-2xl font-extrabold tracking-tight print:text-gray-900 mb-1">
+                                            E-TICKET RECEIPT</h1>
+
+                                        <div class="mt-2">
+                                            <p class="text-sm print:text-gray-700 mb-1">
+                                                <span class="font-medium">Status:</span>
+                                                <span :class="{
+                                                    'text-green-600 font-bold': booking.status === 'booked',
+                                                    'text-yellow-600 font-bold': booking.status === 'pending',
+                                                    'text-red-600 font-bold': booking.status === 'cancelled' || booking.status === 'failed',
+                                                    'text-blue-600 font-bold': booking.status === 'confirmed',
+                                                    'capitalize font-semibold print:text-gray-900': true
+                                                }">{{ booking.status }}</span>
+                                            </p>
+
+                                            <div v-if="booking.status === 'booked'"
+                                                class="text-sm opacity-90 print:text-gray-700 mt-1">
+                                                <span class="font-medium">Expiry Time: </span>
+                                                <span class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
            bg-amber-100 text-amber-700 border border-amber-300
-           "
-  >
-    {{ getRemainingTime(booking.expiry_time) }}
-  </span>                </div>
-            </div>
-        </div>
+           ">
+                                                    {{ getRemainingTime(booking.expiry_time) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- Booking Reference -->
-                                    <div class="w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
-                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Booking Ref:</span> {{ booking.id
-                                            }}</p>
+                                    <div
+                                        class="w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
+                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Booking
+                                                Ref:</span> {{ booking.id
+                                                }}</p>
                                         <p class="text-sm print:text-gray-700"><span class="font-medium">Status:</span>
-                                            <span class="capitalize font-semibold print:text-gray-900">{{ booking.status }}</span>
+                                            <span class="capitalize font-semibold print:text-gray-900">{{ booking.status
+                                            }}</span>
                                         </p>
-                                            <p class="text-sm print:text-gray-700"><span class="font-medium">Airline PNR:</span> {{ pnrDetails?.bookingId ? pnrDetails?.bookingId : booking?.itinerary_ref || "-"
-                                            }}</p>
-                                            <!-- <p class="text-sm print:text-gray-700"><span class="font-medium">Airline PNR:</span> {{
+                                        <p class="text-sm print:text-gray-700"><span class="font-medium">PNR:</span> {{
+                                            booking?.itinerary_ref || "-"
+                                        }}</p>
+                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Airline
+                                                PNR:</span> {{ pnrDetails?.bookingId ? pnrDetails?.bookingId :
+                                                    booking?.itinerary_ref || "-"
+                                                }}</p>
+                                        <!-- <p class="text-sm print:text-gray-700"><span class="font-medium">Airline PNR:</span> {{
                                                 pnrData?.ReservationResponse?.Reservation?.Receipt?.[1]?.Confirmation?.Locator?.value
                                                 }}</p> -->
                                     </div>
@@ -1205,7 +1237,7 @@ onMounted(() => {
                             </div>
 
                             <!-- Flight Information -->
-                           <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
+                            <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
                                 <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
                                     <PlaneIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
                                     FLIGHT INFORMATION
@@ -1213,170 +1245,214 @@ onMounted(() => {
 
                                 <div v-if="parseFlightData(booking.flight_data)?.original?.leg || parseFlightData(booking.flight_data)?.leg"
                                     class="space-y-4">
-                                   <div v-for="(flight, flightIndex) in (parseFlightData(booking.flight_data)?.original?.leg?.flights ?? parseFlightData(booking.flight_data)?.leg?.flights)"
-    :key="flightIndex" class="space-y-3 print:break-inside-avoid">
-    <!-- Main Flight Card -->
-    <div class="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
-        
-        <!-- Segments Container -->
-        <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex" class="bg-white overflow-hidden">
-            
-            <!-- Layover Info -->
-            <div v-if="segment?.layover_time" class="flex justify-center ">
-  <div class="bg-blue-100 text-blue-800 text-xs sm:text-sm font-medium px-4 py-1.5 rounded-full shadow-sm">
-    Layover Time: 
-    {{
-      Math.floor(segment.layover_time / 60) + "h " +
-      (segment.layover_time % 60) + "m"
-    }}
-  </div>
-</div>
+                                    <div v-for="(flight, flightIndex) in (parseFlightData(booking.flight_data)?.original?.leg?.flights ?? parseFlightData(booking.flight_data)?.leg?.flights)"
+                                        :key="flightIndex" class="space-y-3 print:break-inside-avoid">
+                                        <!-- Main Flight Card -->
+                                        <div
+                                            class="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
 
-            <!-- Segment Details -->
-            <div class="p-2 sm:p-3 lg:p-6">
-                <div class="flex items-center justify-center gap-6">
-                    <div class="grid grid-cols-7 gap-4 items-center w-full">
-                        
-                        <!-- Airline Logo -->
-                        <div class="w-20 flex-shrink-0 print:w-24">
-                            <img :src="segment?.operating_carrier?.logo" 
-                                 class="h-12 w-auto object-contain print:h-14" 
-                                 :alt="segment?.operating_carrier?.name" />
-                            <div class="text-xs text-gray-500 mt-1">
-                                {{ segment?.operating_carrier?.iata }}-{{ segment?.flight_number ?? "N/A" }}
-                            </div>
-                        </div>
+                                            <!-- Segments Container -->
+                                            <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
+                                                class="bg-white overflow-hidden">
 
-                        <!-- FROM (Right aligned content) -->
-                        <div class="col-span-2 text-right print:text-right">
-                            <p class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                {{ segment?.from?.iata }}
-                            </p>
-                            <p class="text-lg text-gray-600 print:text-base">
-                                {{ segment?.from?.city?.name }}
-                            </p>
-                            <p class="text-lg font-semibold text-gray-600 print:text-base">
-                                {{ segment?.from?.name }}
-                            </p>
+                                                <!-- Layover Info -->
+                                                <div v-if="segment?.layover_time" class="flex justify-center ">
+                                                    <div
+                                                        class="bg-blue-100 text-blue-800 text-xs sm:text-sm font-medium px-4 py-1.5 rounded-full shadow-sm">
+                                                        Layover Time:
+                                                        {{
+                                                            Math.floor(segment.layover_time / 60) + "h " +
+                                                            (segment.layover_time % 60) + "m"
+                                                        }}
+                                                    </div>
+                                                </div>
 
-                            <p class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                {{ formatDate(segment?.departure_at) }}
-                            </p>
-                            <p class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
-                            </p>
+                                                <!-- Segment Details -->
+                                                <div class="p-2 sm:p-3 lg:p-6">
+                                                    <div class="flex items-center justify-center gap-6">
+                                                        <div class="grid grid-cols-7 gap-4 items-center w-full">
 
-                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                Terminal: {{ segment?.from_terminal?.Gate ?? "N/A" }}
-                            </p>
-                        </div>
-                        <!-- Arrow with Duration -->
-                        <div class="col-span-1 flex flex-col items-center">
-                            <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:bg-transparent print:border print:border-gray-400">
-                                <MoveRight class="h-5 w-5 text-gray-600 print:text-black" />
-                            </div>
+                                                            <!-- Airline Logo -->
+                                                            <div class="w-20 flex-shrink-0 print:w-24">
+                                                                <img :src="segment?.operating_carrier?.logo"
+                                                                    class="h-12 w-auto object-contain print:h-14"
+                                                                    :alt="segment?.operating_carrier?.name" />
+                                                                <div class="text-xs text-gray-500 mt-1">
+                                                                    {{ segment?.operating_carrier?.iata }}-{{
+                                                                        segment?.flight_number ?? "N/A" }}
+                                                                </div>
+                                                            </div>
 
-                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                {{ (segment.flight_time) }}
-                            </p>
-                        </div>
+                                                            <!-- FROM (Right aligned content) -->
+                                                            <div class="col-span-2 text-right print:text-right">
+                                                                <p
+                                                                    class="text-2xl font-bold text-gray-900 print:text-3xl">
+                                                                    {{ segment?.from?.iata }}
+                                                                </p>
+                                                                <p class="text-lg text-gray-600 print:text-base">
+                                                                    {{ segment?.from?.city?.name }}
+                                                                </p>
+                                                                <p
+                                                                    class="text-lg font-semibold text-gray-600 print:text-base">
+                                                                    {{ segment?.from?.name }}
+                                                                </p>
 
-                        <!-- TO (Left aligned content) -->
-                        <div class="col-span-2 text-left print:text-left">
-                            <p class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                {{ segment?.to?.iata }}
-                            </p>
+                                                                <p
+                                                                    class="text-base font-medium mt-3 text-gray-700 print:text-lg">
+                                                                    {{ formatDate(segment?.departure_at) }}
+                                                                </p>
+                                                                <p
+                                                                    class="text-xl font-bold text-primary print:text-2xl print:text-black">
+                                                                    {{
+                                                                        moment.parseZone(segment?.departure_at).format("HH:mm")
+                                                                    }}
+                                                                </p>
 
-                            <p class="text-lg text-gray-600 print:text-base">
-                                {{ segment?.to?.city?.name }}
-                            </p>
-                            <p class="text-lg font-semibold text-gray-600 print:text-base">
-                                {{ segment?.to?.name }}
-                            </p>
+                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
+                                                                    Terminal: {{ segment?.from_terminal?.Gate ?? "N/A"
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                            <!-- Arrow with Duration -->
+                                                            <div class="col-span-1 flex flex-col items-center">
+                                                                <div
+                                                                    class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:bg-transparent print:border print:border-gray-400">
+                                                                    <MoveRight
+                                                                        class="h-5 w-5 text-gray-600 print:text-black" />
+                                                                </div>
 
-                            <p class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                {{ formatDate(segment?.arrival_at) }}
-                            </p>
+                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
+                                                                    {{ (segment.flight_time) }}
+                                                                </p>
+                                                            </div>
 
-                            <p class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
-                            </p>
+                                                            <!-- TO (Left aligned content) -->
+                                                            <div class="col-span-2 text-left print:text-left">
+                                                                <p
+                                                                    class="text-2xl font-bold text-gray-900 print:text-3xl">
+                                                                    {{ segment?.to?.iata }}
+                                                                </p>
 
-                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                Terminal: {{ segment?.to_terminal?.Gate ?? "N/A" }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                                                                <p class="text-lg text-gray-600 print:text-base">
+                                                                    {{ segment?.to?.city?.name }}
+                                                                </p>
+                                                                <p
+                                                                    class="text-lg font-semibold text-gray-600 print:text-base">
+                                                                    {{ segment?.to?.name }}
+                                                                </p>
 
-                <!-- Aircraft Info (only show for first segment or per segment basis) -->
-                <div class="mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
-                    <span>
-                        <span class="font-semibold">Aircraft:</span>
-                        {{ segment?.aircraft?.model || "N/A" }}
-                    </span>
-                    <span>
-                        <span class="font-semibold">Class:</span>
-                        Economy
-                    </span>
-                    <span>
-                        <span class="font-semibold">Flight:</span>
-                        {{ segment?.flight_number }}
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
+                                                                <p
+                                                                    class="text-base font-medium mt-3 text-gray-700 print:text-lg">
+                                                                    {{ formatDate(segment?.arrival_at) }}
+                                                                </p>
 
-    <!-- Baggage Section - Half Width Rounded Table (unchanged) -->
-    <div class="border border-gray-200 rounded-lg p-4 print:border-gray-300 print:break-inside-avoid">
-        <div class="space-y-6">
-            <div class="flex justify-start items-center divide-x divide-gray-300 print:divide-gray-400">
-                <div v-for="(flightSegment, sIndex) in flight?.segments" :key="sIndex" class="mb-4 p-4">
-                    <div class="text-xs font-medium text-gray-700 mb-2 print:text-gray-800">
-                        {{ flightSegment.from.iata }} → {{ flightSegment.to.iata }}
-                    </div>
-                    <div class="print:w-full">
-                        <table class="w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
-                            <thead>
-                                <tr class="border-b border-gray-300 print:border-gray-400 print:bg-white">
-                                    <th class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-white">
-                                        Pax Type
-                                    </th>
-                                    <th class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                        Check-In Baggage
-                                    </th>
-                                    <th class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                        Cabin Baggage
-                                    </th>
-                                </tr>
-                            </thead>
-                            <pre class="hidden">{{ flight.fares }}</pre>
-                            <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                                <template v-for="(fare, fIndex) in flight?.fares" :key="fIndex">
-                                    <template v-if="parseFlightData(bookingDetails?.[0]?.fare_reference)?.includes(fare?.ref_id)">
-                                        <tr v-for="(travelerType, tIndex) in [...new Set(fare.baggage_policies.map(bp => bp.traveler_type))]"
-                                            :key="tIndex" class="hover:bg-gray-50 print:bg-transparent">
-                                            <td class="py-2 px-3 uppercase font-medium print:text-gray-800">
-                                                {{ travelerType }}
-                                            </td>
-                                            <td class="py-2 px-3 uppercase print:text-gray-800">
-                                                {{fare.baggage_policies.find(bp => bp.traveler_type === travelerType && bp.type === 'checked')?.description || 'N/A'}}
-                                            </td>
-                                            <td class="py-2 px-3 uppercase print:text-gray-800">
-                                                {{(fare.baggage_policies || []).find(bp => bp.traveler_type === travelerType && (bp.type === 'carry' || bp.type === 'carry-on'))?.description || 'N/A' }}
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                                                                <p
+                                                                    class="text-xl font-bold text-primary print:text-2xl print:text-black">
+                                                                    {{
+                                                                        moment.parseZone(segment?.arrival_at).format("HH:mm")
+                                                                    }}
+                                                                </p>
+
+                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
+                                                                    Terminal: {{ segment?.to_terminal?.Gate ?? "N/A" }}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Aircraft Info (only show for first segment or per segment basis) -->
+                                                    <div
+                                                        class="mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
+                                                        <span>
+                                                            <span class="font-semibold">Aircraft:</span>
+                                                            {{ segment?.aircraft?.model || "N/A" }}
+                                                        </span>
+                                                        <span>
+                                                            <span class="font-semibold">Class:</span>
+                                                            Economy
+                                                        </span>
+                                                        <span>
+                                                            <span class="font-semibold">Flight:</span>
+                                                            {{ segment?.flight_number }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Baggage Section - Half Width Rounded Table (unchanged) -->
+                                        <div
+                                            class="border border-gray-200 rounded-lg p-4 print:border-gray-300 print:break-inside-avoid">
+                                            <div class="space-y-6">
+                                                <div
+                                                    class="flex justify-start items-center divide-x divide-gray-300 print:divide-gray-400">
+                                                    <div v-for="(flightSegment, sIndex) in flight?.segments"
+                                                        :key="sIndex" class="mb-4 p-4">
+                                                        <div
+                                                            class="text-xs font-medium text-gray-700 mb-2 print:text-gray-800">
+                                                            {{ flightSegment.from.iata }} → {{ flightSegment.to.iata }}
+                                                        </div>
+                                                        <div class="print:w-full">
+                                                            <table
+                                                                class="w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
+                                                                <thead>
+                                                                    <tr
+                                                                        class="border-b border-gray-300 print:border-gray-400 print:bg-white">
+                                                                        <th
+                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-white">
+                                                                            Pax Type
+                                                                        </th>
+                                                                        <th
+                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
+                                                                            Check-In Baggage
+                                                                        </th>
+                                                                        <th
+                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
+                                                                            Cabin Baggage
+                                                                        </th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <pre class="hidden">{{ flight.fares }}</pre>
+                                                                <tbody
+                                                                    class="divide-y divide-gray-200 print:divide-gray-400">
+                                                                    <template v-for="(fare, fIndex) in flight?.fares"
+                                                                        :key="fIndex">
+                                                                        <template
+                                                                            v-if="parseFlightData(bookingDetails?.[0]?.fare_reference)?.includes(fare?.ref_id)">
+                                                                            <tr v-for="(travelerType, tIndex) in [...new Set(fare.baggage_policies.map(bp => bp.traveler_type))]"
+                                                                                :key="tIndex"
+                                                                                class="hover:bg-gray-50 print:bg-transparent">
+                                                                                <td
+                                                                                    class="py-2 px-3 uppercase font-medium print:text-gray-800">
+                                                                                    {{ travelerType }}
+                                                                                </td>
+                                                                                <td
+                                                                                    class="py-2 px-3 uppercase print:text-gray-800">
+                                                                                    {{fare.baggage_policies.find(bp =>
+                                                                                        bp.traveler_type === travelerType &&
+                                                                                        bp.type === 'checked')?.description
+                                                                                        || 'N/A'}}
+                                                                                </td>
+                                                                                <td
+                                                                                    class="py-2 px-3 uppercase print:text-gray-800">
+                                                                                    {{(fare.baggage_policies ||
+                                                                                        []).find(bp => bp.traveler_type ===
+                                                                                            travelerType && (bp.type === 'carry'
+                                                                                                || bp.type ===
+                                                                                                'carry-on'))?.description || 'N/A'
+                                                                                    }}
+                                                                                </td>
+                                                                            </tr>
+                                                                        </template>
+                                                                    </template>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1388,9 +1464,11 @@ onMounted(() => {
                                 </h2>
 
                                 <div class="overflow-x-auto">
-                                    <table class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
+                                    <table
+                                        class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
                                         <thead>
-                                            <tr class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
+                                            <tr
+                                                class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
                                                 <th
                                                     class="px-4 py-2.5 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
                                                     Traveller Name
@@ -1414,9 +1492,10 @@ onMounted(() => {
                                                 class="even:bg-gray-50 hover:bg-gray-100/50 transition-colors print:bg-transparent">
                                                 <td class="px-4 py-2.5 uppercase print:text-gray-800">
                                                     {{ traveller.title }} {{ traveller.first_name }} {{
-                                                    traveller.last_name }}
-                                                    <span class="text-gray-500 text-xs ml-1 print:text-gray-600">({{ traveller.type
-                                                        }})</span>
+                                                        traveller.last_name }}
+                                                    <span class="text-gray-500 text-xs ml-1 print:text-gray-600">({{
+                                                        traveller.type
+                                                    }})</span>
                                                 </td>
                                                 <td class="px-4 py-2.5 uppercase print:text-gray-800">{{
                                                     traveller?.gender?.toUpperCase() ||
@@ -1426,87 +1505,128 @@ onMounted(() => {
                                                 <td class="px-4 py-2.5 font-mono print:text-gray-800">
                                                     {{ Array.isArray(pnrDetails?.flightTickets) &&
                                                         pnrDetails.flightTickets[index] ?
-                                                    pnrDetails.flightTickets[index].number : "N/A" }}
+                                                        pnrDetails.flightTickets[index].number : "N/A" }}
                                                 </td>
                                             </tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-<!-- Special Service Requests (SSR) Section -->
-<div class="p-2 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid" v-if="hasSSR()">
-    <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
-        <span class="h-5 w-5 mr-2 text-primary print:text-gray-700"><BellIcon/></span>
-        SPECIAL SERVICES
-    </h2>
+                            <!-- Special Service Requests (SSR) Section -->
+                            <div class="p-2 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
+                                v-if="hasSSR()">
+                                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
+                                    <span class="h-5 w-5 mr-2 text-primary print:text-gray-700">
+                                        <BellIcon />
+                                    </span>
+                                    SPECIAL SERVICES
+                                </h2>
 
-    <div class="space-y-4">
-        <!-- Seat Requests -->
-        <div v-if="getSeatRequests().length > 0" class=" border-gray-200 rounded p-4 print:border-gray-300">
-            <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Seat Selections</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
-                    <thead>
-                        <tr class="border-b border-gray-300 print:border-gray-400">
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Passenger</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Flight</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Seat</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Status</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Cost</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                        <tr v-for="(seat, index) in getSeatRequests()" :key="'seat-'+index" 
-                            class="even:bg-gray-50 print:bg-transparent">
-                            <td class="px-4 py-2 print:text-gray-800">{{ seat.passengerName }}</td>
-                            <td class="px-4 py-2 print:text-gray-800">Flight {{ seat['@attributes']?.FlightRefNumberRPHList }}</td>
-                            <td class="px-4 py-2 font-mono print:text-gray-800">{{ seat['@attributes']?.RowNumber }}{{ seat['@attributes']?.SeatNumber }}</td>
-                            <td class="px-4 py-2">
-                                <span :class="getStatusClass(seat['@attributes']?.Status)">
-                                    {{ seat['@attributes']?.Status }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-2 print:text-gray-800">{{ formatAmount(seat?.TPA_Extensions?.SeatCost || 0) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                                <div class="space-y-4">
+                                    <!-- Seat Requests -->
+                                    <div v-if="getSeatRequests().length > 0"
+                                        class=" border-gray-200 rounded p-4 print:border-gray-300">
+                                        <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Seat
+                                            Selections</h3>
+                                        <div class="overflow-x-auto">
+                                            <table
+                                                class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
+                                                <thead>
+                                                    <tr class="border-b border-gray-300 print:border-gray-400">
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Passenger</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Flight</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Seat</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Status</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Cost</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-gray-200 print:divide-gray-400">
+                                                    <tr v-for="(seat, index) in getSeatRequests()"
+                                                        :key="'seat-' + index"
+                                                        class="even:bg-gray-50 print:bg-transparent">
+                                                        <td class="px-4 py-2 print:text-gray-800">{{ seat.passengerName
+                                                        }}</td>
+                                                        <td class="px-4 py-2 print:text-gray-800">Flight {{
+                                                            seat['@attributes']?.FlightRefNumberRPHList }}</td>
+                                                        <td class="px-4 py-2 font-mono print:text-gray-800">{{
+                                                            seat['@attributes']?.RowNumber }}{{
+                                                                seat['@attributes']?.SeatNumber }}</td>
+                                                        <td class="px-4 py-2">
+                                                            <span :class="getStatusClass(seat['@attributes']?.Status)">
+                                                                {{ seat['@attributes']?.Status }}
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-4 py-2 print:text-gray-800">{{
+                                                            formatAmount(seat?.TPA_Extensions?.SeatCost ||
+                                                                0) }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
 
-        <!-- Extra Baggage SSR -->
-        <div v-if="getBaggageSSR().length > 0" class=" border-gray-200 rounded-lg p-4 print:border-gray-300">
-            <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Extra Baggage</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
-                    <thead>
-                        <tr class="border-b border-gray-300 print:border-gray-400">
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Passenger</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Flight</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Description</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Status</th>
-                            <th class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">Charge</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                        <tr v-for="(ssr, index) in getBaggageSSR()" :key="'ssr-'+index"
-                            class="even:bg-gray-50 print:bg-transparent">
-                            <td class="px-4 py-2 print:text-gray-800">{{ ssr.passengerName }}</td>
-                            <td class="px-4 py-2 print:text-gray-800">Flight {{ ssr['@attributes']?.FlightRefNumberRPHList }}</td>
-                            <td class="px-4 py-2 print:text-gray-800">{{ ssr['@attributes']?.ItemTitle || 'Extra Baggage' }}</td>
-                            <td class="px-4 py-2">
-                                <span :class="getStatusClass(ssr['@attributes']?.Status)">
-                                    {{ ssr['@attributes']?.Status }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-2 print:text-gray-800">{{ formatAmount(ssr['@attributes']?.ChargeAmount) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Special Service Requests - Flight Wise -->
+                                    <!-- Extra Baggage SSR -->
+                                    <div v-if="getBaggageSSR().length > 0"
+                                        class=" border-gray-200 rounded-lg p-4 print:border-gray-300">
+                                        <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Extra
+                                            Baggage</h3>
+                                        <div class="overflow-x-auto">
+                                            <table
+                                                class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
+                                                <thead>
+                                                    <tr class="border-b border-gray-300 print:border-gray-400">
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Passenger</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Flight</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Description</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Status</th>
+                                                        <th
+                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
+                                                            Charge</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-gray-200 print:divide-gray-400">
+                                                    <tr v-for="(ssr, index) in getBaggageSSR()" :key="'ssr-' + index"
+                                                        class="even:bg-gray-50 print:bg-transparent">
+                                                        <td class="px-4 py-2 print:text-gray-800">{{ ssr.passengerName
+                                                        }}</td>
+                                                        <td class="px-4 py-2 print:text-gray-800">Flight {{
+                                                            ssr['@attributes']?.FlightRefNumberRPHList }}</td>
+                                                        <td class="px-4 py-2 print:text-gray-800">{{
+                                                            ssr['@attributes']?.ItemTitle || "Extra Baggage" }}</td>
+                                                        <td class="px-4 py-2">
+                                                            <span :class="getStatusClass(ssr['@attributes']?.Status)">
+                                                                {{ ssr['@attributes']?.Status }}
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-4 py-2 print:text-gray-800">{{
+                                                            formatAmount(ssr['@attributes']?.ChargeAmount)
+                                                        }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Special Service Requests - Flight Wise -->
 
                             <!-- Fare Breakdown - Using existing fare logic -->
                             <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
@@ -1563,50 +1683,43 @@ onMounted(() => {
                                                 </tr>
                                             </tbody>
                                             <tbody v-else class="divide-y divide-gray-200 print:divide-gray-400">
-                                                <template
-                                                    v-for="(flight, index) in parseFlightData(bookingDetails?.[0]?.flight_data)?.leg?.flights"
-                                                    :key="index">
-                                                    <tr v-for="(fare, fareIndex) in flight.fares.filter(f => {
-                                                        const fareRefs = Array.isArray(parseFlightData(bookingDetails[0]?.fare_reference))
-                                                            ? parseFlightData(bookingDetails[0]?.fare_reference)
-                                                            : [parseFlightData(bookingDetails[0]?.fare_reference)];
-                                                        return fareRefs.includes(f.ref_id);
-                                                    })" :key="fareIndex" class="hover:bg-gray-50 print:bg-transparent">
-                                                        <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                            {{ flight.segments?.[0]?.from?.iata }} → {{
-                                                                flight.segments?.[flight.segments.length - 1]?.to?.iata
-                                                            }}
-                                                        </td>
-                                                        <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                            {{ formatSelectedFareMoney(fare) }}
-                                                        </td>
-                                                        <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                            {{ formatAmount(calculateTaxes(fare)) }}
-                                                        </td>
-                                                        <td class="py-1.5 px-2 uppercase font-bold print:text-gray-900">
-                                                            {{ formatSelectedFareMoney(fare) }}
-                                                        </td>
-                                                    </tr>
-                                                </template>
+                                                <tr v-if="bookedFareLegs.length" class="hover:bg-gray-50 print:bg-transparent">
+                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
+                                                        {{ bookedFareRoute }}
+                                                    </td>
+                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
+                                                        {{ formatBookedFaresMoney() }}
+                                                    </td>
+                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
+                                                        {{ formatAmount(bookedFareLegs.reduce((sum, { fare }) => sum + calculateTaxes(fare), 0)) }}
+                                                    </td>
+                                                    <td class="py-1.5 px-2 uppercase font-bold print:text-gray-900">
+                                                        {{ formatBookedFaresMoney() }}
+                                                    </td>
+                                                </tr>
                                             </tbody>
                                             <tfoot class=" border-gray-400 bg-gray-50 print:bg-transparent">
-                    <tr>
-                        <td colspan="3" class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
-                            Add-ons
-                        </td>
-                        <td class="py-3 px-2 font-bold text-primary text-sm">
-                            {{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3" class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
-                            Total Amount
-                        </td>
-                        <td class="py-3 px-2 font-bold text-primary text-sm">
-                            {{ formatLockedBookingAmount() }}
-                        </td>
-                    </tr>
-                </tfoot>
+                                                <tr>
+                                                    <td colspan="3"
+                                                        class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
+                                                        Add-ons
+                                                    </td>
+                                                    <td class="py-3 px-2 font-bold text-primary text-sm">
+                                                        {{
+                                                            formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount)
+                                                        }}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td colspan="3"
+                                                        class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
+                                                        Total Amount
+                                                    </td>
+                                                    <td class="py-3 px-2 font-bold text-primary text-sm">
+                                                        {{ formatLockedBookingAmount() }}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                     </div>
                                 </div>
@@ -1614,9 +1727,11 @@ onMounted(() => {
 
                             <!-- Important Information - UPDATED CONTENT -->
                             <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
-                                <h2 class="text-lg font-bold text-gray-800 mb-4 print:text-gray-900">Important Information</h2>
+                                <h2 class="text-lg font-bold text-gray-800 mb-4 print:text-gray-900">Important
+                                    Information</h2>
 
-                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-5 print:bg-transparent print:border-gray-300">
+                                <div
+                                    class="bg-amber-50 border border-amber-200 rounded-lg p-5 print:bg-transparent print:border-gray-300">
                                     <ul class="space-y-3 text-sm text-gray-700 print:text-gray-800">
                                         <li class="flex items-start">
                                             <span
@@ -1664,7 +1779,8 @@ onMounted(() => {
                             </div>
 
                             <!-- Footer -->
-                            <div class="p-6 text-center bg-gray-50 border-t border-gray-200 print:bg-transparent print:border-gray-300">
+                            <div
+                                class="p-6 text-center bg-gray-50 border-t border-gray-200 print:bg-transparent print:border-gray-300">
                                 <p class="text-sm text-gray-700 mb-1 font-medium print:text-gray-800">
                                     Thank you for choosing {{ agentData?.agent_data?.company_name || 'Jetze Travels' }}
                                 </p>
@@ -1817,7 +1933,7 @@ onMounted(() => {
 
     /* When the print clone exists, remove the whole app from layout
        so only the ticket prints, starting at the top of page 1 */
-    body:has(> #print-container) > *:not(#print-container) {
+    body:has(> #print-container)>*:not(#print-container) {
         display: none !important;
     }
 
@@ -1832,32 +1948,95 @@ onMounted(() => {
     }
 
     /* Compact print layout so the ticket fits on one page */
-    #print-container .text-xs { font-size: 7pt !important; }
-    #print-container .text-sm { font-size: 8pt !important; }
-    #print-container .text-base { font-size: 9pt !important; }
-    #print-container .text-lg { font-size: 10.5pt !important; }
-    #print-container .text-xl { font-size: 11.5pt !important; }
-    #print-container .text-2xl { font-size: 13pt !important; }
+    #print-container .text-xs {
+        font-size: 7pt !important;
+    }
 
-    #print-container .p-6 { padding: 10px !important; }
-    #print-container .p-4 { padding: 8px !important; }
-    #print-container .p-3 { padding: 6px !important; }
-    #print-container .px-6 { padding-left: 10px !important; padding-right: 10px !important; }
-    #print-container .py-4 { padding-top: 6px !important; padding-bottom: 6px !important; }
-    #print-container .py-3 { padding-top: 5px !important; padding-bottom: 5px !important; }
-    #print-container .mb-4 { margin-bottom: 8px !important; }
-    #print-container .mb-6 { margin-bottom: 10px !important; }
-    #print-container .gap-4 { gap: 8px !important; }
-    #print-container .space-y-4 > * + * { margin-top: 6px !important; }
-    #print-container .space-y-3 > * + * { margin-top: 5px !important; }
+    #print-container .text-sm {
+        font-size: 8pt !important;
+    }
+
+    #print-container .text-base {
+        font-size: 9pt !important;
+    }
+
+    #print-container .text-lg {
+        font-size: 10.5pt !important;
+    }
+
+    #print-container .text-xl {
+        font-size: 11.5pt !important;
+    }
+
+    #print-container .text-2xl {
+        font-size: 13pt !important;
+    }
+
+    #print-container .p-6 {
+        padding: 10px !important;
+    }
+
+    #print-container .p-4 {
+        padding: 8px !important;
+    }
+
+    #print-container .p-3 {
+        padding: 6px !important;
+    }
+
+    #print-container .px-6 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
+    #print-container .py-4 {
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+    }
+
+    #print-container .py-3 {
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+    }
+
+    #print-container .mb-4 {
+        margin-bottom: 8px !important;
+    }
+
+    #print-container .mb-6 {
+        margin-bottom: 10px !important;
+    }
+
+    #print-container .gap-4 {
+        gap: 8px !important;
+    }
+
+    #print-container .space-y-4>*+* {
+        margin-top: 6px !important;
+    }
+
+    #print-container .space-y-3>*+* {
+        margin-top: 5px !important;
+    }
+
     #print-container th,
-    #print-container td { padding: 4px 8px !important; }
-    #print-container img { max-height: 2.75rem !important; }
+    #print-container td {
+        padding: 4px 8px !important;
+    }
+
+    #print-container img {
+        max-height: 2.75rem !important;
+    }
 
     /* Let large cards flow across pages (prevents blank gaps),
        but keep table rows intact */
-    #print-container .print\:break-inside-avoid { page-break-inside: auto !important; }
-    #print-container tr { page-break-inside: avoid !important; }
+    #print-container .print\:break-inside-avoid {
+        page-break-inside: auto !important;
+    }
+
+    #print-container tr {
+        page-break-inside: avoid !important;
+    }
 
     /* Hide navigation chrome and interactive elements */
     nav,
@@ -1906,7 +2085,7 @@ onMounted(() => {
     thead tr {
         background-color: white !important;
     }
-    
+
     th {
         background-color: white !important;
         font-weight: 600 !important;
@@ -1914,8 +2093,8 @@ onMounted(() => {
     }
 
     /* Table borders - lighter */
-    table, 
-    td, 
+    table,
+    td,
     th {
         border-color: #e5e7eb !important;
     }
@@ -1934,19 +2113,19 @@ onMounted(() => {
     .text-xs {
         font-size: 0.75rem !important;
     }
-    
+
     .text-sm {
         font-size: 0.875rem !important;
     }
-    
+
     .text-base {
         font-size: 1rem !important;
     }
-    
+
     .text-lg {
         font-size: 1.125rem !important;
     }
-    
+
     .text-xl {
         font-size: 1.25rem !important;
     }
@@ -1955,11 +2134,11 @@ onMounted(() => {
     .font-bold {
         font-weight: 600 !important;
     }
-    
+
     .font-semibold {
         font-weight: 500 !important;
     }
-    
+
     .font-medium {
         font-weight: 400 !important;
     }

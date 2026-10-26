@@ -80,7 +80,7 @@ import {
 } from "@/lib/utils";
 import { Check, ChevronsUpDown } from "lucide-vue-next";
 import { calculateLayover, formatDuration } from "@/lib/utils";
-import { calculateFinalPrice } from "@/lib/utils.js";
+import { calculateFinalPrice, sumMoney } from "@/lib/utils.js";
 import apiService from "@/config/axios";
 
 import { useRouter } from "vue-router";
@@ -142,6 +142,41 @@ const quoteTaxBreakdownAvailable = computed(() => {
     const breakdown = lockedPriceQuote.value?.fare_breakdown;
     return Array.isArray(breakdown?.trips) && breakdown.trips.length > 0
         && breakdown.trips.every(isTripTaxBreakdownAvailable);
+});
+const PASSENGER_MONEY_FIELDS = ['base_price', 'taxes', 'fees', 'service_charges', 'surchage', 'discount', 'total_price'];
+// AT combined fares price the whole journey on the outbound fare (the return
+// fare is usually 0), so the breakdown shows every leg as one combined fare.
+const combinedFareBreakdownTrip = computed(() => {
+    const trips = lockedPriceQuote.value?.fare_breakdown?.trips ?? [];
+    if (!trips.length) return null;
+
+    const passengerFares = new Map();
+    for (const trip of trips) {
+        for (const passengerFare of trip?.fare?.passenger_fares ?? []) {
+            const existing = passengerFares.get(passengerFare.traveler_type);
+            if (!existing) {
+                passengerFares.set(passengerFare.traveler_type, {
+                    ...passengerFare,
+                    display_money: { ...passengerFare.display_money },
+                });
+                continue;
+            }
+            for (const field of PASSENGER_MONEY_FIELDS) {
+                existing.display_money[field] = sumMoney([
+                    existing.display_money?.[field],
+                    passengerFare.display_money?.[field],
+                ]);
+            }
+        }
+    }
+
+    return {
+        label: trips.length === 1 ? 'Outbound' : (trips.length === 2 ? 'Outbound + Return' : 'All Flights'),
+        name: [...new Set(trips.map((trip) => trip.fare?.name_class || 'Selected Fare'))].join(' + '),
+        display_money: sumMoney(trips.map((trip) => trip.fare?.display_money)),
+        passenger_fares: [...passengerFares.values()],
+        tax_breakdown_available: trips.every(isTripTaxBreakdownAvailable),
+    };
 });
 const ancillaries = computed(() => store.getters["flight/ancillaries"]);
 const qouteError = computed(() => store.getters["flight/qouteError"]);
@@ -1457,6 +1492,33 @@ function formatSelectedFareTaxes(fare) {
     }
 
     return formatAmount(calculateTaxes(fare));
+}
+
+/** Selected fares across every leg, shown as one combined fare. */
+const checkoutSelectedFares = computed(() =>
+    (flight.value?.leg?.flights ?? []).flatMap((leg) =>
+        (leg?.fares ?? []).filter((fare) => selectedFares.value?.includes(fare.ref_id)),
+    ),
+);
+
+/** Sum the outbound and return fares; AT combined return fares are usually 0. */
+function formatSelectedFaresMoney(fares) {
+    if (isHakimiCheckout.value) {
+        return formatSelectedFareMoney(fares[0]);
+    }
+
+    return formatConvertedMoney(
+        sumMoney(fares.map((fare) => fare?.selling_display_money ?? fare?.display_money)),
+        fares.reduce((sum, fare) => sum + calculateTotalFare(fare), 0),
+    );
+}
+
+function formatSelectedFaresTaxes(fares) {
+    if (isHakimiCheckout.value) {
+        return "Included in total";
+    }
+
+    return formatAmount(fares.reduce((sum, fare) => sum + calculateTaxes(fare), 0));
 }
 
 /** Return the provider amount used only for the later AT booking request. */
@@ -3457,10 +3519,10 @@ watch(flight, () => {
                                                 <DialogDescription class="text-sm text-gray-600">Fare details saved with this quote.</DialogDescription>
                                             </DialogHeader>
                                             <div class="divide-y divide-gray-200">
-                                                <div v-for="(trip, tripIndex) in lockedPriceQuote.fare_breakdown.trips" :key="trip.flight_index" class="py-4">
+                                                <div v-for="trip in (combinedFareBreakdownTrip ? [combinedFareBreakdownTrip] : [])" :key="trip.label" class="py-4">
                                                     <div class="mb-3 flex justify-between gap-3 text-sm font-semibold text-gray-900">
-                                                        <span>{{ tripIndex === 0 ? 'Outbound' : 'Return' }}: {{ trip.fare?.name_class || 'Selected Fare' }}</span>
-                                                        <span class="text-primary">{{ formatConvertedMoney(trip.fare?.display_money) }}</span>
+                                                        <span>{{ trip.label }}: {{ trip.name }}</span>
+                                                        <span class="text-primary">{{ formatConvertedMoney(trip.display_money) }}</span>
                                                     </div>
                                                     <div class="overflow-x-auto">
                                                         <table class="w-full min-w-[680px] text-xs">
@@ -3468,7 +3530,7 @@ watch(flight, () => {
                                                                 <th class="px-2 py-2">Passenger</th><th class="px-2 py-2">Base Fare</th><th class="px-2 py-2">Taxes</th><th class="px-2 py-2">Fees</th><th class="px-2 py-2">Service Charges</th><th class="px-2 py-2">Surcharge</th><th class="px-2 py-2">Discount</th><th class="px-2 py-2 text-right">Total</th>
                                                             </tr></thead>
                                                             <tbody class="divide-y divide-gray-100 text-gray-800">
-                                                                <tr v-for="passengerFare in trip.fare?.passenger_fares || []" :key="passengerFare.traveler_type">
+                                                                <tr v-for="passengerFare in trip.passenger_fares" :key="passengerFare.traveler_type">
                                                                     <td class="px-2 py-2 font-medium">{{ passengerFare.traveler_type }} x{{ passengerFare.total_passenger }}</td>
                                                                     <td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.base_price) }}</td><td class="px-2 py-2">{{ isTripTaxBreakdownAvailable(trip) ? formatConvertedMoney(passengerFare.display_money?.taxes) : 'Unavailable' }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.fees) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.service_charges) }}</td><td class="px-2 py-2">{{ formatConvertedMoney(passengerFare.display_money?.surchage) }}</td><td class="px-2 py-2">-{{ formatConvertedMoney(passengerFare.display_money?.discount) }}</td><td class="px-2 py-2 text-right font-semibold text-primary">{{ formatConvertedMoney(passengerFare.display_money?.total_price) }}</td>
                                                                 </tr>
@@ -3601,35 +3663,27 @@ watch(flight, () => {
                                     </div>
                                 </div>
                                 <div v-else>
-                                    <div v-for="(flight, flightIndex) in flight?.leg?.flights" :key="flightIndex">
-                                            <div v-for="(fare, fareIndex) in flight?.fares" :key="fareIndex">
-                                                <div v-if="selectedFares?.includes(fare.ref_id)"
-                                                    class="bg-gray-50 p-3 space-y-2">
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-xs text-gray-500">Base Fare</span>
-                                                         <span class="text-xs font-medium">
-                                                            {{ formatSelectedFareMoney(fare) }}
-                                                        </span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-xs text-gray-500">Taxes & Fees</span>
-                                                        <span class="text-xs font-medium">{{ formatSelectedFareTaxes(fare) }}</span>
-                                                    </div>
+                                    <div v-if="checkoutSelectedFares.length" class="bg-gray-50 p-3 space-y-2">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xs text-gray-500">Base Fare</span>
+                                            <span class="text-xs font-medium">
+                                                {{ formatSelectedFaresMoney(checkoutSelectedFares) }}
+                                            </span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xs text-gray-500">Taxes & Fees</span>
+                                            <span class="text-xs font-medium">{{ formatSelectedFaresTaxes(checkoutSelectedFares) }}</span>
+                                        </div>
 
-                                                    <div class="border-t border-gray-200 pt-2">
-                                                        <div class="flex justify-between items-center">
-                                                            <span
-                                                                class="text-sm font-medium text-gray-900">Subtotal</span>
-                                                            <span class="text-sm font-semibold text-primary">
-                                                                {{ formatSelectedFareMoney(fare) }}
-                                                            </span>
-
-
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        <div class="border-t border-gray-200 pt-2">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-sm font-medium text-gray-900">Subtotal</span>
+                                                <span class="text-sm font-semibold text-primary">
+                                                    {{ formatSelectedFaresMoney(checkoutSelectedFares) }}
+                                                </span>
                                             </div>
                                         </div>
+                                    </div>
                                 </div>
                                 <div class="flex justify-between mt-3 items-center bg-gray-50 p-3 rounded">
                                     <span class="text-base sm:text-sm font-semibold text-gray-900">Add-ons Amount</span>

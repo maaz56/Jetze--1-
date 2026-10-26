@@ -64,6 +64,22 @@ class AtFreeSsrBaggageTransformer
                             'source' => 'free_ssr',
                         ];
 
+                        // AT lists "<checked>, <cabin>" (e.g. "25 Kg, 7 Kg"),
+                        // and the cabin allowance varies by fare (5 Kg, 7 Kg...).
+                        $cabinDescription = trim(explode(',', $description, 2)[1] ?? '');
+                        [$cabinPieces, $cabinWeight] = $this->allowanceFromText($cabinDescription);
+                        if ($cabinWeight !== null) {
+                            $policies[] = [
+                                'type' => 'carry',
+                                'pieces' => $cabinPieces ?: 1,
+                                'weight' => $cabinWeight,
+                                'description' => $this->formatWeight($cabinWeight),
+                                'detail_description' => null,
+                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
+                                'segment_ref_id' => $segmentRefId,
+                                'source' => 'free_ssr',
+                            ];
+                        }
                     }
                 }
             }

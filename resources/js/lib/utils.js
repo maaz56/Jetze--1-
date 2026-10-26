@@ -109,6 +109,20 @@ export function formatAmountWithCurrency(amount, currencyCode) {
     return formatter.format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
 
+/** Add up `{ amount, currency }` values; null when they do not share one currency. */
+export function sumMoney(values) {
+    const list = (values ?? []).filter((money) => money?.currency);
+    const currency = list[0]?.currency;
+
+    if (!currency || list.some((money) => money.currency !== currency || !Number.isFinite(Number(money.amount)))) {
+        return null;
+    }
+
+    const amount = list.reduce((sum, money) => sum + Number(money.amount), 0);
+
+    return { ...list[0], amount: Math.round(amount * 100) / 100 };
+}
+
 export const formatDate = (date) =>
     new Date(date).toLocaleDateString("en-US", {
         weekday: "short",

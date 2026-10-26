@@ -2298,8 +2298,17 @@ const fareBaggageDialogPolicies = computed(() => {
     // remaining leg. Keep every returned policy so round-trip return baggage
     // is shown alongside the outbound allowance.
     const policies = fareBaggageDialog.value.policies ?? [];
+    const isCarry = (policy) => String(policy?.type).toLowerCase() === "carry";
+    // AT's free SSR returns the fare's real cabin allowance (e.g. 5 Kg).
+    const ssrCabinPolicies = policies.filter(
+        (policy) => isCarry(policy) && policy?.source === "free_ssr",
+    );
+    const ssrCabinSegments = new Set(
+        ssrCabinPolicies.map((policy) => policy?.segment_ref_id),
+    );
     const fixedCabinPolicies = (selectedFlight.value?.leg?.flights ?? [])
         .flatMap((flight) => flight?.segments ?? [])
+        .filter((segment) => !ssrCabinSegments.has(segment?.ref_id))
         .map((segment) => ({
             type: "carry",
             pieces: 1,
@@ -2310,10 +2319,11 @@ const fareBaggageDialogPolicies = computed(() => {
             source: "fixed_cabin_allowance",
         }));
 
-    // Checked baggage varies by fare and remains SSR-driven. Cabin baggage is
-    // always presented as the fixed 7 Kg allowance.
+    // Checked baggage remains SSR-driven. Cabin baggage uses the SSR allowance
+    // when AT returns one, otherwise the fixed 7 Kg allowance.
     return [
-        ...policies.filter((policy) => String(policy?.type).toLowerCase() !== "carry"),
+        ...policies.filter((policy) => !isCarry(policy)),
+        ...ssrCabinPolicies,
         ...fixedCabinPolicies,
     ];
 });
@@ -3111,6 +3121,8 @@ watch(
     { immediate: true, deep: true },
 );
 const isSearchCompact = ref(false);
+const RECENT_SEARCHES_KEY = "recent_search_history";
+const MAX_RECENT_SEARCHES = 5;
 const modelValue = ref({
     flightType: "one-way",
     countdownFor: 0,
@@ -3140,6 +3152,42 @@ watch(
         }
     },
 );
+const createRecentSearchSignature = (searchParams) =>
+    JSON.stringify({
+        flightType: searchParams.flightType,
+        origin: searchParams.origin ?? null,
+        destination: searchParams.destination ?? null,
+        departure_date: searchParams.departure_date ?? null,
+        return_date: searchParams.return_date ?? null,
+        trips: searchParams.trips ?? null,
+        cabin_class: searchParams.cabin_class,
+        adults: searchParams.adults,
+        children: searchParams.children,
+        infants: searchParams.infants,
+    });
+
+const saveRecentSearch = (searchParams) => {
+    try {
+        const entry = {
+            ...searchParams,
+            savedAt: Date.now(),
+            signature: createRecentSearchSignature(searchParams),
+        };
+        const stored = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY));
+        const previousSearches = Array.isArray(stored) ? stored : [];
+        const deduped = previousSearches.filter(
+            (item) => item?.signature !== entry.signature,
+        );
+
+        localStorage.setItem(
+            RECENT_SEARCHES_KEY,
+            JSON.stringify([entry, ...deduped].slice(0, MAX_RECENT_SEARCHES)),
+        );
+    } catch {
+        // Recent-search history is optional; a storage error should not block a flight search.
+    }
+};
+
 const setupFlightsParams = () => {
     flightType.value = modelValue.value.flightType;
     adults.value = modelValue.value.adult;
@@ -3150,6 +3198,25 @@ const setupFlightsParams = () => {
     destination.value = modelValue.value.destination;
     dateRange.value = modelValue.value.dateRange;
     multiCityTrips.value = modelValue.value.multiCityTrips;
+    const searchParams = {
+        flightType: flightType.value,
+        cabin_class: classType.value,
+        adults: adults.value,
+        children: children.value,
+        infants: infants.value,
+        ...(flightType.value === "multi-city"
+            ? { trips: multiCityTrips.value }
+            : {
+                  origin: origin.value,
+                  destination: destination.value,
+                  departure_date: dateRange.value.start,
+                  return_date:
+                      flightType.value === "return" || flightType.value === "two-way"
+                          ? dateRange.value.end
+                          : null,
+              }),
+    };
+    saveRecentSearch(searchParams);
     searchFlights();
     // You can add additional logic here to handle the search action
 };

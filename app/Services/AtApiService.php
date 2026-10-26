@@ -1077,13 +1077,6 @@ private function extractTrips($tripsData): array
                 Log::warning('Price request did not return TUI. Response: ');
                 return null;
             }
-            if (! $skipTravelerChecklist) {
-                // GetTravelCheckList requires the Pricing TUI returned by
-                // SmartPricer. The TUI returned here by GetSPricer is for
-                // post-pricing SSR/seat requests and is rejected by the
-                // checklist endpoint as an "invalid Pricing TUI".
-                $this->travelerCheckList($request);
-            }
             return $responseBody;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -1096,12 +1089,21 @@ private function extractTrips($tripsData): array
             return null;
         }
     }
-    public function travelerCheckList($tui)
+    public function travelerCheckList($tui, ?array $accessToken = null): ?array
     {
+        $rawTui = is_array($tui) ? ($tui['TUI'] ?? '') : $tui;
+        $pricingTui = trim((string) $rawTui);
+        $accessToken ??= $this->getAccessToken();
+        $encryptedClientId = $accessToken['ClientID'] ?? null;
 
+        if ($pricingTui === '' || !is_string($encryptedClientId) || $encryptedClientId === '') {
+            Log::warning('Skipping Traveler Checklist because its pricing TUI or encrypted ClientID is missing.', [
+                'has_pricing_tui' => $pricingTui !== '',
+                'has_encrypted_client_id' => (bool) $encryptedClientId,
+            ]);
 
-        // Log::info('Getting Traveler Checklist with TUI: ', $tui);
-        $accessToken = $this->getAccessToken();
+            return null;
+        }
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -1109,8 +1111,9 @@ private function extractTrips($tripsData): array
         ];
         Log::info('Getting Traveler Checklist Payload: ' . json_encode(
             [
-                'ClientID' => $this->clientId,
-                'TUI' => $tui['TUI'],
+                // Use the encrypted ClientID returned by /Utils/Signature.
+                'ClientID' => $encryptedClientId,
+                'TUI' => $pricingTui,
             ],
             JSON_PRETTY_PRINT
         ));
@@ -1118,12 +1121,14 @@ private function extractTrips($tripsData): array
         $response = $this->client->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
             'headers' => $headers,
             'body' => json_encode([
-                'ClientID' => $this->clientId,
-                'TUI' => $tui['TUI'],
+                'ClientID' => $encryptedClientId,
+                'TUI' => $pricingTui,
             ]),
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
         Log::info('Traveler Checklist response: ', $responseBody);
+
+        return is_array($responseBody) ? $responseBody : null;
     }
 
     public function atBooking($params)
@@ -1291,6 +1296,16 @@ private function extractTrips($tripsData): array
     {
         // Log::info('Fetching ancillaries with data: ', $request);
         $ssrData = ($request['includeSSR'] ?? true) ? $this->getSSR($request) : [];
+
+        // AT requires the traveler checklist after pricing and the SSR
+        // response, while the ancillary session is still active. Use the full
+        // GetSPricer TUI carried by the trusted ancillary request.
+        if (($request['includeSSR'] ?? true) && is_array($ssrData)) {
+            $this->travelerCheckList(
+                $this->resolveAncillaryTui((array) $request),
+            );
+        }
+
         $seatLayout = ($request['includeSeatLayout'] ?? true) ? $this->getSeatLayout($request) : [];
         $data = [
             'ssrData' => $ssrData,
@@ -1726,7 +1741,8 @@ private function extractTrips($tripsData): array
         $startPay = $this->startDepositPayment($reservation, $netAmount, 'HB');
         $held = is_array($startPay)
             && ($startPay['status'] ?? true) !== false
-            && in_array((string) ($startPay['Code'] ?? '200'), ['200', '2000'], true);
+            // 6033 means AT has accepted the hold and is processing the booking.
+            && in_array((string) ($startPay['Code'] ?? '200'), ['200', '2000', '6033'], true);
 
         if (! $held) {
             Log::warning('AT hold StartPay (HB) failed.', [

@@ -54,7 +54,7 @@ class AtFlightTransformer
         $flightData = is_string($flightData) ? json_decode($flightData, true) : $flightData;
         $processed = $this->atFlightProcessor($flightData, $params);
         $results = [];
-        $seenStreamKeys = [];
+        $resultIndexByStreamKey = [];
         $fareType = $this->resolveFareType($flightData, $params);
         $passengerCounts = $this->passengerCounts($params);
 
@@ -441,14 +441,21 @@ class AtFlightTransformer
             $sector = implode('-', $sectorParts);
 
             $streamKey = $this->streamKeyForItem($item);
-            if (isset($seenStreamKeys[$streamKey])) {
-                Log::info('Skipped duplicate AT itinerary after mapping.', [
+            if (isset($resultIndexByStreamKey[$streamKey])) {
+                // The same itinerary can be sold by several AT providers (e.g. 6E and ACH);
+                // keep one card and add this provider's fares to it instead of dropping them.
+                $this->mergeDuplicateItineraryFares(
+                    $results[$resultIndexByStreamKey[$streamKey]],
+                    $transformedLegs,
+                    $item['type'],
+                );
+                Log::info('Merged duplicate AT itinerary fares after mapping.', [
                     'stream_key' => $streamKey,
                 ]);
                 continue;
             }
 
-            $seenStreamKeys[$streamKey] = true;
+            $resultIndexByStreamKey[$streamKey] = count($results);
 
             $fareCombinations = $item['type'] === 'return'
                 ? $this->buildReturnFareCombinations($transformedLegs)
@@ -476,6 +483,46 @@ class AtFlightTransformer
         }
         
         return $results;
+    }
+
+    /**
+     * Append a duplicate itinerary's fares to the already mapped result. Each fare keeps
+     * its own provider and index; segment references are pointed at the kept segments.
+     */
+    private function mergeDuplicateItineraryFares(array &$result, array $transformedLegs, string $type): void
+    {
+        foreach ($transformedLegs as $legIndex => $transformedLeg) {
+            if (!isset($result['leg']['flights'][$legIndex])) {
+                continue;
+            }
+
+            $existingSegments = $result['leg']['flights'][$legIndex]['segments'] ?? [];
+            $segmentRefMap = [];
+            foreach ($transformedLeg['segments'] as $segmentIndex => $segment) {
+                if (isset($existingSegments[$segmentIndex]['ref_id'])) {
+                    $segmentRefMap[$segment['ref_id']] = $existingSegments[$segmentIndex]['ref_id'];
+                }
+            }
+
+            $remapSegmentRef = static fn (array $entry): array => array_merge($entry, [
+                'segment_ref_id' => $segmentRefMap[$entry['segment_ref_id'] ?? ''] ?? ($entry['segment_ref_id'] ?? null),
+            ]);
+
+            foreach ($transformedLeg['fares'] as $fare) {
+                $fare['booking_codes'] = array_map($remapSegmentRef, $fare['booking_codes'] ?? []);
+                $fare['baggage_policies'] = array_map($remapSegmentRef, $fare['baggage_policies'] ?? []);
+                $result['leg']['flights'][$legIndex]['fares'][] = $fare;
+            }
+        }
+
+        if ($type === 'return') {
+            $fareCombinations = $this->buildReturnFareCombinations($result['leg']['flights']);
+            if ($fareCombinations !== []) {
+                $result['leg']['fare_combinations'] = $fareCombinations;
+            } else {
+                unset($result['leg']['fare_combinations']);
+            }
+        }
     }
 
     /**
