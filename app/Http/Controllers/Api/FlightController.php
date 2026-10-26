@@ -1432,6 +1432,9 @@ class FlightController extends Controller
 
         return [
             'ref_id' => $tui,
+            // Paid checkout SSR must use the TUI returned by GetSPricer.
+            'priced_tui' => $tui,
+            'priced_tui_list' => data_get($quote->provider_pricing_data, 'tui_list'),
             'fareType' => data_get($quote->provider_pricing_data, 'fare_type')
                 ?? data_get($quote->flight_data, 'provider.fare_type'),
             'legs' => $legs,

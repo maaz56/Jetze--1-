@@ -176,8 +176,8 @@ class BookingController extends Controller
         // Extract itinerary references
         $bookingsWithItineraryReferences = $bookings->map(function ($booking) {
             $pnrResponse = json_decode($booking->pnr_response, true);
-            $itineraryReference = data_get($pnrResponse, 'CreatePassengerNameRecordRS.ItineraryRef.ID');
-            $booking->itinerary_reference = $itineraryReference;
+            $booking->itinerary_reference = $booking->itinerary_ref
+                ?? data_get($pnrResponse, 'CreatePassengerNameRecordRS.ItineraryRef.ID');
             return $booking;
         });
 
@@ -314,6 +314,24 @@ class BookingController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * AT confirms StartPay completion after CreateItinerary with this message.
+     * Do not update the local ticket status for any other successful-looking
+     * response, because AT may still be processing the reservation.
+     */
+    private function atStartPayCompleted(array $response): bool
+    {
+        $messages = $response['Msg'] ?? $response['message'] ?? [];
+
+        foreach ((array) $messages as $message) {
+            if (strcasecmp(trim((string) $message), 'BOOKING INPROGRESS !') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function store(Request $request)
@@ -512,9 +530,14 @@ class BookingController extends Controller
                             'error' => 'No response from AT API'
                         ], 400);
                     }
-                    $itineraryRef = !empty($response['TransactionIDList'])
+                    // For AT, use the CRS PNR as the itinerary reference. The
+                    // transaction ID remains a fallback if AT omits its CRSPNR.
+                    $crsPnr = data_get($response, 'Trips.0.Journey.0.Segments.0.Flight.CRSPNR');
+                    $crsPnr = is_string($crsPnr) ? trim($crsPnr) : null;
+
+                    $itineraryRef = $crsPnr ?: (!empty($response['TransactionIDList'])
                         ? implode(',', $response['TransactionIDList'])
-                        : $response['TransactionID'];
+                        : $response['TransactionID']);
 
                     // Holdable fares were created with BookingType HB; place the
                     // hold now. Non-holdable fares are only saved, and both are
@@ -970,6 +993,25 @@ class BookingController extends Controller
         return null;
     }
 
+    /** AT's RetrieveBooking endpoint expects TransactionID rather than CRSPNR. */
+    private function atTransactionId(?FlightBookings $booking): ?string
+    {
+        $response = json_decode((string) ($booking?->pnr_response ?? ''), true);
+        $transactionId = is_array($response) ? ($response['TransactionID'] ?? null) : null;
+
+        return is_scalar($transactionId) && (string) $transactionId !== ''
+            ? (string) $transactionId
+            : null;
+    }
+
+    /** Pull the customer-facing CRS PNR from AT's RetrieveBooking response. */
+    private function atCrsPnr(mixed $pnrData): ?string
+    {
+        $crsPnr = data_get($pnrData, 'bookingDetails.Trips.0.Journey.0.Segments.0.Flight.CRSPNR');
+
+        return is_string($crsPnr) && trim($crsPnr) !== '' ? trim($crsPnr) : null;
+    }
+
     public function getMyTravellers(Request $request)
     {
         $userId = auth()->id();
@@ -1065,6 +1107,7 @@ class BookingController extends Controller
 
         Log::info($request);
         $pnrData = null;
+        $booking = $this->findBookingForProviderEvent($request);
         if ($request->flight_provider == 'sabre') {
 
             $pnrData = $this->sabreApiService->getBookingDetails($request);
@@ -1082,7 +1125,19 @@ class BookingController extends Controller
             Log::info('OneApi PNR Details:', ['pnrData' => $pnrData]);
         } else if( $request->flight_provider == 'at') {
             $atApiService = new AtApiService();
-            $pnrData = $atApiService->getBookingDetails($request);
+            // AT RetrieveBooking requires the supplier transaction ID, while
+            // the booking list displays the CRS PNR in itinerary_ref.
+            $atRequest = clone $request;
+            $atRequest->merge([
+                'pnr' => $this->atTransactionId($booking) ?? $request->pnr,
+            ]);
+            $pnrData = $atApiService->getBookingDetails($atRequest);
+
+            $crsPnr = $this->atCrsPnr($pnrData);
+            if ($booking && $crsPnr) {
+                $booking->itinerary_ref = $crsPnr;
+                $booking->save();
+            }
         } else if (strtolower((string) $request->flight_provider) === 'hakimi') {
             $booking = $this->findBookingForProviderEvent($request);
             if (! $booking || strtolower((string) $booking->flight_provider) !== 'hakimi') {
@@ -1094,20 +1149,19 @@ class BookingController extends Controller
             $pnrData = $this->hakimiApiService->bookingDetails((string) $booking->itinerary_ref);
         }
 
-        $booking = $this->findBookingForProviderEvent($request);
-
         if ($booking) {
             $this->providerBookingEventService->record(
                 $booking,
                 (string) ($request->flight_provider ?? $booking->flight_provider),
                 'pnr_fetch',
                 $pnrData,
-                $request->pnr,
+                $booking->itinerary_ref ?? $request->pnr,
             );
         }
 
         return response()->json([
             'message' => 'PNR Details fetched successfully',
+            'pnr' => $booking?->itinerary_ref,
             'data' => $pnrData
         ]);
     }
@@ -1463,21 +1517,40 @@ class BookingController extends Controller
 
             }
 
-            $atPaymentFailureMessage = $this->atPaymentFailureMessage($res);
-            if ($atPaymentFailureMessage !== null) {
+            // A repeated StartPay can return BOOKING INPROGRESS even with a
+            // non-success code. It is still AT's completion acknowledgement,
+            // so check it before treating the response as a payment failure.
+            if (! $this->atStartPayCompleted($res)) {
+                $atPaymentFailureMessage = $this->atPaymentFailureMessage($res);
+                if ($atPaymentFailureMessage !== null) {
+                    if ($walletPaymentLock) { $walletPaymentLock->release(); }
+                    Log::warning('AT confirmation failed; booking status was not updated.', [
+                        'booking_id' => $booking->id,
+                        'code' => $res['Code'] ?? null,
+                        'message' => $atPaymentFailureMessage,
+                        'response' => $res,
+                    ]);
+
+                    return response()->json([
+                        'message' => 'Booking confirmation failed',
+                        'error' => $atPaymentFailureMessage,
+                        'provider_response' => $res,
+                    ], 400);
+                }
+
                 if ($walletPaymentLock) { $walletPaymentLock->release(); }
-                Log::warning('AT confirmation failed; booking status was not updated.', [
+
+                Log::warning('AT StartPay did not confirm booking completion; booking status was not updated.', [
                     'booking_id' => $booking->id,
                     'code' => $res['Code'] ?? null,
-                    'message' => $atPaymentFailureMessage,
+                    'messages' => $res['Msg'] ?? null,
                     'response' => $res,
                 ]);
 
                 return response()->json([
-                    'message' => 'Booking confirmation failed',
-                    'error' => $atPaymentFailureMessage,
+                    'message' => 'AT booking is not yet confirmed.',
                     'provider_response' => $res,
-                ], 400);
+                ], 409);
             }
 
             // Final step of AT's flow: GetItineraryStatus after StartPay (HP).
@@ -1677,8 +1750,8 @@ class BookingController extends Controller
         // Extract itinerary references
         $bookingsWithItineraryReferences = $bookings->map(function ($booking) {
             $pnrResponse = json_decode($booking->pnr_response, true);
-            $itineraryReference = data_get($pnrResponse, 'CreatePassengerNameRecordRS.ItineraryRef.ID');
-            $booking->itinerary_reference = $itineraryReference;
+            $booking->itinerary_reference = $booking->itinerary_ref
+                ?? data_get($pnrResponse, 'CreatePassengerNameRecordRS.ItineraryRef.ID');
             return $booking;
         });
 

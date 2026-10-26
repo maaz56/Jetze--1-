@@ -1031,6 +1031,7 @@ private function extractTrips($tripsData): array
 
         return [
             'tui' => $tui,
+            'tui_list' => data_get($pricingResponse, 'TUIList'),
             'net_amount' => (string) $netAmount,
             'gross_amount' => (string) $grossAmount,
             'currency' => strtoupper((string) (data_get($pricingResponse, 'CurrencyCode') ?? data_get($flight, 'currencyCode'))),
@@ -1077,7 +1078,11 @@ private function extractTrips($tripsData): array
                 return null;
             }
             if (! $skipTravelerChecklist) {
-                $this->travelerCheckList($responseBody);
+                // GetTravelCheckList requires the Pricing TUI returned by
+                // SmartPricer. The TUI returned here by GetSPricer is for
+                // post-pricing SSR/seat requests and is rejected by the
+                // checklist endpoint as an "invalid Pricing TUI".
+                $this->travelerCheckList($request);
             }
             return $responseBody;
 
@@ -1298,7 +1303,7 @@ private function extractTrips($tripsData): array
 
 
     }
-    public function getSSR($request, bool $isPaid = true, int $maxAttempts = 3, int $retryDelaySeconds = 2)
+    public function getSSR($request, bool $isPaid = true, int $maxAttempts = 3, int $retryDelaySeconds = 5)
     {
         $accessToken = $this->getAccessToken();
         Log::info($accessToken);
@@ -1465,7 +1470,7 @@ private function extractTrips($tripsData): array
             'ClientID' => $clientId,
             'Source' => 'LV',
             'TripType' => $tripType,
-            'PaidSSR' => $isPaid ? 'true' : 'false',
+            'PaidSSR' => $isPaid,
         ];
     }
 
@@ -1484,6 +1489,7 @@ private function extractTrips($tripsData): array
 
             $tripResponse = null;
             $maxAttempts = 3;
+            $retryDelaySeconds = $resource === 'SSR' && $isPaid ? 5 : 2;
 
             for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
                 try {
@@ -1497,8 +1503,8 @@ private function extractTrips($tripsData): array
                     }
 
                     if (($response['Code'] ?? null) === '1025' && $attempt < $maxAttempts) {
-                        Log::warning("AT DM {$resource} store not ready yet (Code 1025). Retrying in 1.5s...");
-                        usleep(1500000);
+                        Log::warning("AT DM {$resource} store not ready yet (Code 1025). Retrying in {$retryDelaySeconds}s...");
+                        sleep($retryDelaySeconds);
                         continue;
                     }
 

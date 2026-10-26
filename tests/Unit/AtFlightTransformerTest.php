@@ -358,6 +358,29 @@ it('uses AT airline names to distinguish airlines that share an IATA code', func
         ]);
 });
 
+it('uses the database name for a carrier even when AT supplies a validating-carrier name', function () {
+    $transformer = new AtFlightTransformer();
+    $reflection = new ReflectionClass($transformer);
+    $airlineCache = $reflection->getProperty('airlinesByIataCache');
+    $airlineCache->setValue($transformer, [
+        'FZ' => collect([
+            new Airline([
+                'iata_code' => 'FZ',
+                'name' => 'flydubai',
+                'logo_url' => 'https://example.test/flydubai.png',
+            ]),
+        ]),
+    ]);
+
+    $buildCarrier = $reflection->getMethod('buildCarrier');
+
+    expect($buildCarrier->invoke($transformer, 'FZ', 'APG AIRLINES'))->toMatchArray([
+        'iata' => 'FZ',
+        'name' => 'flydubai',
+        'logo' => 'https://example.test/flydubai.png',
+    ]);
+});
+
 function atJourney(array $overrides = []): array
 {
     return array_merge([
