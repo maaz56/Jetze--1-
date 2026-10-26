@@ -223,7 +223,7 @@ class AtApiService
             'CHD' => (int) ($params['children'] ?? 0),
             'INF' => (int) ($params['infants'] ?? 0),
             // AT expects economy to be specified per trip, not at the payload level.
-            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y') === 'E'
+            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y') === 'Y'
                 ? ''
                 : $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
             'Source' => 'CF',
