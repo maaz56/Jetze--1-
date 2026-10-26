@@ -219,14 +219,10 @@ class AtApiService
         $payload = [
             'FareType' => $fareType,
             'ADT' => (int) ($params['adults'] ?? 1),
-            'YTH' => (int) ($params['youth'] ?? 0),
             'CHD' => (int) ($params['children'] ?? 0),
             'INF' => (int) ($params['infants'] ?? 0),
-            // AT expects economy to be specified per trip, not at the payload level.
-            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y') === 'Y'
-                ? ''
-                : $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
-            'Source' => 'CF',
+            'Cabin' => $this->mapCabinClass($params['cabin_class'] ?? 'Y'),
+            'Source' => 'LV', // Changed from 'LV' to 'CF' for consistency
             'Mode' => 'AS',
             'ClientID' => $this->clientId,
             "MoreFltKey" => "",
@@ -239,7 +235,6 @@ class AtApiService
             'SecType' => $params['SecType'] ?? 'I',
             'Trips' => $trips,
             'Parameters' => [
-                'IsA2AFare' => false,
                 'IsDirect' => $params['is_direct'] ?? false,
                 'IsNearbyAirport' => $params['is_nearby_airport'] ?? true,
                 'IsStudentFare' => $params['is_student_fare'] ?? false,
@@ -250,6 +245,7 @@ class AtApiService
                 "IsLCCSearch" => $params['is_lcc_search'] ?? true,
                 "IsNDCSearch" => $params['is_ndc_search'] ?? true,
                 'Refundable' => $params['refundable'] ?? '',
+                'IsExtendedSearch' => $params['is_extended_search'] ?? false,
             ],
         ];
 
@@ -328,7 +324,6 @@ class AtApiService
     private function buildTripsArray(array $params, string $fareType): array
     {
         $flightType = $params['flightType'] ?? $params['flight_type'] ?? 'one-way';
-        $cabin = $this->mapCabinClass($params['cabin_class'] ?? 'Y');
         $trips = [];
 
         if ($fareType === 'DM' && isset($params['trips']) && is_array($params['trips'])) {
@@ -346,8 +341,7 @@ class AtApiService
                 'To' => $this->normalizeAirportCode($params['destination'] ?? ''),
                 'ReturnDate' => $params['return_date'] ?? '',
                 'OnwardDate' => $params['departure_date'],
-                'OnwardCabin' => $cabin,
-                'ReturnCabin' => $cabin,
+                'TUI' => $params['TUI'] ?? ''
             ];
             return $trips;
         }
@@ -358,8 +352,7 @@ class AtApiService
             'To' => $this->normalizeAirportCode($params['destination'] ?? ''),
             'ReturnDate' => '',
             'OnwardDate' => $params['departure_date'],
-            'OnwardCabin' => $cabin,
-            'ReturnCabin' => '',
+            'TUI' => $params['TUI'] ?? ''
         ];
 
         return $trips;
@@ -1925,7 +1918,6 @@ private function extractTrips($tripsData): array
     private function buildMultiCityTrips(array $params): array
     {
         $trips = [];
-        $cabin = $this->mapCabinClass($params['cabin_class'] ?? 'Y');
 
         foreach ($params['trips'] as $trip) {
             $trips[] = [
@@ -1933,8 +1925,7 @@ private function extractTrips($tripsData): array
                 'To' => $this->normalizeAirportCode($trip['destination'] ?? ''),
                 'ReturnDate' => '',
                 'OnwardDate' => $trip['date'],
-                'OnwardCabin' => $cabin,
-                'ReturnCabin' => '',
+                'TUI' => $trip['TUI'] ?? $params['TUI'] ?? ''
             ];
         }
 
