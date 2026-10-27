@@ -129,6 +129,9 @@ import { useStore } from "vuex";
 import { toast } from "vue3-toastify";
 const activeTab = ref("flights");
 import { SlidersHorizontal } from "lucide-vue-next";
+import { PhMedal } from "@phosphor-icons/vue";
+import tagIcon from "/public/tag.png";
+import timeIcon from "/public/time.png";
 import Login from "./Login.vue";
 import LoginMini from "./LoginMini.vue";
 import {
@@ -378,6 +381,84 @@ const visibleFlights = computed(() => {
 
     return filteredFlights.value.slice(0, visibleFlightCount.value);
 });
+
+/** The cheapest, fastest and best-value flight among the current results. */
+const flightHighlights = computed(() => {
+    const flights = Array.isArray(filteredFlights.value) ? filteredFlights.value : [];
+    if (!flights.length) return {};
+
+    const pickMin = (valueOf) => {
+        let best = null;
+        let bestValue = Infinity;
+        for (const flight of flights) {
+            const value = valueOf(flight);
+            if (value > 0 && value < bestValue) {
+                bestValue = value;
+                best = flight;
+            }
+        }
+        return best;
+    };
+
+    return {
+        cheapest: pickMin(displayFlightPrice),
+        fastest: pickMin(getFlightTotalDurationMinutes),
+        best: pickMin(bestValueScorer(flights)),
+    };
+});
+
+const FLIGHT_HIGHLIGHT_TAGS = [
+    {
+        key: "best",
+        label: "Best Value",
+        icon: PhMedal,
+        badgeClass: "bg-amber-500 text-white",
+        buttonClass: "border-amber-300 bg-amber-50/60 text-amber-600 hover:border-amber-400 hover:bg-amber-50",
+        activeButtonClass: "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/30",
+    },
+    {
+        key: "cheapest",
+        label: "Cheapest",
+        image: tagIcon,
+        badgeClass: "bg-emerald-600 text-white",
+        buttonClass: "border-emerald-300 bg-emerald-50/60 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50",
+        activeButtonClass: "border-emerald-600 bg-emerald-600 text-white shadow-sm shadow-emerald-600/30",
+    },
+    {
+        key: "fastest",
+        label: "Fastest",
+        image: timeIcon,
+        // time.png has thin strokes and wide padding, so draw it larger
+        imageScale: 1.35,
+        badgeClass: "bg-primary text-white",
+        buttonClass: "border-primary/40 bg-primary/5 text-primary hover:border-primary/60 hover:bg-primary/10",
+        activeButtonClass: "border-primary bg-primary text-white shadow-sm shadow-primary/30",
+    },
+];
+
+/** Paints a transparent PNG in the current text colour so it follows the tag's colour. */
+const maskIconStyle = (src, size) => ({
+    width: `${size}px`,
+    height: `${size}px`,
+    WebkitMaskImage: `url(${src})`,
+    maskImage: `url(${src})`,
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+});
+
+const flightHighlightTags = (item) =>
+    (filteredFlights.value?.length ?? 0) > 1
+        ? FLIGHT_HIGHLIGHT_TAGS.filter(
+              (tag) =>
+                  item?.leg?.ref_id &&
+                  flightHighlights.value[tag.key]?.leg?.ref_id === item.leg.ref_id,
+          )
+        : [];
+
 const hasMoreVisibleFlights = computed(() => {
     return (
         Array.isArray(filteredFlights.value) &&
@@ -398,6 +479,18 @@ function loadMoreVisibleFlights() {
     );
 }
 
+/** Returns a scorer where lower is better: price and duration relative to the best of each. */
+function bestValueScorer(flights) {
+    const prices = flights.map(displayFlightPrice).filter((p) => p > 0);
+    const durations = flights.map(getFlightTotalDurationMinutes).filter((d) => d > 0);
+    const minPrice = prices.length ? Math.min(...prices) : 1;
+    const minDuration = durations.length ? Math.min(...durations) : 1;
+
+    return (flight) =>
+        (displayFlightPrice(flight) || Infinity) / minPrice +
+        (getFlightTotalDurationMinutes(flight) || Infinity) / minDuration;
+}
+
 function sortFlightList(flights) {
     const direction = priceSortDirection.value === "high" ? -1 : 1;
     const list = Array.isArray(flights) ? [...flights] : [];
@@ -408,6 +501,11 @@ function sortFlightList(flights) {
                 getFlightTotalDurationMinutes(a) -
                 getFlightTotalDurationMinutes(b),
         );
+    }
+
+    if (activeSortTab.value === "best") {
+        const score = bestValueScorer(list);
+        return list.sort((a, b) => score(a) - score(b));
     }
 
     return list.sort(
@@ -3306,6 +3404,7 @@ watch(isLoggedIn, (newVal) => {
                                 v-model="modelValue"
                                 @search="setupFlightsParams"
                                 @compact-change="isSearchCompact = $event"
+                                compact-on-ready
                                 variant="edge-overlap"
                                 class="w-full"
                             />
@@ -3774,87 +3873,45 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Results Header with Cheapest | Fastest | Best Value -->
                     <div
                         v-if="hasFlightResults"
-                        class="bg-white border border-gray-200 rounded p-4 mb-4 shadow-md shadow-slate-200/80"
+                        class="mb-4 flex flex-wrap items-center justify-between gap-3"
                     >
-                        <div
-                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                        >
-                            <div class="text-sm font-medium text-gray-700">
-                                Showing
-                                <span class="font-bold text-primary">{{
-                                    filteredFlights?.length || 0
-                                }}</span>
-                                results
-                                <template v-if="(filteredFlights?.length || 0) !== allFlights.length">
-                                    of
-                                    <span class="font-bold">{{
-                                        allFlights.length
-                                    }}</span>
-                                </template>
-                            </div>
-
-                            <!-- Cheapest | Fastest | Best Value Tabs -->
-                            <div
-                                class="flex items-center justify-center bg-gray-100 rounded-full p-1"
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button
+                                v-for="tab in FLIGHT_HIGHLIGHT_TAGS"
+                                :key="tab.key"
+                                type="button"
+                                @click="setSortMode(tab.key, 'low')"
+                                :aria-pressed="activeSortTab === tab.key"
+                                class="inline-flex items-center gap-1.5 rounded-md border px-3.5 py-2 text-sm font-semibold transition-all"
+                                :class="activeSortTab === tab.key ? tab.activeButtonClass : tab.buttonClass"
                             >
-                                <div class="flex gap-1">
-                                    <button
-                                        @click="setSortMode('cheapest', 'low')"
-                                        :class="[
-                                            'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                                            activeSortTab === 'cheapest'
-                                                ? 'bg-white shadow-sm text-primary'
-                                                : 'text-gray-600 hover:bg-white/50',
-                                        ]"
-                                    >
-                                        <BadgeDollarSign class="w-4 h-4" />
-                                        <span>Cheapest</span>
-                                    </button>
-                                    <button
-                                        @click="setSortMode('fastest')"
-                                        :class="[
-                                            'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                                            activeSortTab === 'fastest'
-                                                ? 'bg-white shadow-sm text-primary'
-                                                : 'text-gray-600 hover:bg-white/50',
-                                        ]"
-                                    >
-                                        <Zap class="w-4 h-4" />
-                                        <span>Fastest</span>
-                                    </button>
-                                    <button
-                                        @click="setSortMode('best', 'low')"
-                                        :class="[
-                                            'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                                            activeSortTab === 'best'
-                                                ? 'bg-white shadow-sm text-primary'
-                                                : 'text-gray-600 hover:bg-white/50',
-                                        ]"
-                                    >
-                                        <SquareCheckBig class="w-4 h-4" />
-                                        <span>Best Value</span>
-                                    </button>
-                                </div>
-                            </div>
+                                <span v-if="tab.image" class="shrink-0 bg-current" :style="maskIconStyle(tab.image, 18 * (tab.imageScale ?? 1))" />
+                                <component v-else :is="tab.icon" :size="18" :weight="activeSortTab === tab.key ? 'fill' : 'duotone'" />
+                                {{ tab.label }}
+                            </button>
+                        </div>
 
-                            <!-- Sort Dropdown -->
-                            <div class="flex items-center gap-2 text-sm">
-                                <ArrowDownUp class="w-4 h-4 text-gray-500" />
-                                <span class="text-gray-600">Sort by:</span>
+                        <div class="flex items-center gap-3">
+                            <p class="text-[13px] text-slate-600">
+                                Showing
+                                <span class="font-semibold text-slate-900">{{ filteredFlights?.length || 0 }}</span>
+                                of
+                                <span class="font-semibold text-slate-900">{{ allFlights.length }}</span>
+                                flights found
+                            </p>
+
+                            <label class="relative inline-flex items-center rounded-md border border-slate-200 bg-white shadow-sm transition hover:border-slate-300">
                                 <select
-                                    @change="
-                                        setSortMode('cheapest', $event.target.value)
-                                    "
-                                    class="font-medium text-gray-900 bg-transparent border-none outline-none cursor-pointer"
+                                    :value="priceSortDirection"
+                                    @change="setSortMode('cheapest', $event.target.value)"
+                                    class="cursor-pointer appearance-none bg-transparent py-2 pl-3.5 pr-9 text-sm font-semibold text-slate-700 outline-none"
+                                    aria-label="Sort by price"
                                 >
-                                    <option value="low">
-                                        Price - Low To High
-                                    </option>
-                                    <option value="high">
-                                        Price - High To Low
-                                    </option>
+                                    <option value="low">Sort By: Lowest Price</option>
+                                    <option value="high">Sort By: Highest Price</option>
                                 </select>
-                            </div>
+                                <ArrowDownUp class="pointer-events-none absolute right-3 h-4 w-4 text-slate-500" />
+                            </label>
                         </div>
                     </div>
                     <!-- Corusel section -->
@@ -4072,6 +4129,40 @@ watch(isLoggedIn, (newVal) => {
         class="flight-result-card relative overflow-hidden rounded border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_8px_26px_rgba(15,23,42,0.10)]"
     >
 
+
+        <!-- Highlight tags + buy-now-pay-later partners -->
+        <!-- No top padding so the badges hang flush from the card's top edge -->
+        <div class="flex min-h-7 flex-wrap items-center gap-2 px-5 sm:px-6">
+            <span
+                v-for="tag in flightHighlightTags(item)"
+                :key="tag.key"
+                class="inline-flex h-7 items-center gap-1.5 rounded-b-md px-2.5 text-[13px] font-semibold leading-none"
+                :class="tag.badgeClass"
+            >
+                <span v-if="tag.image" class="shrink-0 bg-current" :style="maskIconStyle(tag.image, 16 * (tag.imageScale ?? 1))" />
+                <component v-else :is="tag.icon" :size="17" weight="fill" />
+                {{ tag.label }}
+            </span>
+            <!-- Logo files carry transparent padding, so crop to the visible pill -->
+            <span class="relative block h-5 w-[62px] overflow-hidden rounded" title="Tamara">
+                <img src="/public/tamara.png" alt="Tamara" class="absolute left-[-9px] top-[-12.6px] h-[45.3px] max-w-none" loading="lazy" />
+            </span>
+            <span class="relative block h-5 w-[48px] overflow-hidden rounded" title="Tabby">
+                <img src="/public/tabby.svg" alt="Tabby" class="absolute left-[-7.4px] top-[-21.7px] h-[63.4px] max-w-none" loading="lazy" />
+            </span>
+            <TooltipProvider :delay-duration="100">
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Buy now, pay later info">
+                            <Info class="h-4 w-4" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="max-w-xs text-xs">
+                        Split your payment into interest-free instalments with Tamara or Tabby at checkout.
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        </div>
 
         <!-- One layout for one-way, return and multi-city: itinerary rows + price panel -->
         <div class="flight-card-body">

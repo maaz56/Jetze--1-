@@ -73,6 +73,10 @@ const props = defineProps({
         type: String,
         default: "default",
     },
+    compactOnReady: {
+        type: Boolean,
+        default: false,
+    },
 });
 const emit = defineEmits(["update:modelValue", "search", "compact-change"]);
 
@@ -645,6 +649,22 @@ const previewSummary = computed(() => {
 // Only offer the compact bar once there is a route worth summarising.
 const canCollapse = computed(
     () => Boolean(previewSummary.value.origin && previewSummary.value.destination),
+);
+const hasAppliedInitialCompactState = ref(false);
+
+watch(
+    canCollapse,
+    (hasRoute) => {
+        if (
+            hasRoute &&
+            props.compactOnReady &&
+            !hasAppliedInitialCompactState.value
+        ) {
+            showRoutePreview.value = true;
+            hasAppliedInitialCompactState.value = true;
+        }
+    },
+    { immediate: true },
 );
 
 watch(showRoutePreview, (value) => emit("compact-change", value), {

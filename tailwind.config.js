@@ -23,6 +23,7 @@ export default {
     	},
 		fontFamily: {
             roboto: ['Roboto', 'sans-serif'],
+			manrope: ['Manrope', 'sans-serif'], // Modern, highly legible UI font for travel search and booking screens
 			raleway: ['Raleway', 'sans-serif'],  // For a clean, modern sans-serif font
             nunito: ['Nunito', 'sans-serif'],  // For a rounded, friendly sans-serif font
             arabic: ['Noto Naskh Arabic', 'serif'],

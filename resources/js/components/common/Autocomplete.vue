@@ -53,11 +53,51 @@
             <ul v-if="isOpen" :style="dropdownStyle"
                 class="fixed bg-white z-[9999] border border-gray-200 rounded-lg shadow-lg scrollbar-container">
                 <div class="max-h-72 overflow-y-auto scrollbar">
-                    <li class="px-4 py-3 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    <!-- Country / spelling hint -->
+                    <li
+                        v-if="matchedCountry || correctedTo"
+                        class="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-slate-50 px-4 py-2 text-xs text-slate-600"
+                    >
+                        <img
+                            v-if="matchedCountry"
+                            :src="matchedCountry.flag"
+                            :alt="matchedCountry.name"
+                            class="h-3.5 w-5 shrink-0 rounded-sm object-cover ring-1 ring-black/5"
+                            loading="lazy"
+                        />
+                        <span v-if="correctedTo">
+                            Showing results for <span class="font-semibold text-slate-900">{{ correctedTo }}</span>
+                        </span>
+                        <span v-else>
+                            Airports in <span class="font-semibold text-slate-900">{{ matchedCountry.name }}</span>
+                        </span>
+                    </li>
+
+                    <li class="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 hover:bg-gray-50"
                         :class="{ 'bg-gray-50': index === focusedIndex }" v-for="(item, index) in searchResults"
                         :key="item.id || index" @click.stop="setSelected(item)">
-                        <div class="font-medium">{{ item.name + " " + "(" + item.iata_code + ")" }}</div>
-                        <span class="font-normal text-sm block text-gray-500">{{ item.city_name }}</span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="truncate font-semibold text-slate-900">{{ item.city_name || item.name }}</span>
+                                <span class="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                                    {{ item.iata_code }}
+                                </span>
+                            </div>
+                            <span class="block truncate text-sm text-gray-500">{{ item.name }}</span>
+                        </div>
+                        <div v-if="getAirportCountry(item)" class="flex shrink-0 items-center gap-2 text-sm text-gray-500">
+                            <span
+                                v-if="getAirportCountry(item).name !== item.city_name"
+                                class="hidden max-w-[9rem] truncate sm:inline"
+                            >{{ getAirportCountry(item).name }}</span>
+                            <img
+                                :src="getAirportCountry(item).flag"
+                                :alt="getAirportCountry(item).name"
+                                :title="getAirportCountry(item).name"
+                                class="h-3.5 w-5 rounded-sm object-cover ring-1 ring-black/5"
+                                loading="lazy"
+                            />
+                        </div>
                     </li>
 
                     <!-- Empty state -->
@@ -84,6 +124,7 @@ import { CircleX, MapPin, PlaneLanding, PlaneTakeoff } from "lucide-vue-next";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "vuex";
 import Spinner from "../common/Spinner.vue";
+import { getAirportCountry, searchAirports } from "@/lib/airportSearch";
 
 const store = useStore();
 const props = defineProps({
@@ -137,6 +178,8 @@ const isOpen = ref(false);
 const isFocused = ref(false);
 const focusedIndex = ref(-1);
 const searchResults = ref([]);
+const matchedCountry = ref(null);
+const correctedTo = ref(null);
 const isLoading = ref(false);
 const isLoadingAirport = computed(() => store.getters["airport/isLoading"]);
 
@@ -170,13 +213,17 @@ const updateDropdownStyle = () => {
         return;
     }
     const rect = inputEl.value.getBoundingClientRect();
+    // The input can be narrower than a result row, so give the list room and keep it on screen.
+    const gutter = 8;
+    const width = Math.min(Math.max(rect.width, 380), window.innerWidth - gutter * 2);
+    const left = Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter));
     dropdownStyle.value = {
         position: 'fixed',
         // The dropdown uses fixed positioning, so use viewport coordinates.
         // Adding scroll offsets here makes it drift away from its input.
         top: `${rect.bottom + 8}px`,
-        left: `${rect.left}px`,
-        width: `${rect.width}px`,
+        left: `${left}px`,
+        width: `${width}px`,
         maxHeight: '300px',
         zIndex: 9999
     };
@@ -191,35 +238,16 @@ const updatePosition = () => {
 const updateSearchResults = debounce(() => {
     if (!search.value || search.value === "") {
         searchResults.value = defaultAirportResults();
-        isLoading.value = false;
+        matchedCountry.value = null;
+        correctedTo.value = null;
     } else {
-        const query = search.value.toLowerCase();
-        const filteredResults = props.source.filter((item) => {
-            const name = item.name ? item.name.toLowerCase() : "";
-            const iataCode = item.iata_code ? item.iata_code.toLowerCase() : "";
-            const cityName = item.city_name ? item.city_name.toLowerCase() : "";
-
-            return (
-                iataCode === query ||
-                name.includes(query) ||
-                cityName.includes(query)
-            );
-        });
-
-        // Check if there's an exact match by iata_code
-        const exactMatch = filteredResults.find((item) => {
-            const iataCode = item.iata_code ? item.iata_code.toLowerCase() : "";
-            return iataCode === query;
-        });
-
-        // If exact match found, set searchResults to it
-        if (exactMatch) {
-            searchResults.value = [exactMatch];
-        } else {
-            searchResults.value = filteredResults;
-        }
-        isLoading.value = false;
+        const { results, country, correctedTo: corrected } = searchAirports(props.source, search.value);
+        searchResults.value = results;
+        matchedCountry.value = country;
+        correctedTo.value = corrected;
     }
+    focusedIndex.value = searchResults.value.length ? 0 : -1;
+    isLoading.value = false;
 }, 300);
 
 watch(search, () => {
@@ -247,6 +275,8 @@ function handleFocus() {
     // A click should show the default airports in the dropdown. Filtering only
     // starts after the user edits the IATA code or search text.
     searchResults.value = defaultAirportResults();
+    matchedCountry.value = null;
+    correctedTo.value = null;
     isLoading.value = false;
     isOpen.value = true;
     eventBus.value = {
