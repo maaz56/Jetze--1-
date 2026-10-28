@@ -227,6 +227,33 @@ const resetAutoplay = () => {
     startAutoplay();
 };
 
+let touchStartX = 0;
+let touchStartY = 0;
+
+const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+};
+
+const handleTouchEnd = (e) => {
+    if (!e.changedTouches || !e.changedTouches.length) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+    
+    // Only trigger horizontal swipe if horizontal movement is dominant and > 40px
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+        if (diffX < 0) {
+            nextSlide();
+        } else {
+            prevSlide();
+        }
+    }
+};
+
 onMounted(() => {
     startAutoplay();
 });
@@ -237,55 +264,36 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <section class="w-full py-6 px-4 sm:px-6 lg:px-8">
+    <section class="w-full py-4 sm:py-6 px-3 sm:px-6 lg:px-8">
         <div 
-            class="max-w-7xl mx-auto bg-white rounded-2xl border border-gray-200/80 p-5 sm:p-7 shadow-xs"
+            class="max-w-7xl mx-auto bg-white rounded-2xl border border-gray-200/80 p-3.5 sm:p-7 shadow-xs"
             @mouseenter="stopAutoplay"
             @mouseleave="startAutoplay"
+            @touchstart="handleTouchStart"
+            @touchend="handleTouchEnd"
         >
             
-            <!-- Section Header & Tabs & Controls -->
-            <div class="flex items-center justify-between border-b border-gray-200 mb-6 pb-0">
-                <div class="flex items-center gap-6 sm:gap-10 overflow-x-auto no-scrollbar">
-                    <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight whitespace-nowrap pb-3">
+            <!-- Section Header: Title & Navigation Controls -->
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div>
+                    <h2 class="text-xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
                         Jetze Offers
                     </h2>
-
-                    <div class="flex items-center gap-6 text-sm sm:text-base font-semibold whitespace-nowrap">
-                        <button 
-                            v-for="cat in categories" 
-                            :key="cat"
-                            @click="selectTab(cat)"
-                            :class="[
-                                'pb-3 transition-all cursor-pointer font-bold border-b-2 -mb-px flex items-center gap-1.5',
-                                activeTab === cat 
-                                    ? 'text-primary border-primary' 
-                                    : 'text-gray-500 border-transparent hover:text-gray-800'
-                            ]"
-                        >
-                            <span>{{ cat }}</span>
-                            <span 
-                                v-if="cat === 'Flights' && routes.length > 0" 
-                                class="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-extrabold"
-                            >
-                                {{ routes.length }}
-                            </span>
-                        </button>
-                    </div>
+                    <p class="text-[11px] sm:text-sm text-gray-500 mt-0.5">Curated travel discounts & limited-time deals</p>
                 </div>
 
                 <!-- Carousel Navigation Arrows -->
-                <div v-if="totalPages > 1" class="flex items-center gap-2 pb-3 pl-4 shrink-0">
+                <div v-if="totalPages > 1" class="flex items-center gap-1.5 sm:gap-2">
                     <button 
                         @click="prevSlide" 
-                        class="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-colors cursor-pointer"
+                        class="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-colors cursor-pointer active:scale-95"
                         title="Previous Offers"
                     >
                         <ChevronLeft class="w-4 h-4" />
                     </button>
                     <button 
                         @click="nextSlide" 
-                        class="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-colors cursor-pointer"
+                        class="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-colors cursor-pointer active:scale-95"
                         title="Next Offers"
                     >
                         <ChevronRight class="w-4 h-4" />
@@ -293,19 +301,47 @@ onUnmounted(() => {
                 </div>
             </div>
 
+            <!-- Scrollable Category Tabs Bar -->
+            <div class="flex items-center gap-2 sm:gap-6 border-b border-gray-200 pb-3 mb-4 sm:mb-6 overflow-x-auto no-scrollbar">
+                <button 
+                    v-for="cat in categories" 
+                    :key="cat"
+                    @click="selectTab(cat)"
+                    :class="[
+                        'px-3 py-1.5 sm:px-0 sm:pb-2 sm:pt-0 rounded-full sm:rounded-none transition-all cursor-pointer font-bold text-xs sm:text-sm whitespace-nowrap flex items-center gap-1.5 shrink-0',
+                        activeTab === cat 
+                            ? 'bg-primary text-white sm:bg-transparent sm:text-primary sm:border-b-2 sm:border-primary sm:-mb-px shadow-xs sm:shadow-none' 
+                            : 'bg-slate-100 text-gray-600 hover:bg-slate-200 sm:bg-transparent sm:text-gray-500 sm:hover:text-gray-800 sm:border-b-2 sm:border-transparent sm:-mb-px'
+                    ]"
+                >
+                    <span>{{ cat }}</span>
+                    <span 
+                        v-if="cat === 'Flights' && routes.length > 0" 
+                        :class="[
+                            'text-[10px] px-1.5 py-0.5 rounded-full font-extrabold',
+                            activeTab === cat 
+                                ? 'bg-white/20 text-white sm:bg-primary/10 sm:text-primary' 
+                                : 'bg-slate-200 text-slate-700 sm:bg-primary/10 sm:text-primary'
+                        ]"
+                    >
+                        {{ routes.length }}
+                    </span>
+                </button>
+            </div>
+
             <!-- Offers Carousel Grid (2 rows x 2 cols = 4 items visible) -->
             <Transition name="fade-slide" mode="out-in">
                 <div 
                     :key="`${activeTab}-${currentPage}`"
-                    class="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6 content-start min-h-[360px] sm:min-h-[380px]"
+                    class="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-5 lg:gap-6 content-start min-h-[290px] sm:min-h-[380px]"
                 >
                     <div 
                         v-for="offer in visibleOffers" 
                         :key="offer.id"
-                        class="bg-white rounded-xl border border-gray-200/90 p-3.5 sm:p-4 shadow-xs hover:shadow-md transition-all duration-200 flex gap-4 items-stretch group relative"
+                        class="bg-white rounded-xl border border-gray-200/90 p-3 sm:p-4 shadow-xs hover:shadow-md transition-all duration-200 flex gap-3 sm:gap-4 items-stretch group relative"
                     >
                         <!-- Left Image Thumbnail -->
-                        <div class="w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 relative">
+                        <div class="w-24 h-24 xs:w-28 xs:h-28 sm:w-36 sm:h-36 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 relative">
                             <img 
                                 :src="offer.image" 
                                 :alt="offer.title"
@@ -314,7 +350,7 @@ onUnmounted(() => {
                             />
                             <div 
                                 v-if="offer.price" 
-                                class="absolute bottom-1.5 left-1.5 right-1.5 bg-black/75 backdrop-blur-xs text-white rounded px-1.5 py-0.5 text-[10px] font-bold text-center truncate"
+                                class="absolute bottom-1 left-1 right-1 bg-black/80 backdrop-blur-xs text-white rounded px-1 py-0.5 text-[9px] sm:text-[10px] font-bold text-center truncate"
                             >
                                 from {{ offer.price.currency }} {{ formatAmount(offer.price.amount, offer.price.currency) }}
                             </div>
@@ -325,44 +361,44 @@ onUnmounted(() => {
                             <div>
                                 <!-- Header Row: Category & Details Link / T&C -->
                                 <div class="flex items-center justify-between gap-2 text-xs mb-1">
-                                    <span class="font-bold text-gray-500 uppercase tracking-wider text-[11px] flex items-center gap-1">
+                                    <span class="font-bold text-gray-500 uppercase tracking-wider text-[10px] sm:text-[11px] flex items-center gap-1">
                                         <Plane v-if="offer.category === 'FLIGHTS'" class="w-3 h-3 text-primary" />
                                         {{ offer.category }}
                                     </span>
                                     <RouterLink 
                                         v-if="offer.routeLink"
                                         :to="offer.routeLink"
-                                        class="text-[11px] font-semibold text-gray-400 hover:text-primary transition-colors flex items-center gap-0.5"
+                                        class="text-[10px] sm:text-[11px] font-semibold text-gray-400 hover:text-primary transition-colors flex items-center gap-0.5"
                                         title="View route guide"
                                     >
                                         <span>Route Guide</span>
                                         <ExternalLink class="w-3 h-3" />
                                     </RouterLink>
-                                    <span v-else class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                    <span v-else class="text-[9px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                         T&C'S APPLY
                                     </span>
                                 </div>
 
                                 <!-- Title -->
-                                <h3 class="text-sm sm:text-base font-extrabold text-gray-900 leading-snug line-clamp-2">
+                                <h3 class="text-xs sm:text-base font-extrabold text-gray-900 leading-snug line-clamp-2">
                                     {{ offer.title }}
                                 </h3>
 
                                 <!-- Red Accent Line -->
-                                <div v-if="offer.hasRedAccent" class="w-7 h-[2px] bg-rose-500 my-2"></div>
+                                <div v-if="offer.hasRedAccent" class="w-6 h-[2px] bg-rose-500 my-1 sm:my-2"></div>
 
                                 <!-- Description / Fares info -->
-                                <p class="text-xs sm:text-sm text-gray-500 leading-normal line-clamp-2 mt-1">
+                                <p class="text-[11px] sm:text-sm text-gray-500 leading-normal line-clamp-2 mt-0.5 sm:mt-1">
                                     {{ offer.description }}
                                 </p>
                             </div>
 
                             <!-- CTA Link using Primary Color -->
-                            <div class="flex items-center justify-between pt-2">
+                            <div class="flex items-center justify-between pt-1.5 sm:pt-2">
                                 <RouterLink 
                                     v-if="offer.routeLink" 
                                     :to="offer.routeLink"
-                                    class="text-xs text-gray-500 hover:text-primary font-medium"
+                                    class="text-[11px] sm:text-xs text-gray-500 hover:text-primary font-medium"
                                 >
                                     Details
                                 </RouterLink>
@@ -370,7 +406,7 @@ onUnmounted(() => {
 
                                 <RouterLink 
                                     :to="offer.link" 
-                                    class="text-primary hover:opacity-85 font-black text-xs sm:text-sm uppercase tracking-wider hover:underline flex items-center gap-1"
+                                    class="text-primary hover:opacity-85 font-black text-xs sm:text-sm uppercase tracking-wider hover:underline flex items-center gap-1 active:translate-x-0.5 transition-transform"
                                 >
                                     <span>BOOK NOW</span>
                                     <span class="text-xs">→</span>
@@ -382,7 +418,7 @@ onUnmounted(() => {
             </Transition>
 
             <!-- Carousel Pagination Dots -->
-            <div class="flex items-center justify-center gap-2 mt-6 h-4">
+            <div class="flex items-center justify-center gap-2 mt-4 sm:mt-6 h-4">
                 <template v-if="totalPages > 1">
                     <button 
                         v-for="pageIndex in totalPages" 

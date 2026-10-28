@@ -93,60 +93,91 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="w-full py-4 px-4 sm:px-6 lg:px-8">
+    <div class="w-full py-2 sm:py-4 px-3 sm:px-6 lg:px-8">
         <div 
             class="max-w-7xl mx-auto relative overflow-hidden"
             @mouseenter="stopAutoplay"
             @mouseleave="startAutoplay"
         >
-            <!-- Auto Carousel Container (Horizontal sliding individual cards) -->
-            <Transition name="horizontal-slide" mode="out-in">
+            <!-- Mobile View: Smooth Horizontal Snap Carousel -->
+            <div class="flex md:hidden gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory px-1 py-1">
                 <div 
-                    :key="currentPage"
-                    class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-stretch"
+                    v-for="item in items" 
+                    :key="`mobile-${item.id}`"
+                    class="snap-center shrink-0 w-[265px] bg-white rounded-xl border border-gray-200/90 shadow-2xs p-3.5 flex items-center gap-3"
                 >
+                    <!-- Icon Badge -->
                     <div 
-                        v-for="item in visibleItems" 
-                        :key="item.id"
-                        class="bg-white rounded-xl border border-gray-200/90 shadow-2xs hover:shadow-md transition-all duration-300 p-4 sm:p-5 flex items-center gap-4 group"
+                        class="w-11 h-11 rounded-xl bg-gradient-to-br border flex items-center justify-center shrink-0 shadow-2xs"
+                        :class="item.bgGradient"
                     >
-                        <!-- Icon Badge -->
-                        <div 
-                            class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br border flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform duration-300"
-                            :class="item.bgGradient"
-                        >
-                            <component :is="item.icon" class="w-6 h-6 sm:w-7 sm:h-7" />
-                        </div>
+                        <component :is="item.icon" class="w-5 h-5" />
+                    </div>
 
-                        <!-- Card Content -->
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-2 mb-0.5">
-                                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 tracking-wide uppercase truncate">
-                                    {{ item.title }}
-                                </h3>
-                            </div>
-                            <p class="text-xs text-gray-500 font-medium truncate">
-                                {{ item.subtitle }}
-                            </p>
+                    <!-- Card Content -->
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <h3 class="text-xs font-extrabold text-gray-900 tracking-wide uppercase truncate">
+                                {{ item.title }}
+                            </h3>
                         </div>
+                        <p class="text-[11px] text-gray-500 font-medium truncate">
+                            {{ item.subtitle }}
+                        </p>
                     </div>
                 </div>
-            </Transition>
+            </div>
 
-            <!-- Bottom Carousel Indicators -->
-            <div class="flex items-center justify-center gap-1.5 mt-4">
-                <button 
-                    v-for="(item, index) in items" 
-                    :key="index"
-                    @click="currentPage = index"
-                    :class="[
-                        'h-1.5 rounded-full transition-all cursor-pointer',
-                        currentPage === index 
-                            ? 'w-6 bg-primary' 
-                            : 'w-2 bg-gray-300/80 hover:bg-gray-400'
-                    ]"
-                    :title="`Slide ${index + 1}`"
-                ></button>
+            <!-- Desktop View: Auto Carousel (Horizontal sliding 3 cards) -->
+            <div class="hidden md:block">
+                <Transition name="horizontal-slide" mode="out-in">
+                    <div 
+                        :key="currentPage"
+                        class="grid grid-cols-3 gap-4 sm:gap-6 items-stretch"
+                    >
+                        <div 
+                            v-for="item in visibleItems" 
+                            :key="item.id"
+                            class="bg-white rounded-xl border border-gray-200/90 shadow-2xs hover:shadow-md transition-all duration-300 p-4 sm:p-5 flex items-center gap-4 group"
+                        >
+                            <!-- Icon Badge -->
+                            <div 
+                                class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br border flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform duration-300"
+                                :class="item.bgGradient"
+                            >
+                                <component :is="item.icon" class="w-6 h-6 sm:w-7 sm:h-7" />
+                            </div>
+
+                            <!-- Card Content -->
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 mb-0.5">
+                                    <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 tracking-wide uppercase truncate">
+                                        {{ item.title }}
+                                    </h3>
+                                </div>
+                                <p class="text-xs text-gray-500 font-medium truncate">
+                                    {{ item.subtitle }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </Transition>
+
+                <!-- Desktop Carousel Indicators -->
+                <div class="flex items-center justify-center gap-1.5 mt-4">
+                    <button 
+                        v-for="(item, index) in items" 
+                        :key="index"
+                        @click="currentPage = index"
+                        :class="[
+                            'h-1.5 rounded-full transition-all cursor-pointer',
+                            currentPage === index 
+                                ? 'w-6 bg-primary' 
+                                : 'w-2 bg-gray-300/80 hover:bg-gray-400'
+                        ]"
+                        :title="`Slide ${index + 1}`"
+                    ></button>
+                </div>
             </div>
 
         </div>

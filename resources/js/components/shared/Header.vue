@@ -115,10 +115,12 @@ import {
     Ticket,
     CircleArrowDown,
     ArrowLeftRight,
+    ArrowUpDown,
     ArrowRight,
     Route,
     Plus,
     Sparkles,
+    Trash2,
 } from "lucide-vue-next";
 import { Teleport } from "vue";
 import Calender from "@/components/common/Calender.vue";
@@ -876,6 +878,13 @@ function swapAirports() {
     destination.value = temp;
 }
 
+function swapTripAirports(index) {
+    if (!multiCityTrips.value[index]) return;
+    const temp = multiCityTrips.value[index].origin;
+    multiCityTrips.value[index].origin = multiCityTrips.value[index].destination;
+    multiCityTrips.value[index].destination = temp;
+}
+
 function searchFlights() {
     let errors = [];
 
@@ -1036,7 +1045,7 @@ onMounted(() => {
 <template>
     <div class="relative mx-auto max-w-7xl">
         <!-- Main booking services: tab strip merged into the top edge of the search card -->
-        <div class="merged-tabs relative z-10 -mb-px flex w-fit max-w-full items-center gap-1 rounded-t-2xl bg-white px-1.5 pb-1 pt-1.5 sm:gap-1.5 sm:rounded-t-3xl sm:px-2.5 sm:pt-2.5">
+        <div class="merged-tabs relative z-10 -mb-px flex w-fit max-w-full items-center gap-1 rounded-t-2xl bg-white px-1.5 pb-1 pt-1.5 sm:gap-1.5 sm:rounded-t-3xl sm:px-2.5 sm:pt-2.5 overflow-x-auto no-scrollbar">
             <template v-for="(tab, index) in tabs" :key="tab.id">
                 <span
                     v-if="index > 0"
@@ -1047,7 +1056,7 @@ onMounted(() => {
                     type="button"
                     @click="setActiveTab(tab.id)"
                     :class="[
-                        'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold transition-all duration-200 sm:gap-2 sm:px-6 sm:py-2.5 sm:text-sm',
+                        'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 sm:gap-2 sm:px-6 sm:py-2.5 sm:text-sm',
                         activeTab === tab.id
                             ? 'bg-primary text-white shadow-md shadow-primary/30'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-primary',
@@ -1063,7 +1072,7 @@ onMounted(() => {
             class="h-auto overflow-visible rounded-2xl border border-slate-200/80 bg-white shadow-[0_24px_60px_-16px_rgba(15,23,42,0.18)] rounded-tl-none sm:rounded-3xl sm:rounded-tl-none"
         >
         <!-- Content Area -->
-        <div class="px-4 pb-5 pt-4 sm:px-7 sm:pb-6 sm:pt-5">
+        <div class="px-3 pb-5 pt-3.5 sm:px-7 sm:pb-6 sm:pt-5">
             <!-- Loading State -->
             <div
                 v-if="isLoading"
@@ -1157,262 +1166,282 @@ onMounted(() => {
                 <!-- Main Search Form -->
                 <div class="bg-white rounded-xl sm:pr-0 rtl:pr-0">
                     <div v-if="flightType !== 'multi-city'">
+                        <!-- Mobile: 3 clean, airy cards with gap-2.5 | Desktop: 1 unified 5-column bar -->
                         <div
-                            class="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                            class="flex flex-col gap-2.5 sm:gap-0 sm:grid sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-slate-200 sm:bg-white sm:items-stretch"
                         >
-                            <div
-                                class="grid grid-cols-1 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.02fr)_minmax(0,1.28fr)] items-stretch"
-                            >
-                        <!-- From -->
-                        <div class="booking-cell text-start relative w-full">
-                            <label
-                                class="booking-label sm:mb-1"
-                                >{{ $t("FROM") }}</label
-                            >
-                            <Autocomplete
-                                v-model="origin"
-                                clear-on-click
-                                :icon="'MapPin'"
-                                show-icon
-                                :default-value="
-                                    route.query?.origin
-                                        ? route.query?.origin
-                                        : previousSearch?.origin
-                                          ? previousSearch?.origin
-                                          : ''
-                                "
-                                :placeholder="$t('origin')"
-                                :source="airports"
-                                :excluded-iata-codes="[destination]"
-                                :search-debounce="300"
-                                :default-suggestions="headerDefaultAirportCodes"
-                                :auto-fill-defaults="true"
-                                auto-fill-role="origin"
-                                :auto-fill-suggestion-index="0"
-                                class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                            />
-                            <button
-                                @click="swapAirports"
-                                type="button"
-                                title="Swap origin and destination"
-                                class="absolute -right-5 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200/90 bg-white text-primary shadow-[0_4px_14px_rgba(15,23,42,0.12)] transition-all duration-300 hover:rotate-180 hover:scale-105 hover:border-primary/50 hover:bg-blue-50/80 active:scale-95 sm:flex"
-                            >
-                                <ArrowLeftRight class="w-4 h-4 text-primary" />
-                            </button>
-                        </div>
-
-                        <!-- To -->
-                        <div class="booking-cell text-start relative w-full">
-                            <label
-                                class="booking-label mb-1"
-                                >{{ $t("TO") }}</label
-                            >
-                            <Autocomplete
-                                v-model="destination"
-                                clear-on-click
-                                :icon="'MapPin'"
-                                show-icon
-                                :default-value="
-                                    route.query?.destination
-                                        ? route.query?.destination
-                                        : previousSearch?.destination
-                                          ? previousSearch?.destination
-                                          : ''
-                                "
-                                :placeholder="$t('destination')"
-                                :source="airports"
-                                :excluded-iata-codes="[origin]"
-                                :search-debounce="300"
-                                :default-suggestions="headerDefaultAirportCodes"
-                                :auto-fill-defaults="true"
-                                auto-fill-role="destination"
-                                :auto-fill-suggestion-index="1"
-                                class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
-                            />
-                        </div>
-
-                        <div class="booking-cell w-full text-start">
-                            <div
-                                class="flex sm:mt-0.5 justify-start items-center"
-                            >
-                                <label
-                                    class="booking-label mb-1"
-                                    >Departure</label
-                                >
-                            </div>
-                            <Calender
-                                ref="departureCalendar"
-                                v-model="dateRange.start"
-                                :minValue="new Date().toLocaleDateString('en-CA')"
-                                large-icon
-                                class="w-full h-10 sm:h-auto"
-                            />
-                        </div>
-                        <div class="booking-cell w-full text-start cursor-pointer" @click="activateReturnTrip">
-                            <div
-                                class="flex sm:mt-0.5 justify-start items-center"
-                            >
-                                <label
-                                    class="booking-label mb-1"
-                                    >Return</label
-                                >
-                            </div>
-                            <template v-if="flightType === 'return'">
-                                <Calender
-                                    v-model="dateRange.end"
-                                    :minValue="
-                                        dateRange.start || new Date().toLocaleDateString('en-CA')
-                                    "
-                                    large-icon
-                                    class="w-full h-10 sm:h-auto"
-                                />
-                            </template>
-                            <button
-                                v-else
-                                type="button"
-                                class="group/add flex min-h-[50px] w-full flex-col justify-center text-left transition-colors"
-                            >
-                                <span class="inline-flex items-center gap-1.5 text-xs font-bold text-primary transition-transform duration-200 group-hover/add:translate-x-0.5">
-                                    <Plus class="h-3.5 w-3.5" />
-                                    <span>Add Return Date</span>
-                                </span>
-                                <span class="text-[11px] text-slate-400">Save more on round trips</span>
-                            </button>
-                        </div>
-
-                        <div class="booking-cell w-full text-start">
-                            <label
-                                class="booking-label mb-1"
-                                >Travellers & Class</label
-                            >
-                            <Popover v-model:open="isPopoverOpen">
-                                <PopoverTrigger as-child>
-                                    <button
-                                        type="button"
-                                        class="w-full h-[60px] flex items-center justify-between bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                                    >
-                                        <div class="text-left">
-                                            <p class="font-bold text-lg">
-                                                {{ travelersSummary }}
-                                            </p>
-                                            <p class="text-sm text-gray-500">
-                                                {{ classLabel }}
-                                            </p>
-                                        </div>
-                                        <ChevronDownIcon class="w-4 h-4 opacity-70" />
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent class="w-80 rounded-2xl border border-slate-100 p-5 shadow-2xl">
-                                    <div class="space-y-6">
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <button
-                                                @click="classType = 'Y'"
-                                                :class="[
-                                                    'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                    classType === 'Y'
-                                                        ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                ]"
-                                            >
-                                                {{ $t("economy") }}
-                                            </button>
-                                            <button
-                                                @click="classType = 'S'"
-                                                :class="[
-                                                    'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                    classType === 'S'
-                                                        ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                ]"
-                                            >
-                                                {{ $t("premium_economy") }}
-                                            </button>
-                                            <button
-                                                @click="classType = 'C'"
-                                                :class="[
-                                                    'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                    classType === 'C'
-                                                        ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                ]"
-                                            >
-                                                {{ $t("business") }}
-                                            </button>
-                                            <button
-                                                @click="classType = 'F'"
-                                                :class="[
-                                                    'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                    classType === 'F'
-                                                        ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                ]"
-                                            >
-                                                {{ $t("first class") }}
-                                            </button>
-                                        </div>
-                                        <div class="space-y-5">
-                                            <div class="flex justify-between items-center">
-                                                <Label><b>Adult</b> <br>(12 Years) </Label>
-                                                <NumberField class="w-1/2" id="adult-field-inline-return" v-model="adults" :max="maxAdults" @update:modelValue="handleAdultChange">
-                                                    <NumberFieldContent>
-                                                        <NumberFieldDecrement />
-                                                        <NumberFieldInput />
-                                                        <NumberFieldIncrement />
-                                                    </NumberFieldContent>
-                                                </NumberField>
-                                            </div>
-                                            <div class="flex justify-between items-center">
-                                                <Label><b>Child</b> <br> (2-11 Years)</Label>
-                                                <NumberField class="w-1/2" id="child-field-inline-return" v-model="children" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
-                                                    <NumberFieldContent>
-                                                        <NumberFieldDecrement />
-                                                        <NumberFieldInput />
-                                                        <NumberFieldIncrement />
-                                                    </NumberFieldContent>
-                                                </NumberField>
-                                            </div>
-                                            <div class="flex justify-between items-center">
-                                                <Label><b>Infant</b> <br>(Under 2 Years)</Label>
-                                                <NumberField class="w-1/2" id="infant-field-inline-return" v-model="infants" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
-                                                    <NumberFieldContent>
-                                                        <NumberFieldDecrement />
-                                                        <NumberFieldInput />
-                                                        <NumberFieldIncrement />
-                                                    </NumberFieldContent>
-                                                </NumberField>
-                                            </div>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
-                                                Reset
-                                            </Button>
-                                            <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
-                                                Apply
-                                            </Button>
-                                        </div>
+                            <!-- Card 1: Route Group (From & To) -->
+                            <div class="relative rounded-2xl border border-slate-200/90 bg-white shadow-2xs divide-y divide-slate-100 sm:contents">
+                                <!-- From -->
+                                <div class="booking-cell col-span-2 sm:col-span-1 text-start relative w-full sm:border-r sm:border-slate-200">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 sm:hidden"></span>
+                                        <label class="booking-label">{{ $t("FROM") }}</label>
                                     </div>
-                                </PopoverContent>
-                            </Popover>
+                                    <Autocomplete
+                                        v-model="origin"
+                                        clear-on-click
+                                        :icon="'MapPin'"
+                                        show-icon
+                                        :default-value="
+                                            route.query?.origin
+                                                ? route.query?.origin
+                                                : previousSearch?.origin
+                                                  ? previousSearch?.origin
+                                                  : ''
+                                        "
+                                        :placeholder="$t('origin')"
+                                        :source="airports"
+                                        :excluded-iata-codes="[destination]"
+                                        :search-debounce="300"
+                                        :default-suggestions="headerDefaultAirportCodes"
+                                        :auto-fill-defaults="true"
+                                        auto-fill-role="origin"
+                                        :auto-fill-suggestion-index="0"
+                                        class="w-full px-0 focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    />
+                                    <!-- Desktop Swap Button -->
+                                    <button
+                                        @click="swapAirports"
+                                        type="button"
+                                        title="Swap origin and destination"
+                                        class="absolute -right-5 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200/90 bg-white text-primary shadow-[0_4px_14px_rgba(15,23,42,0.12)] transition-all duration-300 hover:rotate-180 hover:scale-105 hover:border-primary/50 hover:bg-blue-50/80 active:scale-95 sm:flex"
+                                    >
+                                        <ArrowLeftRight class="w-4 h-4 text-primary" />
+                                    </button>
+                                </div>
+
+                                <!-- Mobile Swap Button: Vertically centered on the dividing line between From & To on mobile -->
+                                <button
+                                    @click="swapAirports"
+                                    type="button"
+                                    title="Swap origin and destination"
+                                    class="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border border-slate-200 bg-white text-primary shadow-xs transition-all duration-300 hover:rotate-180 hover:scale-105 hover:bg-blue-50 active:scale-90 sm:hidden"
+                                >
+                                    <ArrowUpDown class="w-3.5 h-3.5 text-primary" />
+                                </button>
+
+                                <!-- To -->
+                                <div class="booking-cell col-span-2 sm:col-span-1 text-start relative w-full sm:border-r sm:border-slate-200">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500 sm:hidden"></span>
+                                        <label class="booking-label">{{ $t("TO") }}</label>
+                                    </div>
+                                    <Autocomplete
+                                        v-model="destination"
+                                        clear-on-click
+                                        :icon="'MapPin'"
+                                        show-icon
+                                        :default-value="
+                                            route.query?.destination
+                                                ? route.query?.destination
+                                                : previousSearch?.destination
+                                                  ? previousSearch?.destination
+                                                  : ''
+                                        "
+                                        :placeholder="$t('destination')"
+                                        :source="airports"
+                                        :excluded-iata-codes="[origin]"
+                                        :search-debounce="300"
+                                        :default-suggestions="headerDefaultAirportCodes"
+                                        :auto-fill-defaults="true"
+                                        auto-fill-role="destination"
+                                        :auto-fill-suggestion-index="1"
+                                        class="w-full px-0 border-none focus:outline-none focus:ring-0 text-sm sm:text-lg font-semibold text-gray-900"
+                                    />
+                                </div>
                             </div>
-                        </div>
+
+                            <!-- Card 2: Dates Group (Departure & Return) -->
+                            <div class="rounded-2xl border border-slate-200/90 bg-white shadow-2xs grid grid-cols-2 divide-x divide-slate-100 overflow-hidden sm:contents">
+                                <!-- Departure -->
+                                <div class="booking-cell col-span-1 w-full text-start sm:border-r sm:border-slate-200">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <CalendarIcon class="w-3 h-3 text-slate-400 sm:hidden" />
+                                        <label class="booking-label">Departure</label>
+                                    </div>
+                                    <Calender
+                                        ref="departureCalendar"
+                                        v-model="dateRange.start"
+                                        :minValue="new Date().toLocaleDateString('en-CA')"
+                                        large-icon
+                                        class="w-full"
+                                    />
+                                </div>
+
+                                <!-- Return -->
+                                <div class="booking-cell col-span-1 w-full text-start cursor-pointer sm:border-r sm:border-slate-200" @click="activateReturnTrip">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <CalendarIcon class="w-3 h-3 text-slate-400 sm:hidden" />
+                                        <label class="booking-label">Return</label>
+                                    </div>
+                                    <template v-if="flightType === 'return'">
+                                        <Calender
+                                            v-model="dateRange.end"
+                                            :minValue="
+                                                dateRange.start || new Date().toLocaleDateString('en-CA')
+                                            "
+                                            large-icon
+                                            class="w-full"
+                                        />
+                                    </template>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        class="group/add flex min-h-[52px] sm:min-h-[50px] w-full flex-col justify-center text-left transition-colors"
+                                    >
+                                        <span class="inline-flex items-center gap-1.5 text-xs font-bold text-primary transition-transform duration-200 group-hover/add:translate-x-0.5">
+                                            <span class="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                                <Plus class="h-3 w-3" />
+                                            </span>
+                                            <span>Add Return</span>
+                                        </span>
+                                        <span class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Save on round trips</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Travellers & Class Group -->
+                            <div class="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden sm:contents">
+                                <div class="booking-cell col-span-2 sm:col-span-1 w-full text-start sm:border-r-0">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <UserIcon class="w-3 h-3 text-slate-400 sm:hidden" />
+                                        <label class="booking-label">Travellers &amp; Class</label>
+                                    </div>
+                                    <Popover v-model:open="isPopoverOpen">
+                                        <PopoverTrigger as-child>
+                                            <button
+                                                type="button"
+                                                class="w-full min-h-[52px] sm:h-[60px] flex items-center justify-between bg-transparent text-gray-900 text-sm sm:text-base font-medium focus:outline-none"
+                                            >
+                                                <div class="text-left flex items-center gap-2.5 sm:gap-3">
+                                                    <div class="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 sm:hidden">
+                                                        <UserIcon class="w-4 h-4" />
+                                                    </div>
+                                                    <UserIcon class="hidden sm:block w-4 h-4 sm:w-5 sm:h-5 text-gray-500 shrink-0" />
+                                                    <div>
+                                                        <p class="font-bold text-sm sm:text-lg text-slate-900 leading-tight">
+                                                            {{ travelersSummary }}
+                                                        </p>
+                                                        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
+                                                            {{ classLabel }}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <ChevronDownIcon class="w-4 h-4 text-slate-400 shrink-0" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent class="w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xl">
+                                            <div class="space-y-6">
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        @click="classType = 'Y'"
+                                                        :class="[
+                                                            'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                            classType === 'Y'
+                                                                ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                        ]"
+                                                    >
+                                                        {{ $t("economy") }}
+                                                    </button>
+                                                    <button
+                                                        @click="classType = 'S'"
+                                                        :class="[
+                                                            'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                            classType === 'S'
+                                                                ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                        ]"
+                                                    >
+                                                        {{ $t("premium_economy") }}
+                                                    </button>
+                                                    <button
+                                                        @click="classType = 'C'"
+                                                        :class="[
+                                                            'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                            classType === 'C'
+                                                                ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                        ]"
+                                                    >
+                                                        {{ $t("business") }}
+                                                    </button>
+                                                    <button
+                                                        @click="classType = 'F'"
+                                                        :class="[
+                                                            'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                            classType === 'F'
+                                                                ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                        ]"
+                                                    >
+                                                        {{ $t("first class") }}
+                                                    </button>
+                                                </div>
+                                                <div class="space-y-5">
+                                                    <div class="flex justify-between items-center">
+                                                        <Label><b>Adult</b> <br>(12 Years) </Label>
+                                                        <NumberField class="w-1/2" id="adult-field-inline-return" v-model="adults" :max="maxAdults" @update:modelValue="handleAdultChange">
+                                                            <NumberFieldContent>
+                                                                <NumberFieldDecrement />
+                                                                <NumberFieldInput />
+                                                                <NumberFieldIncrement />
+                                                            </NumberFieldContent>
+                                                        </NumberField>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <Label><b>Child</b> <br> (2-11 Years)</Label>
+                                                        <NumberField class="w-1/2" id="child-field-inline-return" v-model="children" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
+                                                            <NumberFieldContent>
+                                                                <NumberFieldDecrement />
+                                                                <NumberFieldInput />
+                                                                <NumberFieldIncrement />
+                                                            </NumberFieldContent>
+                                                        </NumberField>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <Label><b>Infant</b> <br>(Under 2 Years)</Label>
+                                                        <NumberField class="w-1/2" id="infant-field-inline-return" v-model="infants" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
+                                                            <NumberFieldContent>
+                                                                <NumberFieldDecrement />
+                                                                <NumberFieldInput />
+                                                                <NumberFieldIncrement />
+                                                            </NumberFieldContent>
+                                                        </NumberField>
+                                                    </div>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
+                                                        Reset
+                                                    </Button>
+                                                    <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
+                                                        Apply
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            </div>
                         </div>
                         <div class="mt-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:mt-4">
+                            <!-- Recent searches -->
                             <div
-                                class="flex flex-wrap items-center gap-2"
+                                v-if="recentSearches.length"
+                                class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 order-2 sm:order-1"
                             >
                                 <span
-                                    v-if="recentSearches.length"
-                                    class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1"
+                                    class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0"
                                 >
                                     Recent:
                                 </span>
                                 <button
-                                    v-if="recentSearches.length"
                                     v-for="(search, index) in recentSearches"
                                     :key="search.signature || `${search.timestamp}-${index}`"
                                     type="button"
                                     @click="applyRecentSearch(search)"
-                                    class="group inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/80 px-3.5 py-1.5 text-xs font-medium text-slate-600 shadow-xs transition-all duration-200 hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-xs"
+                                    class="group shrink-0 inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-xs transition-all duration-200 hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-xs"
                                 >
                                     <ClockIcon class="h-3.5 w-3.5 text-slate-400 group-hover:text-primary transition-colors" />
                                     <span class="font-semibold text-slate-800 group-hover:text-primary">{{ getRecentSearchCities(search).from }}</span>
@@ -1423,7 +1452,10 @@ onMounted(() => {
                                     </span>
                                 </button>
                             </div>
-                            <div class="w-full sm:w-48 sm:shrink-0">
+                            <div v-else class="order-2 sm:order-1"></div>
+
+                            <!-- Search Button -->
+                            <div class="w-full sm:w-48 sm:shrink-0 order-1 sm:order-2">
                                 <button
                                     @click="searchFlights"
                                     class="flight-search-button group"
@@ -1458,220 +1490,293 @@ onMounted(() => {
                                 :key="index"
                                 class="multicity-trip-row mb-3 last:mb-0"
                             >
-                                <div class="mb-1.5 flex items-center gap-2 text-start">
-                                    <span class="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold leading-none text-primary">{{ index + 1 }}</span>
-                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-600">Flight {{ index + 1 }}</span>
+                                <div class="mb-1.5 flex items-center justify-between text-start px-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold leading-none text-primary">{{ index + 1 }}</span>
+                                        <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Flight {{ index + 1 }}</span>
+                                    </div>
+                                    <!-- Mobile Remove Button for Flight 3+ (index >= 2) -->
+                                    <button
+                                        v-if="index >= 2"
+                                        type="button"
+                                        @click="removeTrip(index)"
+                                        class="sm:hidden flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded-lg transition-colors"
+                                    >
+                                        <Trash2 class="w-3.5 h-3.5" />
+                                        <span>Remove</span>
+                                    </button>
                                 </div>
                                 <div
-                                    class="grid grid-cols-1 items-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)]"
+                                    class="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs divide-y divide-slate-100 sm:divide-y-0 sm:grid sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.02fr)_minmax(0,1.28fr)] sm:items-stretch"
                                 >
-                                    <div class="booking-cell multicity-booking-cell text-start relative w-full">
-                                        <label class="booking-label">{{ $t("FROM") }}</label>
-                                    <Autocomplete
-                                        v-model="trip.origin"
-                                        clear-on-click
-                                        :default-value="
-                                            route.query?.origin
-                                                ? route.query?.origin
-                                                : previousSearch?.origin
-                                                  ? previousSearch?.origin
-                                                  : ''
-                                        "
-                                        :placeholder="$t('origin')"
-                                        :source="airports"
-                                        :excluded-iata-codes="[trip.destination]"
-                                        :search-debounce="300"
-                                        :icon="'MapPin'"
-                                        show-icon
-                                        :default-suggestions="
-                                            headerDefaultAirportCodes
-                                        "
-                                        :auto-fill-defaults="index === 0"
-                                        auto-fill-role="origin"
-                                        :auto-fill-suggestion-index="0"
-                                        class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
-                                    />
-                                    </div>
+                                    <!-- Mobile Route Group: From & To -->
+                                    <div class="relative divide-y divide-slate-100 sm:contents">
+                                        <!-- From -->
+                                        <div class="booking-cell multicity-booking-cell text-start relative w-full sm:border-r sm:border-slate-200">
+                                            <div class="flex items-center gap-1.5 mb-0.5">
+                                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 sm:hidden"></span>
+                                                <label class="booking-label">{{ $t("FROM") }}</label>
+                                            </div>
+                                            <Autocomplete
+                                                v-model="trip.origin"
+                                                clear-on-click
+                                                :default-value="
+                                                    route.query?.origin
+                                                        ? route.query?.origin
+                                                        : previousSearch?.origin
+                                                          ? previousSearch?.origin
+                                                          : ''
+                                                "
+                                                :placeholder="$t('origin')"
+                                                :source="airports"
+                                                :excluded-iata-codes="[trip.destination]"
+                                                :search-debounce="300"
+                                                :icon="'MapPin'"
+                                                show-icon
+                                                :default-suggestions="
+                                                    headerDefaultAirportCodes
+                                                "
+                                                :auto-fill-defaults="index === 0"
+                                                auto-fill-role="origin"
+                                                :auto-fill-suggestion-index="0"
+                                                class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
+                                            />
+                                            <!-- Desktop Swap Button -->
+                                            <button
+                                                @click="swapTripAirports(index)"
+                                                type="button"
+                                                title="Swap origin and destination"
+                                                class="absolute -right-5 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200/90 bg-white text-primary shadow-[0_4px_14px_rgba(15,23,42,0.12)] transition-all duration-300 hover:rotate-180 hover:scale-105 hover:border-primary/50 hover:bg-blue-50/80 active:scale-95 sm:flex"
+                                            >
+                                                <ArrowLeftRight class="w-4 h-4 text-primary" />
+                                            </button>
+                                        </div>
 
-                                    <div class="booking-cell multicity-booking-cell text-start relative w-full">
-                                        <label class="booking-label">{{ $t("TO") }}</label>
-                                    <Autocomplete
-                                        v-model="trip.destination"
-                                        clear-on-click
-                                        :icon="'MapPin'"
-                                        show-icon
-                                        :default-value="
-                                            route.query?.destination
-                                                ? route.query?.destination
-                                                : previousSearch?.destination
-                                                  ? previousSearch?.destination
-                                                  : ''
-                                        "
-                                        :placeholder="$t('destination')"
-                                        :source="airports"
-                                        :excluded-iata-codes="[trip.origin]"
-                                        :search-debounce="300"
-                                        :default-suggestions="
-                                            headerDefaultAirportCodes
-                                        "
-                                        :auto-fill-defaults="index === 0"
-                                        auto-fill-role="destination"
-                                        :auto-fill-suggestion-index="1"
-                                        class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
-                                    />
-                                    </div>
+                                        <!-- Mobile Swap Button -->
+                                        <button
+                                            @click="swapTripAirports(index)"
+                                            type="button"
+                                            title="Swap origin and destination"
+                                            class="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border border-slate-200 bg-white text-primary shadow-xs transition-all duration-300 hover:rotate-180 hover:scale-105 hover:bg-blue-50 active:scale-90 sm:hidden"
+                                        >
+                                            <ArrowUpDown class="w-3.5 h-3.5 text-primary" />
+                                        </button>
 
-                                    <div class="booking-cell multicity-booking-cell w-full text-start">
-                                        <label class="booking-label">Departure</label>
-                                        <Calender
-                                            v-model="trip.date"
-                                            :minValue="
-                                                index === 0
-                                                    ? todayDate
-                                                    : multiCityTrips[index - 1]
-                                                          ?.date || todayDate
-                                            "
-                                            large-icon
-                                            class="w-full border-none"
-                                        />
-                                    </div>
-                                    <div v-if="index === 0" class="w-full text-start">
-                                        <div class="booking-cell multicity-booking-cell w-full text-start">
-                                        <label class="booking-label">Travellers &amp; Class</label>
-                                        <Popover v-model:open="isPopoverOpen">
-                                            <PopoverTrigger as-child>
-                                                <button
-                                                    type="button"
-                                                    class="multicity-travelers-trigger w-full h-[110px] px-3 sm:px-4 flex items-center justify-between rounded border-0 bg-white text-gray-900 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                                                >
-                                                    <div class="text-left">
-                                                        <p class="font-bold text-lg">
-                                                            {{ travelersSummary }}
-                                                        </p>
-                                                        <p class="text-sm text-gray-500">
-                                                            {{ classLabel }}
-                                                        </p>
-                                                    </div>
-                                                    <ChevronDownIcon class="w-4 h-4 opacity-70" />
-                                                </button>
-                                            </PopoverTrigger>
-                                            <PopoverContent class="w-80 rounded-2xl border border-slate-100 p-5 shadow-2xl">
-                                                <div class="space-y-6">
-                                                    <div class="grid grid-cols-2 gap-2">
-                                                        <button
-                                                            @click="classType = 'Y'"
-                                                            :class="[
-                                                                'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                                classType === 'Y'
-                                                                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                            ]"
-                                                        >
-                                                            {{ $t("economy") }}
-                                                        </button>
-                                                        <button
-                                                            @click="classType = 'S'"
-                                                            :class="[
-                                                                'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                                classType === 'S'
-                                                                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                            ]"
-                                                        >
-                                                            {{ $t("premium_economy") }}
-                                                        </button>
-                                                        <button
-                                                            @click="classType = 'C'"
-                                                            :class="[
-                                                                'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                                classType === 'C'
-                                                                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                            ]"
-                                                        >
-                                                            {{ $t("business") }}
-                                                        </button>
-                                                        <button
-                                                            @click="classType = 'F'"
-                                                            :class="[
-                                                                'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
-                                                                classType === 'F'
-                                                                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
-                                                            ]"
-                                                        >
-                                                            {{ $t("first class") }}
-                                                        </button>
-                                                    </div>
-                                                    <div class="space-y-5">
-                                                        <div class="flex justify-between items-center">
-                                                            <Label><b>Adult</b> <br>(12 Years) </Label>
-                                                            <NumberField class="w-1/2" id="adult-field-inline-multicity" v-model="adults" :max="maxAdults" @update:modelValue="handleAdultChange">
-                                                                <NumberFieldContent>
-                                                                    <NumberFieldDecrement />
-                                                                    <NumberFieldInput />
-                                                                    <NumberFieldIncrement />
-                                                                </NumberFieldContent>
-                                                            </NumberField>
-                                                        </div>
-                                                        <div class="flex justify-between items-center">
-                                                            <Label><b>Child</b> <br> (2-11 Years)</Label>
-                                                            <NumberField class="w-1/2" id="child-field-inline-multicity" v-model="children" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
-                                                                <NumberFieldContent>
-                                                                    <NumberFieldDecrement />
-                                                                    <NumberFieldInput />
-                                                                    <NumberFieldIncrement />
-                                                                </NumberFieldContent>
-                                                            </NumberField>
-                                                        </div>
-                                                        <div class="flex justify-between items-center">
-                                                            <Label><b>Infant</b> <br>(Under 2 Years)</Label>
-                                                            <NumberField class="w-1/2" id="infant-field-inline-multicity" v-model="infants" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
-                                                                <NumberFieldContent>
-                                                                    <NumberFieldDecrement />
-                                                                    <NumberFieldInput />
-                                                                    <NumberFieldIncrement />
-                                                                </NumberFieldContent>
-                                                            </NumberField>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex justify-between">
-                                                        <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
-                                                            Reset
-                                                        </Button>
-                                                        <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
-                                                            Apply
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
+                                        <!-- To -->
+                                        <div class="booking-cell multicity-booking-cell text-start relative w-full sm:border-r sm:border-slate-200">
+                                            <div class="flex items-center gap-1.5 mb-0.5">
+                                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500 sm:hidden"></span>
+                                                <label class="booking-label">{{ $t("TO") }}</label>
+                                            </div>
+                                            <Autocomplete
+                                                v-model="trip.destination"
+                                                clear-on-click
+                                                :icon="'MapPin'"
+                                                show-icon
+                                                :default-value="
+                                                    route.query?.destination
+                                                        ? route.query?.destination
+                                                        : previousSearch?.destination
+                                                          ? previousSearch?.destination
+                                                          : ''
+                                                "
+                                                :placeholder="$t('destination')"
+                                                :source="airports"
+                                                :excluded-iata-codes="[trip.origin]"
+                                                :search-debounce="300"
+                                                :default-suggestions="
+                                                    headerDefaultAirportCodes
+                                                "
+                                                :auto-fill-defaults="index === 0"
+                                                auto-fill-role="destination"
+                                                :auto-fill-suggestion-index="1"
+                                                class="w-full px-0 border-none focus:outline-none focus:ring-0 text-base sm:text-lg font-semibold text-gray-900"
+                                            />
                                         </div>
                                     </div>
-                                    <div v-else-if="index === 1" @click="addTrip" class="booking-cell multicity-booking-cell flex w-full cursor-pointer items-center justify-center bg-blue-50/50 text-start transition-all hover:bg-blue-50 hover:border-primary/30 active:bg-blue-100">
-                                        <Button
-                                            @click.stop="addTrip"
-                                            class="h-auto w-full border-0 bg-transparent text-sm font-bold text-primary shadow-none hover:bg-transparent flex items-center justify-center gap-1.5"
+
+                                    <!-- Bottom Row on Mobile: For Flight 1 (index === 0), 2 columns (Departure + Travellers); For Flight 2+ (index >= 1), Departure is full width -->
+                                    <div :class="[index === 0 ? 'grid grid-cols-2 divide-x divide-slate-100 sm:contents' : 'sm:contents']">
+                                        <!-- Departure -->
+                                        <div class="booking-cell multicity-booking-cell w-full text-start sm:border-r sm:border-slate-200">
+                                            <div class="flex items-center gap-1.5 mb-0.5">
+                                                <CalendarIcon class="w-3 h-3 text-slate-400 sm:hidden" />
+                                                <label class="booking-label">Departure</label>
+                                            </div>
+                                            <Calender
+                                                v-model="trip.date"
+                                                :minValue="
+                                                    index === 0
+                                                        ? todayDate
+                                                        : multiCityTrips[index - 1]
+                                                              ?.date || todayDate
+                                                "
+                                                large-icon
+                                                class="w-full border-none"
+                                            />
+                                        </div>
+
+                                        <!-- Travellers & Class (Flight 1 only) -->
+                                        <div v-if="index === 0" class="w-full text-start">
+                                            <div class="booking-cell multicity-booking-cell w-full text-start">
+                                                <div class="flex items-center gap-1.5 mb-0.5">
+                                                    <UserIcon class="w-3 h-3 text-slate-400 sm:hidden" />
+                                                    <label class="booking-label">Travellers &amp; Class</label>
+                                                </div>
+                                                <Popover v-model:open="isPopoverOpen">
+                                                    <PopoverTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            class="multicity-travelers-trigger w-full min-h-[52px] sm:h-[110px] px-0 sm:px-4 flex items-center justify-between bg-transparent text-gray-900 text-sm sm:text-base font-medium focus:outline-none"
+                                                        >
+                                                            <div class="text-left flex items-center gap-2 sm:gap-3">
+                                                                <div class="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 sm:hidden">
+                                                                    <UserIcon class="w-4 h-4" />
+                                                                </div>
+                                                                <div>
+                                                                    <p class="font-bold text-sm sm:text-lg text-slate-900 leading-tight">
+                                                                        {{ travelersSummary }}
+                                                                    </p>
+                                                                    <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
+                                                                        {{ classLabel }}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <ChevronDownIcon class="w-4 h-4 text-slate-400 shrink-0" />
+                                                        </button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent class="w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xl">
+                                                        <div class="space-y-6">
+                                                            <div class="grid grid-cols-2 gap-2">
+                                                                <button
+                                                                    @click="classType = 'Y'"
+                                                                    :class="[
+                                                                        'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                                        classType === 'Y'
+                                                                            ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                                    ]"
+                                                                >
+                                                                    {{ $t("economy") }}
+                                                                </button>
+                                                                <button
+                                                                    @click="classType = 'S'"
+                                                                    :class="[
+                                                                        'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                                        classType === 'S'
+                                                                            ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                                    ]"
+                                                                >
+                                                                    {{ $t("premium_economy") }}
+                                                                </button>
+                                                                <button
+                                                                    @click="classType = 'C'"
+                                                                    :class="[
+                                                                        'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                                        classType === 'C'
+                                                                            ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                                    ]"
+                                                                >
+                                                                    {{ $t("business") }}
+                                                                </button>
+                                                                <button
+                                                                    @click="classType = 'F'"
+                                                                    :class="[
+                                                                        'rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wide transition-all duration-200',
+                                                                        classType === 'F'
+                                                                            ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900',
+                                                                    ]"
+                                                                >
+                                                                    {{ $t("first class") }}
+                                                                </button>
+                                                            </div>
+                                                            <div class="space-y-5">
+                                                                <div class="flex justify-between items-center">
+                                                                    <Label><b>Adult</b> <br>(12 Years) </Label>
+                                                                    <NumberField class="w-1/2" id="adult-field-inline-multicity" v-model="adults" :max="maxAdults" @update:modelValue="handleAdultChange">
+                                                                        <NumberFieldContent>
+                                                                            <NumberFieldDecrement />
+                                                                            <NumberFieldInput />
+                                                                            <NumberFieldIncrement />
+                                                                        </NumberFieldContent>
+                                                                    </NumberField>
+                                                                </div>
+                                                                <div class="flex justify-between items-center">
+                                                                    <Label><b>Child</b> <br> (2-11 Years)</Label>
+                                                                    <NumberField class="w-1/2" id="child-field-inline-multicity" v-model="children" :min="0" :max="maxChildren" @update:modelValue="handleChildChange">
+                                                                        <NumberFieldContent>
+                                                                            <NumberFieldDecrement />
+                                                                            <NumberFieldInput />
+                                                                            <NumberFieldIncrement />
+                                                                        </NumberFieldContent>
+                                                                    </NumberField>
+                                                                </div>
+                                                                <div class="flex justify-between items-center">
+                                                                    <Label><b>Infant</b> <br>(Under 2 Years)</Label>
+                                                                    <NumberField class="w-1/2" id="infant-field-inline-multicity" v-model="infants" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange">
+                                                                        <NumberFieldContent>
+                                                                            <NumberFieldDecrement />
+                                                                            <NumberFieldInput />
+                                                                            <NumberFieldIncrement />
+                                                                        </NumberFieldContent>
+                                                                    </NumberField>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex justify-between">
+                                                                <Button @click="resetTravelers" variant="outline" class="text-sm font-medium text-gray-700 hover:text-white">
+                                                                    Reset
+                                                                </Button>
+                                                                <Button @click="applyChanges" class="px-5 py-1 bg-primary text-white rounded-md font-sm">
+                                                                    Apply
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        </div>
+
+                                        <!-- Desktop Add Another City (Flight 2) -->
+                                        <div v-else-if="index === 1" @click="addTrip" class="hidden sm:flex booking-cell multicity-booking-cell w-full cursor-pointer items-center justify-center bg-blue-50/50 text-start transition-all hover:bg-blue-50 hover:border-primary/30 active:bg-blue-100">
+                                            <Button
+                                                @click.stop="addTrip"
+                                                class="h-auto w-full border-0 bg-transparent text-sm font-bold text-primary shadow-none hover:bg-transparent flex items-center justify-center gap-1.5"
+                                            >
+                                                <Plus class="h-4 w-4" />
+                                                Add Another City
+                                            </Button>
+                                        </div>
+
+                                        <!-- Desktop Remove Button (Flight 3+) -->
+                                        <div
+                                            v-if="index >= 2"
+                                            @click="removeTrip(index)"
+                                            class="hidden sm:flex booking-cell multicity-booking-cell w-full cursor-pointer items-center justify-center bg-red-50/60 transition-colors hover:bg-red-100/80 active:bg-red-200"
                                         >
-                                            <Plus class="h-4 w-4" />
-                                            Add Another City
-                                        </Button>
-                                    </div>
-                                    <!-- Remove Button -->
-                                    <div
-                                        v-if="index >= 2"
-                                        @click="removeTrip(index)"
-                                        class="booking-cell multicity-booking-cell flex w-full cursor-pointer items-center justify-center bg-red-50/60 transition-colors hover:bg-red-100/80 active:bg-red-200"
-                                    >
-                                        <Button
-                                            @click.stop="removeTrip(index)"
-                                            class="h-auto w-full border-0 bg-transparent text-sm font-bold text-red-600 shadow-none hover:bg-transparent"
-                                        >
-                                            Remove
-                                        </Button>
+                                            <Button
+                                                @click.stop="removeTrip(index)"
+                                                class="h-auto w-full border-0 bg-transparent text-sm font-bold text-red-600 shadow-none hover:bg-transparent"
+                                            >
+                                                Remove
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Mobile "+ Add Another City" Button (below all flight cards) -->
+                            <button
+                                v-if="multiCityTrips.length < 6"
+                                type="button"
+                                @click="addTrip"
+                                class="sm:hidden w-full h-11 mt-2.5 rounded-2xl border-2 border-dashed border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-2xs active:scale-[0.99]"
+                            >
+                                <Plus class="w-4 h-4" />
+                                <span>Add Another City</span>
+                            </button>
                             <div class="multicity-actions mt-3 flex justify-end">
                                 <button
                                     @click="searchFlights"
@@ -1866,7 +1971,7 @@ onMounted(() => {
 
 /* Boxed segmented trip-type control */
 .trip-type-btn {
-    @apply flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition-all duration-200 select-none sm:h-8 sm:w-auto sm:px-4 sm:text-xs md:text-sm border;
+    @apply flex h-9 w-full cursor-pointer items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap rounded-lg px-1 sm:px-4 text-[11px] sm:text-xs md:text-sm font-semibold transition-all duration-200 select-none sm:h-8 sm:w-auto border;
 }
 
 .trip-type-btn-active {
@@ -1914,11 +2019,72 @@ onMounted(() => {
 }
 
 .booking-cell {
-    @apply relative min-w-0 min-h-[76px] border-b border-slate-200 px-3.5 py-2 transition-colors duration-200 hover:bg-slate-50/70 focus-within:bg-blue-50/40 sm:border-b-0 sm:border-r;
+    @apply relative min-w-0 min-h-[64px] sm:min-h-[76px] px-3.5 sm:px-3.5 py-2.5 sm:py-2 transition-colors duration-200 hover:bg-slate-50/70 focus-within:bg-blue-50/40;
 }
 
-.booking-cell:last-child {
-    @apply sm:border-r-0;
+@media (max-width: 639px) {
+    /* Calendar Button in Mobile: transparent, zero padding, clean font */
+    .booking-cell :deep(.h-\[110px\]) {
+        height: 52px !important;
+        min-height: 52px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
+    .booking-cell :deep(button.h-\[110px\]) {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        background-color: transparent !important;
+    }
+    .booking-cell :deep(.h-\[110px\] svg) {
+        width: 1.25rem !important;
+        height: 1.25rem !important;
+        margin-right: 0.5rem !important;
+        color: hsl(var(--primary)) !important;
+    }
+    .booking-cell :deep(.h-\[110px\] p.text-lg) {
+        font-size: 0.95rem !important;
+        line-height: 1.2rem !important;
+        font-weight: 700 !important;
+        color: rgb(15 23 42) !important;
+    }
+    .booking-cell :deep(.h-\[110px\] p.text-sm) {
+        font-size: 0.72rem !important;
+        margin-top: 0 !important;
+        color: rgb(100 116 139) !important;
+    }
+
+    /* Autocomplete in Mobile: zero padding-top on pointer-events, proper icon color & margin */
+    .booking-cell :deep(.dropdown .pointer-events-none) {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-top: 0 !important;
+        gap: 0.65rem !important;
+    }
+    .booking-cell :deep(.dropdown .pointer-events-none svg) {
+        width: 1.35rem !important;
+        height: 1.35rem !important;
+        color: hsl(var(--primary)) !important;
+    }
+    .booking-cell :deep(.dropdown input) {
+        padding-left: 2.25rem !important;
+        padding-right: 2.5rem !important;
+        padding-top: 0 !important;
+        font-size: 0.95rem !important;
+    }
+    .booking-cell :deep(.dropdown p.text-lg) {
+        font-size: 1rem !important;
+        line-height: 1.25rem !important;
+        font-weight: 700 !important;
+        color: rgb(15 23 42) !important;
+    }
+    .booking-cell :deep(.dropdown p.text-sm) {
+        font-size: 0.75rem !important;
+        margin-top: 0.1rem !important;
+        margin-bottom: 0 !important;
+        color: rgb(100 116 139) !important;
+    }
 }
 
 .booking-cell :deep(.min-h-\[110px\]) {

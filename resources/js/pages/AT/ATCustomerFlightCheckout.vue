@@ -2558,53 +2558,31 @@ watch(flight, () => {
     </div>
     <!-- Main Content - Flight Source 1 -->
     <div v-if="route?.query?.flight_source == 1 && !showPreview" class="min-h-screen bg-gray-50 py-4">
-        <pre>{{qoute}}</pre>
         <div class="max-w-7xl  mx-auto px-3 sm:px-4">
             <div v-if="!isLoading && flight">
                 <!-- Header -->
-                <div class="bg-white border mb-10 border-gray-200 py-6 px-4">
-
-
-                    <!-- Progress Steps -->
-                    <div class="relative flex items-center justify-between mx-auto px-4">
-
-                        <!-- Step 1 - Completed -->
-                        <div class="flex flex-col items-center relative z-10">
-                            <div
-                                class="w-8 h-8 rounded-full bg-primary border-primary text-white shadow-lg shadow-primary/30 flex items-center justify-center border-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M5 13l4 4L19 7" />
+                <!-- Progress Steps -->
+                <div class="mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 sm:mb-4 sm:px-5 sm:py-3">
+                    <ol class="flex items-center gap-2 sm:gap-3">
+                        <li class="flex shrink-0 items-center gap-1.5">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                                 </svg>
-                            </div>
-                            <span class="mt-3 text-sm font-semibold text-gray-700">Information</span>
-                        </div>
-
-                        <!-- Line -->
-                        <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full"></div>
-
-                        <!-- Step 2 - Pending -->
-                        <div class="flex flex-col items-center relative z-10">
-                            <div
-                                class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 text-gray-400 flex items-center justify-center">
-                                <span class="text-xs font-bold">2</span>
-                            </div>
-                            <span class="mt-3 text-sm font-semibold text-gray-500">Payment</span>
-                        </div>
-
-                        <!-- Line -->
-                        <div class="flex-1 h-0.5 bg-gray-200 mx-6 rounded-full"></div>
-
-                        <!-- Step 3 - Pending -->
-                        <div class="flex flex-col items-center relative z-10">
-                            <div
-                                class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 text-gray-400 flex items-center justify-center">
-                                <span class="text-xs font-bold">3</span>
-                            </div>
-                            <span class="mt-3 text-sm font-semibold text-gray-500">E-Ticket</span>
-                        </div>
-
-                    </div>
+                            </span>
+                            <span class="text-xs font-semibold text-gray-900 sm:text-sm">Information</span>
+                        </li>
+                        <li class="h-px flex-1 bg-gray-200" aria-hidden="true"></li>
+                        <li class="flex shrink-0 items-center gap-1.5">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 text-[11px] font-bold text-gray-400">2</span>
+                            <span class="text-xs font-medium text-gray-500 sm:text-sm">Payment</span>
+                        </li>
+                        <li class="h-px flex-1 bg-gray-200" aria-hidden="true"></li>
+                        <li class="flex shrink-0 items-center gap-1.5">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 text-[11px] font-bold text-gray-400">3</span>
+                            <span class="text-xs font-medium text-gray-500 sm:text-sm">E-Ticket</span>
+                        </li>
+                    </ol>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -2617,7 +2595,7 @@ watch(flight, () => {
 
 
                         <!-- Contact Information Card -->
-                        <div class="order-2 bg-white shadow-sm border border-gray-200">
+                        <div class="order-2 bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
                             <div class="bg-gray-50 border-b border-gray-200 p-3">
                                 <h2 class="text-base font-medium text-gray-900">Contact Information</h2>
                                 <p class="text-xs text-gray-500 mt-1">We'll use this information to send you booking
@@ -2671,15 +2649,15 @@ watch(flight, () => {
                         </div>
 
                         <!-- Traveller Details Card with Accordions -->
-                        <div class="order-1 bg-white shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="order-1 bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
                             <div class="bg-gray-50 border-b border-gray-200 p-3">
                                 <h2 class="text-base font-medium text-gray-900">Traveller Details</h2>
                                 <p class="text-xs text-gray-500 mt-1">Use all names exactly as they appear on your
                                     passport/ID</p>
                             </div>
-                            <div class="p-3 space-y-2">
+                            <div class="p-2 sm:p-3 space-y-2">
                                 <div v-for="(traveller, index) in travellers" :key="`traveller-${index}`"
-                                    class="border border-gray-200">
+                                    class="rounded-lg border border-gray-200 overflow-hidden">
                                     <!-- Accordion Header -->
                                     <button @click="traveller.isOpen = !traveller.isOpen"
                                         class="w-full bg-gray-50 p-3 text-left flex items-center justify-between hover:bg-gray-100 transition-colors">
@@ -2701,286 +2679,177 @@ watch(flight, () => {
 
                                     <!-- Accordion Content -->
                                     <div v-show="traveller.isOpen" class="border-t border-gray-200">
-                                        <div class="p-4">
+                                        <div class="p-3 sm:p-4">
                                             <!-- Personal Details Section -->
                                             <div class="mb-6">
-                                                <h4 class="text-sm font-medium text-gray-900 mb-4">Personal details</h4>
-                                                <p class="text-xs text-gray-500 mb-4">
-                                                    Save time by uploading a passport image to auto-fill the details
-                                                    below. Ensure the image
-                                                    is clear and contains all relevant information.
+                                                <h4 class="text-sm font-medium text-gray-900 mb-2">Personal details</h4>
+
+                                                <!-- Passport upload auto-fills the fields below -->
+                                                <input type="file" accept="image/*" ref="passportUpload"
+                                                    @change="handlePassportUpload($event, index)"
+                                                    class="hidden" :id="`passport-upload-${index}`" />
+                                                <button type="button" @click="triggerFileUpload(index)"
+                                                    class="flex w-full items-center gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-left transition-colors hover:bg-primary/10 sm:max-w-md">
+                                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm">
+                                                        <Upload class="h-4 w-4" />
+                                                    </span>
+                                                    <span class="min-w-0 flex-1">
+                                                        <span class="block text-sm font-semibold text-gray-900">Upload passport to auto-fill</span>
+                                                        <span class="block truncate text-xs text-gray-500">
+                                                            {{ traveller.passportImage?.name || "Use a clear photo of the info page" }}
+                                                        </span>
+                                                    </span>
+                                                    <span class="shrink-0 text-xs font-semibold text-primary">Upload</span>
+                                                </button>
+                                                <p v-if="traveller.uploadError" class="mt-1 text-red-500 text-xs">
+                                                    {{ traveller.uploadError }}
                                                 </p>
-
-                                                <!-- Upload Passport Button -->
-                                                <div class="flex">
-                                                    <div class="mb-4">
-                                                        <Label
-                                                            class="text-sm font-medium text-gray-700 mb-2 block">Upload
-                                                            Passport Image</Label>
-                                                        <div class="flex items-center gap-3">
-                                                            <input type="file" accept="image/*" ref="passportUpload"
-                                                                @change="handlePassportUpload($event, index)"
-                                                                class="hidden" :id="`passport-upload-${index}`" />
-                                                            <button type="button" @click="triggerFileUpload(index)"
-                                                                class="bg-primary text-white px-4 py-2 text-sm rounded hover:bg-primary/90 flex items-center gap-2">
-                                                                <Upload class="w-4 h-4" />
-                                                                Upload Image
-                                                            </button>
-                                                            <span v-if="traveller.passportImage"
-                                                                class="text-xs text-gray-600">
-                                                                {{ traveller.passportImage.name }}
-                                                            </span>
-                                                            <span v-if="traveller.uploadError"
-                                                                class="text-red-500 text-xs">
-                                                                {{ traveller.uploadError }}
-                                                            </span>
-
-
-                                                        </div>
-
-                                                    </div>
-
-                                                </div>
                                                 <div v-if="scanning"
                                                     class="text-blue-500 text-sm flex items-center gap-2">
                                                     <span>Scanning... {{ progress }}%</span>
                                                 </div>
-                                                <div class="flex items-center  gap-6 mt-4">
+                                                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                                     <!-- Gender Selection -->
-                                                    <div class="mb-4">
-                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                    <div>
+                                                        <Label class="field-label">
                                                             Gender <span class="text-red-500">*</span>
                                                         </Label>
                                                         <div class="flex gap-2">
-                                                            <button type="button" @click="traveller.gender = 'M'"
-                                                                :class="[
-                                                                    'px-3 py-1.5 text-xs rounded-full border transition-colors',
-                                                                    traveller.gender === 'M'
-                                                                        ? 'border-primary bg-primary text-white'
-                                                                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                                                                ]">
-                                                                Male
-                                                            </button>
-                                                            <button type="button" @click="traveller.gender = 'F'"
-                                                                :class="[
-                                                                    'px-3 py-1.5 text-xs rounded-full border transition-colors',
-                                                                    traveller.gender === 'F'
-                                                                        ? 'border-primary bg-primary text-white'
-                                                                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                                                                ]">
-                                                                Female
+                                                            <button v-for="genderOption in [{ value: 'M', label: 'Male' }, { value: 'F', label: 'Female' }]"
+                                                                :key="genderOption.value" type="button"
+                                                                @click="traveller.gender = genderOption.value"
+                                                                :class="['choice-chip flex-1 sm:flex-none', { 'is-selected': traveller.gender === genderOption.value }]">
+                                                                {{ genderOption.label }}
                                                             </button>
                                                         </div>
-                                                        <div v-if="getErrorPath(`travellers.${index}.gender`)"
-                                                            class="text-red-500 text-xs mt-1">
+                                                        <div v-if="getErrorPath(`travellers.${index}.gender`)" class="field-error">
                                                             {{ getErrorPath(`travellers.${index}.gender`) }}
                                                         </div>
                                                     </div>
 
                                                     <!-- Title -->
-                                                    <div class="mb-4">
-                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">
+                                                    <div>
+                                                        <Label class="field-label">
                                                             Title <span class="text-red-500">*</span>
                                                         </Label>
-                                                        <div class="flex gap-2 flex-wrap">
+                                                        <div class="flex flex-wrap gap-2">
                                                             <button type="button"
                                                                 v-for="titleOption in ['Mr', 'Ms', 'Mrs', 'Miss', 'Mstr']"
                                                                 :key="titleOption"
-                                                                @click="traveller.title = titleOption" :class="[
-                                                                    'px-3 py-1.5 text-xs rounded-full border transition-colors',
-                                                                    traveller.title === titleOption
-                                                                        ? 'border-primary bg-primary text-white'
-                                                                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                                                                ]">
+                                                                @click="traveller.title = titleOption"
+                                                                :class="['choice-chip', { 'is-selected': traveller.title === titleOption }]">
                                                                 {{ titleOption }}
                                                             </button>
                                                         </div>
-                                                        <div v-if="getErrorPath(`travellers.${index}.title`)"
-                                                            class="text-red-500 text-xs mt-1">
+                                                        <div v-if="getErrorPath(`travellers.${index}.title`)" class="field-error">
                                                             {{ getErrorPath(`travellers.${index}.title`) }}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <!-- Full Name -->
-                                                <div class="grid grid-cols-2 gap-4">
-                                                    <div class="mb-4">
-                                                        <Label class="text-sm font-medium text-gray-700 mb-2 block">Full
-                                                            name <span class="text-red-500">*</span></Label>
-                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            <div>
-                                                                <Input v-model="traveller.firstName" type="text"
-                                                                    placeholder="First name"
-                                                                    class="text-sm border-gray-300"
-                                                                    :class="{ 'border-red-300': getErrorPath(`travellers.${index}.firstName`) }" />
-                                                                <div v-if="getErrorPath(`travellers.${index}.firstName`)"
-                                                                    class="text-red-500 text-xs mt-1">{{
-                                                                        getErrorPath(`travellers.${index}.firstName`) }}
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <Input v-model="traveller.lastName" type="text"
-                                                                    placeholder="Last name"
-                                                                    class="text-sm border-gray-300"
-                                                                    :class="{ 'border-red-300': getErrorPath(`travellers.${index}.lastName`) }" />
-                                                                <div v-if="getErrorPath(`travellers.${index}.lastName`)"
-                                                                    class="text-red-500 text-xs mt-1">{{
-                                                                        getErrorPath(`travellers.${index}.lastName`) }}
-                                                                </div>
-                                                            </div>
+
+                                                <div class="mt-5 mb-1 border-t border-gray-100"></div>
+
+                                                <!-- Traveller fields, two per row -->
+                                                <div class="traveller-fields mt-4 grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-x-4">
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.firstName`) }]">
+                                                        <Label :for="`first-name-${index}`" class="field-label">First name <span class="text-red-500">*</span></Label>
+                                                        <Input v-model="traveller.firstName" :id="`first-name-${index}`" type="text" placeholder="As on passport" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.firstName`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.firstName`) }}
+                                                        </div>
+                                                    </div>
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.lastName`) }]">
+                                                        <Label :for="`last-name-${index}`" class="field-label">Last name <span class="text-red-500">*</span></Label>
+                                                        <Input v-model="traveller.lastName" :id="`last-name-${index}`" type="text" placeholder="As on passport" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.lastName`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.lastName`) }}
                                                         </div>
                                                     </div>
 
-                                                    <!-- Additional Personal Information -->
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                        <div>
-                                                            <Label class="text-sm font-medium text-gray-700 mb-2 block">
-                                                                Date of Birth
-                                                                <span v-if="traveller.type == 'ADT'"
-                                                                    class="text-red-500 text-xs">*12+
-                                                                    years</span>
-                                                                <span v-else-if="traveller.type == 'CNN'"
-                                                                    class="text-red-500 text-xs">*2-12
-                                                                    years</span>
-                                                                <span v-else-if="traveller.type == 'INF'"
-                                                                    class="text-red-500 text-xs">*Under
-                                                                    2</span>
-                                                            </Label>
-                                                            <Calender v-model="traveller.dob" type="date"
-                                                                :maxValue="todayDate"
-                                                                :id="`date-of-birth-${index}`"
-                                                                placeholder="Date Of Birth"
-                                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.dob`) }"
-                                                                class="w-full h-8 text-sm bg-white text-black border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.dob`)"
-                                                                class="text-red-500 text-xs mt-1">{{
-                                                                    getErrorPath(`travellers.${index}.dob`) }}</div>
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.dob`) }]">
+                                                        <Label :for="`date-of-birth-${index}`" class="field-label">
+                                                            Date of birth <span class="text-red-500">*</span>
+                                                            <span class="field-hint">
+                                                                {{ traveller.type == 'ADT' ? '12+ yrs' : traveller.type == 'CNN' ? '2-12 yrs' : traveller.type == 'INF' ? 'Under 2' : '' }}
+                                                            </span>
+                                                        </Label>
+                                                        <Calender v-model="traveller.dob" type="date"
+                                                            :maxValue="todayDate"
+                                                            :id="`date-of-birth-${index}`"
+                                                            placeholder="Date Of Birth" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.dob`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.dob`) }}
                                                         </div>
-                                                        <div class="mb-3">
-                                                            <Label :for="`nationality-${index}`"
-                                                                class="block text-sm font-medium text-gray-700 mb-1">
-                                                                Nationality<span class="required">*</span>
-                                                            </Label>
-                                                            <CountryDropdown :keyValue="'code'"
-                                                                placeholder="SELECT NATIONALITY"
-                                                                v-model="traveller.nationality"
-                                                                @update:modelValue="(value) => setNationality(traveller, value)" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.nationality`)"
-                                                                class="error-message">
-                                                                {{ getErrorPath(`travellers.${index}.nationality`) }}
-                                                            </div>
+                                                    </div>
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.nationality`) }]">
+                                                        <Label :for="`nationality-${index}`" class="field-label">Nationality <span class="text-red-500">*</span></Label>
+                                                        <CountryDropdown :keyValue="'code'"
+                                                            placeholder="Select"
+                                                            v-model="traveller.nationality"
+                                                            @update:modelValue="(value) => setNationality(traveller, value)" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.nationality`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.nationality`) }}
                                                         </div>
                                                     </div>
 
-                                                    <!-- Document Information -->
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                        <div class="space-y-2">
-                                                            <Label :for="`document-type-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
-                                                                Document Type <span class="text-red-500">*</span>
-                                                            </Label>
-                                                            <Select v-model="traveller.documentType"
-                                                                :id="`document-type-${index}`"
-                                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.documentType`) }">
-                                                                <SelectTrigger
-                                                                    class="h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20">
-                                                                    <SelectValue placeholder="Select type" />
-                                                                </SelectTrigger>
-                                                                <SelectContent class="bg-white border-gray-200">
-                                                                    <SelectGroup>
-                                                                        <SelectItem value="passport">Passport
-                                                                        </SelectItem>
-                                                                        <SelectItem value="cnic">CNIC</SelectItem>
-                                                                    </SelectGroup>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <div v-if="getErrorPath(`travellers.${index}.documentType`)"
-                                                                class="error-message text-xs text-red-500">
-                                                                {{ getErrorPath(`travellers.${index}.documentType`) }}
-                                                            </div>
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.documentType`) }]">
+                                                        <Label :for="`document-type-${index}`" class="field-label">Document type <span class="text-red-500">*</span></Label>
+                                                        <Select v-model="traveller.documentType" :id="`document-type-${index}`">
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select type" />
+                                                            </SelectTrigger>
+                                                            <SelectContent class="bg-white border-gray-200">
+                                                                <SelectGroup>
+                                                                    <SelectItem value="passport">Passport</SelectItem>
+                                                                    <SelectItem value="cnic">CNIC</SelectItem>
+                                                                </SelectGroup>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <div v-if="getErrorPath(`travellers.${index}.documentType`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.documentType`) }}
                                                         </div>
-
-                                                        <div v-if="traveller.documentType == 'passport'"
-                                                            class="space-y-2">
-                                                            <Label :for="`document-no-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
-                                                                Document Number <span class="text-red-500">*</span>
-                                                            </Label>
-                                                            <Input v-model="traveller.documentNo"
-                                                                :id="`document-no-${index}`"
-                                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.documentNo`) }"
-                                                                type="text"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                                placeholder="Enter document number" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.documentNo`)"
-                                                                class="error-message text-xs text-red-500">
-                                                                {{ getErrorPath(`travellers.${index}.documentNo`) }}
-                                                            </div>
+                                                    </div>
+                                                    <div v-if="traveller.documentType == 'passport'"
+                                                        :class="['field', { 'has-error': getErrorPath(`travellers.${index}.documentNo`) }]">
+                                                        <Label :for="`document-no-${index}`" class="field-label">Passport no. <span class="text-red-500">*</span></Label>
+                                                        <Input v-model="traveller.documentNo" :id="`document-no-${index}`" type="text" placeholder="e.g. AB1234567" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.documentNo`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.documentNo`) }}
                                                         </div>
-                                                        <div v-if="traveller.documentType == 'cnic'" class="space-y-2">
-                                                            <Label :for="`document-no-${index}`"
-                                                                class="block text-sm font-medium text-gray-700">
-                                                                CNIC Number <span class="text-red-500">*</span>
-                                                            </Label>
-                                                            <Input v-model="traveller.cnic" :id="`cnic-no-${index}`"
-                                                                type="text"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                                placeholder="Enter CNIC number" />
-
-                                                            <div v-if="getErrorPath(`travellers.${index}.cnic`)"
-                                                                class="error-message text-xs text-red-500">
-                                                                {{ getErrorPath(`travellers.${index}.cnic`) }}
-                                                            </div>
+                                                    </div>
+                                                    <div v-if="traveller.documentType == 'cnic'"
+                                                        :class="['field', { 'has-error': getErrorPath(`travellers.${index}.cnic`) }]">
+                                                        <Label :for="`cnic-no-${index}`" class="field-label">CNIC number <span class="text-red-500">*</span></Label>
+                                                        <Input v-model="traveller.cnic" :id="`cnic-no-${index}`" type="text" placeholder="Enter CNIC" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.cnic`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.cnic`) }}
                                                         </div>
                                                     </div>
 
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div>
-                                                            <Label
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">Expiry
-                                                                Date <span class="text-red-500">*</span></Label>
-                                                            <Calender v-model="traveller.expiryDate"
-                                                                :id="`expiry-date-${index}`"
-                                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
-                                                                type="date"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.expiryDate`)"
-                                                                class="text-red-500 text-xs mt-1">{{
-                                                                    getErrorPath(`travellers.${index}.expiryDate`) }}</div>
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.expiryDate`) }]">
+                                                        <Label :for="`expiry-date-${index}`" class="field-label">Expiry date <span class="text-red-500">*</span></Label>
+                                                        <Calender v-model="traveller.expiryDate" :id="`expiry-date-${index}`" type="date" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.expiryDate`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.expiryDate`) }}
                                                         </div>
-                                                        <div class="mb-3">
-                                                            <Label :for="`issue-country-${index}`"
-                                                                class="block text-sm font-medium text-gray-700 mb-1">
-                                                                Issue Country<span class="required">*</span>
-                                                            </Label>
-                                                            <CountryDropdown :keyValue="'code'"
-                                                                placeholder="SELECT ISSUE COUNTRY"
-                                                                v-model="traveller.issueCountry" />
-                                                            <div v-if="getErrorPath(`travellers.${index}.issueCountry`)"
-                                                                class="error-message">
-                                                                {{ getErrorPath(`travellers.${index}.issueCountry`) }}
-                                                            </div>
-                                                        </div>
-
                                                     </div>
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                                        <div>
-                                                            <Label :for="`state-${index}`"
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">
-                                                                State
-                                                            </Label>
-                                                            <Input v-model="traveller.state" :id="`state-${index}`"
-                                                                type="text" placeholder="Enter state"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
+                                                    <div :class="['field', { 'has-error': getErrorPath(`travellers.${index}.issueCountry`) }]">
+                                                        <Label :for="`issue-country-${index}`" class="field-label">Issue country <span class="text-red-500">*</span></Label>
+                                                        <CountryDropdown :keyValue="'code'"
+                                                            placeholder="Select"
+                                                            v-model="traveller.issueCountry" />
+                                                        <div v-if="getErrorPath(`travellers.${index}.issueCountry`)" class="field-error">
+                                                            {{ getErrorPath(`travellers.${index}.issueCountry`) }}
                                                         </div>
-                                                        <div>
-                                                            <Label :for="`city-${index}`"
-                                                                class="text-sm font-medium text-gray-700 mb-2 block">
-                                                                City
-                                                            </Label>
-                                                            <Input v-model="traveller.city" :id="`city-${index}`"
-                                                                type="text" placeholder="Enter city name"
-                                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                                        </div>
+                                                    </div>
+
+                                                    <div class="field">
+                                                        <Label :for="`state-${index}`" class="field-label">State</Label>
+                                                        <Input v-model="traveller.state" :id="`state-${index}`" type="text" placeholder="Optional" />
+                                                    </div>
+                                                    <div class="field">
+                                                        <Label :for="`city-${index}`" class="field-label">City</Label>
+                                                        <Input v-model="traveller.city" :id="`city-${index}`" type="text" placeholder="Optional" />
                                                     </div>
                                                 </div>
                                             </div>
@@ -3415,7 +3284,7 @@ watch(flight, () => {
                                     <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex">
                                         <!-- Layover Info -->
                                         <div v-if="segment?.layover_time"
-                                            class="bg-amber-50 border-l-4 border-amber-400 p-3">
+                                            class="bg-amber-50 border-l-4 border-amber-400 px-3 py-1.5">
                                             <div class="flex items-center justify-center">
                                                 <ClockIcon class="w-4 h-4 text-amber-600 mr-2" />
                                                 <span class="text-xs font-medium text-amber-800">
@@ -3425,76 +3294,49 @@ watch(flight, () => {
                                             </div>
                                         </div>
                                         <!-- Flight Segment -->
-                                        <div class="p-4">
-                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div class="px-4 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <img class="h-7 w-7 shrink-0 rounded border border-gray-200 object-contain"
+                                                    :src="segment?.operating_carrier?.logo" alt="Airline" />
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="truncate text-sm font-semibold text-gray-900">
+                                                        {{ segment?.operating_carrier?.name }}
+                                                        <span class="font-normal text-gray-400">· {{ segment?.flight_number }}</span>
+                                                    </div>
+                                                    <div v-if="segment?.aircraft?.model" class="truncate text-[11px] text-gray-400">{{ segment.aircraft.model }}</div>
+                                                </div>
+                                                <div class="shrink-0 text-xs font-medium text-gray-500">
+                                                    {{ moment.parseZone(segment?.departure_at).format("ddd, DD MMM") }}
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-2.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
                                                 <!-- Departure -->
-                                                <div class="space-y-2">
-                                                    <div class="flex items-center space-x-2">
-                                                        <img class="w-8 h-8 border border-gray-200"
-                                                            :src="segment?.operating_carrier?.logo" alt="Airline" />
-                                                        <div>
-                                                            <div class="text-sm font-medium text-gray-900">{{
-                                                                segment?.operating_carrier?.name }}</div>
-                                                            <div class="text-xs text-gray-500">{{
-                                                                segment?.flight_number
-                                                                }}</div>
-                                                        </div>
+                                                <div class="min-w-0">
+                                                    <div class="text-base font-bold tabular-nums text-gray-900">
+                                                        {{ moment.parseZone(segment?.departure_at).format("HH:mm") }}
+                                                        <span class="text-xs font-semibold text-gray-500">{{ segment?.from?.iata }}</span>
                                                     </div>
-                                                    <div class="space-y-1">
-                                                        <div class="text-sm font-medium text-gray-900">{{
-                                                            formatDate(segment?.departure_at) }}</div>
-                                                        <div class="text-xs text-gray-500">{{ segment?.from?.name }}
-                                                            ({{
-                                                                segment?.from?.iata }})</div>
-                                                        <!-- <div class="text-xs text-gray-400">Terminal: {{
-                                                                segment?.from_terminal[0] ?? "N/A" }}</div> -->
-                                                    </div>
+                                                    <div class="truncate text-[11px] text-gray-500" :title="segment?.from?.name">{{ segment?.from?.name }}</div>
                                                 </div>
                                                 <!-- Flight Path -->
-                                                <div class="flex items-center justify-center">
-                                                    <div class="w-full max-w-xs">
-                                                        <div class="flex items-center justify-between mb-1">
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                                }}</span>
-                                                            <span class="text-xs font-medium text-gray-900">{{
-                                                                moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                                }}</span>
-                                                        </div>
-                                                        <div class="relative">
-                                                            <div
-                                                                class="absolute left-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                            <div
-                                                                class="h-0.5 bg-gradient-to-r from-primary to-primary/30 mx-1">
-                                                            </div>
-                                                            <div
-                                                                class="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-primary rounded-full">
-                                                            </div>
-                                                        </div>
-                                                        <div class="flex items-center justify-between mt-1">
-                                                            <span class="text-xs text-gray-400">{{
-                                                                segment?.from?.iata
-                                                                }}</span>
-                                                            <span class="text-xs text-gray-400">{{ segment?.to?.iata
-                                                                }}</span>
-                                                        </div>
+                                                <div class="flex w-16 flex-col items-center sm:w-24">
+                                                    <span class="whitespace-nowrap text-[10px] font-medium text-gray-400">
+                                                        {{ Math.floor(moment(segment?.arrival_at).diff(moment(segment?.departure_at), "minutes") / 60) }}h
+                                                        {{ moment(segment?.arrival_at).diff(moment(segment?.departure_at), "minutes") % 60 }}m
+                                                    </span>
+                                                    <div class="relative mt-1 h-px w-full bg-primary/40">
+                                                        <span class="absolute -left-0.5 -top-[3px] h-1.5 w-1.5 rounded-full bg-primary"></span>
+                                                        <span class="absolute -right-0.5 -top-[3px] h-1.5 w-1.5 rounded-full bg-primary"></span>
                                                     </div>
                                                 </div>
                                                 <!-- Arrival -->
-                                                <div class="space-y-2 text-right">
-                                                    <div class="space-y-1">
-                                                        <div class="text-sm font-medium text-gray-900">{{
-                                                            formatDate(segment?.arrival_at) }}</div>
-                                                        <div class="text-xs text-gray-500">{{ segment?.to?.name }}
-                                                            ({{
-                                                                segment?.to?.iata }})</div>
-                                                        <!-- <div class="text-xs text-gray-400">Terminal: {{
-                                                                segment?.to_terminal[0] ?? "N/A" }}</div> -->
+                                                <div class="min-w-0 text-right">
+                                                    <div class="text-base font-bold tabular-nums text-gray-900">
+                                                        <span class="text-xs font-semibold text-gray-500">{{ segment?.to?.iata }}</span>
+                                                        {{ moment.parseZone(segment?.arrival_at).format("HH:mm") }}
                                                     </div>
-                                                    <div class="text-xs text-gray-400">{{ segment?.aircraft?.model
-                                                        }}
-                                                    </div>
+                                                    <div class="truncate text-[11px] text-gray-500" :title="segment?.to?.name">{{ segment?.to?.name }}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -4468,6 +4310,108 @@ watch(flight, () => {
 </template>
 
 <style scoped>
+/* ---------- Traveller form fields ---------- */
+.field-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    margin-bottom: 0.375rem;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+    white-space: nowrap;
+}
+
+.field-hint {
+    margin-left: auto;
+    color: #94a3b8;
+    font-size: 0.65rem;
+    font-weight: 500;
+}
+
+.field-error {
+    margin-top: 0.25rem;
+    color: #ef4444;
+    font-size: 0.7rem;
+    line-height: 1rem;
+}
+
+.choice-chip {
+    height: 2.25rem;
+    padding: 0 0.9rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.choice-chip:hover {
+    border-color: hsl(var(--primary) / 0.5);
+}
+
+.choice-chip.is-selected {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary));
+    font-weight: 600;
+}
+
+/* Inputs, selects, date pickers and country pickers share one look. */
+.traveller-fields .field :deep(input),
+.traveller-fields .field :deep(button) {
+    display: flex;
+    width: 100%;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #ffffff !important;
+    color: #0f172a;
+    font-size: 0.875rem;
+    font-weight: 400;
+    box-shadow: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.traveller-fields .field :deep(button > span) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.traveller-fields .field :deep(button svg) {
+    flex: none;
+    color: #94a3b8;
+}
+
+/* Keep select chevrons on the right edge. */
+.traveller-fields .field :deep(button > svg:last-child:not(:first-child)) {
+    margin-left: auto;
+}
+
+.traveller-fields .field :deep(input::placeholder) {
+    color: #94a3b8;
+}
+
+.traveller-fields .field :deep(input:focus),
+.traveller-fields .field :deep(button:focus-visible),
+.traveller-fields .field :deep(button[data-state="open"]) {
+    border-color: hsl(var(--primary));
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.traveller-fields .field.has-error :deep(input),
+.traveller-fields .field.has-error :deep(button) {
+    border-color: #fca5a5;
+}
 .booking-form {
     max-width: 1200px;
     margin: 0 auto;

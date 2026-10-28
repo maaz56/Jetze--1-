@@ -269,8 +269,8 @@ onUnmounted(() => {
                     : 'bg-white shadow-md border-b border-slate-200/80 text-slate-900 py-0 animate-slide-down-nav',
             ]"
         >
-            <div class="container shared-nav-content mx-auto px-4">
-                <div class="flex items-center justify-between h-20 px-4 lg:px-6">
+            <div class="container shared-nav-content mx-auto px-3 sm:px-4">
+                <div class="flex items-center justify-between h-16 sm:h-20 px-2 sm:px-4 lg:px-6">
                 
                     <!-- Over the hero, a soft blurred light fades into the sky behind the logo so its colours stay legible -->
                     <router-link :to="{ name: 'Home' }" class="relative flex items-center shrink-0">
@@ -283,7 +283,7 @@ onUnmounted(() => {
                             src="/public/assets/logo.png" 
                             alt="Logo" 
                             :class="[
-                                'relative h-10 w-auto object-contain transition-transform duration-300 hover:scale-105 lg:h-11',
+                                'relative h-8 sm:h-10 w-auto object-contain transition-transform duration-300 hover:scale-105 lg:h-11',
                                 isHomePage && isTransparent ? 'lg:h-12' : '',
                             ]" 
                         />
@@ -395,12 +395,12 @@ onUnmounted(() => {
                         <!-- Guests can choose their search display currency; quotes lock it after Book Now. -->
                         <div
                             v-if="!isLockedPriceRoute"
-                            class="hidden md:flex items-center gap-2 border-l px-4 shrink-0 whitespace-nowrap"
+                            class="flex items-center gap-2 shrink-0 whitespace-nowrap md:border-l md:px-4"
                             :class="isTransparent ? 'border-white/20' : 'border-slate-200'"
                         >
-                            <span :class="['text-[11px] tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
+                            <span :class="['hidden md:inline text-[11px] tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Currency:</span>
                             <Select v-model="selectedCurrencyCode">
-                                <SelectTrigger :class="['h-8.5 w-[84px] rounded-lg border px-2.5 text-xs font-bold shadow-xs focus:ring-0', isTransparent ? 'border-white/60 bg-white/10 text-white backdrop-blur-md' : 'border-slate-200 bg-white text-slate-700']">
+                                <SelectTrigger aria-label="Display currency" :class="['h-8 w-[72px] md:h-8.5 md:w-[84px] rounded-lg border px-2 md:px-2.5 text-xs font-bold shadow-xs focus:ring-0', isTransparent ? 'border-white/60 bg-white/10 text-white backdrop-blur-md' : 'border-slate-200 bg-white text-slate-700']">
                                     <SelectValue placeholder="Currency" />
                                 </SelectTrigger>
                                 <SelectContent :body-lock="false" class="rounded-lg border border-slate-200 bg-white shadow-xl">
@@ -417,30 +417,31 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Login Button / User Dropdown -->
-                        <div class="flex items-center ml-4 space-x-3">
+                        <div class="flex items-center ml-2 sm:ml-4 space-x-2 sm:space-x-3">
                             <button 
                                 v-if="!isAuthenticated" 
                                 @click="handleLogin"
                                 :class="[
-                                    'px-4 py-2 rounded-xl shadow-sm flex items-center space-x-3 transition-all duration-300 border',
+                                    'px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl shadow-xs sm:shadow-sm flex items-center space-x-1.5 sm:space-x-3 transition-all duration-300 border text-xs sm:text-sm',
                                     isTransparent
                                         ? 'bg-white/15 hover:bg-white/25 text-white border-white/30 backdrop-blur-md shadow-md'
                                         : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-900'
                                 ]"
                             >
                                 <div :class="['p-1 rounded-full', isTransparent ? 'bg-white/20' : 'bg-primary/10']">
-                                    <LogIn :class="['w-4 h-4', isTransparent ? 'text-sky-300' : 'text-primary']" />
+                                    <LogIn :class="['w-3.5 h-3.5 sm:w-4 sm:h-4', isTransparent ? 'text-sky-300' : 'text-primary']" />
                                 </div>
-                                <div class="flex flex-col items-start leading-none">
+                                <span class="sm:hidden font-bold">Sign In</span>
+                                <div class="hidden sm:flex flex-col items-start leading-none">
                                     <span :class="['text-[11px] font-medium', isTransparent ? 'text-slate-200' : 'text-slate-500']">Login or</span>
                                     <span :class="['text-sm font-bold', isTransparent ? 'text-white' : 'text-slate-900']">Create Account</span>
                                 </div>
-                                <ChevronDown :class="['w-4 h-4', isTransparent ? 'text-slate-200' : 'text-slate-400']" />
+                                <ChevronDown :class="['hidden sm:block w-4 h-4', isTransparent ? 'text-slate-200' : 'text-slate-400']" />
                             </button>
 
                             <DropdownMenu v-if="isAuthenticated">
                                 <DropdownMenuTrigger as-child>
-                                    <Button variant="ghost" class="h-11 w-11 p-0 rounded-full ring-2 ring-white/50 overflow-hidden hover:ring-primary transition-all">
+                                    <Button variant="ghost" class="h-9 w-9 sm:h-11 sm:w-11 p-0 rounded-full ring-2 ring-white/50 overflow-hidden hover:ring-primary transition-all">
                                         <img v-if="user?.avatar" :src="user.avatar" class="h-full w-full object-cover" />
                                         <div v-else class="h-full w-full bg-primary text-white flex items-center justify-center font-bold">
                                             {{ user?.name?.charAt(0).toUpperCase() || 'U' }}
@@ -477,50 +478,166 @@ onUnmounted(() => {
                                         <Menu class="h-6 w-6" />
                                     </Button>
                                 </SheetTrigger>
-                                <SheetContent side="left" class="w-[300px] bg-slate-900 text-white border-r-slate-800">
-                                    <div class="py-6">
-                                        <img class="h-10 mb-8" src="/public/assets/logo.png" alt="Logo" />
-                                        <nav class="space-y-4">
-                                            <component :is="link.routeName ? RouterLink : 'a'" v-for="link in navLinks"
-                                                :key="link.routeName || link.href" v-bind="getLinkProps(link)"
-                                                @click="mobileMenuOpen = false"
-                                                :aria-current="isLinkActive(link) ? 'page' : undefined"
-                                                :class="[
-                                                    'relative flex items-center rounded-xl p-3 transition-colors',
-                                                    isLinkActive(link) ? 'text-sky-300' : 'hover:bg-white/10',
-                                                ]">
-                                                <div :class="['mr-3 rounded-lg p-2', isLinkActive(link) ? 'bg-sky-400/20' : 'bg-sky-400/15']">
-                                                    <img :src="link.icon" :alt="link.text" class="w-5 h-5 object-contain" />
+                                <SheetContent side="left" class="w-[310px] max-w-[85vw] bg-white text-slate-800 border-r border-slate-200 p-0 flex flex-col h-full shadow-2xl overflow-hidden">
+                                    <!-- Drawer Top Header: Logo -->
+                                    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white pr-12">
+                                        <router-link :to="{ name: 'Home' }" @click="mobileMenuOpen = false" class="flex items-center">
+                                            <img class="h-8 sm:h-9 w-auto object-contain" src="/public/assets/logo.png" alt="Jetze Logo" />
+                                        </router-link>
+                                    </div>
+
+                                    <!-- Scrollable Drawer Body -->
+                                    <div class="flex-1 overflow-y-auto px-5 py-4 space-y-5 no-scrollbar">
+
+                                        <!-- User Profile Card (if Authenticated) -->
+                                        <div v-if="isAuthenticated && user" class="rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50/50 p-3.5 border border-slate-200/80 shadow-2xs">
+                                            <div class="flex items-center gap-3">
+                                                <div class="h-10 w-10 rounded-full ring-2 ring-primary/20 overflow-hidden bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0">
+                                                    <img v-if="user.avatar" :src="user.avatar" class="h-full w-full object-cover" />
+                                                    <span v-else>{{ user.name?.charAt(0).toUpperCase() || 'U' }}</span>
                                                 </div>
-                                                <div>
-                                                    <p class="font-bold text-sm">{{ link.text }}</p>
-                                                    <p :class="['text-[10px]', isLinkActive(link) ? 'text-sky-300/75' : 'text-slate-400']">{{ link.subText }}</p>
+                                                <div class="min-w-0 flex-1">
+                                                    <p class="font-bold text-sm text-slate-900 truncate">{{ user.name }}</p>
+                                                    <p class="text-xs text-slate-500 truncate">{{ user.email || user.phone }}</p>
                                                 </div>
-                                                <span v-if="isLinkActive(link)" aria-hidden="true" class="absolute inset-x-3 bottom-0 h-[3px] rounded-sm bg-primary"></span>
-                                            </component>
-                                        </nav>
-                                        <div v-if="!isLockedPriceRoute" class="mt-8 pt-6 border-t border-white/10">
-                                            <label class="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-300">Currency</label>
-                                            <Select v-model="selectedCurrencyCode">
-                                                <SelectTrigger class="h-10 w-full border-white/20 bg-white/10 text-sm font-bold text-white">
-                                                    <SelectValue placeholder="Currency" />
-                                                </SelectTrigger>
-                                                <SelectContent :body-lock="false" class="rounded-lg border border-slate-200 bg-white shadow-xl">
-                                                    <SelectItem
-                                                        v-for="currency in currencyOptions"
-                                                        :key="currency.code"
-                                                        :value="currency.code"
-                                                        class="cursor-pointer text-xs font-medium"
-                                                    >
-                                                        {{ currency.code }}
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            </div>
+
+                                            <!-- Agent Balance (if available) -->
+                                            <div v-if="agentLedger?.balance_money" class="mt-2.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                                                <span class="font-medium text-slate-500">Balance:</span>
+                                                <span class="font-extrabold text-emerald-600">{{ selectedCurrencySymbol }} {{ formatBalanceAmount(agentLedger.balance_money.amount) }}</span>
+                                            </div>
+
+                                            <!-- Quick Action Links -->
+                                            <div class="mt-2.5 grid grid-cols-2 gap-2 pt-0.5">
+                                                <button
+                                                    type="button"
+                                                    @click="mobileMenuOpen = false; goToDashboard('bookings')"
+                                                    class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-white border border-slate-200/90 text-xs font-bold text-slate-700 hover:text-primary hover:border-primary/50 shadow-2xs transition-colors"
+                                                >
+                                                    <BookCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                    <span>My Bookings</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    @click="mobileMenuOpen = false; goToDashboard('dashboard')"
+                                                    class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-white border border-slate-200/90 text-xs font-bold text-slate-700 hover:text-primary hover:border-primary/50 shadow-2xs transition-colors"
+                                                >
+                                                    <CircleUser class="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                    <span>Dashboard</span>
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div class="mt-8 pt-8 border-t border-white/10">
-                                            <Button v-if="!isAuthenticated" @click="handleLogin" class="w-full bg-blue-600">Login</Button>
-                                            <Button v-else @click="handleLogout" variant="outline" class="w-full border-white/20 text-white hover:bg-white/10">Logout</Button>
+
+                                        <!-- Guest Welcome Card (if Not Authenticated) -->
+                                        <div v-else class="rounded-2xl bg-gradient-to-br from-primary/5 via-blue-50/40 to-slate-50 p-4 border border-primary/15 shadow-2xs">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary">
+                                                    <LogIn class="w-3.5 h-3.5" />
+                                                </span>
+                                                <h4 class="font-extrabold text-sm text-slate-900">Welcome to Jetze</h4>
+                                            </div>
+                                            <p class="text-xs text-slate-500 leading-relaxed mb-3">Sign in to manage flights, save travelers & unlock exclusive fares.</p>
+                                            <Button @click="mobileMenuOpen = false; handleLogin()" class="w-full h-9 bg-primary text-white font-bold text-xs rounded-xl shadow-xs hover:bg-primary/90 flex items-center justify-center gap-1.5">
+                                                <LogIn class="w-3.5 h-3.5" />
+                                                <span>Sign In / Register</span>
+                                            </Button>
                                         </div>
+
+                                        <!-- Main Travel Navigation Section -->
+                                        <div>
+                                            <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2 px-1">
+                                                Travel Services
+                                            </span>
+                                            <nav class="space-y-1.5">
+                                                <component 
+                                                    :is="link.routeName ? RouterLink : 'a'" 
+                                                    v-for="link in navLinks"
+                                                    :key="link.routeName || link.href" 
+                                                    v-bind="getLinkProps(link)"
+                                                    @click="mobileMenuOpen = false"
+                                                    :aria-current="isLinkActive(link) ? 'page' : undefined"
+                                                    :class="[
+                                                        'relative flex items-center rounded-xl p-2.5 transition-all duration-200 group border',
+                                                        isLinkActive(link) 
+                                                            ? 'bg-primary/10 border-primary/30 text-primary font-bold shadow-2xs' 
+                                                            : 'bg-white border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900',
+                                                    ]"
+                                                >
+                                                    <div :class="['mr-3 rounded-xl p-2 shrink-0 transition-colors', isLinkActive(link) ? 'bg-primary/20' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200']">
+                                                        <img :src="link.icon" :alt="link.text" class="w-5 h-5 object-contain" />
+                                                    </div>
+                                                    <div class="min-w-0 flex-1">
+                                                        <p class="font-bold text-sm leading-tight">{{ link.text }}</p>
+                                                        <p :class="['text-[11px]', isLinkActive(link) ? 'text-primary/80 font-semibold' : 'text-slate-400']">{{ link.subText }}</p>
+                                                    </div>
+                                                    <span v-if="isLinkActive(link)" aria-hidden="true" class="h-2 w-2 rounded-full bg-primary shrink-0 mr-1"></span>
+                                                </component>
+                                            </nav>
+                                        </div>
+
+                                        <!-- Company & Information Section -->
+                                        <div>
+                                            <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2 px-1">
+                                                More Information
+                                            </span>
+                                            <div class="space-y-1">
+                                                <RouterLink 
+                                                    to="/about/us" 
+                                                    @click="mobileMenuOpen = false"
+                                                    class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors"
+                                                >
+                                                    <FileText class="w-4 h-4 text-slate-400" />
+                                                    <span>About Jetze</span>
+                                                </RouterLink>
+                                                <RouterLink 
+                                                    to="/contact/us" 
+                                                    @click="mobileMenuOpen = false"
+                                                    class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors"
+                                                >
+                                                    <Phone class="w-4 h-4 text-slate-400" />
+                                                    <span>Contact Us</span>
+                                                </RouterLink>
+                                                <RouterLink 
+                                                    to="/how-to-use-abhi-pay-bank-transfer" 
+                                                    @click="mobileMenuOpen = false"
+                                                    class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors"
+                                                >
+                                                    <Coins class="w-4 h-4 text-slate-400" />
+                                                    <span>Payment Methods</span>
+                                                </RouterLink>
+                                            </div>
+                                        </div>
+
+                                        <!-- 24/7 Live Support Assistance -->
+                                        <div class="rounded-2xl bg-slate-50 p-3.5 border border-slate-200/70">
+                                            <div class="flex items-center gap-2 text-xs font-bold text-slate-800 mb-1">
+                                                <Phone class="w-3.5 h-3.5 text-primary" />
+                                                <span>24/7 Live Support</span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-500 mb-2">Our travel specialists are always on standby.</p>
+                                            <a 
+                                                href="tel:+923007690691" 
+                                                class="inline-flex items-center gap-1.5 text-xs font-extrabold text-primary hover:underline"
+                                            >
+                                                <span>Call: (+92) 300 7690691</span>
+                                            </a>
+                                        </div>
+
+                                    </div>
+
+                                    <!-- Drawer Footer (Logout / Copyright) -->
+                                    <div class="p-4 border-t border-slate-100 bg-slate-50/60">
+                                        <Button 
+                                            v-if="isAuthenticated" 
+                                            @click="mobileMenuOpen = false; handleLogout()" 
+                                            variant="outline" 
+                                            class="w-full h-9 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5"
+                                        >
+                                            <LogOut class="w-3.5 h-3.5" />
+                                            <span>Sign Out</span>
+                                        </Button>
+                                        <p class="text-center text-[10px] text-slate-400 mt-2">© {{ new Date().getFullYear() }} Jetze Travel Services</p>
                                     </div>
                                 </SheetContent>
                             </Sheet>

@@ -25,7 +25,7 @@ import {
     X,
 } from "lucide-vue-next";
 import { FETCH_AIRPORTS, FETCH_PNR_DATA } from "@/services/store/actions.type";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useStore } from "vuex";
 import Calender from "./Calender.vue";
 import { useRouter } from "vue-router";
@@ -400,6 +400,13 @@ const todayDate = getLocalDateString();
 
 const isMultiCity = computed(() => localValue.value.flightType === "multi-city");
 
+// On phones, multi-city keeps travellers and search below every trip.
+const isSmallScreen = ref(false);
+const updateSmallScreen = () => (isSmallScreen.value = isMobileViewport());
+const moveMultiCityFooter = computed(() => isMultiCity.value && isSmallScreen.value);
+const multiCityFooterId = `multicity-footer-${useId()}`;
+
+
 const setFlightType = (type) => {
     const previousType = localValue.value.flightType;
     if (previousType === type) return;
@@ -646,6 +653,25 @@ const previewSummary = computed(() => {
     };
 });
 
+const routeTitle = computed(() => {
+    const o = previewSummary.value.origin;
+    const d = previewSummary.value.destination;
+    if (o && d) return `${o} to ${d}`;
+    if (previewSummary.value.originCity && previewSummary.value.destinationCity) {
+        return `${previewSummary.value.originCity} to ${previewSummary.value.destinationCity}`;
+    }
+    return "Flight Search";
+});
+
+const routeSubtitle = computed(() => {
+    const parts = [];
+    if (selectedFlightTypeLabel.value) parts.push(selectedFlightTypeLabel.value);
+    if (previewSummary.value.dates) parts.push(previewSummary.value.dates);
+    if (travelersSummary.value) parts.push(travelersSummary.value);
+    if (classLabel.value) parts.push(classLabel.value);
+    return parts.join(" - ");
+});
+
 // Only offer the compact bar once there is a route worth summarising.
 const canCollapse = computed(
     () => Boolean(previewSummary.value.origin && previewSummary.value.destination),
@@ -672,11 +698,14 @@ watch(showRoutePreview, (value) => emit("compact-change", value), {
 });
 
 onMounted(() => {
+    updateSmallScreen();
+    window.addEventListener("resize", updateSmallScreen);
     store.dispatch("airport/" + FETCH_AIRPORTS);
     if (isMobileViewport() && canCollapse.value) {
         showRoutePreview.value = true;
     }
 });
+onBeforeUnmount(() => window.removeEventListener("resize", updateSmallScreen));
 </script>
 
 <template>
@@ -690,65 +719,111 @@ onMounted(() => {
             <!-- Compact summary; expands into the full form -->
             <div v-if="showRoutePreview" class="container flight-filter-content">
                 <div class="route-preview">
-                    <button
-                        type="button"
-                        class="route-preview__summary"
-                        @click="showRoutePreview = false"
-                    >
-                        <span class="route-preview__icon">
-                            <Plane class="h-4 w-4" />
-                        </span>
-                        <span class="route-preview__segment route-preview__segment--route">
-                            <span class="route-preview__route">
-                                <span class="truncate">{{ previewSummary.originCity }}</span>
-                                <component
-                                    :is="localValue.flightType === 'return' ? ArrowLeftRight : ArrowRight"
-                                    class="h-4 w-4 shrink-0 text-primary"
-                                />
-                                <span class="truncate">{{ previewSummary.destinationCity }}</span>
+                    <!-- Mobile view -->
+                    <div class="md:hidden flex w-full items-center gap-3">
+                        <button
+                            type="button"
+                            class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                            @click="showRoutePreview = false"
+                        >
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Plane class="h-[18px] w-[18px]" />
                             </span>
-                            <span class="route-preview__sub">
-                                {{ previewSummary.origin }} – {{ previewSummary.destination }}
-                                · {{ selectedFlightTypeLabel }}
+                            <span class="min-w-0 flex-1">
+                                <span class="flex items-center gap-1.5 text-[15px] font-bold leading-tight text-gray-900">
+                                    <span class="truncate">{{ previewSummary.origin || previewSummary.originCity }}</span>
+                                    <component
+                                        :is="localValue.flightType === 'return' ? ArrowLeftRight : ArrowRight"
+                                        class="h-3.5 w-3.5 shrink-0 text-primary"
+                                    />
+                                    <span class="truncate">{{ previewSummary.destination || previewSummary.destinationCity }}</span>
+                                </span>
+                                <span class="mt-0.5 block truncate text-xs text-gray-500">
+                                    {{ routeSubtitle.replaceAll(" - ", " · ") }}
+                                </span>
                             </span>
-                        </span>
-                        <span v-if="previewSummary.dates" class="route-preview__segment">
-                            <span class="route-preview__label">
-                                <CalendarDays class="h-3.5 w-3.5" />
-                                Dates
+                        </button>
+                        <button
+                            type="button"
+                            @click="showRoutePreview = false"
+                            class="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white transition hover:brightness-110"
+                        >
+                            <Pencil class="h-3.5 w-3.5" />
+                            <span>Edit</span>
+                        </button>
+                    </div>
+
+                    <!-- Desktop view -->
+                    <div class="hidden md:flex items-center w-full">
+                        <button
+                            type="button"
+                            class="route-preview__summary"
+                            @click="showRoutePreview = false"
+                        >
+                            <span class="route-preview__icon">
+                                <Plane class="h-4 w-4" />
                             </span>
-                            <span class="route-preview__value">{{ previewSummary.dates }}</span>
-                        </span>
-                        <span class="route-preview__segment">
-                            <span class="route-preview__label">
-                                <Users class="h-3.5 w-3.5" />
-                                Travellers
+                            <span class="route-preview__segment route-preview__segment--route">
+                                <span class="route-preview__route">
+                                    <span class="truncate">{{ previewSummary.originCity }}</span>
+                                    <component
+                                        :is="localValue.flightType === 'return' ? ArrowLeftRight : ArrowRight"
+                                        class="h-4 w-4 shrink-0 text-primary"
+                                    />
+                                    <span class="truncate">{{ previewSummary.destinationCity }}</span>
+                                </span>
+                                <span class="route-preview__sub">
+                                    {{ previewSummary.origin }} – {{ previewSummary.destination }}
+                                    · {{ selectedFlightTypeLabel }}
+                                </span>
                             </span>
-                            <span class="route-preview__value">
-                                {{ travelersSummary }}, {{ classLabel }}
+                            <span v-if="previewSummary.dates" class="route-preview__segment">
+                                <span class="route-preview__label">
+                                    <CalendarDays class="h-3.5 w-3.5" />
+                                    Dates
+                                </span>
+                                <span class="route-preview__value">{{ previewSummary.dates }}</span>
                             </span>
-                        </span>
-                        <span class="route-preview__meta">
-                            <span v-if="previewSummary.dates">{{ previewSummary.dates }}</span>
-                            <span v-if="previewSummary.dates" aria-hidden="true">·</span>
-                            <span>{{ travelersSummary }}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{{ classLabel }}</span>
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        @click="showRoutePreview = false"
-                        class="route-preview__edit"
-                    >
-                        <Pencil class="h-4 w-4" />
-                        <span class="route-preview__edit-text">Modify search</span>
-                    </button>
+                            <span class="route-preview__segment">
+                                <span class="route-preview__label">
+                                    <Users class="h-3.5 w-3.5" />
+                                    Travellers
+                                </span>
+                                <span class="route-preview__value">
+                                    {{ travelersSummary }}, {{ classLabel }}
+                                </span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="showRoutePreview = false"
+                            class="route-preview__edit"
+                        >
+                            <Pencil class="h-4 w-4" />
+                            <span class="route-preview__edit-text">Modify search</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div v-else class="flight-filter-panel py-4 sm:py-5">
+            <div v-else class="flight-filter-panel py-3 sm:py-5">
                 <div class="container flight-filter-content">
+                    <!-- Mobile header while editing -->
+                    <div v-if="canCollapse" class="mobile-edit-header md:hidden">
+                        <div class="min-w-0 flex-1">
+                            <div class="mobile-edit-header__title">Modify search</div>
+                            <div class="mobile-edit-header__sub">{{ routeTitle }}</div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="showRoutePreview = true"
+                            class="mobile-edit-header__close"
+                            aria-label="Close search form"
+                        >
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
                     <!-- Trip type -->
                     <div class="flight-type-bar">
                         <div class="flight-type-tabs" role="tablist" aria-label="Trip type">
@@ -974,6 +1049,7 @@ onMounted(() => {
                             </div>
                         </template>
 
+                        <Teleport defer :to="`#${multiCityFooterId}`" :disabled="!moveMultiCityFooter">
                         <!-- Travellers & cabin (shared by every trip type) -->
                         <div class="search-field search-field--travellers">
                             <label class="search-field__label">
@@ -1070,6 +1146,7 @@ onMounted(() => {
                                 <span>{{ $t("search") }}</span>
                             </button>
                         </div>
+                        </Teleport>
                     </div>
 
                     <!-- Additional multi-city legs -->
@@ -1162,6 +1239,12 @@ onMounted(() => {
                             Add another flight
                         </button>
                     </div>
+
+                    <div
+                        v-show="moveMultiCityFooter"
+                        :id="multiCityFooterId"
+                        class="flight-search-card multicity-footer"
+                    ></div>
                 </div>
             </div>
         </div>
@@ -2048,8 +2131,58 @@ onMounted(() => {
     }
 
     .flight-type-collapse {
-        width: 2rem;
-        padding: 0;
+        display: none;
+    }
+
+    .flight-filter-content {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* Trip-type tabs stretch across the full width. */
+    .flight-type-bar {
+        margin-bottom: 0.75rem;
+    }
+
+    .flight-type-tabs {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .flight-type-tab {
+        justify-content: center;
+        min-height: 2.1rem;
+    }
+
+    /* Departure and return share a row; everything else spans it. */
+    .flight-search-card--standard {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .flight-search-card--standard > .search-field--from,
+    .flight-search-card--standard > .search-field--to,
+    .flight-search-card--standard > .search-field--travellers,
+    .flight-search-card--standard > .search-action {
+        grid-column: 1 / -1;
+    }
+
+    .flight-search-card--standard > .search-field:nth-child(3) {
+        border-right: 1px solid #e2e8f0;
+    }
+
+    .search-field {
+        min-height: 3.9rem;
+        padding: 0.5rem 0.85rem;
+    }
+
+    .flight-search-card > .search-field:last-child,
+    .multicity-leg > .search-field:last-child {
+        border-bottom: 0;
+    }
+
+    .multicity-footer {
+        margin-top: 0.6rem;
     }
 
     .flight-type-collapse__text {
@@ -2057,44 +2190,53 @@ onMounted(() => {
     }
 }
 
+.mobile-edit-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    color: #ffffff;
+}
+
+.mobile-edit-header__title {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.3rem;
+}
+
+.mobile-edit-header__sub {
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-edit-header__close {
+    display: inline-flex;
+    height: 2.1rem;
+    width: 2.1rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+    transition: background-color 0.2s ease;
+}
+
+.mobile-edit-header__close:hover {
+    background: rgba(255, 255, 255, 0.26);
+}
+
 @media (max-width: 768px) {
-    .route-preview__summary {
-        flex-wrap: wrap;
-        align-content: center;
-        padding: 0.15rem 0;
-    }
-
-    .route-preview__icon {
-        display: none;
-    }
-
-    .route-preview__segment {
-        display: none;
-    }
-
-    .route-preview__segment--route {
-        display: flex;
-        flex-basis: 100%;
-        padding: 0 0.5rem;
-    }
-
-    .route-preview__sub {
-        display: none;
-    }
-
-    .route-preview__meta {
-        display: flex;
-        padding: 0 0.5rem;
-    }
-
-    .route-preview__edit {
-        min-height: 2.6rem;
-        width: 2.6rem;
-        padding: 0;
-    }
-
-    .route-preview__edit-text {
-        display: none;
+    .route-preview {
+        padding: 0.6rem 0.6rem 0.6rem 0.75rem;
+        border: 0;
+        border-radius: 0.85rem;
+        background: #ffffff;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
     }
 }
 </style>

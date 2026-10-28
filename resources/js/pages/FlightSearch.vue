@@ -169,7 +169,8 @@ const syncFilterScrollWithPage = (event) => {
     const navScrollDistance = 80;
     const delta = event.deltaY;
 
-    if (!delta) return;
+    // The bottom sheet scrolls on its own below desktop.
+    if (!delta || window.innerWidth < 1024) return;
 
     const pageDelta = delta > 0
         ? Math.min(delta, Math.max(0, navScrollDistance - window.scrollY))
@@ -299,6 +300,11 @@ const toCheckoutClicked = ref(false);
 const error = ref(null);
 const activeSortTab = ref("cheapest");
 const priceSortDirection = ref("low");
+const isSortOpen = ref(false);
+const PRICE_SORT_OPTIONS = [
+    { value: "low", label: "Lowest price", hint: "Cheapest flights first" },
+    { value: "high", label: "Highest price", hint: "Most expensive flights first" },
+];
 const selectedStops = ref();
 const selectedAirline = ref([]);
 const selectedTimes = ref([]);
@@ -890,9 +896,10 @@ function filterByAirline() {
 }
 
 function filterByCarouselAirline(airlineIatas) {
-    selectedAirline.value = airlineIatas.some((iata) => selectedAirline.value.includes(iata))
-        ? []
-        : [...airlineIatas];
+    const isSelected = airlineIatas.some((iata) => selectedAirline.value.includes(iata));
+    selectedAirline.value = isSelected
+        ? selectedAirline.value.filter((iata) => !airlineIatas.includes(iata))
+        : [...new Set([...selectedAirline.value, ...airlineIatas])];
     filterByAirline();
 }
 
@@ -3414,16 +3421,16 @@ watch(isLoggedIn, (newVal) => {
                 <div v-if="activeTab === 'flights'" class="animate-fadeIn">
                     <div>
                         <!-- Progress Bar -->
-                        <div v-if="isSearching" class="w-full mt-2 container">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-3 flex-1">
+                        <div v-if="isSearching" class="container mt-3 w-full px-3 sm:px-6 lg:px-8">
+                            <div class="mb-1.5 flex items-center justify-between gap-2">
+                                <div class="flex min-w-0 flex-1 items-center gap-2">
                                     <div class="relative flex-shrink-0">
                                         <div
-                                            class="w-6 h-6 border-2 border-primary/20 rounded-full"
+                                            class="h-4 w-4 rounded-full border-2 border-primary/20"
                                         ></div>
                                         <div
                                             :class="[
-                                                'absolute top-0 left-0 w-6 h-6 border-2 rounded-full border-t-primary border-r-transparent border-b-transparent border-l-transparent',
+                                                'absolute top-0 left-0 h-4 w-4 border-2 rounded-full border-t-primary border-r-transparent border-b-transparent border-l-transparent',
                                                 progress > 0
                                                     ? 'animate-spin-slow'
                                                     : 'animate-spin',
@@ -3432,7 +3439,7 @@ watch(isLoggedIn, (newVal) => {
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <span
-                                            class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate"
+                                            class="block truncate text-xs font-medium text-gray-700 sm:text-sm dark:text-gray-300"
                                         >
                                             {{
                                                 progress === 100
@@ -3443,20 +3450,20 @@ watch(isLoggedIn, (newVal) => {
                                     </div>
                                 </div>
                                 <div class="flex-shrink-0">
-                                    <span class="text-sm font-bold text-primary"
+                                    <span class="text-xs font-bold tabular-nums text-primary sm:text-sm"
                                         >{{ progress }}%</span
                                     >
                                 </div>
                             </div>
                             <div
-                                class="w-full bg-gray-200 dark:bg-gray-700 rounded h-6 relative overflow-hidden"
+                                class="relative h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
                             >
                                 <div
                                     class="absolute inset-0 bg-gradient-to-r from-gray-300/50 to-gray-300/30 dark:from-gray-600/50 dark:to-gray-600/30"
                                 ></div>
                                 <div
                                     :class="[
-                                        'h-full rounded transition-all duration-700 ease-out relative overflow-hidden',
+                                        'h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden',
                                         progress === 0
                                             ? 'bg-primary'
                                             : 'bg-primary',
@@ -3470,7 +3477,7 @@ watch(isLoggedIn, (newVal) => {
                                 >
                                     <div
                                         v-if="progress === 0"
-                                        class="absolute inset-0 bg-white/30 rounded animate-pulse"
+                                        class="absolute inset-0 bg-white/30 rounded-full animate-pulse"
                                     ></div>
                                     <div
                                         :class="[
@@ -3540,14 +3547,21 @@ watch(isLoggedIn, (newVal) => {
                     <p class="text-gray-600 mb-4">Coming Soon.</p>
                 </div>
         <!-- NEW LAYOUT: Filters Sidebar + Results -->
-        <div v-if="showFlightResultsShell" class="container flight-results-content mx-auto px-4 py-6 px-8">
+        <div v-if="showFlightResultsShell" class="container flight-results-content mx-auto px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
             <div class="flex flex-col gap-6 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
-                <!-- LEFT SIDEBAR FILTERS - Always visible, not accordion -->
+                <!-- Filters: sidebar on desktop, bottom sheet on smaller screens -->
+                <Transition name="fade">
+                    <div
+                        v-if="isFilterOpen && hasFlightResults"
+                        class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
+                        @click="isFilterOpen = false"
+                    ></div>
+                </Transition>
                 <aside
                     v-if="hasFlightResults"
                     :class="[
                         'flight-results-sidebar lg:z-20 lg:w-80 lg:self-start',
-                        { 'flight-results-sidebar--compact': isSearchCompact },
+                        { 'flight-results-sidebar--compact': isSearchCompact, 'is-open': isFilterOpen },
                     ]"
                 >
                     <div @wheel.passive="syncFilterScrollWithPage" class="filter-panel lg:max-h-[calc(100dvh-11.25rem)] lg:overflow-y-auto lg:overscroll-contain">
@@ -3556,9 +3570,19 @@ watch(isLoggedIn, (newVal) => {
                             <SlidersHorizontal class="h-5 w-5 text-primary" />
                             <h2>Filters</h2>
                         </div>
-                        <button @click="resetAllFilters" class="filter-reset-button">
-                            Reset
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button @click="resetAllFilters" class="filter-reset-button">
+                                Reset
+                            </button>
+                            <button
+                                type="button"
+                                class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 lg:hidden"
+                                aria-label="Close filters"
+                                @click="isFilterOpen = false"
+                            >
+                                <X class="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
                     <!-- Price Filter -->
                     <div class="filter-section">
@@ -3859,6 +3883,15 @@ watch(isLoggedIn, (newVal) => {
                             placeholder="Price Margin"
                         />
                     </div>
+                    <div class="filter-sheet-footer lg:hidden">
+                        <button
+                            type="button"
+                            class="w-full rounded-lg bg-primary py-3 text-sm font-bold text-white shadow-md transition hover:bg-primary/90"
+                            @click="isFilterOpen = false"
+                        >
+                            Show {{ filteredFlights?.length || 0 }} flights
+                        </button>
+                    </div>
                     </div>
                 </aside>
 
@@ -3873,16 +3906,16 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Results Header with Cheapest | Fastest | Best Value -->
                     <div
                         v-if="hasFlightResults"
-                        class="mb-4 flex flex-wrap items-center justify-between gap-3"
+                        class="mb-3 flex flex-wrap items-center justify-between gap-3 sm:mb-4"
                     >
-                        <div class="flex flex-wrap items-center gap-2">
+                        <div class="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                             <button
                                 v-for="tab in FLIGHT_HIGHLIGHT_TAGS"
                                 :key="tab.key"
                                 type="button"
                                 @click="setSortMode(tab.key, 'low')"
                                 :aria-pressed="activeSortTab === tab.key"
-                                class="inline-flex items-center gap-1.5 rounded-md border px-3.5 py-2 text-sm font-semibold transition-all"
+                                class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-2 text-xs font-semibold transition-all sm:px-3.5 sm:text-sm"
                                 :class="activeSortTab === tab.key ? tab.activeButtonClass : tab.buttonClass"
                             >
                                 <span v-if="tab.image" class="shrink-0 bg-current" :style="maskIconStyle(tab.image, 18 * (tab.imageScale ?? 1))" />
@@ -3891,8 +3924,8 @@ watch(isLoggedIn, (newVal) => {
                             </button>
                         </div>
 
-                        <div class="flex items-center gap-3">
-                            <p class="text-[13px] text-slate-600">
+                        <div class="flex w-full items-center justify-between gap-3 sm:w-auto">
+                            <p class="text-xs text-slate-600 sm:text-[13px]">
                                 Showing
                                 <span class="font-semibold text-slate-900">{{ filteredFlights?.length || 0 }}</span>
                                 of
@@ -3900,11 +3933,20 @@ watch(isLoggedIn, (newVal) => {
                                 flights found
                             </p>
 
-                            <label class="relative inline-flex items-center rounded-md border border-slate-200 bg-white shadow-sm transition hover:border-slate-300">
+                            <!-- Phones pick the sort order from a bottom sheet -->
+                            <button
+                                type="button"
+                                class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm sm:hidden"
+                                @click="isSortOpen = true"
+                            >
+                                <ArrowDownUp class="h-3.5 w-3.5 text-slate-500" />
+                                {{ priceSortDirection === "high" ? "Highest price" : "Lowest price" }}
+                            </button>
+                            <label class="relative hidden items-center rounded-md border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 sm:inline-flex">
                                 <select
                                     :value="priceSortDirection"
                                     @change="setSortMode('cheapest', $event.target.value)"
-                                    class="cursor-pointer appearance-none bg-transparent py-2 pl-3.5 pr-9 text-sm font-semibold text-slate-700 outline-none"
+                                    class="cursor-pointer appearance-none bg-transparent py-2 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none sm:pl-3.5 sm:pr-9 sm:text-sm"
                                     aria-label="Sort by price"
                                 >
                                     <option value="low">Sort By: Lowest Price</option>
@@ -3917,51 +3959,58 @@ watch(isLoggedIn, (newVal) => {
                     <!-- Corusel section -->
                     <section
                         v-if="hasFlightResults && cheapestFlightsByAirline.length"
-                        class="mb-4  px-2 py-3"
+                        class="mb-4 py-1 sm:px-2 sm:py-3"
                     >
-                        <Carousel class="relative w-full px-10" :opts="{ align: 'start' }">
-                            <CarouselContent class="-ml-3">
+                        <Carousel class="relative w-full lg:px-10" :opts="{ align: 'start', dragFree: true }">
+                            <CarouselContent class="-ml-2 sm:-ml-3">
                                 <CarouselItem
                                     v-for="airline in cheapestFlightsByAirline"
                                     :key="airline.airlineIata"
-                                    class="basis-full pl-3 sm:basis-1/2 xl:basis-1/4"
+                                    class="basis-[44%] pl-2 sm:basis-1/3 sm:pl-3 xl:basis-1/4"
                                 >
                                     <button
                                         type="button"
                                         @click="filterByCarouselAirline(airline.airlineIatas)"
+                                        :aria-pressed="airline.airlineIatas.some((iata) => selectedAirline.includes(iata))"
                                         :class="[
-                                            'flex min-h-[72px] w-full items-center gap-3 rounded border p-3 text-left transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30',
+                                            'relative flex min-h-[60px] w-full items-center gap-2 rounded-lg border p-2.5 text-left transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 sm:min-h-[72px] sm:gap-3 sm:rounded sm:p-3',
                                             airline.airlineIatas.some((iata) => selectedAirline.includes(iata))
                                                 ? 'border-primary bg-primary/5'
                                                 : 'border-gray-200 bg-white',
                                         ]"
                                     >
-                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center">
+                                        <span
+                                            v-if="airline.airlineIatas.some((iata) => selectedAirline.includes(iata))"
+                                            class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white"
+                                        >
+                                            <Check class="h-3 w-3" />
+                                        </span>
+                                        <div class="flex h-8 w-8 shrink-0 items-center justify-center sm:h-10 sm:w-10">
                                             <img
                                                 v-if="airline.logo"
                                                 :src="airline.logo"
                                                 :alt="`${airline.name} logo`"
-                                                class="h-9 w-9 object-contain"
+                                                class="h-7 w-7 object-contain sm:h-9 sm:w-9"
                                                 @error="$event.target.style.display = 'none'"
                                             />
                                             <Plane v-else class="h-5 w-5 text-primary" />
                                         </div>
                                         <div class="min-w-0 flex-1">
-                                            <p class="truncate text-base font-bold leading-tight text-gray-900">
+                                            <p class="truncate text-sm font-bold leading-tight text-gray-900 sm:text-base">
                                                 {{ formatFlightDisplayMoney(airline.flight) }}
                                             </p>
-                                            <p class="mt-1 truncate text-[11px] text-gray-500">{{ airline.name }}</p>
+                                            <p class="mt-0.5 truncate text-[10px] text-gray-500 sm:mt-1 sm:text-[11px]">{{ airline.name }}</p>
                                         </div>
                                     </button>
                                 </CarouselItem>
                             </CarouselContent>
                             <CarouselPrevious
                                 v-if="cheapestFlightsByAirline.length > 1"
-                                class="absolute left-0 top-1/2 z-10 h-8 w-8 -translate-y-1/2 rounded-full border border-gray-200 bg-white text-gray-600 shadow-none hover:bg-gray-100"
+                                class="absolute left-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-gray-200 bg-white text-gray-600 shadow-none hover:bg-gray-100 lg:flex"
                             />
                             <CarouselNext
                                 v-if="cheapestFlightsByAirline.length > 1"
-                                class="absolute right-0 top-1/2 z-10 h-8 w-8 -translate-y-1/2 rounded-full border border-gray-200 bg-white text-gray-600 shadow-none hover:bg-gray-100"
+                                class="absolute right-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-gray-200 bg-white text-gray-600 shadow-none hover:bg-gray-100 lg:flex"
                             />
                         </Carousel>
                     </section>
@@ -4131,24 +4180,24 @@ watch(isLoggedIn, (newVal) => {
 
 
         <!-- Highlight tags + buy-now-pay-later partners -->
-        <!-- No top padding so the badges hang flush from the card's top edge -->
-        <div class="flex min-h-7 flex-wrap items-center gap-2 px-5 sm:px-6">
+        <!-- Highlight tags and BNPL logos share one pill size -->
+        <div class="flex flex-wrap items-center gap-1.5 px-4 pt-3 sm:px-6">
             <span
                 v-for="tag in flightHighlightTags(item)"
                 :key="tag.key"
-                class="inline-flex h-7 items-center gap-1.5 rounded-b-md px-2.5 text-[13px] font-semibold leading-none"
+                class="inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs font-semibold leading-none"
                 :class="tag.badgeClass"
             >
-                <span v-if="tag.image" class="shrink-0 bg-current" :style="maskIconStyle(tag.image, 16 * (tag.imageScale ?? 1))" />
-                <component v-else :is="tag.icon" :size="17" weight="fill" />
+                <span v-if="tag.image" class="shrink-0 bg-current" :style="maskIconStyle(tag.image, 14 * (tag.imageScale ?? 1))" />
+                <component v-else :is="tag.icon" :size="14" weight="fill" />
                 {{ tag.label }}
             </span>
             <!-- Logo files carry transparent padding, so crop to the visible pill -->
-            <span class="relative block h-5 w-[62px] overflow-hidden rounded" title="Tamara">
-                <img src="/public/tamara.png" alt="Tamara" class="absolute left-[-9px] top-[-12.6px] h-[45.3px] max-w-none" loading="lazy" />
+            <span class="relative block h-6 w-[74px] overflow-hidden rounded-md" title="Tamara">
+                <img src="/public/tamara.png" alt="Tamara" class="absolute left-[-10.8px] top-[-15.1px] h-[54.4px] max-w-none" loading="lazy" />
             </span>
-            <span class="relative block h-5 w-[48px] overflow-hidden rounded" title="Tabby">
-                <img src="/public/tabby.svg" alt="Tabby" class="absolute left-[-7.4px] top-[-21.7px] h-[63.4px] max-w-none" loading="lazy" />
+            <span class="relative block h-6 w-[58px] overflow-hidden rounded-md" title="Tabby">
+                <img src="/public/tabby.svg" alt="Tabby" class="absolute left-[-8.9px] top-[-26px] h-[76.1px] max-w-none" loading="lazy" />
             </span>
             <TooltipProvider :delay-duration="100">
                 <Tooltip>
@@ -4170,7 +4219,7 @@ watch(isLoggedIn, (newVal) => {
                 <div
                     v-for="(leg, legIndex) in item?.leg?.flights"
                     :key="leg?.ref_id || legIndex"
-                    class="flight-leg-row px-5 py-4 sm:px-6 sm:py-5"
+                    class="flight-leg-row px-4 py-4 sm:px-6 sm:py-5"
                 >
                     <!-- Leg label + airline -->
                     <div class="flight-leg-airline flex min-w-0 items-center gap-3">
@@ -4300,7 +4349,7 @@ watch(isLoggedIn, (newVal) => {
             </div>
 
             <!-- Price panel -->
-            <aside class="flight-card-price flex items-center justify-between gap-4 border-t border-dashed border-slate-200 bg-slate-50/60 px-5 py-4 sm:px-6">
+            <aside class="flight-card-price flex items-center justify-between gap-4 border-t border-dashed border-slate-200 bg-slate-50/60 px-4 py-4 sm:px-6">
                 <div class="flight-card-price-summary flex min-w-0 flex-col items-start gap-1">
                     <FlightCardBadges :flight="item?.leg?.flights?.[0]" />
                     <p
@@ -4751,10 +4800,65 @@ watch(isLoggedIn, (newVal) => {
             </DialogContent>
         </Dialog>
 
+        <!-- Mobile sort sheet -->
+        <Transition name="fade">
+            <div
+                v-if="isSortOpen"
+                class="fixed inset-0 z-40 bg-slate-950/50 sm:hidden"
+                @click="isSortOpen = false"
+            ></div>
+        </Transition>
+        <Transition name="sort-sheet">
+            <section
+                v-if="isSortOpen"
+                class="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_rgba(15,23,42,0.18)] sm:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Sort flights"
+            >
+                <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3.5">
+                    <div class="flex items-center gap-2">
+                        <ArrowDownUp class="h-5 w-5 text-primary" />
+                        <h2 class="text-base font-extrabold text-slate-900">Sort by</h2>
+                    </div>
+                    <button
+                        type="button"
+                        class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600"
+                        aria-label="Close sort"
+                        @click="isSortOpen = false"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+                <div class="space-y-2 p-4">
+                    <button
+                        v-for="option in PRICE_SORT_OPTIONS"
+                        :key="option.value"
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition"
+                        :class="priceSortDirection === option.value ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'"
+                        @click="setSortMode('cheapest', option.value); isSortOpen = false"
+                    >
+                        <span
+                            class="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2"
+                            :class="priceSortDirection === option.value ? 'border-primary' : 'border-slate-300'"
+                        >
+                            <span v-if="priceSortDirection === option.value" class="h-2 w-2 rounded-full bg-primary"></span>
+                        </span>
+                        <span class="min-w-0">
+                            <span class="block text-sm font-semibold text-slate-900">{{ option.label }}</span>
+                            <span class="block text-xs text-slate-500">{{ option.hint }}</span>
+                        </span>
+                    </button>
+                </div>
+            </section>
+        </Transition>
+
         <!-- Mobile filter toggle button (visible on small screens) -->
-        <div class="lg:hidden fixed bottom-4 right-4 z-40">
+        <div v-if="hasFlightResults && !isFilterOpen && !isSortOpen" class="lg:hidden fixed bottom-4 right-4 z-40">
             <button
-                @click="showMoreFilters = true"
+                @click="isFilterOpen = true"
+                aria-label="Open filters"
                 class="bg-primary text-white p-3 rounded-full shadow-lg"
             >
                 <SlidersHorizontal class="w-5 h-5" />
@@ -4828,7 +4932,7 @@ watch(isLoggedIn, (newVal) => {
                 class="fixed inset-y-0 right-0 flex h-full w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl z-40 sm:w-[73%] sm:max-w-[864px] sm:rounded-l-xl"
             >
                 <!-- The close button sits over the tab bar so the navigation stays at the very top. -->
-                <div class="pointer-events-none absolute right-0 top-0 z-30 flex h-[59px] items-center bg-white/95 px-3 sm:px-5">
+                <div class="pointer-events-none absolute right-0 top-0 z-30 flex h-[59px] items-center bg-white/95 px-1 sm:px-5">
                     <button
                         @click="isSooperFlihgtDetailsOpen = false"
                         aria-label="Close flight details"
@@ -4857,18 +4961,18 @@ watch(isLoggedIn, (newVal) => {
                     >
                         <!-- Top navigation, modelled after the fare-options sheet. -->
                         <aside
-                            class="relative z-20 flex h-[59px] flex-shrink-0 border-b border-primary/70 bg-white pr-14 sm:pr-20"
+                            class="relative z-20 flex h-[59px] flex-shrink-0 border-b border-primary/70 bg-white pr-11 sm:pr-20"
                         >
                             <div class="side-sheet-scroll w-full overflow-x-auto overflow-y-hidden">
                                 <TabsList
-                                    class="flex h-full w-max min-w-full items-stretch justify-start gap-0 bg-transparent p-0"
+                                    class="flex h-full w-full items-stretch justify-start gap-0 bg-transparent p-0 sm:w-max sm:min-w-full"
                                 >
                                     <TabsTrigger
                                         value="fare-options"
                                         class="flight-sheet-tab"
                                     >
                                         <Ticket class="h-4 w-4" />
-                                        Fare Options
+                                        <span class="sm:hidden">Fares</span><span class="hidden sm:inline">Fare Options</span>
                                     </TabsTrigger>
 
                                     <TabsTrigger
@@ -4876,7 +4980,7 @@ watch(isLoggedIn, (newVal) => {
                                         class="flight-sheet-tab"
                                     >
                                         <PlaneTakeoff class="h-4 w-4" />
-                                        Flight Itinerary
+                                        <span class="sm:hidden">Itinerary</span><span class="hidden sm:inline">Flight Itinerary</span>
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="fare-rules"
@@ -4884,14 +4988,14 @@ watch(isLoggedIn, (newVal) => {
                                         class="flight-sheet-tab"
                                     >
                                         <ListRestart class="h-4 w-4" />
-                                        Fare Rules
+                                        <span class="sm:hidden">Rules</span><span class="hidden sm:inline">Fare Rules</span>
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="baggage-details"
                                         class="flight-sheet-tab"
                                     >
                                         <Briefcase class="h-4 w-4" />
-                                        Baggage
+                                        <span>Baggage</span>
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="fare-breakdown"
@@ -4899,7 +5003,7 @@ watch(isLoggedIn, (newVal) => {
                                         class="flight-sheet-tab"
                                     >
                                         <BadgeDollarSign class="h-4 w-4" />
-                                        Fare Breakup
+                                        <span class="sm:hidden">Breakup</span><span class="hidden sm:inline">Fare Breakup</span>
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
@@ -5158,12 +5262,10 @@ watch(isLoggedIn, (newVal) => {
                                     :references="cardFareReferences(selectedFlight)"
                                     :format-price="(fare, index) => cardOptionPrice(selectedFlight, fare, index)"
                                     :fare-legs="(fare, index) => cardFareLegs(selectedFlight, fare, index)"
-                                    :booking-disabled="isCheckoutLoading || customerSettings?.is_booking_allowed !== 1"
                                     :baggage-summaries="getFareBaggageSummaries"
                                     @select="(index, fare) => selectCardFare(selectedFlight, index, fare)"
                                     @view-baggage="(index, fare) => viewCardFareBaggage(selectedFlight, index, fare)"
                                     @details="(index, fare) => viewCardFareDetails(selectedFlight, index, fare)"
-                                    @book="(index, fare) => bookCardFare(selectedFlight, index, fare)"
                                 />
                             </TabsContent>
 
@@ -5800,10 +5902,9 @@ watch(isLoggedIn, (newVal) => {
                         </div>
                     </Tabs>
 
-                    <!-- Keep the strip off Fare Options, where each fare has its own booking action. -->
+                    <!-- Shared checkout strip; on Fare Options it books the selected fare. -->
                     <div
-                        v-if="flightDetailsActiveTab !== 'fare-options'"
-                        class="flex flex-shrink-0 flex-col gap-3 border-t border-gray-200 bg-white px-4 py-4 shadow-[0_-8px_24px_rgba(16,24,40,0.04)] sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                        class="flex flex-shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(16,24,40,0.06)] sm:py-4 sm:px-6"
                     >
                         <div class="min-w-0">
                             <div
@@ -5818,7 +5919,7 @@ watch(isLoggedIn, (newVal) => {
                             </div>
                         </div>
                         <div
-                            class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center"
+                            class="flex shrink-0 items-center gap-3"
                         >
                             <div
                                 class="hidden items-center gap-2 text-sm text-gray-500 sm:flex"
@@ -5827,9 +5928,9 @@ watch(isLoggedIn, (newVal) => {
                                 Secure checkout
                             </div>
                             <button
-                                @click="goToCheckout"
+                                @click="flightDetailsActiveTab === 'fare-options' ? bookCardFare(selectedFlight) : goToCheckout()"
                                 :disabled="isButtonDisabled || isCheckoutLoading"
-                                class="flex w-full items-center justify-center rounded-lg bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:text-base"
+                                class="flex items-center justify-center rounded-lg bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70 sm:px-8 sm:text-base"
                             >
                                 <span
                                     v-if="isCheckoutLoading"
@@ -6296,9 +6397,18 @@ watch(isLoggedIn, (newVal) => {
 }
 
 @media (max-width: 640px) {
+    /* All five tabs fit the width: icon over a short label. */
     .flight-sheet-tab {
-        padding: 0 0.9rem;
-        font-size: 0.8125rem;
+        flex: 1 1 0;
+        min-width: 0;
+        flex-direction: column;
+        gap: 0.2rem;
+        padding: 0 0.15rem;
+        font-size: 0.6875rem;
+    }
+
+    .flight-sheet-tab[data-state="active"]::after {
+        display: none;
     }
 }
 
@@ -6479,6 +6589,72 @@ watch(isLoggedIn, (newVal) => {
 
 .animate-fadeIn {
     animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Sort sheet rises from the bottom on phones. */
+.sort-sheet-enter-active {
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sort-sheet-leave-active {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.sort-sheet-enter-from,
+.sort-sheet-leave-to {
+    transform: translateY(100%);
+}
+
+/* Below desktop the filters panel becomes a bottom sheet. */
+@media (max-width: 1023px) {
+    .flight-results-sidebar {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 50;
+        visibility: hidden;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.35s;
+    }
+
+    .flight-results-sidebar.is-open {
+        visibility: visible;
+        transform: translateY(0);
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+    }
+
+    .flight-results-sidebar .filter-panel {
+        max-height: 85dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-bottom: 0;
+        border-radius: 1.25rem 1.25rem 0 0;
+        box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.18);
+    }
+
+    .flight-results-sidebar .filter-panel-heading {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #ffffff;
+    }
+
+    .filter-sheet-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+        border-top: 1px solid #e2e8f0;
+        background: #ffffff;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flight-results-sidebar,
+    .flight-results-sidebar.is-open {
+        transition: none;
+    }
 }
 
 /* Keep the complete filters panel directly below the sticky flight search card. */

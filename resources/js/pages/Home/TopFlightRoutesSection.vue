@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { RouterLink } from 'vue-router';
+import { ChevronDown, ChevronUp } from 'lucide-vue-next';
 import { FETCH_POPULAR_ROUTES, FETCH_TOP_AIRLINES } from '@/services/store/actions.type';
 
 const store = useStore();
@@ -153,21 +154,57 @@ const mergedAirlines = computed(() => {
     });
     return combined;
 });
+
+const isRoutesExpanded = ref(false);
+const isAirlinesExpanded = ref(false);
+
+const displayedRoutes = computed(() => {
+    if (isRoutesExpanded.value) return mergedRoutes.value;
+    return mergedRoutes.value.slice(0, 8);
+});
+
+const displayedAirlines = computed(() => {
+    if (isAirlinesExpanded.value) return mergedAirlines.value;
+    return mergedAirlines.value.slice(0, 10);
+});
 </script>
 
 <template>
-    <section class="w-full bg-slate-200/60 border-t border-gray-300/60 py-10 sm:py-12 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto space-y-8 text-gray-700">
+    <section class="w-full bg-slate-200/60 border-t border-gray-300/60 py-8 sm:py-12 px-3 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto space-y-6 sm:space-y-8 text-gray-700">
             
-            <!-- WHY JETZE & BOOKING FLIGHTS WITH JETZE (2 Columns) -->
-           
-
             <!-- TOP FLIGHT ROUTES -->
             <div>
-                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2">
+                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2.5">
                     TOP FLIGHT ROUTES
                 </h3>
-                <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+                
+                <!-- Mobile Chips Layout -->
+                <div class="sm:hidden">
+                    <div class="flex flex-wrap gap-1.5">
+                        <RouterLink 
+                            v-for="(route, index) in displayedRoutes" 
+                            :key="index"
+                            :to="getRouteSearchLink(route)" 
+                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs text-slate-700 shadow-2xs hover:border-primary hover:bg-white hover:text-primary transition-all capitalize active:scale-95"
+                        >
+                            <span>{{ route.from_city }}</span>
+                            <span class="text-slate-400 text-[10px]">✈</span>
+                            <span>{{ route.to_city }}</span>
+                        </RouterLink>
+                    </div>
+                    <button 
+                        v-if="mergedRoutes.length > 8"
+                        @click="isRoutesExpanded = !isRoutesExpanded" 
+                        class="mt-2.5 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline focus:outline-none"
+                    >
+                        <span>{{ isRoutesExpanded ? 'Show fewer routes' : `Show all ${mergedRoutes.length} routes` }}</span>
+                        <component :is="isRoutesExpanded ? ChevronUp : ChevronDown" class="w-3.5 h-3.5" />
+                    </button>
+                </div>
+
+                <!-- Desktop Text List -->
+                <p class="hidden sm:block text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
                     <template v-for="(route, index) in mergedRoutes" :key="index">
                         <RouterLink 
                             :to="getRouteSearchLink(route)" 
@@ -182,10 +219,34 @@ const mergedAirlines = computed(() => {
 
             <!-- AIRLINES -->
             <div>
-                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2">
+                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2.5">
                     AIRLINES
                 </h3>
-                <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+
+                <!-- Mobile Chips Layout -->
+                <div class="sm:hidden">
+                    <div class="flex flex-wrap gap-1.5">
+                        <RouterLink 
+                            v-for="(airline, index) in displayedAirlines" 
+                            :key="index"
+                            :to="{ path: '/flight/search', query: { airline: airline.code } }" 
+                            class="inline-flex items-center rounded-lg border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs hover:border-primary hover:bg-white hover:text-primary transition-all active:scale-95"
+                        >
+                            {{ airline.name }}
+                        </RouterLink>
+                    </div>
+                    <button 
+                        v-if="mergedAirlines.length > 10"
+                        @click="isAirlinesExpanded = !isAirlinesExpanded" 
+                        class="mt-2.5 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline focus:outline-none"
+                    >
+                        <span>{{ isAirlinesExpanded ? 'Show fewer airlines' : `Show all ${mergedAirlines.length} airlines` }}</span>
+                        <component :is="isAirlinesExpanded ? ChevronUp : ChevronDown" class="w-3.5 h-3.5" />
+                    </button>
+                </div>
+
+                <!-- Desktop Text List -->
+                <p class="hidden sm:block text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
                     <template v-for="(airline, index) in mergedAirlines" :key="index">
                         <RouterLink 
                             :to="{ path: '/flight/search', query: { airline: airline.code } }" 
@@ -200,38 +261,42 @@ const mergedAirlines = computed(() => {
 
             <!-- ABOUT THE SITE -->
             <div>
-                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2">
+                <h3 class="text-xs sm:text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-2.5">
                     ABOUT THE SITE
                 </h3>
-                <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+                <div class="flex flex-wrap gap-x-3 gap-y-1.5 text-xs sm:text-sm text-gray-600 font-normal">
                     <RouterLink to="/about/us" class="hover:text-primary hover:underline transition-colors">About Us</RouterLink>
-                    <span class="text-gray-400 mx-1.5">,</span>
+                    <span class="text-gray-400">•</span>
                     <RouterLink to="/contact/us" class="hover:text-primary hover:underline transition-colors">Contact Us</RouterLink>
-                    <span class="text-gray-400 mx-1.5">,</span>
+                    <span class="text-gray-400">•</span>
                     <RouterLink to="/our/services" class="hover:text-primary hover:underline transition-colors">Our Services</RouterLink>
-                    <span class="text-gray-400 mx-1.5">,</span>
+                    <span class="text-gray-400">•</span>
                     <RouterLink to="/how-to-use-abhi-pay-bank-transfer" class="hover:text-primary hover:underline transition-colors">How to Pay</RouterLink>
-                    <span class="text-gray-400 mx-1.5">,</span>
+                    <span class="text-gray-400">•</span>
                     <RouterLink to="/privacy-policy" class="hover:text-primary hover:underline transition-colors">Privacy Policy</RouterLink>
-                    <span class="text-gray-400 mx-1.5">,</span>
-                    <RouterLink to="/terms-condition" class="hover:text-primary hover:underline transition-colors">Terms & Conditions</RouterLink>
-                </p>
+                    <span class="text-gray-400">•</span>
+                    <RouterLink to="/terms-condition" class="hover:text-primary hover:underline transition-colors">Terms &amp; Conditions</RouterLink>
+                </div>
             </div>
- <div class="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 pb-6 border-b border-gray-300/60">
-                <div>
-                    <h3 class="text-sm sm:text-base font-extrabold text-gray-900 mb-2.5">
+
+            <!-- WHY JETZE & BOOKING FLIGHTS WITH JETZE -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 pt-2 pb-2">
+                <div class="bg-white/70 rounded-xl p-4 sm:p-5 border border-slate-300/60 shadow-2xs">
+                    <h3 class="text-sm sm:text-base font-extrabold text-gray-900 mb-2 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-primary shrink-0"></span>
                         Why Jetze?
                     </h3>
-                    <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal text-justify sm:text-left">
+                    <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
                         Established as Pakistan's premier online travel platform, Jetze has positioned itself as the go-to destination for modern travelers by providing great offers, competitive airfares, exclusive discounts, and a seamless online booking experience. Booking flight tickets, luxury hotel stays, Umrah packages, and vacation tours through our web or mobile app can be done with complete ease and zero hassle. We deliver amazing value with low fare alerts, instant discounts, transparent pricing, and flexible payment solutions.
                     </p>
                 </div>
 
-                <div>
-                    <h3 class="text-sm sm:text-base font-extrabold text-gray-900 mb-2.5">
+                <div class="bg-white/70 rounded-xl p-4 sm:p-5 border border-slate-300/60 shadow-2xs">
+                    <h3 class="text-sm sm:text-base font-extrabold text-gray-900 mb-2 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
                         Booking Flights with Jetze
                     </h3>
-                    <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal text-justify sm:text-left">
+                    <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
                         At Jetze, you can find the best travel deals and cheap air tickets to any destination worldwide by booking on our web or mobile platform. Comparing fares across 450+ leading domestic and international airlines, Jetze helps you secure affordable flights customized to your travel schedule. With customer satisfaction as our priority, our 24/7 dedicated support team is always on standby to assist with queries, ticket reissues, and travel assistance.
                     </p>
                 </div>

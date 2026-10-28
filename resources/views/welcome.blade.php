@@ -14,6 +14,15 @@
 
     @include('partials.google-tag')
 
+    @if (request()->is('/'))
+        {{-- Start the hero photo with the HTML instead of after the Home chunk renders. --}}
+        <link rel="preload" as="image" type="image/webp" fetchpriority="high" media="(max-width: 639px)"
+            href="/public/images/hero/banner-mobile.webp">
+        <link rel="preload" as="image" type="image/webp" fetchpriority="high" media="(min-width: 640px)"
+            imagesrcset="/public/images/hero/banner-1280.webp 1280w, /public/images/hero/banner-1920.webp 1920w, /public/images/hero/banner-2560.webp 2560w"
+            imagesizes="100vw">
+    @endif
+
     <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
