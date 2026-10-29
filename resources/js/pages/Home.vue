@@ -4,6 +4,14 @@ import OffersSection from './Home/OffersSection.vue';
 import TrustFeaturesCarousel from './Home/TrustFeaturesCarousel.vue';
 import TopFlightRoutesSection from './Home/TopFlightRoutesSection.vue';
 import Footer from '@/components/common/Footer.vue';
+
+// Served by Laravel from public/; bound so Vite does not try to bundle them.
+// Keep these in sync with the preload links in welcome.blade.php.
+const heroImage = {
+    mobile: '/images/hero/banner-mobile.webp',
+    srcset: '/images/hero/banner-1280.webp 1280w, /images/hero/banner-1920.webp 1920w, /images/hero/banner-2560.webp 2560w',
+    fallback: '/banner.jpg',
+};
 </script>
 
 <template>
@@ -13,14 +21,14 @@ import Footer from '@/components/common/Footer.vue';
         <!-- Blue sky fill shows until the photo arrives; the photo is preloaded from welcome.blade.php. -->
         <div class="relative z-10 w-full bg-gradient-to-br from-[#163f75] via-[#2a62a6] to-[#5b8fca]">
             <picture class="pointer-events-none absolute inset-0">
-                <source media="(max-width: 639px)" srcset="/public/images/hero/banner-mobile.webp" type="image/webp" />
+                <source media="(max-width: 639px)" :srcset="heroImage.mobile" type="image/webp" />
                 <source
-                    srcset="/public/images/hero/banner-1280.webp 1280w, /public/images/hero/banner-1920.webp 1920w, /public/images/hero/banner-2560.webp 2560w"
+                    :srcset="heroImage.srcset"
                     sizes="100vw"
                     type="image/webp"
                 />
                 <img
-                    src="/public/banner.jpg"
+                    :src="heroImage.fallback"
                     alt=""
                     fetchpriority="high"
                     decoding="async"
@@ -28,7 +36,7 @@ import Footer from '@/components/common/Footer.vue';
                 />
             </picture>
             <!-- Keep the image vivid while retaining enough contrast for the white hero copy. -->
-            <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/38 via-slate-950/12 to-slate-900/5"></div>
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/[.38] via-slate-950/[.12] to-slate-900/[.05]"></div>
 
         <!-- HERO SEARCH SECTION -->
         <div class="relative z-20 mx-auto w-full max-w-7xl px-3 sm:px-6 pb-8 pt-[86px] sm:pb-14 sm:pt-[140px] lg:px-8 lg:pb-20 lg:pt-[155px] animate-fade-in-up">
