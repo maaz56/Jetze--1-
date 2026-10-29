@@ -2071,7 +2071,8 @@ onMounted(() => {
         padding-left: 2.25rem !important;
         padding-right: 2.5rem !important;
         padding-top: 0 !important;
-        font-size: 0.95rem !important;
+        /* iOS Safari zooms a focused editable field below 16px. */
+        font-size: 16px !important;
     }
     .booking-cell :deep(.dropdown p.text-lg) {
         font-size: 1rem !important;

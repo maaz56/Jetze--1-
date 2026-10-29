@@ -7,6 +7,7 @@ defineProps({
     formatPrice: { type: Function, required: true },
     baggageSummaries: { type: Function, required: true },
     fareLegs: { type: Function, required: true },
+    flightSummaries: { type: Array, default: () => [] },
 });
 defineEmits(["select", "view-baggage", "details"]);
 
@@ -33,6 +34,40 @@ function fareCount(groups) {
 
 <template>
     <div v-if="groups.length" class="w-full">
+        <!-- Shared flight context belongs above the fare choices, not inside every card. -->
+        <section v-if="flightSummaries.length" class="border-b border-primary/20 bg-gradient-to-br from-primary/[0.12] via-white to-sky-50 px-4 py-3 sm:px-6">
+            <div class="flex items-center justify-between gap-3">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Flight summary</p>
+                <span class="text-[10px] font-semibold text-slate-400">Selected itinerary</span>
+            </div>
+            <div class="mt-1.5 divide-y divide-slate-200/80">
+                <div
+                    v-for="(summary, index) in flightSummaries"
+                    :key="`${summary.airlineCode}-${summary.flightNumber}-${index}`"
+                    class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
+                >
+                    <p class="truncate text-xs font-bold text-slate-800">
+                        {{ summary.airlineName }}
+                        <span v-if="summary.airlineCode || summary.flightNumber" class="font-semibold text-slate-500">
+                            · {{ [summary.airlineCode, summary.flightNumber].filter(Boolean).join(' ') }}
+                        </span>
+                    </p>
+                    <p class="whitespace-nowrap text-sm font-extrabold tabular-nums text-slate-900">
+                        {{ summary.departureTime }}
+                        <span class="mx-1 font-semibold text-slate-400">→</span>
+                        {{ summary.arrivalTime }}
+                    </p>
+                    <div class="col-span-2 flex min-w-0 items-center gap-2 text-[10px] font-semibold text-slate-500">
+                        <span class="shrink-0 font-bold tracking-wide text-slate-600">{{ summary.departureAirport }} → {{ summary.arrivalAirport }}</span>
+                        <span v-if="summary.duration" class="h-3 w-px shrink-0 bg-slate-200"></span>
+                        <span v-if="summary.duration" class="shrink-0">{{ summary.duration }}</span>
+                        <span v-if="summary.stopLabel" class="rounded-full px-1.5 py-0.5 text-[9px] font-bold" :class="summary.stopLabel === 'Nonstop' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
+                            {{ summary.stopLabel }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
         <header class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
             <div class="min-w-0">
                 <h3 class="text-base font-bold text-slate-950">Choose your fare</h3>

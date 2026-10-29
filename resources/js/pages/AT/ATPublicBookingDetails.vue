@@ -1088,7 +1088,7 @@ onMounted(() => {
             <!-- Action Buttons -->
             <div v-if="route?.query?.booking_source == 1">
                 <div v-for="booking in bookingDetails" :key="booking?.id"
-                    class="bg-white rounded-lg shadow-sm p-3 py-4 mb-4 flex flex-wrap gap-1 justify-end print:hidden">
+                    class="ticket-actions bg-white rounded-lg shadow-sm p-3 py-4 mb-4 flex flex-wrap gap-1 justify-end print:hidden">
                     <button @click="printBooking"
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2">
                         <PrinterIcon class="h-4 w-4" />
@@ -1171,20 +1171,20 @@ onMounted(() => {
                     <!-- Print Section - Main Content -->
                     <div :class="isChatOpen && modifyRequestData ? 'w-8/12' : 'w-full'" id="print-section">
                         <div v-for="booking in bookingDetails" :key="booking.id"
-                            class="bg-white rounded-lg shadow-sm overflow-hidden mb-4 print:shadow-none print:border print:border-gray-300 print:mb-0 print:rounded-none">
+                            class="ticket-receipt bg-white rounded-lg shadow-sm overflow-hidden mb-4 print:shadow-none print:border print:border-gray-300 print:mb-0 print:rounded-none">
 
                             <!-- Header - Professional Design -->
                             <div
-                                class="p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
-                                <div class="flex justify-between items-center">
+                                class="ticket-receipt-header p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
+                                <div class="ticket-receipt-header-grid flex justify-between items-center">
                                     <!-- Logo -->
-                                    <div class="w-1/4">
+                                    <div class="ticket-receipt-logo w-1/4">
                                         <img class="h-16 w-auto print:h-12" src="/public/assets/logo.png" alt="Logo" />
                                     </div>
 
                                     <!-- Agency Info -->
                                     <div
-                                        class="w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
+                                        class="ticket-receipt-title w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
                                         <h1 class="text-2xl font-extrabold tracking-tight print:text-gray-900 mb-1">
                                             E-TICKET RECEIPT</h1>
 
@@ -1214,7 +1214,7 @@ onMounted(() => {
 
                                     <!-- Booking Reference -->
                                     <div
-                                        class="w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
+                                        class="ticket-receipt-reference w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
                                         <p class="text-sm print:text-gray-700"><span class="font-medium">Booking
                                                 Ref:</span> {{ booking.id
                                                 }}</p>
@@ -1237,7 +1237,7 @@ onMounted(() => {
                             </div>
 
                             <!-- Flight Information -->
-                            <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
+                            <div class="ticket-flight-information p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
                                 <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
                                     <PlaneIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
                                     FLIGHT INFORMATION
@@ -1249,11 +1249,11 @@ onMounted(() => {
                                         :key="flightIndex" class="space-y-3 print:break-inside-avoid">
                                         <!-- Main Flight Card -->
                                         <div
-                                            class="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
+                                            class="ticket-flight-card hidden sm:block border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:block print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
 
                                             <!-- Segments Container -->
                                             <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
-                                                class="bg-white overflow-hidden">
+                                                class="ticket-segment bg-white overflow-hidden">
 
                                                 <!-- Layover Info -->
                                                 <div v-if="segment?.layover_time" class="flex justify-center ">
@@ -1268,12 +1268,12 @@ onMounted(() => {
                                                 </div>
 
                                                 <!-- Segment Details -->
-                                                <div class="p-2 sm:p-3 lg:p-6">
+                                                <div class="ticket-segment-details p-2 sm:p-3 lg:p-6">
                                                     <div class="flex items-center justify-center gap-6">
-                                                        <div class="grid grid-cols-7 gap-4 items-center w-full">
+                                                        <div class="ticket-segment-grid grid grid-cols-7 gap-4 items-center w-full">
 
                                                             <!-- Airline Logo -->
-                                                            <div class="w-20 flex-shrink-0 print:w-24">
+                                                            <div class="ticket-airline w-20 flex-shrink-0 print:w-24">
                                                                 <img :src="segment?.operating_carrier?.logo"
                                                                     class="h-12 w-auto object-contain print:h-14"
                                                                     :alt="segment?.operating_carrier?.name" />
@@ -1284,7 +1284,7 @@ onMounted(() => {
                                                             </div>
 
                                                             <!-- FROM (Right aligned content) -->
-                                                            <div class="col-span-2 text-right print:text-right">
+                                                            <div class="ticket-origin col-span-2 text-right print:text-right">
                                                                 <p
                                                                     class="text-2xl font-bold text-gray-900 print:text-3xl">
                                                                     {{ segment?.from?.iata }}
@@ -1314,7 +1314,7 @@ onMounted(() => {
                                                                 </p>
                                                             </div>
                                                             <!-- Arrow with Duration -->
-                                                            <div class="col-span-1 flex flex-col items-center">
+                                                            <div class="ticket-flight-path col-span-1 flex flex-col items-center">
                                                                 <div
                                                                     class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:bg-transparent print:border print:border-gray-400">
                                                                     <MoveRight
@@ -1327,7 +1327,7 @@ onMounted(() => {
                                                             </div>
 
                                                             <!-- TO (Left aligned content) -->
-                                                            <div class="col-span-2 text-left print:text-left">
+                                                            <div class="ticket-destination col-span-2 text-left print:text-left">
                                                                 <p
                                                                     class="text-2xl font-bold text-gray-900 print:text-3xl">
                                                                     {{ segment?.to?.iata }}
@@ -1362,7 +1362,7 @@ onMounted(() => {
 
                                                     <!-- Aircraft Info (only show for first segment or per segment basis) -->
                                                     <div
-                                                        class="mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
+                                                        class="ticket-segment-meta mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
                                                         <span>
                                                             <span class="font-semibold">Aircraft:</span>
                                                             {{ segment?.aircraft?.model || "N/A" }}
@@ -1380,21 +1380,68 @@ onMounted(() => {
                                             </div>
                                         </div>
 
+                                        <!-- Compact mobile ticket: mirrors the desktop ticket details without its seven-column squeeze. -->
+                                        <div class="ticket-mobile-flight-card sm:hidden">
+                                            <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
+                                                class="ticket-mobile-segment">
+                                                <div v-if="segment?.layover_time" class="ticket-mobile-layover">
+                                                    Layover: {{ Math.floor(segment.layover_time / 60) + "h " + (segment.layover_time % 60) + "m" }}
+                                                </div>
+
+                                                <div class="ticket-mobile-airline">
+                                                    <img :src="segment?.operating_carrier?.logo"
+                                                        :alt="segment?.operating_carrier?.name" />
+                                                    <div>
+                                                        <p>{{ segment?.operating_carrier?.name || 'Airline' }}</p>
+                                                        <span>{{ segment?.operating_carrier?.iata }}-{{ segment?.flight_number ?? 'N/A' }}</span>
+                                                    </div>
+                                                    <span class="ticket-mobile-class">Economy</span>
+                                                </div>
+
+                                                <div class="ticket-mobile-route">
+                                                    <div class="ticket-mobile-place ticket-mobile-place--from">
+                                                        <strong>{{ segment?.from?.iata }}</strong>
+                                                        <span>{{ segment?.from?.city?.name }}</span>
+                                                        <small>{{ formatDate(segment?.departure_at) }}</small>
+                                                        <b>{{ moment.parseZone(segment?.departure_at).format('HH:mm') }}</b>
+                                                    </div>
+
+                                                    <div class="ticket-mobile-path">
+                                                        <MoveRight />
+                                                        <span>{{ segment?.flight_time || 'Direct' }}</span>
+                                                    </div>
+
+                                                    <div class="ticket-mobile-place ticket-mobile-place--to">
+                                                        <strong>{{ segment?.to?.iata }}</strong>
+                                                        <span>{{ segment?.to?.city?.name }}</span>
+                                                        <small>{{ formatDate(segment?.arrival_at) }}</small>
+                                                        <b>{{ moment.parseZone(segment?.arrival_at).format('HH:mm') }}</b>
+                                                    </div>
+                                                </div>
+
+                                                <div class="ticket-mobile-meta">
+                                                    <span>Terminal: {{ segment?.from_terminal?.Gate ?? 'N/A' }}</span>
+                                                    <span>Flight {{ segment?.flight_number ?? 'N/A' }}</span>
+                                                    <span>Terminal: {{ segment?.to_terminal?.Gate ?? 'N/A' }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Baggage Section - Half Width Rounded Table (unchanged) -->
                                         <div
-                                            class="border border-gray-200 rounded-lg p-4 print:border-gray-300 print:break-inside-avoid">
+                                            class="ticket-baggage-section border border-gray-200 rounded-lg p-4 print:border-gray-300 print:break-inside-avoid">
                                             <div class="space-y-6">
                                                 <div
-                                                    class="flex justify-start items-center divide-x divide-gray-300 print:divide-gray-400">
+                                                    class="ticket-baggage-list flex justify-start items-center divide-x divide-gray-300 print:divide-gray-400">
                                                     <div v-for="(flightSegment, sIndex) in flight?.segments"
-                                                        :key="sIndex" class="mb-4 p-4">
+                                                        :key="sIndex" class="ticket-baggage-item mb-4 p-4">
                                                         <div
                                                             class="text-xs font-medium text-gray-700 mb-2 print:text-gray-800">
                                                             {{ flightSegment.from.iata }} → {{ flightSegment.to.iata }}
                                                         </div>
                                                         <div class="print:w-full">
                                                             <table
-                                                                class="w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
+                                                                class="ticket-baggage-table w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
                                                                 <thead>
                                                                     <tr
                                                                         class="border-b border-gray-300 print:border-gray-400 print:bg-white">
@@ -1457,15 +1504,15 @@ onMounted(() => {
                             </div>
 
                             <!-- Passenger & Ticket Details -->
-                            <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
+                            <div class="ticket-passenger-section p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
                                 <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
                                     <UserIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
                                     PASSENGER & TICKET DETAILS
                                 </h2>
 
-                                <div class="overflow-x-auto">
+                                <div class="ticket-passenger-table-wrap overflow-x-auto">
                                     <table
-                                        class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
+                                        class="ticket-passenger-table w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
                                         <thead>
                                             <tr
                                                 class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
@@ -1629,15 +1676,15 @@ onMounted(() => {
                             <!-- Special Service Requests - Flight Wise -->
 
                             <!-- Fare Breakdown - Using existing fare logic -->
-                            <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
+                            <div class="ticket-fare-section p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
                                 v-if="isDetailsInfoVisible">
                                 <h2 class="text-lg font-bold text-gray-800 mb-2 print:text-gray-900">
                                     FARE BREAKDOWN
                                 </h2>
                                 <div>
-                                    <div class="overflow-x-auto">
+                                    <div class="ticket-fare-table-wrap overflow-x-auto">
                                         <table
-                                            class="w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
+                                            class="ticket-fare-table w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
                                             <thead>
                                                 <tr
                                                     class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
@@ -1924,6 +1971,517 @@ onMounted(() => {
 </template>
 
 <style>
+/* The desktop ticket is intentionally kept as-is. These rules make the same
+   receipt hierarchy readable on narrow screens without changing print output. */
+@media screen and (max-width: 639px) {
+    .ticket-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.3rem;
+        padding: 0.6rem;
+    }
+
+    .ticket-actions button {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        gap: 0.2rem;
+        padding: 0.45rem 0.2rem;
+        font-size: 0.62rem;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .ticket-actions button svg {
+        width: 0.75rem;
+        height: 0.75rem;
+        flex: 0 0 auto;
+    }
+
+    .ticket-receipt-header {
+        padding: 1rem 0.85rem;
+    }
+
+    .ticket-receipt-header-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: center;
+        gap: 0;
+    }
+
+    .ticket-receipt-logo {
+        display: flex;
+        width: auto;
+        align-items: center;
+        justify-content: center;
+        padding-top: 0;
+    }
+
+    .ticket-receipt-logo img {
+        height: 1.75rem;
+    }
+
+    .ticket-receipt-title {
+        display: flex;
+        width: auto;
+        height: 3.15rem;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 0.45rem;
+        text-align: center;
+    }
+
+    .ticket-receipt-title h1 {
+        font-size: 0.9rem;
+        line-height: 1.25;
+        letter-spacing: -0.025em;
+        margin-bottom: 0.2rem;
+    }
+
+    .ticket-receipt-title .text-sm,
+    .ticket-receipt-reference .text-sm {
+        font-size: 0.65rem;
+        line-height: 1.35;
+    }
+
+    .ticket-receipt-title .mt-2 {
+        margin-top: 0.3rem;
+    }
+
+    .ticket-receipt-title .mt-2 > p {
+        display: none;
+    }
+
+    .ticket-receipt-title .px-3 {
+        padding-left: 0.4rem;
+        padding-right: 0.4rem;
+    }
+
+    .ticket-receipt-reference {
+        display: flex;
+        width: auto;
+        height: 3.15rem;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 0.45rem;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-flight-information {
+        padding: 1rem 0.85rem;
+    }
+
+    .ticket-flight-information > h2 {
+        margin-bottom: 0.85rem;
+        font-size: 0.95rem;
+    }
+
+    .ticket-flight-card {
+        padding: 0.75rem;
+        border-radius: 0.6rem;
+    }
+
+    .ticket-segment-details {
+        padding: 0.5rem 0 0.2rem;
+    }
+
+    .ticket-segment-details > div {
+        gap: 0;
+    }
+
+    .ticket-segment-grid {
+        grid-template-columns: 0.7fr repeat(2, minmax(0, 1fr)) 0.45fr repeat(2, minmax(0, 1fr)) 0.1fr;
+        gap: 0.25rem;
+    }
+
+    .ticket-airline {
+        width: 2.25rem;
+        align-self: start;
+        padding-top: 0.2rem;
+    }
+
+    .ticket-airline img {
+        height: 1.85rem;
+    }
+
+    .ticket-airline .text-xs {
+        margin-top: 0.2rem;
+        font-size: 0.52rem;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-origin .text-2xl,
+    .ticket-destination .text-2xl {
+        font-size: 1.05rem;
+        line-height: 1.2;
+    }
+
+    .ticket-origin .text-lg,
+    .ticket-destination .text-lg {
+        font-size: 0.7rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-origin .text-base,
+    .ticket-destination .text-base {
+        margin-top: 0.55rem;
+        font-size: 0.62rem;
+        line-height: 1.3;
+    }
+
+    .ticket-origin .text-xl,
+    .ticket-destination .text-xl {
+        font-size: 0.9rem;
+        line-height: 1.25;
+    }
+
+    .ticket-origin .text-sm,
+    .ticket-destination .text-sm {
+        margin-top: 0.35rem;
+        font-size: 0.58rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-flight-path > div {
+        width: 1.65rem;
+        height: 1.65rem;
+    }
+
+    .ticket-flight-path svg {
+        width: 0.85rem;
+        height: 0.85rem;
+    }
+
+    .ticket-flight-path .text-sm {
+        margin-top: 0.35rem;
+        font-size: 0.54rem;
+        line-height: 1.2;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-segment-meta {
+        margin-top: 0.85rem;
+        padding-top: 0.65rem;
+        gap: 0.35rem 0.65rem;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        font-size: 0.62rem;
+        line-height: 1.3;
+    }
+
+    .ticket-segment-meta span {
+        white-space: nowrap;
+    }
+
+    .ticket-mobile-flight-card {
+        overflow: hidden;
+        border: 1px solid #dbe5f1;
+        border-radius: 0.7rem;
+        background: linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
+    }
+
+    .ticket-mobile-segment {
+        padding: 0.8rem;
+    }
+
+    .ticket-mobile-segment + .ticket-mobile-segment {
+        border-top: 1px dashed #cbd5e1;
+    }
+
+    .ticket-mobile-layover {
+        width: fit-content;
+        margin: -0.05rem auto 0.7rem;
+        padding: 0.22rem 0.55rem;
+        border-radius: 9999px;
+        background: #eaf4ff;
+        color: #1d5c9e;
+        font-size: 0.64rem;
+        font-weight: 700;
+    }
+
+    .ticket-mobile-airline {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding-bottom: 0.65rem;
+        border-bottom: 1px solid #e6edf5;
+        color: #34445b;
+    }
+
+    .ticket-mobile-airline img {
+        width: 1.85rem;
+        height: 1.85rem;
+        object-fit: contain;
+    }
+
+    .ticket-mobile-airline p {
+        margin: 0;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .ticket-mobile-airline span {
+        display: block;
+        margin-top: 0.1rem;
+        color: #718198;
+        font-size: 0.62rem;
+        line-height: 1.2;
+    }
+
+    .ticket-mobile-airline .ticket-mobile-class {
+        margin: 0 0 0 auto;
+        padding: 0.22rem 0.45rem;
+        border-radius: 9999px;
+        background: #eef5ff;
+        color: #256fc0;
+        font-size: 0.57rem;
+        font-weight: 700;
+    }
+
+    .ticket-mobile-route {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 2.15rem minmax(0, 1fr);
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.8rem 0 0.65rem;
+    }
+
+    .ticket-mobile-place {
+        min-width: 0;
+    }
+
+    .ticket-mobile-place--from {
+        text-align: left;
+    }
+
+    .ticket-mobile-place--to {
+        text-align: right;
+    }
+
+    .ticket-mobile-place strong,
+    .ticket-mobile-place span,
+    .ticket-mobile-place small,
+    .ticket-mobile-place b {
+        display: block;
+    }
+
+    .ticket-mobile-place strong {
+        color: #172033;
+        font-size: 1.05rem;
+        line-height: 1.1;
+    }
+
+    .ticket-mobile-place span {
+        margin-top: 0.15rem;
+        color: #526277;
+        font-size: 0.68rem;
+        line-height: 1.25;
+        display: -webkit-box;
+        min-height: 1.7rem;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .ticket-mobile-place small {
+        margin-top: 0.55rem;
+        color: #718198;
+        font-size: 0.6rem;
+        line-height: 1.2;
+    }
+
+    .ticket-mobile-place b {
+        margin-top: 0.12rem;
+        color: #277bd2;
+        font-size: 0.9rem;
+        line-height: 1.15;
+    }
+
+    .ticket-mobile-path {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.32rem;
+        color: #718198;
+    }
+
+    .ticket-mobile-path svg {
+        width: 1.45rem;
+        height: 1.45rem;
+        padding: 0.32rem;
+        border-radius: 9999px;
+        background: #eef5ff;
+        color: #277bd2;
+    }
+
+    .ticket-mobile-path span {
+        max-width: 2.5rem;
+        font-size: 0.56rem;
+        font-weight: 600;
+        line-height: 1.2;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+
+    .ticket-mobile-meta {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.25rem;
+        padding-top: 0.6rem;
+        border-top: 1px solid #e6edf5;
+        color: #718198;
+        font-size: 0.56rem;
+        line-height: 1.25;
+        text-align: center;
+    }
+
+    .ticket-mobile-meta span:nth-child(1) {
+        text-align: left;
+    }
+
+    .ticket-mobile-meta span:nth-child(3) {
+        text-align: right;
+    }
+
+    .ticket-baggage-section {
+        padding: 0.65rem;
+        border-radius: 0.7rem;
+    }
+
+    .ticket-baggage-section > .space-y-6 > * + * {
+        margin-top: 0;
+    }
+
+    .ticket-baggage-list {
+        display: block;
+    }
+
+    .ticket-baggage-item {
+        margin: 0;
+        padding: 0.75rem 0;
+    }
+
+    .ticket-baggage-item + .ticket-baggage-item {
+        border-top: 1px dashed #cbd5e1;
+    }
+
+    .ticket-baggage-list > .ticket-baggage-item {
+        border-left-width: 0 !important;
+    }
+
+    .ticket-baggage-item .text-xs {
+        margin-bottom: 0.4rem;
+        font-size: 0.62rem;
+    }
+
+    .ticket-baggage-table {
+        table-layout: fixed;
+        font-size: 0.58rem;
+        line-height: 1.3;
+    }
+
+    .ticket-baggage-table th,
+    .ticket-baggage-table td {
+        padding: 0.45rem 0.25rem;
+        overflow-wrap: anywhere;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .ticket-passenger-section,
+    .ticket-fare-section {
+        padding: 1rem 0.85rem;
+    }
+
+    .ticket-passenger-section > h2,
+    .ticket-fare-section > h2 {
+        margin-bottom: 0.8rem;
+        font-size: 0.95rem;
+    }
+
+    .ticket-passenger-table-wrap,
+    .ticket-fare-table-wrap {
+        overflow: hidden;
+    }
+
+    .ticket-passenger-table {
+        table-layout: fixed;
+        font-size: 0.62rem;
+        line-height: 1.35;
+    }
+
+    .ticket-passenger-table th,
+    .ticket-passenger-table td {
+        padding: 0.48rem 0.28rem;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+        text-align: left;
+    }
+
+    .ticket-passenger-table th:nth-child(1),
+    .ticket-passenger-table td:nth-child(1) {
+        width: 25%;
+    }
+
+    .ticket-passenger-table th:nth-child(2),
+    .ticket-passenger-table td:nth-child(2) {
+        width: 25%;
+    }
+
+    .ticket-passenger-table th:nth-child(3),
+    .ticket-passenger-table td:nth-child(3) {
+        width: 25%;
+    }
+
+    .ticket-passenger-table th:nth-child(4),
+    .ticket-passenger-table td:nth-child(4) {
+        width: 25%;
+    }
+
+    .ticket-passenger-table .text-xs {
+        font-size: 0.54rem;
+    }
+
+    .ticket-fare-table {
+        table-layout: fixed;
+        font-size: 0.57rem;
+        line-height: 1.3;
+    }
+
+    .ticket-fare-table th,
+    .ticket-fare-table td {
+        padding: 0.42rem 0.2rem;
+        overflow-wrap: anywhere;
+        text-align: left;
+    }
+
+    .ticket-fare-table th:nth-child(1),
+    .ticket-fare-table td:nth-child(1) {
+        width: 25%;
+    }
+
+    .ticket-fare-table th:nth-child(n + 2),
+    .ticket-fare-table td:nth-child(n + 2) {
+        width: 25%;
+    }
+
+    .ticket-fare-table tfoot td:first-child,
+    .ticket-fare-table tfoot td:last-child {
+        text-align: right;
+    }
+
+    .ticket-fare-table tfoot td {
+        padding: 0.55rem 0.35rem;
+        font-size: 0.68rem;
+    }
+}
+
 /* Print styles - Only necessary overrides */
 @media print {
     @page {

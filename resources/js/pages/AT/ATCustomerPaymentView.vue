@@ -1,27 +1,30 @@
 <template>
+  <CheckoutLoadingOverlay v-if="actionLoading" />
 
-
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 lg:p-5">
+  <div class="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100/70 to-primary/[0.04] p-3 sm:p-4 lg:p-5">
     <div class="mx-auto max-w-7xl">
       <ATFlowLoader
-        v-if="isLoading || isPaymentLoading"
+        v-if="(isLoading || isPaymentLoading) && !actionLoading"
         title="Preparing payment"
         message="We are loading your booking, fare summary, and available payment methods."
         :fullscreen="false"
         :steps="['Booking', 'Fare', 'Pay']"
       />
       <!-- Main Container -->
-      <div v-else class="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
+      <div v-else class="grid grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
         <!-- Payment Methods Section -->
         <div class="min-w-0 space-y-4">
-          <div class="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+          <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)]">
             <!-- Header and quote expiry live inside the payment shell. -->
-            <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <h1 class="text-xl font-bold text-slate-900">Make Payment</h1>
-              <div :class="['flex items-center gap-2 text-sm sm:text-right', isBookingExpired ? 'text-destructive' : 'text-slate-600']">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5 sm:py-4">
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Secure checkout</p>
+                <h1 class="mt-0.5 text-lg font-bold text-slate-900 sm:text-xl">Make Payment</h1>
+              </div>
+              <div :class="['inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs sm:text-sm', isBookingExpired ? 'bg-red-50 text-destructive' : 'bg-slate-100 text-slate-600']">
                 <ClockIcon class="h-4 w-4 shrink-0" />
-                <div class="flex">
-                  <p class="font-medium">{{ isBookingExpired ? 'Session expires in :' : ' ' }}</p>
+                <div class="flex gap-1">
+                  <p class="hidden font-medium sm:block">{{ isBookingExpired ? 'Expired' : 'Time left' }}</p>
                   <p class="font-bold tabular-nums">{{ getRemainingTime(bookingExpiryTime) }}</p>
                 </div>
               </div>
@@ -30,32 +33,32 @@
             <!-- Main Payment Section with Two Column Layout -->
             <div class="grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)]">
               <!-- Payment methods are intentionally visual only until their payment flows are enabled. -->
-              <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
-                <div class="flex overflow-x-auto lg:block lg:overflow-visible">
+              <aside class="border-b border-slate-200 bg-slate-50/80 lg:border-b-0 lg:border-r">
+                <div class="grid grid-cols-3 lg:block">
                     <button type="button" @click="activePaymentTab = 'wallet'" :class="[
-                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
-                      activePaymentTab === 'wallet' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                      'flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:border-r-0 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
+                      activePaymentTab === 'wallet' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
                     ]" :aria-current="activePaymentTab === 'wallet' ? 'page' : undefined">
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
-                        <Wallet class="h-5 w-5" />
+                      <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary lg:h-8 lg:w-8 lg:rounded">
+                        <Wallet class="h-4 w-4 lg:h-5 lg:w-5" />
                       </span>
-                      <span>Wallet Balance</span>
+                      <span class="lg:hidden">Wallet</span><span class="hidden lg:inline">Wallet Balance</span>
                     </button>
                     <button type="button" v-on:click="activePaymentTab = 'debit-card'" :class="[
-                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
-                      activePaymentTab === 'debit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                      'flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:border-r-0 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
+                      activePaymentTab === 'debit-card' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
                     ]" :aria-current="activePaymentTab === 'debit-card' ? 'page' : undefined">
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
-                        <CreditCard class="h-5 w-5" />
+                      <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary lg:h-8 lg:w-8 lg:rounded">
+                        <CreditCard class="h-4 w-4 lg:h-5 lg:w-5" />
                       </span>
                       <span>Debit Card</span>
                     </button>
                     <button type="button" v-on:click="activePaymentTab = 'credit-card'" :class="[
-                      'flex w-full min-w-[175px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-semibold transition-colors lg:border-r-0',
-                      activePaymentTab === 'credit-card' ? 'border-primary bg-white text-primary lg:border-l-4' : 'border-slate-200 text-slate-800 hover:bg-white'
+                      'flex min-w-0 flex-col items-center justify-center gap-1.5 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
+                      activePaymentTab === 'credit-card' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
                     ]" :aria-current="activePaymentTab === 'credit-card' ? 'page' : undefined">
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
-                        <CreditCard class="h-5 w-5" />
+                      <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary lg:h-8 lg:w-8 lg:rounded">
+                        <CreditCard class="h-4 w-4 lg:h-5 lg:w-5" />
                       </span>
                       <span>Credit Card</span>
                     </button>
@@ -91,7 +94,7 @@
               </aside>
 
               <!-- Right: Dynamic Information Box Based on Selected Method -->
-              <div class="min-w-0 p-4 sm:p-5">
+              <div class="min-w-0 p-4 sm:p-5 lg:p-6">
                 <div v-if="false" class="w-full">
                   <div class="flex items-center gap-3 text-primary">
                     <span class="flex h-10 w-10 items-center justify-center rounded border border-primary/20 bg-primary/10">
@@ -329,30 +332,30 @@
                 <!-- Wallet Info -->
                 <div v-else-if="activePaymentTab === 'wallet'" class="w-full">
                   <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/10 text-primary">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                       <Wallet class="h-5 w-5" />
                     </span>
                     <div>
-                      <h2 class="text-lg font-semibold text-primary">Wallet Balance</h2>
-                      <p class="text-sm text-slate-500">Pay securely from your Jetze wallet.</p>
+                      <h2 class="text-lg font-bold text-slate-900">Jetze Wallet</h2>
+                      <p class="text-xs text-slate-500 sm:text-sm">The fastest way to confirm your booking.</p>
                     </div>
                   </div>
 
-                  <div class="mt-7 space-y-4 text-sm leading-6 text-slate-700">
-                    <p>Pay directly from your Jetze wallet balance for the fastest payment and instant booking confirmation.</p>
-                    <ul class="space-y-2">
-                      <li class="flex gap-3"><span class="font-bold text-primary">✓</span><span>No additional fees apply for wallet payments.</span></li>
-                      <li class="flex gap-3"><span class="font-bold text-primary">✓</span><span>Your booking will be confirmed immediately after payment.</span></li>
+                  <div class="mt-5 rounded-xl border border-primary/10 bg-primary/[0.04] p-3.5 text-sm leading-6 text-slate-700 sm:p-4">
+                    <p>Pay directly from your Jetze wallet for instant booking confirmation.</p>
+                    <ul class="mt-3 space-y-2 text-xs sm:text-sm">
+                      <li class="flex gap-2.5"><span class="font-bold text-primary">✓</span><span>No additional payment fees.</span></li>
+                      <li class="flex gap-2.5"><span class="font-bold text-primary">✓</span><span>Your booking is confirmed immediately after payment.</span></li>
                     </ul>
                   </div>
 
-                  <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="mt-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p class="text-sm text-slate-500">Total payable amount</p>
-                      <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatPaymentAmount() }}</p>
+                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total payable</p>
+                      <p class="mt-1 text-2xl font-extrabold text-slate-950">{{ formatPaymentAmount() }}</p>
                     </div>
                     <button @click="handlePaymentMethod('wallet')" :disabled="!paymentMethod || isProcessing || isBookingExpired" :class="[
-                      'inline-flex min-h-12 items-center justify-center rounded px-7 py-3 font-semibold uppercase tracking-wide transition-colors',
+                      'inline-flex min-h-12 w-full items-center justify-center rounded-lg px-7 py-3 text-sm font-bold uppercase tracking-wide transition-colors sm:w-auto',
                       paymentMethod && !isProcessing && !isBookingExpired
                         ? 'bg-primary text-white hover:bg-primary/90'
                         : 'cursor-not-allowed bg-slate-200 text-slate-500'
@@ -395,7 +398,7 @@
                   </div>
                 </div>
 
-                <p class="mt-7 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+                <p class="mt-5 border-t border-slate-200 pt-4 text-[11px] leading-5 text-slate-500 sm:mt-6 sm:text-xs">
                   Your payment and personal information are protected with secure encryption.
                 </p>
 
@@ -407,18 +410,21 @@
 
         <!-- Flight Summary Section -->
         <div class="lg:col-span-1">
-          <div class="sticky top-6 space-y-6">
+          <div class="sticky top-6 space-y-4">
             <!-- Summary Card -->
-            <div class="overflow-hidden border border-gray-200 bg-white shadow-sm">
-              <div class="flex items-center justify-between border-b border-gray-200 p-4">
-                <h2 class="text-xl font-bold text-slate-900">Flight summary</h2>
-                <span class="text-xs font-semibold text-primary bg-amber-100 px-3 py-1 rounded-full">
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)]">
+              <div class="flex items-center justify-between border-b border-primary/10 bg-gradient-to-r from-primary/[0.08] via-white to-sky-50 px-4 py-3.5">
+                <div>
+                  <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Your trip</p>
+                  <h2 class="mt-0.5 text-lg font-bold text-slate-900">Flight summary</h2>
+                </div>
+                <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary shadow-sm ring-1 ring-primary/10">
                   Flight details
                 </span>
               </div>
 
-              <div class="space-y-4 p-4">
-              <details v-if="passengers.length" class="rounded border border-slate-200 bg-slate-50 p-4">
+              <div class="space-y-3 p-3.5 sm:p-4">
+              <details v-if="passengers.length" class="rounded-lg border border-slate-200 bg-slate-50/80 p-3.5">
                 <summary class="flex cursor-pointer list-none items-center justify-between">
                   <h3 class="text-sm font-semibold text-slate-900">Passengers</h3>
                   <span class="flex items-center gap-2 text-xs font-medium text-slate-500">{{ passengers.length }} Total <span class="text-base leading-none">⌄</span></span>
@@ -440,7 +446,7 @@
               </details>
 
               <!-- Contact details saved during checkout -->
-              <details class="rounded border border-slate-200 bg-slate-50 p-4">
+              <details class="rounded-lg border border-slate-200 bg-slate-50/80 p-3.5">
                 <summary class="flex cursor-pointer list-none items-center justify-between">
                   <h3 class="text-sm font-semibold text-slate-900">Contact Information</h3>
                   <span class="text-base leading-none text-slate-500">⌄</span>
@@ -462,7 +468,7 @@
               </details>
 
               <!-- Flight Route -->
-              <div class="rounded border border-slate-200 p-4">
+              <div class="rounded-lg border border-slate-200 p-3.5">
                 <div class="flex items-center justify-between gap-3">
                   <h3 class="text-sm font-semibold text-slate-900">Flight itinerary</h3>
                   <button
@@ -779,6 +785,7 @@ import html2pdf from "html2pdf.js";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
+import CheckoutLoadingOverlay from "@/components/common/CheckoutLoadingOverlay.vue";
 import NomodCheckoutButton from "@/components/payment/NomodCheckoutButton.vue";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";

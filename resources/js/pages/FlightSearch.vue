@@ -365,7 +365,10 @@ const freeSsrBaggageRunId = ref(0);
 const freeSsrBaggageAbortControllers = new Set();
 // Baggage depends on the search, itinerary and selected fares, not just the airline.
 const freeSsrBaggageCache = new Map();
-// Exactly three attempts: immediate, then after 3 seconds, then after 5 seconds.
+const baggageDetailsLoading = ref(false);
+const baggageDetailsError = ref("");
+let baggageDetailsRequestId = 0;
+let baggageDetailsLoadingKey = "";
 const isFareBaggageDialogOpen = ref(false);
 const fareBaggageDialogLoading = ref(false);
 const fareBaggageDialogError = ref("");
@@ -1779,11 +1782,12 @@ function cardFareLegs(flight, fare, index) {
         }];
     }
     return fare.fare_references.map((reference, legIndex) => {
-        const legFare = flight?.leg?.flights?.[legIndex]?.fares?.find((option) => option.ref_id === reference);
+        const legFlight = flight?.leg?.flights?.[legIndex];
+        const legFare = legFlight?.fares?.find((option) => option.ref_id === reference);
         return {
             index: legIndex,
             name: legFare?.name_class || legFare?.name || legFare?.class,
-            route: fareRouteSummary(flight?.leg?.flights?.[legIndex]),
+            route: fareRouteSummary(legFlight),
             baggagePolicies: legFare?.baggage_policies ?? (legIndex === 0 ? fare.baggage_policies : fare.return_baggage_policies),
         };
     });
@@ -1794,6 +1798,44 @@ function fareRouteSummary(flight) {
     const to = flight?.to?.iata || flight?.to?.city?.code || flight?.to?.city?.name;
 
     return from && to ? `${from} → ${to}` : "";
+}
+
+/** Shared flight facts displayed once above the selectable fare cards. */
+function cardFareFlightSummary(flight, leg) {
+    const segments = Array.isArray(leg?.segments) ? leg.segments : [];
+    const firstSegment = segments[0] ?? leg;
+    const lastSegment = segments[segments.length - 1] ?? leg;
+    const carrier =
+        firstSegment?.marketing_carrier
+        ?? firstSegment?.operating_carrier
+        ?? leg?.marketing_carrier
+        ?? leg?.operating_carrier;
+    const durationMinutes = getLegTotalDurationMinutes(flight, leg);
+    const stops = Number.isFinite(Number(leg?.layovers_count))
+        ? Math.max(0, Number(leg.layovers_count))
+        : Math.max(0, segments.length - 1);
+    const departureAt = firstSegment?.departure_at ?? leg?.departure_at;
+    const arrivalAt = lastSegment?.arrival_at ?? leg?.arrival_at;
+
+    return {
+        airlineName: carrier?.name || carrier?.iata || "Airline",
+        airlineCode: carrier?.iata || "",
+        flightNumber: formatFlightNumber(firstSegment?.flight_number ?? leg?.flight_number),
+        departureTime: departureAt ? moment.parseZone(departureAt).format("HH:mm") : "—",
+        arrivalTime: arrivalAt ? moment.parseZone(arrivalAt).format("HH:mm") : "—",
+        departureAirport: firstSegment?.from?.iata ?? leg?.from?.iata ?? "",
+        arrivalAirport: lastSegment?.to?.iata ?? leg?.to?.iata ?? "",
+        duration: durationMinutes > 0
+            ? `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
+            : "",
+        stopLabel: stops === 0 ? "Nonstop" : `${stops} ${stops === 1 ? "stop" : "stops"}`,
+    };
+}
+
+function cardFlightSummaries(flight) {
+    return (flight?.leg?.flights ?? []).map((leg) =>
+        cardFareFlightSummary(flight, leg),
+    );
 }
 
 function openCardFareOptions(flight) {
@@ -2364,8 +2406,8 @@ function isFareOptionSelected(flightIdx, fare) {
 }
 
 /**
- * Load AT free baggage only from View baggage; never during search or on sheet open.
- * Sent once: the backend already retries AT's SSR store (3 attempts).
+ * Load AT free baggage on demand from the Baggage tab or View baggage.
+ * The response is cached by search, itinerary and selected fare references.
  */
 async function requestFreeSsrBaggage(payload, shouldContinue = () => true) {
     const cacheKey = JSON.stringify([payload.search_token, payload.flight_ref_id, payload.fare_references]);
@@ -2392,10 +2434,77 @@ async function requestFreeSsrBaggage(payload, shouldContinue = () => true) {
 }
 
 function cancelPendingFreeSsrBaggageRequests() {
-    // Abort an in-flight View baggage request when the checkout quote starts.
+    // Abort an in-flight baggage request when the checkout quote starts.
     freeSsrBaggageRunId.value += 1;
     freeSsrBaggageAbortControllers.forEach((controller) => controller.abort());
     freeSsrBaggageAbortControllers.clear();
+}
+
+/** Fetch the verified allowance for the fare currently selected in the side sheet. */
+async function fetchSelectedFareBaggage() {
+    const provider = String(
+        selectedFlight.value?.provider?.name
+        ?? selectedFlight.value?.provider?.identifier
+        ?? "",
+    ).toLowerCase();
+
+    if (provider !== "at") {
+        baggageDetailsLoading.value = false;
+        baggageDetailsError.value = "";
+        return;
+    }
+
+    const flightRefId = selectedFlight.value?.leg?.ref_id;
+    const searchToken = selectedFlight.value?.quote_search_token;
+    const fareReferences = [...selectedFares].filter(Boolean);
+
+    if (!flightRefId || !searchToken || fareReferences.length === 0) {
+        baggageDetailsError.value = "Selected fare baggage is unavailable. Please select a fare first.";
+        return;
+    }
+
+    const selectionKey = `${flightRefId}:${fareReferences.join(",")}`;
+    // A tab click updates the model as well; avoid sending the same request twice.
+    if (baggageDetailsLoading.value && baggageDetailsLoadingKey === selectionKey) return;
+
+    const requestId = ++baggageDetailsRequestId;
+    const runId = freeSsrBaggageRunId.value;
+    baggageDetailsLoadingKey = selectionKey;
+    baggageDetailsLoading.value = true;
+    baggageDetailsError.value = "";
+
+    try {
+        const response = await requestFreeSsrBaggage({
+            flight_ref_id: flightRefId,
+            fare_references: fareReferences,
+            search_token: searchToken,
+            timeout: 70000,
+        }, () => (
+            freeSsrBaggageRunId.value === runId
+            && requestId === baggageDetailsRequestId
+        ));
+
+        if (!response || requestId !== baggageDetailsRequestId) return;
+
+        // Do not apply a response after the user has selected a different fare.
+        const currentSelectionKey = `${selectedFlight.value?.leg?.ref_id ?? ""}:${[...selectedFares].filter(Boolean).join(",")}`;
+        if (selectionKey !== currentSelectionKey) return;
+
+        const policies = response?.free_ssr_baggage?.baggage_policies ?? [];
+        freeSsrBaggagePoliciesByFare.value = {
+            ...freeSsrBaggagePoliciesByFare.value,
+            ...Object.fromEntries(fareReferences.map((fareRef) => [fareRef, policies])),
+        };
+    } catch (error) {
+        if (requestId !== baggageDetailsRequestId || error?.name === "AbortError") return;
+
+        baggageDetailsError.value = "Baggage details are unavailable right now. Please try again.";
+    } finally {
+        if (requestId === baggageDetailsRequestId) {
+            baggageDetailsLoading.value = false;
+            baggageDetailsLoadingKey = "";
+        }
+    }
 }
 
 const fareBaggageDialogPolicies = computed(() => {
@@ -2964,6 +3073,9 @@ watch(
         }
         if (flightDetailsActiveTab.value === "fare-rules") {
             fetchAtFareRules();
+        }
+        if (flightDetailsActiveTab.value === "baggage-details") {
+            fetchSelectedFareBaggage();
         }
     },
 );
@@ -4992,6 +5104,7 @@ watch(isLoggedIn, (newVal) => {
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="baggage-details"
+                                        @click="fetchSelectedFareBaggage"
                                         class="flight-sheet-tab"
                                     >
                                         <Briefcase class="h-4 w-4" />
@@ -5262,6 +5375,7 @@ watch(isLoggedIn, (newVal) => {
                                     :references="cardFareReferences(selectedFlight)"
                                     :format-price="(fare, index) => cardOptionPrice(selectedFlight, fare, index)"
                                     :fare-legs="(fare, index) => cardFareLegs(selectedFlight, fare, index)"
+                                    :flight-summaries="cardFlightSummaries(selectedFlight)"
                                     :baggage-summaries="getFareBaggageSummaries"
                                     @select="(index, fare) => selectCardFare(selectedFlight, index, fare)"
                                     @view-baggage="(index, fare) => viewCardFareBaggage(selectedFlight, index, fare)"
@@ -5410,7 +5524,29 @@ watch(isLoggedIn, (newVal) => {
                                 value="baggage-details"
                                 class="text-xs sm:text-base"
                             >
-                                <div class="space-y-3 sm:space-y-4">
+                                <div v-if="baggageDetailsLoading" class="space-y-3 sm:space-y-4">
+                                    <div
+                                        v-for="index in Math.max(selectedFlight?.leg?.flights?.length || 1, 1)"
+                                        :key="index"
+                                        class="animate-pulse overflow-hidden rounded border border-gray-200 bg-white shadow-md shadow-slate-200/80"
+                                    >
+                                        <div class="space-y-2 border-b border-primary/20 bg-primary/5 p-4">
+                                            <div class="h-5 w-40 rounded bg-slate-200"></div>
+                                            <div class="h-3 w-56 rounded bg-slate-200"></div>
+                                        </div>
+                                        <div class="space-y-3 p-4">
+                                            <div class="h-5 w-32 rounded bg-slate-200"></div>
+                                            <div class="h-20 rounded bg-slate-100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="space-y-3 sm:space-y-4">
+                                    <div
+                                        v-if="baggageDetailsError"
+                                        class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700"
+                                    >
+                                        {{ baggageDetailsError }}
+                                    </div>
                                     <div
                                         v-if="
                                             selectedFlight?.leg?.flights
