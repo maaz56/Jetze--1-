@@ -1900,9 +1900,138 @@ private function extractTrips($tripsData): array
         }
     }
 
-    public function cancelBooking($request)
+    /**
+     * Cancel an AT hold using the references returned when the itinerary was created.
+     *
+     * AT requires the CRS PNR and each passenger ID for every segment. Those values
+     * are deliberately built from the stored provider response, not browser input.
+     */
+    public function cancelBooking(array $bookingData, string $remarks = '', string $clientIp = ''): array
     {
-        Log::info('Cancelling booking with PNR: ' . $request);
+        $accessToken = $this->getAccessToken();
+        $token = $accessToken['Token'] ?? null;
+        $clientId = $accessToken['ClientID'] ?? $this->clientId;
+        $tui = $bookingData['TUI'] ?? null;
+        $transactionId = $bookingData['TransactionID'] ?? null;
+
+        if (! $token || ! $clientId || ! $tui || ! $transactionId) {
+            return [
+                'success' => false,
+                'message' => 'The AT booking does not contain the references required for cancellation.',
+            ];
+        }
+
+        $defaultPax = [];
+        foreach (($bookingData['Pax'] ?? []) as $passenger) {
+            if (! empty($passenger['ID'])) {
+                $defaultPax[] = [
+                    'ID' => $passenger['ID'],
+                    'Ticket' => $passenger['Ticket'] ?? '',
+                ];
+            }
+        }
+
+        $trips = [];
+        foreach (($bookingData['Trips'] ?? []) as $trip) {
+            $journeys = [];
+            foreach (($trip['Journey'] ?? []) as $journey) {
+                $segments = [];
+                foreach (($journey['Segments'] ?? []) as $segment) {
+                    $flight = $segment['Flight'] ?? [];
+                    $crsPnr = $segment['CRSPNR'] ?? $flight['CRSPNR'] ?? null;
+                    $passengers = ! empty($segment['Pax']) ? $segment['Pax'] : $defaultPax;
+
+                    if (! $crsPnr || empty($passengers)) {
+                        continue;
+                    }
+
+                    $segments[] = [
+                        'CRSPNR' => $crsPnr,
+                        'Pax' => array_values(array_map(static fn ($passenger) => [
+                            'ID' => $passenger['ID'],
+                            'Ticket' => $passenger['Ticket'] ?? '',
+                        ], array_filter($passengers, static fn ($passenger) => ! empty($passenger['ID'])))),
+                    ];
+                }
+
+                if ($segments) {
+                    $journeys[] = ['Segments' => $segments];
+                }
+            }
+
+            if ($journeys) {
+                $trips[] = ['Journey' => $journeys];
+            }
+        }
+
+        if (empty($trips)) {
+            return [
+                'success' => false,
+                'message' => 'The AT booking does not contain a cancellable CRS PNR and passenger list.',
+            ];
+        }
+
+        $payload = [
+            'ClientID' => $clientId,
+            'ClientIP' => $clientIp,
+            'Remarks' => $remarks,
+            'TUI' => $tui,
+            'TransactionID' => $transactionId,
+            'Trips' => $trips,
+        ];
+
+        try {
+            $response = $this->client->post("{$this->flightBaseUrl}/Flights/Cancel", [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Authorization' => $token,
+                ],
+                'json' => $payload,
+            ]);
+            $rawBody = (string) $response->getBody();
+            $body = json_decode($rawBody, true);
+
+            if (is_array($body) && isset($body['Msg'][0]) && strcasecmp((string) $body['Msg'][0], 'Success') !== 0) {
+                Log::warning('AT cancellation returned a non-success response.', [
+                    'transaction_id' => $transactionId,
+                    'response' => $body,
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => (string) $body['Msg'][0],
+                    'response' => $body,
+                ];
+            }
+
+            Log::info('AT cancellation completed.', [
+                'transaction_id' => $transactionId,
+                'status' => $response->getStatusCode(),
+                'response' => $body,
+            ]);
+
+            return [
+                'success' => true,
+                'response' => is_array($body) ? $body : ['raw' => $rawBody],
+            ];
+        } catch (RequestException $exception) {
+            $body = $exception->hasResponse()
+                ? (string) $exception->getResponse()->getBody()
+                : null;
+
+            Log::error('AT cancellation failed.', [
+                'transaction_id' => $transactionId,
+                'message' => $exception->getMessage(),
+                'status' => $exception->hasResponse() ? $exception->getResponse()->getStatusCode() : null,
+                'response' => $body,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'AT could not cancel this booking.',
+                'response' => $body,
+            ];
+        }
     }
 
     /*

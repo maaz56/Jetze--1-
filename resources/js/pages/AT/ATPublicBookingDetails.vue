@@ -178,6 +178,18 @@ const isChatOpen = ref(false);
 
 
 const booking = ref(null);
+const atPnrReferences = computed(() => {
+    const flight = pnrData.value?.Trips
+        ?.flatMap((trip) => trip?.Journey || [])
+        ?.flatMap((journey) => journey?.Segments || [])
+        ?.map((segment) => segment?.Flight)
+        ?.find(Boolean);
+
+    return {
+        crs: flight?.CRSPNR || booking.value?.itinerary_ref || "-",
+        airline: flight?.APNR || flight?.AirlinePNR || booking.value?.airline_pnr || "-",
+    };
+});
 const flightData = ref(null);
 const isDetailsInfoVisible = ref(true);
 const totalTicketPrice = ref(0);
@@ -1223,12 +1235,10 @@ onMounted(() => {
                                             }}</span>
                                         </p>
                                         <p class="text-sm print:text-gray-700"><span class="font-medium">PNR:</span> {{
-                                            booking?.itinerary_ref || "-"
+                                            atPnrReferences.crs
                                         }}</p>
                                         <p class="text-sm print:text-gray-700"><span class="font-medium">Airline
-                                                PNR:</span> {{ pnrDetails?.bookingId ? pnrDetails?.bookingId :
-                                                    booking?.itinerary_ref || "-"
-                                                }}</p>
+                                                PNR:</span> {{ atPnrReferences.airline }}</p>
                                         <!-- <p class="text-sm print:text-gray-700"><span class="font-medium">Airline PNR:</span> {{
                                                 pnrData?.ReservationResponse?.Reservation?.Receipt?.[1]?.Confirmation?.Locator?.value
                                                 }}</p> -->

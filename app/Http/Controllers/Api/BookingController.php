@@ -1324,7 +1324,59 @@ class BookingController extends Controller
                     'message' => 'Booking Canceled successfully',
                     'booking' => $booking,
                 ]);
-        } else if (in_array(strtolower((string) ($request->booking_source ?? $request->flight_provider)), ["at", "hakimi"], true)) {
+        } else if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "at") {
+            $validated = $request->validate(["bookingId" => ["required", "integer"]]);
+            $booking = FlightBookings::find($validated["bookingId"]);
+
+            if (! $booking) {
+                return response()->json(["message" => "Booking not found."], 404);
+            }
+
+            if (strtolower((string) $booking->flight_provider) !== "at") {
+                return response()->json(["message" => "This is not an AT booking."], 422);
+            }
+
+            if (in_array(strtolower((string) $booking->status), ["ticketed", "issued"], true)) {
+                return response()->json([
+                    "message" => "A ticketed booking must be voided before a cancellation email can be sent.",
+                ], 422);
+            }
+
+            if (in_array(strtolower((string) $booking->status), ["canceled", "cancelled", "voided"], true)) {
+                return response()->json(["message" => "This booking has already been cancelled."], 409);
+            }
+
+            $atBookingData = json_decode((string) $booking->pnr_response, true);
+            $atBookingData = data_get($atBookingData, "bookingDetails") ?: $atBookingData;
+            $atApiService = new AtApiService();
+            $cancelResult = $atApiService->cancelBooking(
+                is_array($atBookingData) ? $atBookingData : [],
+                (string) $request->input("remarks", "Cancelled via Jetze"),
+                (string) $request->ip(),
+            );
+
+            if (! ($cancelResult["success"] ?? false)) {
+                return response()->json([
+                    "message" => $cancelResult["message"] ?? "AT cancellation failed.",
+                ], 422);
+            }
+
+            $providerName = "at";
+            $booking->update(["status" => "canceled"]);
+            $this->providerBookingEventService->record(
+                $booking,
+                $providerName,
+                "cancel",
+                $cancelResult["response"] ?? null,
+                $request->pnr ?: $booking->itinerary_ref,
+            );
+            $this->sendBookingCanceledMail($booking);
+
+            return response()->json([
+                "message" => "Booking cancelled and notification queued successfully.",
+                "booking" => $booking->fresh(),
+            ]);
+        } else if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "hakimi") {
             $validated = $request->validate(["bookingId" => ["required", "integer"]]);
             $booking = FlightBookings::find($validated["bookingId"]);
 
@@ -1342,11 +1394,10 @@ class BookingController extends Controller
                 return response()->json(["message" => "This booking has already been cancelled."], 409);
             }
 
-            $providerName = strtolower((string) ($booking->flight_provider ?: "hakimi"));
             $booking->update(["status" => "canceled"]);
             $this->providerBookingEventService->record(
                 $booking,
-                $providerName,
+                "hakimi",
                 "cancel",
                 ["source" => "local_hold_release"],
                 $request->pnr ?: $booking->itinerary_ref,

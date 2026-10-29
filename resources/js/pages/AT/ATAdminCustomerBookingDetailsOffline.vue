@@ -232,6 +232,18 @@ const pnrDetails = computed(() => store.getters["flight/pnrData"]);
 
 
 const booking = computed(() => bookingDetails.value?.[0] ?? null);
+const atPnrReferences = computed(() => {
+    const flight = pnrData.value?.Trips
+        ?.flatMap((trip) => trip?.Journey || [])
+        ?.flatMap((journey) => journey?.Segments || [])
+        ?.map((segment) => segment?.Flight)
+        ?.find(Boolean);
+
+    return {
+        crs: flight?.CRSPNR || booking.value?.itinerary_ref || "-",
+        airline: flight?.APNR || flight?.AirlinePNR || booking.value?.airline_pnr || "-",
+    };
+});
 const flightData = ref(null);
 const isDetailsInfoVisible = ref(true);
 const totalTicketPrice = ref(0);
@@ -1232,9 +1244,12 @@ onMounted(async () => {
                                             }}</span>
                                     </p>
                                     <p class="text-sm print:text-gray-700">
+                                        <span class="font-medium">PNR:</span>
+                                        {{ atPnrReferences.crs }}
+                                    </p>
+                                    <p class="text-sm print:text-gray-700">
                                         <span class="font-medium">Airline PNR:</span>
-                                        {{ pnrDetails?.bookingId ? pnrDetails?.bookingId : booking?.itinerary_ref || "-"
-                                        }}
+                                        {{ atPnrReferences.airline }}
                                     </p>
                                 </div>
                             </div>
