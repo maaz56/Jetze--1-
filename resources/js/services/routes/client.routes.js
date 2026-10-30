@@ -172,7 +172,7 @@ export const clientRoutes = [
                 component: () => import("@/pages/CustomerBookingsDetails.vue"),
             },
             {
-                path: "customer-profile/:section(profile|bookings|hotel-bookings|deposits|wallet)?",
+                path: "customer-profile/:section(profile|bookings|cancellation-requests|hotel-bookings|deposits|wallet)?",
                 name: "CustomerProfile",
                 component: () => import("@/pages/CustomerProfile.vue"),
             },

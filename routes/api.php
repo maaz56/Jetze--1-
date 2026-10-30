@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\AirportController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\BlogController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\BookingRequestController;
 use App\Http\Controllers\Api\CityController;
 use App\Http\Controllers\Api\CmsController;
 use App\Http\Controllers\Api\ContactController;
@@ -204,6 +205,17 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     // Route::post('cancel-pnr', [BookingController::class, 'cancelPnrDetails']);
     Route::post('void-booking', [BookingController::class, 'voidBooking']);
     Route::post('void-request', [BookingController::class, 'voidRequest']);
+
+    // Void / refund requests: customers submit, admins approve or reject.
+    Route::get('booking-requests', [BookingRequestController::class, 'index']);
+    Route::get('booking-requests/counts', [BookingRequestController::class, 'counts']);
+    Route::get('booking-requests/lookup', [BookingRequestController::class, 'lookup'])->middleware('throttle:30,1');
+    Route::get('booking-requests/{id}', [BookingRequestController::class, 'show'])->whereNumber('id');
+    Route::post('booking-requests', [BookingRequestController::class, 'store'])->middleware('throttle:10,1');
+    Route::post('booking-requests/{id}/approve', [BookingRequestController::class, 'approve'])->whereNumber('id');
+    Route::post('booking-requests/{id}/reject', [BookingRequestController::class, 'reject'])->whereNumber('id');
+    Route::post('booking-requests/{id}/cancel', [BookingRequestController::class, 'cancel'])->whereNumber('id');
+
     Route::post('approve-booking', [BookingController::class, 'approveBooking']);
     Route::post('admin-booking', [BookingController::class, 'saveAdminBooking']);
     Route::get('get-admin-bookings', [BookingController::class, 'getAdminBookings']);

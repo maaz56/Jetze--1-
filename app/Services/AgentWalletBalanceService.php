@@ -24,9 +24,7 @@ class AgentWalletBalanceService
 
         $debits = [
             FlightBookings::where('agent_id', $agentId)
-                ->whereIn('status', ['ticketed', 'issued', 'voided'])
-                ->where(fn ($query) => $query->whereNull('t_status')->orWhere('t_status', '!=', 'approved'))
-                ->where(fn ($query) => $query->whereNull('tid')->orWhere('status', '!=', 'issued'))
+                ->chargedToWallet()
                 ->selectRaw('COALESCE(SUM(COALESCE(aed_amount, amount)), 0) as total')->value('total'),
             HotelBooking::query()
                 ->join('hotel_booking_price_snapshots', 'hotel_booking_price_snapshots.hotel_booking_id', '=', 'hotel_bookings.id')

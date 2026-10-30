@@ -60,6 +60,7 @@ import { useStore } from "vuex";
 import { useRoute, useRouter } from "vue-router";
 import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, ref, watch, nextTick } from "vue";
 import { formatAmount } from "@/lib/utils";
+import { statusLabel } from "@/lib/bookingRequests";
 import moment from "moment";
 import { useAuthStore } from "@/services/stores/auth";
 import { useTransactionStore } from "@/services/stores/transaction";
@@ -78,6 +79,7 @@ import {
 } from "@/services/store/actions.type";
 const CustomerWallet = defineAsyncComponent(() => import("@/pages/CustomerWallet.vue"));
 const AgentLedger = defineAsyncComponent(() => import("./customer/CustomerLedger.vue"));
+const CancellationRequests = defineAsyncComponent(() => import("./customer/CustomerCancellationRequests.vue"));
 
 /* ------------------------------------------------------------------ */
 /*  STORES & ROUTE                                                    */
@@ -85,7 +87,7 @@ const AgentLedger = defineAsyncComponent(() => import("./customer/CustomerLedger
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
-const sections = ['profile', 'bookings', 'hotel-bookings', 'deposits', 'wallet'];
+const sections = ['profile', 'bookings', 'cancellation-requests', 'hotel-bookings', 'deposits', 'wallet'];
 const activeTab = computed(() => {
     const section = route.params.section || route.query.tab || 'bookings';
     return sections.includes(section) ? section : 'bookings';
@@ -400,6 +402,15 @@ watch([user_id, activeTab], ([id, tab]) => {
                     <TicketCheck class="h-4 w-4" aria-hidden="true" />
                     Bookings Overview
                 </router-link>
+                <router-link :to="{ name: 'CustomerProfile', params: { section: 'cancellation-requests' } }" :class="[
+                    'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
+                    activeTab === 'cancellation-requests'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                ]">
+                    <Ban class="h-4 w-4" aria-hidden="true" />
+                    Cancellation Requests
+                </router-link>
                 <router-link :to="{ name: 'CustomerProfile', params: { section: 'hotel-bookings' } }" :class="[
                     'px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm whitespace-nowrap border-b-2 transition-colors flex-shrink-0 inline-flex items-center gap-2',
                     activeTab === 'hotel-bookings'
@@ -657,6 +668,10 @@ watch([user_id, activeTab], ([id, tab]) => {
                                                         {{ passenger.title }}
                                                         {{ passenger.first_name }}
                                                         {{ passenger.last_name }}
+                                                        <span v-if="passenger.status && passenger.status !== booking.status"
+                                                            class="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gray-600">
+                                                            {{ statusLabel(passenger.status) }}
+                                                        </span>
                                                     </p>
                                                 </div>
                                             </div>
@@ -681,7 +696,7 @@ watch([user_id, activeTab], ([id, tab]) => {
 
                                     </td>
                                     <td class="py-2 px-4">
-                                        {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
+                                        {{ statusLabel(booking.status).toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
                                     </td>
                                     <td v-if="booking?.status === 'booked'" class="py-2 px-4">
                                         <span
@@ -749,6 +764,11 @@ watch([user_id, activeTab], ([id, tab]) => {
             </div>
 
             <!-- Hotel Bookings Tab -->
+            <!-- Cancellation Requests Tab -->
+            <div v-if="activeTab === 'cancellation-requests'" class="p-6">
+                <CancellationRequests />
+            </div>
+
             <div v-if="activeTab === 'hotel-bookings'" class="p-6">
                 <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>

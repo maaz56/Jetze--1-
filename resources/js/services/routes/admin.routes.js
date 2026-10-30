@@ -172,6 +172,12 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/OfflineBookingDetails.vue"),
             },
             {
+                path: "booking-requests",
+                name: "BookingRequests",
+                component: () => import("@/pages/admin/BookingRequests.vue"),
+                meta: { permission: 'manage-bookings' }
+            },
+            {
                 path: "void-bookings",
                 name: "VoidBookings",
                 component: () => import("@/pages/admin/VoidBookings.vue"),

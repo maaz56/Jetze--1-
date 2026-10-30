@@ -506,6 +506,27 @@ export default {
     voidRequest(params) {
         return apiClient.post("/void-request", params);
     },
+    lookupBookingForRequest(params) {
+        return apiClient.get("/booking-requests/lookup", { params });
+    },
+    fetchBookingRequests(params) {
+        return apiClient.get("/booking-requests", { params });
+    },
+    submitBookingRequest(params) {
+        return apiClient.post("/booking-requests", params);
+    },
+    approveBookingRequest(id, params) {
+        return apiClient.post(`/booking-requests/${id}/approve`, params);
+    },
+    rejectBookingRequest(id, params) {
+        return apiClient.post(`/booking-requests/${id}/reject`, params);
+    },
+    cancelBookingRequest(id) {
+        return apiClient.post(`/booking-requests/${id}/cancel`);
+    },
+    fetchBookingRequestCounts() {
+        return apiClient.get("/booking-requests/counts");
+    },
 
     updateCardAllowance(params) {
         return apiClient.post("/update-card-allowance", params);

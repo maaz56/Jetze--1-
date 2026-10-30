@@ -789,6 +789,7 @@ import CheckoutLoadingOverlay from "@/components/common/CheckoutLoadingOverlay.v
 import NomodCheckoutButton from "@/components/payment/NomodCheckoutButton.vue";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";
+import apiService from "@/services/store/apiService";
 import {
   FETCH_BOOKING_DETAILS,
   FETCH_AGENT_DATA,
@@ -1025,6 +1026,7 @@ const savedMarginTotal = computed(() => {
 });
 
 let expiryInterval = null;
+let isUnmounted = false;
 
 onMounted(() => {
   expiryInterval = setInterval(() => {
@@ -1033,6 +1035,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isUnmounted = true;
   if (expiryInterval) clearInterval(expiryInterval);
 });
 
@@ -1092,6 +1095,58 @@ async function fetchBookingDetails() {
     toast.error(error.value);
   } finally {
     isBookingDetailsLoading.value = false;
+  }
+}
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+/**
+ * AT may accept a hold before its CRS PNR is available. Re-check the existing
+ * transaction twice after the page has rendered. This is intentionally a
+ * direct API call (rather than a Vuex action) so it never enables the global
+ * loading overlay.
+ */
+async function pollAtPnr() {
+  const booking = bookingDetails.value?.[0];
+  const provider = String(flight_provider || booking?.flight_provider || '').toLowerCase();
+  const itineraryRef = String(booking?.itinerary_ref || '').trim();
+  const transactionId = String(booking?.transaction_id || '').trim();
+
+  // A CRS PNR is already available, or this is not an AT booking.
+  if (provider !== 'at' || (itineraryRef && itineraryRef !== transactionId)) {
+    return;
+  }
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await wait(2000);
+
+    if (isUnmounted) return;
+
+    try {
+      const response = await apiService.get('/get-pnr-details', {
+        params: {
+          booking_id,
+          flight_provider: 'at',
+        },
+      });
+      const resolvedPnr = String(response.data?.pnr || '').trim();
+
+      if (resolvedPnr && resolvedPnr !== transactionId) {
+        // Keep subsequent payment/confirmation requests on the CRS PNR without
+        // refreshing the page or turning on a loading state.
+        pnr = resolvedPnr;
+        if (bookingDetails.value?.[0]) {
+          bookingDetails.value[0].itinerary_ref = resolvedPnr;
+        }
+        await router.replace({
+          query: { ...route.query, pnr: resolvedPnr },
+        });
+        return;
+      }
+    } catch (pollError) {
+      // The normal booking page remains usable; the second attempt still runs.
+      console.warn(`AT PNR polling attempt ${attempt} failed.`, pollError);
+    }
   }
 }
 
@@ -1990,6 +2045,7 @@ onMounted(async () => {
   pnr = route.query.pnr;
   await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(),
   ]);
+  void pollAtPnr();
 });
 // Payment methods
 

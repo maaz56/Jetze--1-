@@ -1346,6 +1346,9 @@ async function fetchAncillaries({ force = false } = {}) {
     isAncillaryOptionsLoading.value = true;
     const body = {
         ref_id: providerTui,
+        // Free SSR is retrieved separately with this original search TUI;
+        // paid SSR continues to use providerPricing.tui above.
+        search_tui: flight?.value?.provider?.TUI,
         fareType: providerPricing.value?.fare_type || flight?.value?.provider?.fare_type,
         currency_code: lockedPriceQuote.value?.display_money?.currency,
         legs: flight?.value?.leg?.flights

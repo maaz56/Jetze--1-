@@ -50,6 +50,7 @@ import {
     VOID_BOOKING,
 } from "@/services/store/actions.type";
 import moment from "moment";
+import ATETicket from "@/components/AT/ATETicket.vue";
 import Badge from "@/components/ui/badge/Badge.vue";
 import { SEND_EMAIL } from "../../services/store/actions.type";
 import Label from "@/components/common/Label.vue";
@@ -1204,640 +1205,60 @@ onMounted(async () => {
 
                 </div>
                 <div id="print-section">
-                    <div v-for="booking in bookingDetails" :key="booking.id"
-                        class="bg-white rounded-lg shadow-sm overflow-hidden mb-4 print:shadow-none print:border print:border-gray-300 print:mb-0 print:rounded-none">
-
-                        <div class="p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
-                            <div class="flex justify-between items-center">
-                                <div class="w-1/4">
-                                    <img class="h-16 w-auto print:h-12"
-                                        :src="agentData?.agent_data?.logo || '/public/assets/logo.png'" alt="Logo" />
-                                </div>
-
-                                <div
-                                    class="w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
-                                    <h1 class="text-2xl font-extrabold tracking-tight print:text-gray-900 mb-1">
-                                        E-TICKET RECEIPT
-                                    </h1>
-                                    <div class="mt-2">
-                                        <p class="text-sm print:text-gray-700 mb-1">
-                                            <span class="font-medium">Status:</span>
-                                            <span :class="{
-                                                'text-green-600 font-bold': booking.status === 'booked',
-                                                'text-yellow-600 font-bold': booking.status === 'pending',
-                                                'text-red-600 font-bold': booking.status === 'cancelled' || booking.status === 'failed',
-                                                'text-blue-600 font-bold': booking.status === 'confirmed',
-                                                'capitalize font-semibold print:text-gray-900': true
-                                            }">{{ booking.status }}</span>
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div
-                                    class="w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
-                                    <p class="text-sm print:text-gray-700">
-                                        <span class="font-medium">Booking Ref:</span> {{ booking.id }}
-                                    </p>
-                                    <p class="text-sm print:text-gray-700">
-                                        <span class="font-medium">Status:</span>
-                                        <span class="capitalize font-semibold print:text-gray-900">{{ booking.status
-                                            }}</span>
-                                    </p>
-                                    <p class="text-sm print:text-gray-700">
-                                        <span class="font-medium">PNR:</span>
-                                        {{ atPnrReferences.crs }}
-                                    </p>
-                                    <p class="text-sm print:text-gray-700">
-                                        <span class="font-medium">Airline PNR:</span>
-                                        {{ atPnrReferences.airline }}
-                                    </p>
-                                </div>
+                    <ATETicket v-for="booking in bookingDetails" :key="booking.id" :booking="booking"
+                        :agent="agentData?.agent_data" :pnr="atPnrReferences.crs"
+                        :airline-pnr="atPnrReferences.airline" :pnr-details="pnrDetails"
+                        :show-fare="isDetailsInfoVisible">
+                        <template #fare-rows>
+                            <tr v-if="pnrDetails?.fares?.length">
+                                <td>
+                                    {{ parseFlightData(bookingDetails?.[0]?.flight_data)?.leg?.flights?.[0]?.segments?.[0]?.from?.iata || "-" }}
+                                    →
+                                    {{ parseFlightData(bookingDetails?.[0]?.flight_data)?.leg?.flights?.[0]?.segments?.slice(-1)?.[0]?.to?.iata || "-" }}
+                                </td>
+                                <td>{{ formatLockedBookingAmount() }}</td>
+                                <td>{{ formatPnrTaxesAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}</td>
+                                <td>{{ formatLockedBookingAmount() }}</td>
+                            </tr>
+                            <template v-else>
+                            <template
+                                v-for="(flight, index) in parseFlightData(bookingDetails[0]?.flight_data)?.leg?.flights"
+                                :key="index">
+                                <tr v-for="(fare, fareIndex) in flight.fares.filter(f => {
+                                    const fareRefs = Array.isArray(parseFlightData(bookingDetails[0]?.fare_reference))
+                                        ? parseFlightData(bookingDetails[0]?.fare_reference)
+                                        : [parseFlightData(bookingDetails[0]?.fare_reference)];
+                                    return fareRefs.includes(f.ref_id);
+                                })" :key="fareIndex">
+                                    <td>{{ flight.segments?.[0]?.from?.iata }} → {{ flight.segments?.[flight.segments.length - 1]?.to?.iata }}</td>
+                                    <td>{{ formatSelectedFareMoney(fare) }}</td>
+                                    <td>{{ formatSelectedFareTaxesMoney(fare) }}</td>
+                                    <td>{{ formatSelectedFareMoney(fare) }}</td>
+                                </tr>
+                            </template>
+                            </template>
+                        </template>
+                        <template #fare-summary>
+                            <div><span>Add-ons</span><b>{{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}</b></div>
+                            <div v-for="adjustment in lockedCommercialAdjustments"
+                                :key="`${adjustment.sequence}-${adjustment.type}-${adjustment.rule_id}-${adjustment.fare_reference}`">
+                                <span>
+                                    {{ adjustment.type === 'segment_margin' ? 'Segment Margin' : 'Promotion' }}
+                                    <template v-if="adjustment.title">— {{ adjustment.title }}</template>
+                                    <small>{{ describeLockedCommercialAdjustment(adjustment) }}</small>
+                                </span>
+                                <b>{{ formatLockedCommercialAdjustment(adjustment) }}</b>
                             </div>
-                        </div>
-                        <!-- Flight Information -->
-                        <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
-                            <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
-                                <PlaneIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
-                                FLIGHT INFORMATION
-                            </h2>
-                            <div v-if="parseFlightData(booking.flight_data)?.original?.leg || parseFlightData(booking.flight_data)?.leg"
-                                class="space-y-4">
-                                <div v-for="(flight, flightIndex) in (parseFlightData(booking.flight_data)?.original?.leg?.flights ?? parseFlightData(booking.flight_data)?.leg?.flights)"
-                                    :key="flightIndex" class="space-y-3 print:break-inside-avoid">
-                                    <div
-                                        class="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
-                                        <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
-                                            class="bg-white overflow-hidden">
-                                            <div v-if="segment?.layover_time" class="flex justify-center">
-                                                <div
-                                                    class="bg-blue-100 text-blue-800 text-xs sm:text-sm font-medium px-4 py-1.5 rounded-full shadow-sm">
-                                                    Layover Time:
-                                                    {{
-                                                        Math.floor(segment.layover_time / 60) + "h " +
-                                                        (segment.layover_time % 60) + "m"
-                                                    }}
-                                                </div>
-                                            </div>
-
-                                            <div class="p-2 sm:p-3 lg:p-6">
-                                                <div class="flex items-center justify-center gap-6">
-                                                    <div class="grid grid-cols-7 gap-4 items-center w-full">
-                                                        <div class="w-20 flex-shrink-0 print:w-24">
-                                                            <img :src="segment?.operating_carrier?.logo"
-                                                                class="h-12 w-auto object-contain print:h-14"
-                                                                :alt="segment?.operating_carrier?.name" />
-                                                            <div class="text-xs text-gray-500 mt-1">
-                                                                {{ segment?.operating_carrier?.iata }}-{{
-                                                                    segment?.flight_number ?? "N/A" }}
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="col-span-2 text-right print:text-right">
-                                                            <p class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                                                {{ segment?.from?.iata }}
-                                                            </p>
-                                                            <p class="text-lg text-gray-600 print:text-base">
-                                                                {{ segment?.from?.city?.name }}
-                                                            </p>
-                                                            <p
-                                                                class="text-lg font-semibold text-gray-600 print:text-base">
-                                                                {{ segment?.from?.name }}
-                                                            </p>
-                                                            <p
-                                                                class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                                                {{ formatDate(segment?.departure_at) }}
-                                                            </p>
-                                                            <p
-                                                                class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                                                {{ moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                                }}
-                                                            </p>
-                                                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                Terminal: {{ segment?.from_terminal?.Gate ?? "N/A" }}
-                                                            </p>
-                                                        </div>
-
-                                                        <div class="col-span-1 flex flex-col items-center">
-                                                            <div
-                                                                class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:bg-transparent print:border print:border-gray-400">
-                                                                <MoveRight class="h-5 w-5 text-gray-600 print:text-black" />
-                                                            </div>
-                                                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                {{ segment?.flight_time }}
-                                                            </p>
-                                                        </div>
-
-                                                        <div class="col-span-2 text-left print:text-left">
-                                                            <p class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                                                {{ segment?.to?.iata }}
-                                                            </p>
-                                                            <p class="text-lg text-gray-600 print:text-base">
-                                                                {{ segment?.to?.city?.name }}
-                                                            </p>
-                                                            <p
-                                                                class="text-lg font-semibold text-gray-600 print:text-base">
-                                                                {{ segment?.to?.name }}
-                                                            </p>
-                                                            <p
-                                                                class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                                                {{ formatDate(segment?.arrival_at) }}
-                                                            </p>
-                                                            <p
-                                                                class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                                                {{ moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                                }}
-                                                            </p>
-                                                            <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                Terminal: {{ segment?.to_terminal?.Gate ?? "N/A" }}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div
-                                                    class="mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
-                                                    <span>
-                                                        <span class="font-semibold">Aircraft:</span>
-                                                        {{ segment?.aircraft?.model || "N/A" }}
-                                                    </span>
-                                                    <span>
-                                                        <span class="font-semibold">Class:</span>
-                                                        Economy
-                                                    </span>
-                                                    <span>
-                                                        <span class="font-semibold">Flight:</span>
-                                                        {{ segment?.flight_number }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        class="border border-gray-200 rounded-xl bg-white p-8 min-h-[152px] print:border-gray-300 print:break-inside-avoid">
-                                        <div class="space-y-6">
-                                            <div class="flex flex-wrap justify-start items-start gap-8">
-                                                <div v-for="(flightSegment, sIndex) in flight?.segments" :key="sIndex"
-                                                    class="min-w-[260px]">
-                                                    <div
-                                                        class="mb-3 text-[10px] font-semibold text-slate-900 print:text-gray-800">
-                                                        {{ flightSegment.from.iata }} → {{ flightSegment.to.iata }}
-                                                    </div>
-                                                    <div class="print:w-full">
-                                                        <table
-                                                            class="w-auto min-w-[260px] text-[10px] border-0 print:rounded-none">
-                                                            <thead>
-                                                                <tr
-                                                                    class="border-b border-gray-300 print:border-gray-400 print:bg-white">
-                                                                    <th
-                                                                        class="py-2 px-3 text-left font-bold text-slate-950 print:text-gray-900 print:bg-white">
-                                                                        Pax Type
-                                                                    </th>
-                                                                    <th
-                                                                        class="py-2 px-3 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                                        Check-In Baggage
-                                                                    </th>
-                                                                    <th
-                                                                        class="py-2 px-3 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                                        Cabin Baggage
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
-                                                            <pre class="hidden">{{ flight.fares }}</pre>
-                                                            <tbody>
-                                                                <template v-for="(fare, fIndex) in flight?.fares"
-                                                                    :key="fIndex">
-                                                                    <template
-                                                                        v-if="parseFlightData(bookingDetails?.[0]?.fare_reference)?.includes(fare?.ref_id)">
-                                                                        <tr v-for="(travelerType, tIndex) in [...new Set((fare.baggage_policies || []).map(bp => bp.traveler_type))]"
-                                                                            :key="tIndex"
-                                                                            class="hover:bg-gray-50 print:bg-transparent">
-                                                                            <td
-                                                                                class="py-3 px-3 uppercase font-medium text-slate-950 print:text-gray-800">
-                                                                                {{ travelerType }}
-                                                                            </td>
-                                                                            <td class="py-3 px-3 uppercase text-slate-950 print:text-gray-800">
-                                                                                {{ fare.baggage_policies?.find(bp => bp.traveler_type === travelerType && bp.type === 'checked')?.description || 'N/A' }}
-                                                                            </td>
-                                                                            <td class="py-3 px-3 uppercase text-slate-950 print:text-gray-800">
-                                                                                {{ (fare.baggage_policies || []).find(bp => bp.traveler_type === travelerType && (bp.type === 'carry' || bp.type === 'carry-on'))?.description || 'N/A' }}
-                                                                            </td>
-                                                                        </tr>
-                                                                    </template>
-                                                                </template>
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div v-if="lockedCommercialReconciliation">
+                                <span>Pricing Audit</span>
+                                <b :class="lockedCommercialReconciliation.is_reconciled ? 'et-text-ok' : 'et-text-bad'">
+                                    {{ lockedCommercialReconciliation.is_reconciled ? 'Reconciled' : 'Review Required' }}
+                                </b>
                             </div>
-                        </div>
-                    </div>
-                    <div class="p-6 border-b border-gray-200 bg-white print:border-gray-300 print:break-inside-avoid"
-                        v-for="booking in bookingDetails"
-                        :key="booking.id">
-                        <h2 class="mb-6 flex items-center text-base font-extrabold text-slate-950 print:text-gray-900">
-                            <UserIcon class="mr-3 h-5 w-5 text-primary print:text-gray-700" />
-                            PASSENGER & TICKET DETAILS
-                        </h2>
-
-                        <div class="overflow-x-auto">
-                            <table
-                                class="w-full border-0 text-[11px] print:rounded-none">
-                                <thead>
-                                    <tr class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
-                                        <th
-                                            class="px-4 py-2.5 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                            Traveller Name</th>
-                                        <th
-                                            class="px-4 py-2.5 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                            Gender</th>
-                                        <th
-                                            class="px-4 py-2.5 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                            Nationality/CNIC</th>
-                                        <th
-                                            class="px-4 py-2.5 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                            Ticket No</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(traveller, index) in booking?.pessangers" :key="index"
-                                        class="print:bg-transparent">
-                                        <td class="px-4 py-4 uppercase text-slate-950 print:text-gray-800">
-                                            {{ traveller.title }} {{ traveller.first_name }} {{ traveller.last_name }}
-                                            <span class="text-gray-500 text-xs ml-1 print:text-gray-600">({{
-                                                traveller.type }})</span>
-                                        </td>
-                                        <td class="px-4 py-4 uppercase text-slate-950 print:text-gray-800">
-                                            {{ traveller?.gender?.toUpperCase() || 'N/A' }}
-                                        </td>
-                                        <td class="px-4 py-4 text-slate-950 print:text-gray-800">
-                                            {{ traveller.nationality || 'N/A' }}
-                                        </td>
-                                        <td class="px-4 py-4 font-mono text-slate-950 print:text-gray-800">
-                                            {{ pnrDetails?.booking_details ? pnrDetails?.booking_details[index]?.ticket_no : "N/A" }}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid bg-white"
-                        v-if="isDetailsInfoVisible">
-                        <h2 class="mb-6 text-base font-extrabold text-slate-950 print:text-gray-900">
-                            FARE BREAKDOWN
-                        </h2>
-                        <div>
-                            <div class="overflow-x-auto">
-
-
-                                <table
-                                    class="w-full border-0 text-[10px] print:rounded-none">
-                                    <thead>
-                                        <tr class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
-                                            <th
-                                                class="py-2 px-2 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                Sector</th>
-                                            <th
-                                                class="py-2 px-2 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                Subtotal</th>
-                                            <th
-                                                class="py-2 px-2 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                Taxes + Fees
-                                            </th>
-                                            <th
-                                                class="py-2 px-2 text-left font-bold text-slate-950 print:text-gray-900 print:bg-transparent">
-                                                Grand Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody v-if="pnrDetails?.fares?.length"
-                                        class="print:divide-gray-400">
-                                        <tr class="print:bg-transparent">
-                                            <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                {{
-                                                    parseFlightData(bookingDetails?.[0]?.flight_data)?.leg?.flights?.[0]
-                                                        ?.segments?.[0]?.from?.iata || "-"
-                                                }} →
-                                                {{
-                                                    parseFlightData(bookingDetails?.[0]?.flight_data)?.leg?.flights?.[0]
-                                                        ?.segments?.slice(-1)?.[0]?.to?.iata || "-"
-                                                }}
-                                            </td>
-                                            <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                {{ formatLockedBookingAmount() }}
-                                            </td>
-
-                                            <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                {{ formatPnrTaxesAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}
-                                            </td>
-                                            <td class="py-4 px-2 uppercase font-bold text-slate-950 print:text-gray-900">
-                                                {{ formatLockedBookingAmount() }}
-                                            </td>
-
-                                        </tr>
-                                    </tbody>
-
-                                    <tbody v-else class="divide-y divide-gray-200 print:divide-gray-400">
-                                        <template
-                                            v-for="(flight, index) in parseFlightData(bookingDetails[0]?.flight_data)?.leg?.flights"
-                                            :key="index">
-                                            <!-- Flight route header -->
-
-
-                                            <!-- Fare rows -->
-                                            <tr v-for="(fare, fareIndex) in flight.fares.filter(f => {
-                                                const fareRefs = Array.isArray(parseFlightData(bookingDetails[0]?.fare_reference))
-                                                    ? parseFlightData(bookingDetails[0]?.fare_reference)
-                                                    : [parseFlightData(bookingDetails[0]?.fare_reference)];
-                                                return fareRefs.includes(f.ref_id);
-                                            })" :key="fareIndex" class="print:bg-transparent">
-                                                <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                    {{ flight.segments?.[0]?.from?.iata }} → {{
-                                                        flight.segments?.[flight.segments.length - 1]?.to?.iata }}
-                                                </td>
-
-
-                                                <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                    {{ formatSelectedFareMoney(fare) }}
-                                                </td>
-
-                                                <td class="py-4 px-2 uppercase text-slate-950 print:text-gray-800">
-                                                    {{ formatSelectedFareTaxesMoney(fare) }}
-                                                </td>
-
-                                                <td class="py-4 px-2 uppercase font-bold text-slate-950 print:text-gray-900">
-                                                    {{ formatSelectedFareMoney(fare) }}
-                                                </td>
-                                            </tr>
-                                            
-                                        </template>
-                                    </tbody>
-                                    <tfoot class="bg-gray-50 print:bg-transparent">
-                                        <tr>
-                                            <td colspan="3"
-                                                class="py-4 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                Add-ons
-                                            </td>
-                                            <td class="py-4 px-2 text-[11px] font-bold text-primary">
-                                                {{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}
-                                            </td>
-                                        </tr>
-                                        <tr v-for="adjustment in lockedCommercialAdjustments" :key="`${adjustment.sequence}-${adjustment.type}-${adjustment.rule_id}-${adjustment.fare_reference}`">
-                                            <td colspan="3"
-                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                {{ adjustment.type === 'segment_margin' ? 'Segment Margin' : 'Promotion' }}
-                                                <span v-if="adjustment.title" class="font-normal text-slate-500">— {{ adjustment.title }}</span>
-                                                <span class="block font-normal text-[9px] text-slate-500">
-                                                    {{ describeLockedCommercialAdjustment(adjustment) }}
-                                                </span>
-                                            </td>
-                                            <td class="pb-2 px-2 text-[11px] font-bold text-primary">
-                                                {{ formatLockedCommercialAdjustment(adjustment) }}
-                                            </td>
-                                        </tr>
-                                        <tr v-if="lockedCommercialReconciliation">
-                                            <td colspan="3"
-                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                Pricing Audit
-                                            </td>
-                                            <td
-                                                class="pb-2 px-2 text-[11px] font-bold"
-                                                :class="lockedCommercialReconciliation.is_reconciled ? 'text-emerald-600' : 'text-red-600'">
-                                                {{ lockedCommercialReconciliation.is_reconciled ? 'Reconciled' : 'Review Required' }}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td colspan="3"
-                                                class="pb-2 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                Total Amount (AED)
-                                            </td>
-                                            <td class="pb-2 px-2 text-[11px] font-bold text-primary">
-                                                {{ formatLockedBookingAmount() }}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td colspan="3"
-                                                class="pb-6 px-2 text-right text-[11px] font-bold text-slate-950">
-                                                Customer Selected Total
-                                            </td>
-                                            <td class="pb-6 px-2 text-[11px] font-bold text-primary">
-                                                {{ formatCustomerSelectedBookingAmount() }}
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-
-
-                                </table>
-                            </div>
-                        </div>
-
-
-                    </div>
-                   <div class="w-full p-6">
-                        <div class="bg-white border border-gray-200 rounded-lg p-6 grid gap-3 grid-cols-2">
-                            <!-- Travel documents -->
-                            <div class="mb-8 col-span-1 ">
-                                <div class="flex items-center mb-4">
-                                    <div class="w-6 h-6 mr-3">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                            class="w-6 h-6 text-primary">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <polyline points="14,2 14,8 20,8" />
-                                            <line x1="16" y1="13" x2="8" y2="13" />
-                                            <line x1="16" y1="17" x2="8" y2="17" />
-                                            <polyline points="10,9 9,9 8,9" />
-                                        </svg>
-                                    </div>
-                                    <h3 class="text-lg font-semibold text-gray-800">Travel documents</h3>
-                                </div>
-                                <p class="text-sm text-gray-600 mb-4 leading-relaxed">
-                                    Please be advised that you are required to produce various travel documents
-                                    depending on your journey, destination and purpose of travel. The documents required
-                                    may include the following:
-                                </p>
-                                <ul class="space-y-2 text-sm text-gray-700">
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>A passport with a minimum validity of 6 months is required, with
-                                            sufficient empty pages in the back.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>A valid visa for the country you are visiting. Also check if a transit
-                                            visa is required if you are transiting between other countries during your
-                                            journey.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>A valid National ID for GCC nationals travelling with the Arabian Gulf
-                                            region; please check if the country you are visiting allows entry with your
-                                            National ID card.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Immigration authorities require airlines to provide advance passenger
-                                            information prior to departure, so please ensure that your bookings have
-                                            been updated prior to your travel.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Passengers from SAARC countries like India and Pakistan travelling to the
-                                            GCC may require OK to board approval; please ensure your booking is updated
-                                            with approval 24 hours prior to travel.</span>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <div class="col-span-1">
-                                <!-- Don't miss your flight -->
-                                <div class="mb-8">
-                                    <div class="flex items-center mb-4">
-                                        <div class="w-6 h-6 mr-3">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                                class="w-6 h-6 text-primary">
-                                                <path
-                                                    d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19 4s-3 2-4.5 3.5L11 16l-7.2 1.8a1 1 0 0 0-.8.8 1 1 0 0 0 .8.8L11 16l3.5 4.5C16 22 18 22 18 20s-2-3-3.5-4.5L16 11l1.8 7.2Z" />
-                                            </svg>
-                                        </div>
-                                        <h3 class="text-lg font-semibold text-gray-800">Don't miss your flight</h3>
-                                    </div>
-                                    <ul class="space-y-2 text-sm text-gray-700">
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                            <span>Please make sure you're at the airport well ahead of your flight's
-                                                departure time.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                            <span>For international flights, it's typically advised to arrive at the
-                                                airport
-                                                at least <span class="font-semibold">4 hours</span> before departure,
-                                                but
-                                                this can vary depending on circumstances.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                            <span>For domestic flights, it's typically advised to arrive at the airport
-                                                at
-                                                least <span class="font-semibold">2 hours</span> before departure, but
-                                                this
-                                                can vary depending on circumstances.</span>
-                                        </li>
-                                    </ul>
-                                </div>
-
-                                <!-- Boarding pass -->
-                                <div class="mb-8">
-                                    <div class="flex items-center mb-4">
-                                        <div class="w-6 h-6 mr-3">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                                class="w-6 h-6 text-primary">
-                                                <path
-                                                    d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-                                                <path d="M13 5v2" />
-                                                <path d="M13 17v2" />
-                                                <path d="M13 11v2" />
-                                            </svg>
-                                        </div>
-                                        <h3 class="text-lg font-semibold text-gray-800">Boarding pass</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-700">
-                                        If you'd like to get your boarding pass before heading to the airport, our team
-                                        may
-                                        be able to assist you.
-                                    </p>
-                                </div>
-
-                                <!-- Extra baggage -->
-                                <div class="mb-8">
-                                    <div class="flex items-center mb-4">
-                                        <div class="w-6 h-6 mr-3">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                                class="w-6 h-6 text-primary">
-                                                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-                                                <path d="M3 6h18" />
-                                                <path d="M16 10a4 4 0 0 1-8 0" />
-                                            </svg>
-                                        </div>
-                                        <h3 class="text-lg font-semibold text-gray-800">Extra baggage</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-700">
-                                        You can contact a travel advisor to add extra baggage, subject to the airline's
-                                        availability and rates.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- Cancellation & Amendment Policies -->
-                            <!-- <div>
-                                <h2 class="text-lg font-semibold mb-3 text-gray-800">Cancellation & Amendment Policies
-                                </h2>
-                                <ul class="space-y-2 text-sm text-gray-700">
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Cancellation of a ticket can be done either by emailing us or directly
-                                            through the airline.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>For ticket amendments, please send us an email along with your booking
-                                            reference (e.g., Trip 20 - AK 180XXXXXX) and the new travel details.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Cancellations or amendments must be made at least 24 hours prior to
-                                            departure.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Requests made within 24 hours of departure should be directed to the
-                                            airline.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>Cancellation policy follows airline rules. Special and promotional fares
-                                            are non-refundable.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span>If you have canceled your booking directly with the airline, please email
-                                            us to process the applicable refund.</span>
-                                    </li>
-                                    <li class="flex items-start">
-                                        <span
-                                            class="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <span><span class="text-blue-600">{{ agentData?.agent_data?.company_name
-                                                }}</span> service charge: PKR 1000 per passenger.</span>
-                                    </li>
-                                </ul>
-                            </div> -->
-                        </div>
-                    </div>
-
-
-                    <!-- Customer Support -->
-                    <div class="p-6 text-center text-gray-700 text-sm bg-gray-50">
-                        <p>Thank you for choosing {{ agentData?.agent_data?.company_name }}</p>
-                        <p>For assistance, please contact us at {{ agentData?.agent_data?.mobile }} or {{
-                            agentData?.agent_data?.company_email }}</p>
-                    </div>
+                            <div><span>Customer Selected Total</span><b>{{ formatCustomerSelectedBookingAmount() }}</b></div>
+                            <div class="et-tot"><span>Total amount (AED)</span><b>{{ formatLockedBookingAmount() }}</b></div>
+                        </template>
+                    </ATETicket>
                 </div>
             </div>
             
@@ -1850,7 +1271,9 @@ onMounted(async () => {
 /* Print styles - Only necessary overrides */
 @media print {
     @page {
-        margin: 0.4in;
+        /* No page margin: Chrome then has no room to print its date/title/URL header and footer.
+           The ticket adds its own 10px edge spacing. */
+        margin: 0;
         size: A4;
     }
 

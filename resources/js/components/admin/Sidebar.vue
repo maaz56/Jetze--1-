@@ -61,6 +61,16 @@
             :class="{ 'admin-sidebar-icon-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }" />
           Hotel Bookings
         </router-link>
+        <router-link :to="{ name: 'BookingRequests' }"
+          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'BookingRequests' }"
+          v-if="authStore.hasPermission('manage-bookings')">
+          <XCircle class="admin-sidebar-icon"
+            :class="{ 'admin-sidebar-icon-active': $route.name === 'BookingRequests' }" />
+          <span class="flex-1">Cancellation Requests</span>
+          <span v-if="pendingRequestsCount > 0" class="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-gray-900">
+            {{ pendingRequestsCount }}
+          </span>
+        </router-link>
         <router-link :to="{ name: 'VoidBookings' }"
           class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'VoidBookings' }"
           v-if="authStore.hasPermission('manage-bookings')">
@@ -198,12 +208,14 @@ import {
   MailPlus,
   ChevronLeft,
   ChevronRight,
+  XCircle,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from "vue";
 import { useStore } from 'vuex';
 import SocialLinks from "../common/SocialLinks.vue";
 import { GearIcon } from "@radix-icons/vue";
 import { useAuthStore } from "@/services/stores/auth";
+import apiService from "@/services/store/apiService";
 const store = useStore();
 const authStore = useAuthStore();
 defineOptions({
@@ -391,8 +403,21 @@ function handleResize() {
         document.body.style.overflow = '';
     }
 }
+const pendingRequestsCount = ref(0);
+
+async function loadPendingRequestsCount() {
+  if (!authStore.hasPermission('manage-bookings')) return;
+  try {
+    const res = await apiService.fetchBookingRequestCounts();
+    pendingRequestsCount.value = res.data?.pending ?? 0;
+  } catch (err) {
+    // The badge is optional; the page itself reports load errors.
+  }
+}
+
 onMounted(() => {
   window.addEventListener('resize', handleResize)
+  loadPendingRequestsCount()
 })
 
 onBeforeUnmount(() => {

@@ -21,6 +21,7 @@ class AtAncillaryTransformer
     {
         $data = $response['data'] ?? [];
         $ssrData = is_array($data['ssrData'] ?? null) ? $data['ssrData'] : [];
+        $freeSsrData = is_array($data['freeSsrData'] ?? null) ? $data['freeSsrData'] : [];
         $seatLayout = is_array($data['seatLayout'] ?? null) ? $data['seatLayout'] : [];
         $providerCurrency = strtoupper($providerCurrency ?: ($ssrData['CurrencyCode'] ?? 'AED'));
         $displayCurrency = strtoupper($displayCurrency ?: 'AED');
@@ -31,6 +32,10 @@ class AtAncillaryTransformer
                 'provider_currency' => $providerCurrency,
                 'display_currency' => $displayCurrency,
                 'ssrData' => $this->mapSsrData($ssrData, $providerCurrency, $displayCurrency),
+                // Keep free SSR separate from selectable paid services. This
+                // preserves included baggage for display without allowing it
+                // to be added to the booking as a paid ancillary.
+                'freeSsrData' => $this->mapSsrData($freeSsrData, $providerCurrency, $displayCurrency, false),
                 'seatLayout' => $this->mapSeatLayout($seatLayout, $providerCurrency, $displayCurrency),
             ],
         ];
@@ -39,7 +44,12 @@ class AtAncillaryTransformer
     /**
      * Keep the SSR journey structure used by checkout and map each selectable service.
      */
-    private function mapSsrData(array $ssrData, string $providerCurrency, string $displayCurrency): array
+    private function mapSsrData(
+        array $ssrData,
+        string $providerCurrency,
+        string $displayCurrency,
+        bool $selectableOnly = true,
+    ): array
     {
         return [
             'TUI' => $ssrData['TUI'] ?? null,
@@ -57,6 +67,7 @@ class AtAncillaryTransformer
                                     $segment,
                                     $providerCurrency,
                                     $displayCurrency,
+                                    $selectableOnly,
                                 ),
                                 $journey['Segments'] ?? [],
                             ),
@@ -72,7 +83,12 @@ class AtAncillaryTransformer
     /**
      * Map SSR references and their money without exposing AT's complete raw object.
      */
-    private function mapSsrSegment(array $segment, string $providerCurrency, string $displayCurrency): array
+    private function mapSsrSegment(
+        array $segment,
+        string $providerCurrency,
+        string $displayCurrency,
+        bool $selectableOnly = true,
+    ): array
     {
         return [
             'FUID' => $segment['FUID'] ?? null,
@@ -96,7 +112,8 @@ class AtAncillaryTransformer
                 ],
                 array_values(array_filter(
                     $segment['SSR'] ?? [],
-                    fn (array $ssr): bool => (string) ($ssr['Type'] ?? '') !== '2'
+                    fn (array $ssr): bool => ! $selectableOnly
+                        || (string) ($ssr['Type'] ?? '') !== '2'
                         || $this->ssrAmount($ssr) > 0,
                 )),
             ),

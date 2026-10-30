@@ -1295,12 +1295,31 @@ private function extractTrips($tripsData): array
     public function fetchAncillaries($request)
     {
         // Log::info('Fetching ancillaries with data: ', $request);
-        $ssrData = ($request['includeSSR'] ?? true) ? $this->getSSR($request) : [];
+        $includeSsr = $request['includeSSR'] ?? true;
+        $freeSsrData = [];
+        $paidSsrData = [];
+
+        if ($includeSsr) {
+            // Free baggage is tied to AT's original search TUI and requires the
+            // selected fare index. It must not share the paid-SSR request.
+            $searchTui = trim((string) ($request['search_tui'] ?? $request['searchTui'] ?? ''));
+            if ($searchTui !== '') {
+                $freeSsrRequest = $request;
+                $freeSsrRequest['ref_id'] = $searchTui;
+                $freeSsrData = $this->getSSR($freeSsrRequest, false);
+            } else {
+                Log::warning('AT free SSR request skipped because the original search TUI is missing.');
+            }
+
+            // Paid SSR uses the priced TUI and an empty Index. AT returns paid
+            // baggage/products from this distinct store.
+            $paidSsrData = $this->getSSR($request, true);
+        }
 
         // AT requires the traveler checklist after pricing and the SSR
         // response, while the ancillary session is still active. Use the full
         // GetSPricer TUI carried by the trusted ancillary request.
-        if (($request['includeSSR'] ?? true) && is_array($ssrData)) {
+        if ($includeSsr && is_array($paidSsrData)) {
             $this->travelerCheckList(
                 $this->resolveAncillaryTui((array) $request),
             );
@@ -1308,7 +1327,10 @@ private function extractTrips($tripsData): array
 
         $seatLayout = ($request['includeSeatLayout'] ?? true) ? $this->getSeatLayout($request) : [];
         $data = [
-            'ssrData' => $ssrData,
+            // ssrData stays the paid response so only purchasable services are
+            // considered by the selection and booking paths.
+            'ssrData' => $paidSsrData,
+            'freeSsrData' => $freeSsrData,
             'seatLayout' => $seatLayout,
         ];
         Log::info('Fetched ancillaries data: ', $data);
@@ -1348,8 +1370,9 @@ private function extractTrips($tripsData): array
 
             $trips[] = [
                 'Amount' => 0,
-                // AT's free-SSR request must identify the selected search fare.
-                'Index' => (string) ($leg['selectedFare']['index'] ?? ''),
+                // Free SSR is attached to the selected search fare. AT's paid
+                // SSR store, however, returns baggage only with an empty Index.
+                'Index' => $isPaid ? '' : (string) ($leg['selectedFare']['index'] ?? ''),
                 'OrderID' => $index + 1, // keep static or change if needed
                 'TUI' => $this->resolveAncillaryTui($request, $cachedValidationResponse, $index),
             ];
@@ -1362,8 +1385,9 @@ private function extractTrips($tripsData): array
         }
 
         $payload = $this->buildAncillaryPayload($trips, $accessToken['ClientID'], $tripType, $isPaid);
+        $ssrKind = $isPaid ? 'paid' : 'free';
 
-        Log::info('SSR request payload (final): ' . json_encode($payload, JSON_PRETTY_PRINT));
+        Log::info("AT {$ssrKind} SSR request payload: " . json_encode($payload, JSON_PRETTY_PRINT));
         Log::info($headers);
         $maxAttempts = max(1, $maxAttempts);
         $retryDelaySeconds = max(1, $retryDelaySeconds);
@@ -1383,10 +1407,10 @@ private function extractTrips($tripsData): array
                 $responseBody = json_decode($response->getBody(), true);
 
                 $attemptLabel = $maxAttempts > 1 ? " (attempt {$attempt})" : '';
-                Log::info("SSR request payload response{$attemptLabel}: " . json_encode($responseBody, JSON_PRETTY_PRINT));
+                Log::info("AT {$ssrKind} SSR response{$attemptLabel}: " . json_encode($responseBody, JSON_PRETTY_PRINT));
 
                 if (($responseBody['Code'] ?? null) === '1025' && $attempt < $maxAttempts) {
-                    Log::warning("AT SSR store not ready yet (Code 1025). Retrying in {$retryDelaySeconds}s (attempt {$attempt}/{$maxAttempts})...");
+                    Log::warning("AT {$ssrKind} SSR store not ready yet (Code 1025). Retrying in {$retryDelaySeconds}s (attempt {$attempt}/{$maxAttempts})...");
                     sleep($retryDelaySeconds);
                     continue;
                 }

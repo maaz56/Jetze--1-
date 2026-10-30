@@ -39,6 +39,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
                     'date',
+                    'created_at as sort_date',
                     DB::raw('NULL as debit'),
                     'aed_amount as credit',
                     DB::raw('"deposit" as transaction_type'),
@@ -53,24 +54,13 @@ class AgentLedgerController extends Controller
 
             // Fetch all flight bookings with user data
             $flightBookings = FlightBookings::with('agent.agentData')
-                ->whereIn('status', ['ticketed', 'issued','voided'])
+                ->chargedToWallet()
                 ->when($agentId, fn($q) => $q->where('agent_id', $agentId))
-                // Card/One-bill approved transactions are paid externally,
-                // so they should not reduce agent wallet ledger balance.
-                ->where(function ($q) {
-                    $q->whereNull('t_status')
-                        ->orWhere('t_status', '!=', 'approved');
-                })
-                // If booking is issued and has external transaction id,
-                // treat it as externally paid (card/bank) and skip wallet debit.
-                ->where(function ($q) {
-                    $q->whereNull('tid')
-                        ->orWhere('status', '!=', 'issued');
-                })
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     DB::raw('COALESCE(aed_amount, amount) as debit'),
                     DB::raw('NULL as credit'),
                     DB::raw('"booking" as transaction_type'),
@@ -91,6 +81,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '<=', $endDate))
                 ->select([
                     DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.updated_at) as date'),
+                    DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.created_at) as sort_date'),
                     'hotel_booking_price_snapshots.aed_amount as debit',
                     DB::raw('NULL as credit'),
                     DB::raw('"hotel_booking" as transaction_type'),
@@ -108,6 +99,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     'amount as debit',
                     DB::raw('NULL as credit'),
                     DB::raw('"offline_booking" as transaction_type'),
@@ -127,6 +119,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     DB::raw('(total_amount + margin) as debit'),
                     DB::raw('NULL as credit'),
                     DB::raw('"direct_booking" as transaction_type'),
@@ -147,6 +140,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
                     'date',
+                    'created_at as sort_date',
                     DB::raw('CASE WHEN payment_type IN ("charge", "ok_to_board", "re_issue", "umrah", "visa") THEN amount ELSE NULL END as debit'),
                     DB::raw('CASE WHEN payment_type IN ("refund", "void") THEN amount ELSE NULL END as credit'),
                     DB::raw('payment_type as transaction_type'),
@@ -167,6 +161,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('effective_date', '<=', $endDate))
                 ->select([
                     'effective_date as date',
+                    'created_at as sort_date',
                     DB::raw('CASE WHEN direction = "debit" THEN aed_amount ELSE NULL END as debit'),
                     DB::raw('CASE WHEN direction = "credit" THEN aed_amount ELSE NULL END as credit'),
                     'entry_type as transaction_type',
@@ -187,6 +182,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
                     'date',
+                    'created_at as sort_date',
                     DB::raw('NULL as debit'),
                     'aed_amount as credit',
                     DB::raw('"deposit" as transaction_type'),
@@ -200,23 +196,12 @@ class AgentLedgerController extends Controller
 
             // Fetch bookings (debits)
             $flightBookings = FlightBookings::where('agent_id', $agentId)
-                ->whereIn('status', ['ticketed', 'issued','voided'])
-                // Card/One-bill approved transactions are paid externally,
-                // so they should not reduce agent wallet ledger balance.
-                ->where(function ($q) {
-                    $q->whereNull('t_status')
-                        ->orWhere('t_status', '!=', 'approved');
-                })
-                // If booking is issued and has external transaction id,
-                // treat it as externally paid (card/bank) and skip wallet debit.
-                ->where(function ($q) {
-                    $q->whereNull('tid')
-                        ->orWhere('status', '!=', 'issued');
-                })
+                ->chargedToWallet()
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     DB::raw('COALESCE(aed_amount, amount) as debit'),
                     DB::raw('NULL as credit'),
                     DB::raw('"booking" as transaction_type'),
@@ -236,6 +221,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('hotel_bookings.paid_at', '<=', $endDate))
                 ->select([
                     DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.updated_at) as date'),
+                    DB::raw('COALESCE(hotel_bookings.paid_at, hotel_bookings.created_at) as sort_date'),
                     'hotel_booking_price_snapshots.aed_amount as debit',
                     DB::raw('NULL as credit'),
                     DB::raw('"hotel_booking" as transaction_type'),
@@ -251,6 +237,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     'amount as debit',
                     DB::raw('NULL as credit'),
                     DB::raw('"offline_booking" as transaction_type'),
@@ -269,6 +256,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
                 ->select([
                     'created_at as date',
+                    'created_at as sort_date',
                     DB::raw('(total_amount + margin) as debit'),
                     DB::raw('NULL as credit'),
                     DB::raw('"direct_booking" as transaction_type'),
@@ -287,6 +275,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('date', '<=', $endDate))
                 ->select([
                     'date',
+                    'created_at as sort_date',
                     DB::raw('CASE WHEN payment_type IN ("charge", "ok_to_board", "re_issue", "umrah", "visa") THEN amount ELSE NULL END as debit'),
                     DB::raw('CASE WHEN payment_type IN ("refund", "void") THEN amount ELSE NULL END as credit'),
                     DB::raw('payment_type as transaction_type'),
@@ -306,6 +295,7 @@ class AgentLedgerController extends Controller
                 ->when($endDate, fn($q) => $q->whereDate('effective_date', '<=', $endDate))
                 ->select([
                     'effective_date as date',
+                    'created_at as sort_date',
                     DB::raw('CASE WHEN direction = "debit" THEN aed_amount ELSE NULL END as debit'),
                     DB::raw('CASE WHEN direction = "credit" THEN aed_amount ELSE NULL END as credit'),
                     'entry_type as transaction_type',
@@ -326,7 +316,9 @@ class AgentLedgerController extends Controller
             ->unionAll($agentCharges)
             ->unionAll($voidLedgerEntries)
             ->unionAll($offlineBookings)
-            ->orderBy('date', 'asc')
+            // Sort by when each entry was created, oldest first, so the newest entry is at the bottom.
+            // updated_at is not used: a status change would move an old booking below its own void entries.
+            ->orderBy('sort_date', 'asc')
             ->orderBy('record_id', 'asc')
             ->get();
         $balance = 0;

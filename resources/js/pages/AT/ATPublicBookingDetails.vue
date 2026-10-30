@@ -61,6 +61,7 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import { SEND_EMAIL } from "@/services/store/actions.type";
 import { ChatBubbleIcon } from "@radix-icons/vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
+import ATETicket from "@/components/AT/ATETicket.vue";
 
 
 const store = useStore();
@@ -1182,672 +1183,105 @@ onMounted(() => {
                 <div class="flex gap-4">
                     <!-- Print Section - Main Content -->
                     <div :class="isChatOpen && modifyRequestData ? 'w-8/12' : 'w-full'" id="print-section">
-                        <div v-for="booking in bookingDetails" :key="booking.id"
-                            class="ticket-receipt bg-white rounded-lg shadow-sm overflow-hidden mb-4 print:shadow-none print:border print:border-gray-300 print:mb-0 print:rounded-none">
-
-                            <!-- Header - Professional Design -->
-                            <div
-                                class="ticket-receipt-header p-6 text-white print:text-black print:bg-white print:border-b print:border-gray-300">
-                                <div class="ticket-receipt-header-grid flex justify-between items-center">
-                                    <!-- Logo -->
-                                    <div class="ticket-receipt-logo w-1/4">
-                                        <img class="h-16 w-auto print:h-12" src="/public/assets/logo.png" alt="Logo" />
-                                    </div>
-
-                                    <!-- Agency Info -->
-                                    <div
-                                        class="ticket-receipt-title w-2/4 text-black text-center border-l-2 border-black/30 pl-4 print:border-gray-400">
-                                        <h1 class="text-2xl font-extrabold tracking-tight print:text-gray-900 mb-1">
-                                            E-TICKET RECEIPT</h1>
-
-                                        <div class="mt-2">
-                                            <p class="text-sm print:text-gray-700 mb-1">
-                                                <span class="font-medium">Status:</span>
-                                                <span :class="{
-                                                    'text-green-600 font-bold': booking.status === 'booked',
-                                                    'text-yellow-600 font-bold': booking.status === 'pending',
-                                                    'text-red-600 font-bold': booking.status === 'cancelled' || booking.status === 'failed',
-                                                    'text-blue-600 font-bold': booking.status === 'confirmed',
-                                                    'capitalize font-semibold print:text-gray-900': true
-                                                }">{{ booking.status }}</span>
-                                            </p>
-
-                                            <div v-if="booking.status === 'booked'"
-                                                class="text-sm opacity-90 print:text-gray-700 mt-1">
-                                                <span class="font-medium">Expiry Time: </span>
-                                                <span class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full
-           bg-amber-100 text-amber-700 border border-amber-300
-           ">
-                                                    {{ getRemainingTime(booking.expiry_time) }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Booking Reference -->
-                                    <div
-                                        class="ticket-receipt-reference w-1/4 text-black text-right border-l-2 border-black/30 pl-4 print:border-gray-400">
-                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Booking
-                                                Ref:</span> {{ booking.id
-                                                }}</p>
-                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Status:</span>
-                                            <span class="capitalize font-semibold print:text-gray-900">{{ booking.status
-                                            }}</span>
-                                        </p>
-                                        <p class="text-sm print:text-gray-700"><span class="font-medium">PNR:</span> {{
-                                            atPnrReferences.crs
-                                        }}</p>
-                                        <p class="text-sm print:text-gray-700"><span class="font-medium">Airline
-                                                PNR:</span> {{ atPnrReferences.airline }}</p>
-                                        <!-- <p class="text-sm print:text-gray-700"><span class="font-medium">Airline PNR:</span> {{
-                                                pnrData?.ReservationResponse?.Reservation?.Receipt?.[1]?.Confirmation?.Locator?.value
-                                                }}</p> -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Flight Information -->
-                            <div class="ticket-flight-information p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
-                                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
-                                    <PlaneIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
-                                    FLIGHT INFORMATION
-                                </h2>
-
-                                <div v-if="parseFlightData(booking.flight_data)?.original?.leg || parseFlightData(booking.flight_data)?.leg"
-                                    class="space-y-4">
-                                    <div v-for="(flight, flightIndex) in (parseFlightData(booking.flight_data)?.original?.leg?.flights ?? parseFlightData(booking.flight_data)?.leg?.flights)"
-                                        :key="flightIndex" class="space-y-3 print:break-inside-avoid">
-                                        <!-- Main Flight Card -->
-                                        <div
-                                            class="ticket-flight-card hidden sm:block border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow print:block print:border-gray-400 print:shadow-none print:mb-6 print:p-8 print:text-base">
-
-                                            <!-- Segments Container -->
-                                            <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
-                                                class="ticket-segment bg-white overflow-hidden">
-
-                                                <!-- Layover Info -->
-                                                <div v-if="segment?.layover_time" class="flex justify-center ">
-                                                    <div
-                                                        class="bg-blue-100 text-blue-800 text-xs sm:text-sm font-medium px-4 py-1.5 rounded-full shadow-sm">
-                                                        Layover Time:
-                                                        {{
-                                                            Math.floor(segment.layover_time / 60) + "h " +
-                                                            (segment.layover_time % 60) + "m"
-                                                        }}
-                                                    </div>
-                                                </div>
-
-                                                <!-- Segment Details -->
-                                                <div class="ticket-segment-details p-2 sm:p-3 lg:p-6">
-                                                    <div class="flex items-center justify-center gap-6">
-                                                        <div class="ticket-segment-grid grid grid-cols-7 gap-4 items-center w-full">
-
-                                                            <!-- Airline Logo -->
-                                                            <div class="ticket-airline w-20 flex-shrink-0 print:w-24">
-                                                                <img :src="segment?.operating_carrier?.logo"
-                                                                    class="h-12 w-auto object-contain print:h-14"
-                                                                    :alt="segment?.operating_carrier?.name" />
-                                                                <div class="text-xs text-gray-500 mt-1">
-                                                                    {{ segment?.operating_carrier?.iata }}-{{
-                                                                        segment?.flight_number ?? "N/A" }}
-                                                                </div>
-                                                            </div>
-
-                                                            <!-- FROM (Right aligned content) -->
-                                                            <div class="ticket-origin col-span-2 text-right print:text-right">
-                                                                <p
-                                                                    class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                                                    {{ segment?.from?.iata }}
-                                                                </p>
-                                                                <p class="text-lg text-gray-600 print:text-base">
-                                                                    {{ segment?.from?.city?.name }}
-                                                                </p>
-                                                                <p
-                                                                    class="text-lg font-semibold text-gray-600 print:text-base">
-                                                                    {{ segment?.from?.name }}
-                                                                </p>
-
-                                                                <p
-                                                                    class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                                                    {{ formatDate(segment?.departure_at) }}
-                                                                </p>
-                                                                <p
-                                                                    class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                                                    {{
-                                                                        moment.parseZone(segment?.departure_at).format("HH:mm")
-                                                                    }}
-                                                                </p>
-
-                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                    Terminal: {{ segment?.from_terminal?.Gate ?? "N/A"
-                                                                    }}
-                                                                </p>
-                                                            </div>
-                                                            <!-- Arrow with Duration -->
-                                                            <div class="ticket-flight-path col-span-1 flex flex-col items-center">
-                                                                <div
-                                                                    class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:bg-transparent print:border print:border-gray-400">
-                                                                    <MoveRight
-                                                                        class="h-5 w-5 text-gray-600 print:text-black" />
-                                                                </div>
-
-                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                    {{ (segment.flight_time) }}
-                                                                </p>
-                                                            </div>
-
-                                                            <!-- TO (Left aligned content) -->
-                                                            <div class="ticket-destination col-span-2 text-left print:text-left">
-                                                                <p
-                                                                    class="text-2xl font-bold text-gray-900 print:text-3xl">
-                                                                    {{ segment?.to?.iata }}
-                                                                </p>
-
-                                                                <p class="text-lg text-gray-600 print:text-base">
-                                                                    {{ segment?.to?.city?.name }}
-                                                                </p>
-                                                                <p
-                                                                    class="text-lg font-semibold text-gray-600 print:text-base">
-                                                                    {{ segment?.to?.name }}
-                                                                </p>
-
-                                                                <p
-                                                                    class="text-base font-medium mt-3 text-gray-700 print:text-lg">
-                                                                    {{ formatDate(segment?.arrival_at) }}
-                                                                </p>
-
-                                                                <p
-                                                                    class="text-xl font-bold text-primary print:text-2xl print:text-black">
-                                                                    {{
-                                                                        moment.parseZone(segment?.arrival_at).format("HH:mm")
-                                                                    }}
-                                                                </p>
-
-                                                                <p class="text-sm text-gray-500 mt-2 print:text-base">
-                                                                    Terminal: {{ segment?.to_terminal?.Gate ?? "N/A" }}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Aircraft Info (only show for first segment or per segment basis) -->
-                                                    <div
-                                                        class="ticket-segment-meta mt-5 pt-4 border-t border-gray-200 text-sm text-gray-600 flex items-center gap-6 print:text-base print:border-gray-400">
-                                                        <span>
-                                                            <span class="font-semibold">Aircraft:</span>
-                                                            {{ segment?.aircraft?.model || "N/A" }}
-                                                        </span>
-                                                        <span>
-                                                            <span class="font-semibold">Class:</span>
-                                                            Economy
-                                                        </span>
-                                                        <span>
-                                                            <span class="font-semibold">Flight:</span>
-                                                            {{ segment?.flight_number }}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Compact mobile ticket: mirrors the desktop ticket details without its seven-column squeeze. -->
-                                        <div class="ticket-mobile-flight-card sm:hidden">
-                                            <div v-for="(segment, segmentIndex) in flight?.segments" :key="segmentIndex"
-                                                class="ticket-mobile-segment">
-                                                <div v-if="segment?.layover_time" class="ticket-mobile-layover">
-                                                    Layover: {{ Math.floor(segment.layover_time / 60) + "h " + (segment.layover_time % 60) + "m" }}
-                                                </div>
-
-                                                <div class="ticket-mobile-airline">
-                                                    <img :src="segment?.operating_carrier?.logo"
-                                                        :alt="segment?.operating_carrier?.name" />
-                                                    <div>
-                                                        <p>{{ segment?.operating_carrier?.name || 'Airline' }}</p>
-                                                        <span>{{ segment?.operating_carrier?.iata }}-{{ segment?.flight_number ?? 'N/A' }}</span>
-                                                    </div>
-                                                    <span class="ticket-mobile-class">Economy</span>
-                                                </div>
-
-                                                <div class="ticket-mobile-route">
-                                                    <div class="ticket-mobile-place ticket-mobile-place--from">
-                                                        <strong>{{ segment?.from?.iata }}</strong>
-                                                        <span>{{ segment?.from?.city?.name }}</span>
-                                                        <small>{{ formatDate(segment?.departure_at) }}</small>
-                                                        <b>{{ moment.parseZone(segment?.departure_at).format('HH:mm') }}</b>
-                                                    </div>
-
-                                                    <div class="ticket-mobile-path">
-                                                        <MoveRight />
-                                                        <span>{{ segment?.flight_time || 'Direct' }}</span>
-                                                    </div>
-
-                                                    <div class="ticket-mobile-place ticket-mobile-place--to">
-                                                        <strong>{{ segment?.to?.iata }}</strong>
-                                                        <span>{{ segment?.to?.city?.name }}</span>
-                                                        <small>{{ formatDate(segment?.arrival_at) }}</small>
-                                                        <b>{{ moment.parseZone(segment?.arrival_at).format('HH:mm') }}</b>
-                                                    </div>
-                                                </div>
-
-                                                <div class="ticket-mobile-meta">
-                                                    <span>Terminal: {{ segment?.from_terminal?.Gate ?? 'N/A' }}</span>
-                                                    <span>Flight {{ segment?.flight_number ?? 'N/A' }}</span>
-                                                    <span>Terminal: {{ segment?.to_terminal?.Gate ?? 'N/A' }}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Baggage Section - Half Width Rounded Table (unchanged) -->
-                                        <div
-                                            class="ticket-baggage-section border border-gray-200 rounded-lg p-4 print:border-gray-300 print:break-inside-avoid">
-                                            <div class="space-y-6">
-                                                <div
-                                                    class="ticket-baggage-list flex justify-start items-center divide-x divide-gray-300 print:divide-gray-400">
-                                                    <div v-for="(flightSegment, sIndex) in flight?.segments"
-                                                        :key="sIndex" class="ticket-baggage-item mb-4 p-4">
-                                                        <div
-                                                            class="text-xs font-medium text-gray-700 mb-2 print:text-gray-800">
-                                                            {{ flightSegment.from.iata }} → {{ flightSegment.to.iata }}
-                                                        </div>
-                                                        <div class="print:w-full">
-                                                            <table
-                                                                class="ticket-baggage-table w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
-                                                                <thead>
-                                                                    <tr
-                                                                        class="border-b border-gray-300 print:border-gray-400 print:bg-white">
-                                                                        <th
-                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-white">
-                                                                            Pax Type
-                                                                        </th>
-                                                                        <th
-                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                                            Check-In Baggage
-                                                                        </th>
-                                                                        <th
-                                                                            class="py-2 px-3 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                                            Cabin Baggage
-                                                                        </th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <pre class="hidden">{{ flight.fares }}</pre>
-                                                                <tbody
-                                                                    class="divide-y divide-gray-200 print:divide-gray-400">
-                                                                    <template v-for="(fare, fIndex) in flight?.fares"
-                                                                        :key="fIndex">
-                                                                        <template
-                                                                            v-if="parseFlightData(bookingDetails?.[0]?.fare_reference)?.includes(fare?.ref_id)">
-                                                                            <tr v-for="(travelerType, tIndex) in [...new Set(fare.baggage_policies.map(bp => bp.traveler_type))]"
-                                                                                :key="tIndex"
-                                                                                class="hover:bg-gray-50 print:bg-transparent">
-                                                                                <td
-                                                                                    class="py-2 px-3 uppercase font-medium print:text-gray-800">
-                                                                                    {{ travelerType }}
-                                                                                </td>
-                                                                                <td
-                                                                                    class="py-2 px-3 uppercase print:text-gray-800">
-                                                                                    {{fare.baggage_policies.find(bp =>
-                                                                                        bp.traveler_type === travelerType &&
-                                                                                        bp.type === 'checked')?.description
-                                                                                        || 'N/A'}}
-                                                                                </td>
-                                                                                <td
-                                                                                    class="py-2 px-3 uppercase print:text-gray-800">
-                                                                                    {{(fare.baggage_policies ||
-                                                                                        []).find(bp => bp.traveler_type ===
-                                                                                            travelerType && (bp.type === 'carry'
-                                                                                                || bp.type ===
-                                                                                                'carry-on'))?.description || 'N/A'
-                                                                                    }}
-                                                                                </td>
-                                                                            </tr>
-                                                                        </template>
-                                                                    </template>
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Passenger & Ticket Details -->
-                            <div class="ticket-passenger-section p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
-                                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
-                                    <UserIcon class="h-5 w-5 mr-2 text-primary print:text-gray-700" />
-                                    PASSENGER & TICKET DETAILS
-                                </h2>
-
-                                <div class="ticket-passenger-table-wrap overflow-x-auto">
-                                    <table
-                                        class="ticket-passenger-table w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
-                                        <thead>
-                                            <tr
-                                                class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
-                                                <th
-                                                    class="px-4 py-2.5 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                    Traveller Name
-                                                </th>
-                                                <th
-                                                    class="px-4 py-2.5 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                    Gender
-                                                </th>
-                                                <th
-                                                    class="px-4 py-2.5 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                    Nationality/CNIC
-                                                </th>
-                                                <th
-                                                    class="px-4 py-2.5 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                    Ticket No
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                                            <tr v-for="(traveller, index) in booking?.pessangers" :key="index"
-                                                class="even:bg-gray-50 hover:bg-gray-100/50 transition-colors print:bg-transparent">
-                                                <td class="px-4 py-2.5 uppercase print:text-gray-800">
-                                                    {{ traveller.title }} {{ traveller.first_name }} {{
-                                                        traveller.last_name }}
-                                                    <span class="text-gray-500 text-xs ml-1 print:text-gray-600">({{
-                                                        traveller.type
-                                                    }})</span>
-                                                </td>
-                                                <td class="px-4 py-2.5 uppercase print:text-gray-800">{{
-                                                    traveller?.gender?.toUpperCase() ||
-                                                    'N/A' }}</td>
-                                                <td class="px-4 py-2.5 print:text-gray-800">{{ traveller.nationality
-                                                    || 'N/A' }}</td>
-                                                <td class="px-4 py-2.5 font-mono print:text-gray-800">
-                                                    {{ Array.isArray(pnrDetails?.flightTickets) &&
-                                                        pnrDetails.flightTickets[index] ?
-                                                        pnrDetails.flightTickets[index].number : "N/A" }}
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <!-- Special Service Requests (SSR) Section -->
-                            <div class="p-2 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
-                                v-if="hasSSR()">
-                                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center print:text-gray-900">
-                                    <span class="h-5 w-5 mr-2 text-primary print:text-gray-700">
+                        <ATETicket v-for="booking in bookingDetails" :key="booking.id" :booking="booking"
+                            :agent="agentData?.agent_data" logo="/public/assets/logo.png"
+                            :pnr="atPnrReferences.crs" :airline-pnr="atPnrReferences.airline"
+                            :pnr-details="pnrDetails"
+                            :expiry="booking.status === 'booked' ? getRemainingTime(booking.expiry_time) : ''"
+                            :show-fare="isDetailsInfoVisible">
+                            <template #extras>
+                                <section v-if="hasSSR()" class="et-sec">
+                                    <div class="et-sec-h">
                                         <BellIcon />
-                                    </span>
-                                    SPECIAL SERVICES
-                                </h2>
-
-                                <div class="space-y-4">
-                                    <!-- Seat Requests -->
-                                    <div v-if="getSeatRequests().length > 0"
-                                        class=" border-gray-200 rounded p-4 print:border-gray-300">
-                                        <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Seat
-                                            Selections</h3>
-                                        <div class="overflow-x-auto">
-                                            <table
-                                                class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
+                                        Special services
+                                    </div>
+                                    <template v-if="getSeatRequests().length > 0">
+                                        <div class="et-sub-h">Seat selections</div>
+                                        <div class="et-scroll">
+                                            <table class="et-table">
                                                 <thead>
-                                                    <tr class="border-b border-gray-300 print:border-gray-400">
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Passenger</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Flight</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Seat</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Status</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Cost</th>
+                                                    <tr>
+                                                        <th>Passenger</th>
+                                                        <th>Flight</th>
+                                                        <th>Seat</th>
+                                                        <th>Status</th>
+                                                        <th>Cost</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                                                    <tr v-for="(seat, index) in getSeatRequests()"
-                                                        :key="'seat-' + index"
-                                                        class="even:bg-gray-50 print:bg-transparent">
-                                                        <td class="px-4 py-2 print:text-gray-800">{{ seat.passengerName
-                                                        }}</td>
-                                                        <td class="px-4 py-2 print:text-gray-800">Flight {{
-                                                            seat['@attributes']?.FlightRefNumberRPHList }}</td>
-                                                        <td class="px-4 py-2 font-mono print:text-gray-800">{{
-                                                            seat['@attributes']?.RowNumber }}{{
-                                                                seat['@attributes']?.SeatNumber }}</td>
-                                                        <td class="px-4 py-2">
-                                                            <span :class="getStatusClass(seat['@attributes']?.Status)">
-                                                                {{ seat['@attributes']?.Status }}
-                                                            </span>
-                                                        </td>
-                                                        <td class="px-4 py-2 print:text-gray-800">{{
-                                                            formatAmount(seat?.TPA_Extensions?.SeatCost ||
-                                                                0) }}</td>
+                                                <tbody>
+                                                    <tr v-for="(seat, index) in getSeatRequests()" :key="'seat-' + index">
+                                                        <td>{{ seat.passengerName }}</td>
+                                                        <td>Flight {{ seat['@attributes']?.FlightRefNumberRPHList }}</td>
+                                                        <td>{{ seat['@attributes']?.RowNumber }}{{ seat['@attributes']?.SeatNumber }}</td>
+                                                        <td><span :class="getStatusClass(seat['@attributes']?.Status)">{{ seat['@attributes']?.Status }}</span></td>
+                                                        <td>{{ formatAmount(seat?.TPA_Extensions?.SeatCost || 0) }}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
                                         </div>
-                                    </div>
-
-                                    <!-- Extra Baggage SSR -->
-                                    <div v-if="getBaggageSSR().length > 0"
-                                        class=" border-gray-200 rounded-lg p-4 print:border-gray-300">
-                                        <h3 class="text-md font-semibold text-gray-700 mb-3 print:text-gray-800">Extra
-                                            Baggage</h3>
-                                        <div class="overflow-x-auto">
-                                            <table
-                                                class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden print:border-gray-400">
+                                    </template>
+                                    <template v-if="getBaggageSSR().length > 0">
+                                        <div class="et-sub-h">Extra baggage</div>
+                                        <div class="et-scroll">
+                                            <table class="et-table">
                                                 <thead>
-                                                    <tr class="border-b border-gray-300 print:border-gray-400">
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Passenger</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Flight</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Description</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Status</th>
-                                                        <th
-                                                            class="px-4 py-2 text-left font-bold text-gray-800 print:text-gray-900">
-                                                            Charge</th>
+                                                    <tr>
+                                                        <th>Passenger</th>
+                                                        <th>Flight</th>
+                                                        <th>Description</th>
+                                                        <th>Status</th>
+                                                        <th>Charge</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody class="divide-y divide-gray-200 print:divide-gray-400">
-                                                    <tr v-for="(ssr, index) in getBaggageSSR()" :key="'ssr-' + index"
-                                                        class="even:bg-gray-50 print:bg-transparent">
-                                                        <td class="px-4 py-2 print:text-gray-800">{{ ssr.passengerName
-                                                        }}</td>
-                                                        <td class="px-4 py-2 print:text-gray-800">Flight {{
-                                                            ssr['@attributes']?.FlightRefNumberRPHList }}</td>
-                                                        <td class="px-4 py-2 print:text-gray-800">{{
-                                                            ssr['@attributes']?.ItemTitle || "Extra Baggage" }}</td>
-                                                        <td class="px-4 py-2">
-                                                            <span :class="getStatusClass(ssr['@attributes']?.Status)">
-                                                                {{ ssr['@attributes']?.Status }}
-                                                            </span>
-                                                        </td>
-                                                        <td class="px-4 py-2 print:text-gray-800">{{
-                                                            formatAmount(ssr['@attributes']?.ChargeAmount)
-                                                        }}</td>
+                                                <tbody>
+                                                    <tr v-for="(ssr, index) in getBaggageSSR()" :key="'ssr-' + index">
+                                                        <td>{{ ssr.passengerName }}</td>
+                                                        <td>Flight {{ ssr['@attributes']?.FlightRefNumberRPHList }}</td>
+                                                        <td>{{ ssr['@attributes']?.ItemTitle || "Extra Baggage" }}</td>
+                                                        <td><span :class="getStatusClass(ssr['@attributes']?.Status)">{{ ssr['@attributes']?.Status }}</span></td>
+                                                        <td>{{ formatAmount(ssr['@attributes']?.ChargeAmount) }}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Special Service Requests - Flight Wise -->
+                                    </template>
+                                </section>
+                            </template>
 
-                            <!-- Fare Breakdown - Using existing fare logic -->
-                            <div class="ticket-fare-section p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid"
-                                v-if="isDetailsInfoVisible">
-                                <h2 class="text-lg font-bold text-gray-800 mb-2 print:text-gray-900">
-                                    FARE BREAKDOWN
-                                </h2>
-                                <div>
-                                    <div class="ticket-fare-table-wrap overflow-x-auto">
-                                        <table
-                                            class="ticket-fare-table w-full text-xs border border-gray-300 rounded-lg overflow-hidden print:border-gray-400 print:rounded-none">
-                                            <thead>
-                                                <tr
-                                                    class="border-b border-gray-300 print:border-gray-400 print:bg-transparent">
-                                                    <th
-                                                        class="py-1.5 px-2 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                        Sector</th>
-                                                    <th
-                                                        class="py-1.5 px-2 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                        Subtotal</th>
-                                                    <th
-                                                        class="py-1.5 px-2 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                        Taxes + Fees
-                                                    </th>
-                                                    <th
-                                                        class="py-1.5 px-2 text-left font-bold text-gray-800 print:text-gray-900 print:bg-transparent">
-                                                        Grand Total</th>
-                                                </tr>
-                                            </thead>
-
-                                            <tbody v-if="pnrDetails?.fares?.length"
-                                                class="divide-y divide-gray-200 print:divide-gray-400">
-                                                <tr class="hover:bg-gray-50 print:bg-transparent">
-                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                        {{ formatAmount(
-                                                            calculateFinalPrice(
-                                                                pnrDetails?.fares?.[0]?.totals?.subtotal,
-                                                                fare?.margin_amount,
-                                                                fare?.margin_type,
-                                                                fare?.amount_type || 0
-                                                            )
-                                                            + marginPerFlight
-                                                        ) }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                        {{ formatAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 uppercase font-bold print:text-gray-900">
-                                                        {{ formatAmount(
-                                                            parseFloat(pnrDetails?.fares?.[0]?.totals?.total || 0)
-                                                            + marginPerFlight
-                                                        ) }}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                            <tbody v-else class="divide-y divide-gray-200 print:divide-gray-400">
-                                                <tr v-if="bookedFareLegs.length" class="hover:bg-gray-50 print:bg-transparent">
-                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                        {{ bookedFareRoute }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                        {{ formatBookedFaresMoney() }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 uppercase print:text-gray-800">
-                                                        {{ formatAmount(bookedFareLegs.reduce((sum, { fare }) => sum + calculateTaxes(fare), 0)) }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 uppercase font-bold print:text-gray-900">
-                                                        {{ formatBookedFaresMoney() }}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                            <tfoot class=" border-gray-400 bg-gray-50 print:bg-transparent">
-                                                <tr>
-                                                    <td colspan="3"
-                                                        class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
-                                                        Add-ons
-                                                    </td>
-                                                    <td class="py-3 px-2 font-bold text-primary text-sm">
-                                                        {{
-                                                            formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount)
-                                                        }}
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td colspan="3"
-                                                        class="py-3 px-2 text-right font-bold text-gray-900  text-sm">
-                                                        Total Amount
-                                                    </td>
-                                                    <td class="py-3 px-2 font-bold text-primary text-sm">
-                                                        {{ formatLockedBookingAmount() }}
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Important Information - UPDATED CONTENT -->
-                            <div class="p-6 border-b border-gray-200 print:border-gray-300 print:break-inside-avoid">
-                                <h2 class="text-lg font-bold text-gray-800 mb-4 print:text-gray-900">Important
-                                    Information</h2>
-
-                                <div
-                                    class="bg-amber-50 border border-amber-200 rounded-lg p-5 print:bg-transparent print:border-gray-300">
-                                    <ul class="space-y-3 text-sm text-gray-700 print:text-gray-800">
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span>Make sure you have valid travel documents before your trip (e.g.
-                                                passport, visa, etc.). For any
-                                                future reference please refer the above Trip ID.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span>We recommend you check-in at least 3 hours prior to departure of your
-                                                domestic flight and 4 hours
-                                                prior to your international flight.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span>Baggage more than specified units is subject to a charge to be paid at
-                                                the airport during
-                                                Check-in.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span>We are not responsible for any delay in cancellation of flight from
-                                                the airline's end.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span>Please refer the Airline PNR Number when communicating with the
-                                                airline regarding this
-                                                booking.</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <span
-                                                class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 mr-3 flex-shrink-0 print:bg-gray-600"></span>
-                                            <span class="font-medium">Disclaimer:</span> Post-ticketing modifications or
-                                            cancellations will be
-                                            processed in accordance with the airline's policy.
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <!-- Footer -->
-                            <div
-                                class="p-6 text-center bg-gray-50 border-t border-gray-200 print:bg-transparent print:border-gray-300">
-                                <p class="text-sm text-gray-700 mb-1 font-medium print:text-gray-800">
-                                    Thank you for choosing {{ agentData?.agent_data?.company_name || 'Jetze Travels' }}
-                                </p>
-                                <p class="text-xs text-gray-500 print:text-gray-600">
-                                    For assistance, contact us at {{ agentData?.agent_data?.mobile || '+92 0000000000'
-                                    }} or {{
-                                        agentData?.agent_data?.company_email || 'support@Jetze.pk' }}
-                                </p>
-                            </div>
-                        </div>
+                            <template #fare-rows>
+                                <tr v-if="pnrDetails?.fares?.length">
+                                    <td>{{ bookedFareRoute || '-' }}</td>
+                                    <td>
+                                        {{ formatAmount(
+                                            calculateFinalPrice(
+                                                pnrDetails?.fares?.[0]?.totals?.subtotal,
+                                                fare?.margin_amount,
+                                                fare?.margin_type,
+                                                fare?.amount_type || 0
+                                            )
+                                            + marginPerFlight
+                                        ) }}
+                                    </td>
+                                    <td>{{ formatAmount(pnrDetails?.fares?.[0]?.totals?.taxes) }}</td>
+                                    <td>
+                                        {{ formatAmount(
+                                            parseFloat(pnrDetails?.fares?.[0]?.totals?.total || 0)
+                                            + marginPerFlight
+                                        ) }}
+                                    </td>
+                                </tr>
+                                <tr v-else-if="bookedFareLegs.length">
+                                    <td>{{ bookedFareRoute }}</td>
+                                    <td>{{ formatBookedFaresMoney() }}</td>
+                                    <td>{{ formatAmount(bookedFareLegs.reduce((sum, { fare }) => sum + calculateTaxes(fare), 0)) }}</td>
+                                    <td>{{ formatBookedFaresMoney() }}</td>
+                                </tr>
+                            </template>
+                            <template #fare-summary>
+                                <div><span>Add-ons</span><b>{{ formatBookingAddOnsAmount(bookingDetails?.[0]?.add_ones_amount) }}</b></div>
+                                <div class="et-tot"><span>Total amount</span><b>{{ formatLockedBookingAmount() }}</b></div>
+                            </template>
+                        </ATETicket>
                     </div>
 
                     <!-- Chat Panel - Right Side (UNCHANGED) -->
@@ -1981,8 +1415,7 @@ onMounted(() => {
 </template>
 
 <style>
-/* The desktop ticket is intentionally kept as-is. These rules make the same
-   receipt hierarchy readable on narrow screens without changing print output. */
+/* Mobile layout for the action bar; the ticket itself is styled by ATETicket. */
 @media screen and (max-width: 639px) {
     .ticket-actions {
         display: grid;
@@ -2007,495 +1440,14 @@ onMounted(() => {
         height: 0.75rem;
         flex: 0 0 auto;
     }
-
-    .ticket-receipt-header {
-        padding: 1rem 0.85rem;
-    }
-
-    .ticket-receipt-header-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        align-items: center;
-        gap: 0;
-    }
-
-    .ticket-receipt-logo {
-        display: flex;
-        width: auto;
-        align-items: center;
-        justify-content: center;
-        padding-top: 0;
-    }
-
-    .ticket-receipt-logo img {
-        height: 1.75rem;
-    }
-
-    .ticket-receipt-title {
-        display: flex;
-        width: auto;
-        height: 3.15rem;
-        flex-direction: column;
-        justify-content: center;
-        padding: 0 0.45rem;
-        text-align: center;
-    }
-
-    .ticket-receipt-title h1 {
-        font-size: 0.9rem;
-        line-height: 1.25;
-        letter-spacing: -0.025em;
-        margin-bottom: 0.2rem;
-    }
-
-    .ticket-receipt-title .text-sm,
-    .ticket-receipt-reference .text-sm {
-        font-size: 0.65rem;
-        line-height: 1.35;
-    }
-
-    .ticket-receipt-title .mt-2 {
-        margin-top: 0.3rem;
-    }
-
-    .ticket-receipt-title .mt-2 > p {
-        display: none;
-    }
-
-    .ticket-receipt-title .px-3 {
-        padding-left: 0.4rem;
-        padding-right: 0.4rem;
-    }
-
-    .ticket-receipt-reference {
-        display: flex;
-        width: auto;
-        height: 3.15rem;
-        flex-direction: column;
-        justify-content: center;
-        padding: 0 0.45rem;
-        text-align: center;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-flight-information {
-        padding: 1rem 0.85rem;
-    }
-
-    .ticket-flight-information > h2 {
-        margin-bottom: 0.85rem;
-        font-size: 0.95rem;
-    }
-
-    .ticket-flight-card {
-        padding: 0.75rem;
-        border-radius: 0.6rem;
-    }
-
-    .ticket-segment-details {
-        padding: 0.5rem 0 0.2rem;
-    }
-
-    .ticket-segment-details > div {
-        gap: 0;
-    }
-
-    .ticket-segment-grid {
-        grid-template-columns: 0.7fr repeat(2, minmax(0, 1fr)) 0.45fr repeat(2, minmax(0, 1fr)) 0.1fr;
-        gap: 0.25rem;
-    }
-
-    .ticket-airline {
-        width: 2.25rem;
-        align-self: start;
-        padding-top: 0.2rem;
-    }
-
-    .ticket-airline img {
-        height: 1.85rem;
-    }
-
-    .ticket-airline .text-xs {
-        margin-top: 0.2rem;
-        font-size: 0.52rem;
-        line-height: 1.2;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-origin .text-2xl,
-    .ticket-destination .text-2xl {
-        font-size: 1.05rem;
-        line-height: 1.2;
-    }
-
-    .ticket-origin .text-lg,
-    .ticket-destination .text-lg {
-        font-size: 0.7rem;
-        line-height: 1.3;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-origin .text-base,
-    .ticket-destination .text-base {
-        margin-top: 0.55rem;
-        font-size: 0.62rem;
-        line-height: 1.3;
-    }
-
-    .ticket-origin .text-xl,
-    .ticket-destination .text-xl {
-        font-size: 0.9rem;
-        line-height: 1.25;
-    }
-
-    .ticket-origin .text-sm,
-    .ticket-destination .text-sm {
-        margin-top: 0.35rem;
-        font-size: 0.58rem;
-        line-height: 1.3;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-flight-path > div {
-        width: 1.65rem;
-        height: 1.65rem;
-    }
-
-    .ticket-flight-path svg {
-        width: 0.85rem;
-        height: 0.85rem;
-    }
-
-    .ticket-flight-path .text-sm {
-        margin-top: 0.35rem;
-        font-size: 0.54rem;
-        line-height: 1.2;
-        text-align: center;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-segment-meta {
-        margin-top: 0.85rem;
-        padding-top: 0.65rem;
-        gap: 0.35rem 0.65rem;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        font-size: 0.62rem;
-        line-height: 1.3;
-    }
-
-    .ticket-segment-meta span {
-        white-space: nowrap;
-    }
-
-    .ticket-mobile-flight-card {
-        overflow: hidden;
-        border: 1px solid #dbe5f1;
-        border-radius: 0.7rem;
-        background: linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
-    }
-
-    .ticket-mobile-segment {
-        padding: 0.8rem;
-    }
-
-    .ticket-mobile-segment + .ticket-mobile-segment {
-        border-top: 1px dashed #cbd5e1;
-    }
-
-    .ticket-mobile-layover {
-        width: fit-content;
-        margin: -0.05rem auto 0.7rem;
-        padding: 0.22rem 0.55rem;
-        border-radius: 9999px;
-        background: #eaf4ff;
-        color: #1d5c9e;
-        font-size: 0.64rem;
-        font-weight: 700;
-    }
-
-    .ticket-mobile-airline {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        padding-bottom: 0.65rem;
-        border-bottom: 1px solid #e6edf5;
-        color: #34445b;
-    }
-
-    .ticket-mobile-airline img {
-        width: 1.85rem;
-        height: 1.85rem;
-        object-fit: contain;
-    }
-
-    .ticket-mobile-airline p {
-        margin: 0;
-        font-size: 0.72rem;
-        font-weight: 700;
-        line-height: 1.2;
-    }
-
-    .ticket-mobile-airline span {
-        display: block;
-        margin-top: 0.1rem;
-        color: #718198;
-        font-size: 0.62rem;
-        line-height: 1.2;
-    }
-
-    .ticket-mobile-airline .ticket-mobile-class {
-        margin: 0 0 0 auto;
-        padding: 0.22rem 0.45rem;
-        border-radius: 9999px;
-        background: #eef5ff;
-        color: #256fc0;
-        font-size: 0.57rem;
-        font-weight: 700;
-    }
-
-    .ticket-mobile-route {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 2.15rem minmax(0, 1fr);
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.8rem 0 0.65rem;
-    }
-
-    .ticket-mobile-place {
-        min-width: 0;
-    }
-
-    .ticket-mobile-place--from {
-        text-align: left;
-    }
-
-    .ticket-mobile-place--to {
-        text-align: right;
-    }
-
-    .ticket-mobile-place strong,
-    .ticket-mobile-place span,
-    .ticket-mobile-place small,
-    .ticket-mobile-place b {
-        display: block;
-    }
-
-    .ticket-mobile-place strong {
-        color: #172033;
-        font-size: 1.05rem;
-        line-height: 1.1;
-    }
-
-    .ticket-mobile-place span {
-        margin-top: 0.15rem;
-        color: #526277;
-        font-size: 0.68rem;
-        line-height: 1.25;
-        display: -webkit-box;
-        min-height: 1.7rem;
-        overflow: hidden;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-    }
-
-    .ticket-mobile-place small {
-        margin-top: 0.55rem;
-        color: #718198;
-        font-size: 0.6rem;
-        line-height: 1.2;
-    }
-
-    .ticket-mobile-place b {
-        margin-top: 0.12rem;
-        color: #277bd2;
-        font-size: 0.9rem;
-        line-height: 1.15;
-    }
-
-    .ticket-mobile-path {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.32rem;
-        color: #718198;
-    }
-
-    .ticket-mobile-path svg {
-        width: 1.45rem;
-        height: 1.45rem;
-        padding: 0.32rem;
-        border-radius: 9999px;
-        background: #eef5ff;
-        color: #277bd2;
-    }
-
-    .ticket-mobile-path span {
-        max-width: 2.5rem;
-        font-size: 0.56rem;
-        font-weight: 600;
-        line-height: 1.2;
-        text-align: center;
-        overflow-wrap: anywhere;
-    }
-
-    .ticket-mobile-meta {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.25rem;
-        padding-top: 0.6rem;
-        border-top: 1px solid #e6edf5;
-        color: #718198;
-        font-size: 0.56rem;
-        line-height: 1.25;
-        text-align: center;
-    }
-
-    .ticket-mobile-meta span:nth-child(1) {
-        text-align: left;
-    }
-
-    .ticket-mobile-meta span:nth-child(3) {
-        text-align: right;
-    }
-
-    .ticket-baggage-section {
-        padding: 0.65rem;
-        border-radius: 0.7rem;
-    }
-
-    .ticket-baggage-section > .space-y-6 > * + * {
-        margin-top: 0;
-    }
-
-    .ticket-baggage-list {
-        display: block;
-    }
-
-    .ticket-baggage-item {
-        margin: 0;
-        padding: 0.75rem 0;
-    }
-
-    .ticket-baggage-item + .ticket-baggage-item {
-        border-top: 1px dashed #cbd5e1;
-    }
-
-    .ticket-baggage-list > .ticket-baggage-item {
-        border-left-width: 0 !important;
-    }
-
-    .ticket-baggage-item .text-xs {
-        margin-bottom: 0.4rem;
-        font-size: 0.62rem;
-    }
-
-    .ticket-baggage-table {
-        table-layout: fixed;
-        font-size: 0.58rem;
-        line-height: 1.3;
-    }
-
-    .ticket-baggage-table th,
-    .ticket-baggage-table td {
-        padding: 0.45rem 0.25rem;
-        overflow-wrap: anywhere;
-        text-align: left;
-        vertical-align: middle;
-    }
-
-    .ticket-passenger-section,
-    .ticket-fare-section {
-        padding: 1rem 0.85rem;
-    }
-
-    .ticket-passenger-section > h2,
-    .ticket-fare-section > h2 {
-        margin-bottom: 0.8rem;
-        font-size: 0.95rem;
-    }
-
-    .ticket-passenger-table-wrap,
-    .ticket-fare-table-wrap {
-        overflow: hidden;
-    }
-
-    .ticket-passenger-table {
-        table-layout: fixed;
-        font-size: 0.62rem;
-        line-height: 1.35;
-    }
-
-    .ticket-passenger-table th,
-    .ticket-passenger-table td {
-        padding: 0.48rem 0.28rem;
-        overflow-wrap: anywhere;
-        vertical-align: top;
-        text-align: left;
-    }
-
-    .ticket-passenger-table th:nth-child(1),
-    .ticket-passenger-table td:nth-child(1) {
-        width: 25%;
-    }
-
-    .ticket-passenger-table th:nth-child(2),
-    .ticket-passenger-table td:nth-child(2) {
-        width: 25%;
-    }
-
-    .ticket-passenger-table th:nth-child(3),
-    .ticket-passenger-table td:nth-child(3) {
-        width: 25%;
-    }
-
-    .ticket-passenger-table th:nth-child(4),
-    .ticket-passenger-table td:nth-child(4) {
-        width: 25%;
-    }
-
-    .ticket-passenger-table .text-xs {
-        font-size: 0.54rem;
-    }
-
-    .ticket-fare-table {
-        table-layout: fixed;
-        font-size: 0.57rem;
-        line-height: 1.3;
-    }
-
-    .ticket-fare-table th,
-    .ticket-fare-table td {
-        padding: 0.42rem 0.2rem;
-        overflow-wrap: anywhere;
-        text-align: left;
-    }
-
-    .ticket-fare-table th:nth-child(1),
-    .ticket-fare-table td:nth-child(1) {
-        width: 25%;
-    }
-
-    .ticket-fare-table th:nth-child(n + 2),
-    .ticket-fare-table td:nth-child(n + 2) {
-        width: 25%;
-    }
-
-    .ticket-fare-table tfoot td:first-child,
-    .ticket-fare-table tfoot td:last-child {
-        text-align: right;
-    }
-
-    .ticket-fare-table tfoot td {
-        padding: 0.55rem 0.35rem;
-        font-size: 0.68rem;
-    }
 }
 
 /* Print styles - Only necessary overrides */
 @media print {
     @page {
-        margin: 0.4in;
+        /* No page margin: Chrome then has no room to print its date/title/URL header and footer.
+           The ticket adds its own 10px edge spacing. */
+        margin: 0;
         size: A4;
     }
 
