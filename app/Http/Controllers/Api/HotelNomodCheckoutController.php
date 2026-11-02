@@ -59,7 +59,6 @@ class HotelNomodCheckoutController extends Controller
 
                 if (HotelPaymentAttempt::query()
                     ->where('hotel_booking_id', $booking->id)
-                    ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
                     ->where('status', HotelPaymentAttempt::STATUS_PAID)
                     ->exists()) {
                     throw ValidationException::withMessages([

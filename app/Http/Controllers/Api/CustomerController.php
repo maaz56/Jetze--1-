@@ -131,10 +131,25 @@ class CustomerController extends Controller
         }
 
         if ($request->has('nomod_percentage_charge')) {
-            $settings->nomod_percentage_charge = $request->input('nomod_percentage_charge');
+            $settings->nomod_percentage_charge = $request->input('nomod_percentage_charge') ?? 0; // blank input means no charge
         }
         if ($request->has('nomod_fixed_charge')) {
-            $settings->nomod_fixed_charge = $request->input('nomod_fixed_charge');
+            $settings->nomod_fixed_charge = $request->input('nomod_fixed_charge') ?? 0; // blank input means no charge
+        }
+
+        if ($request->has('tabby_percentage_charge') || $request->has('tabby_fixed_charge')) {
+            abort_unless($request->user()?->role === 'admin', 403, 'Only admins can change Tabby charges.');
+            $request->validate([
+                'tabby_percentage_charge' => ['nullable', 'numeric', 'min:0', 'max:100'],
+                'tabby_fixed_charge' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            ]);
+        }
+
+        if ($request->has('tabby_percentage_charge')) {
+            $settings->tabby_percentage_charge = $request->input('tabby_percentage_charge') ?? 0; // blank input means no charge
+        }
+        if ($request->has('tabby_fixed_charge')) {
+            $settings->tabby_fixed_charge = $request->input('tabby_fixed_charge') ?? 0; // blank input means no charge
         }
 
         if ($request->has('is_card_allowed')) {

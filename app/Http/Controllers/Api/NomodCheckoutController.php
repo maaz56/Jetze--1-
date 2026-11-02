@@ -59,7 +59,6 @@ class NomodCheckoutController extends Controller
 
             if (PaymentAttempt::query()
                 ->where('booking_id', $booking->id)
-                ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
                 ->where('status', PaymentAttempt::STATUS_PAID)
                 ->exists()) {
                 throw ValidationException::withMessages([

@@ -64,7 +64,7 @@ class TboNomodFulfilmentService
                 ->find($paymentAttemptId);
 
             if (! $attempt
-                || $attempt->provider !== HotelPaymentAttempt::PROVIDER_NOMOD
+                || ! in_array($attempt->provider, [HotelPaymentAttempt::PROVIDER_NOMOD, HotelPaymentAttempt::PROVIDER_TABBY], true)
                 || $attempt->status !== HotelPaymentAttempt::STATUS_PAID) {
                 return null;
             }
@@ -79,7 +79,7 @@ class TboNomodFulfilmentService
 
             if ($booking->status === 'confirmed') {
                 $booking->update([
-                    'payment_method' => HotelPaymentAttempt::PROVIDER_NOMOD,
+                    'payment_method' => $attempt->provider,
                     'paid_at' => $booking->paid_at ?? $attempt->paid_at ?? now(),
                 ]);
                 $attempt->update([
@@ -147,7 +147,7 @@ class TboNomodFulfilmentService
             ]);
             $booking->update([
                 'status' => 'processing',
-                'payment_method' => HotelPaymentAttempt::PROVIDER_NOMOD,
+                'payment_method' => $attempt->provider,
                 'paid_at' => $booking->paid_at ?? $attempt->paid_at ?? now(),
             ]);
 
@@ -254,7 +254,7 @@ class TboNomodFulfilmentService
 
             $booking->update([
                 'status' => 'confirmed',
-                'payment_method' => HotelPaymentAttempt::PROVIDER_NOMOD,
+                'payment_method' => $attempt->provider,
                 'paid_at' => $booking->paid_at ?? $attempt->paid_at ?? now(),
                 'provider_status_code' => 200,
                 'booking_reference_id' => data_get($response, 'BookingReferenceId')

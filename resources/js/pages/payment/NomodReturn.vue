@@ -8,6 +8,7 @@ const route = useRoute();
 const router = useRouter();
 const paymentAttempt = computed(() => String(route.query.payment_attempt || ""));
 const isHotelPayment = computed(() => String(route.query.payment_type || "") === "hotel");
+const isTabby = computed(() => route.meta.gateway === "tabby");
 const outcome = computed(() => String(route.params.outcome || "success"));
 const payment = ref(null);
 const error = ref("");
@@ -44,7 +45,7 @@ const progressMessage = computed(() => {
             : "Your payment is verified. Please wait while we confirm your booking and issue the ticket.";
     }
 
-    return "Please wait while we securely verify your payment with Nomod.";
+    return `Please wait while we securely verify your payment with ${isTabby.value ? "Tabby" : "Nomod"}.`;
 });
 
 const stateHeading = computed(() => {
@@ -82,9 +83,13 @@ const loadStatus = async () => {
     }
 
     try {
-        const response = isHotelPayment.value
-            ? await apiService.getHotelNomodPaymentStatus(paymentAttempt.value)
-            : await apiService.getNomodPaymentStatus(paymentAttempt.value);
+        const response = isTabby.value
+            ? (isHotelPayment.value
+                ? await apiService.getHotelTabbyPaymentStatus(paymentAttempt.value)
+                : await apiService.getTabbyPaymentStatus(paymentAttempt.value))
+            : (isHotelPayment.value
+                ? await apiService.getHotelNomodPaymentStatus(paymentAttempt.value)
+                : await apiService.getNomodPaymentStatus(paymentAttempt.value));
         payment.value = response.data;
         error.value = "";
 
@@ -146,7 +151,7 @@ const retryStatus = async () => {
 };
 
 const returnHome = () => {
-    // The prior history entry is Nomod's checkout, so browser-back could reopen
+    // The prior history entry is the gateway's checkout, so browser-back could reopen
     // it and invite a duplicate payment.
     router.push({ name: "Home" });
 };

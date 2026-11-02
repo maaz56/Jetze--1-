@@ -34,7 +34,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)]">
               <!-- Payment methods are intentionally visual only until their payment flows are enabled. -->
               <aside class="border-b border-slate-200 bg-slate-50/80 lg:border-b-0 lg:border-r">
-                <div class="grid grid-cols-3 lg:block">
+                <div :class="['grid lg:block', isTabbyAvailable ? 'grid-cols-4' : 'grid-cols-3']">
                     <button type="button" @click="activePaymentTab = 'wallet'" :class="[
                       'flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:border-r-0 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
                       activePaymentTab === 'wallet' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
@@ -54,13 +54,22 @@
                       <span>Debit Card</span>
                     </button>
                     <button type="button" v-on:click="activePaymentTab = 'credit-card'" :class="[
-                      'flex min-w-0 flex-col items-center justify-center gap-1.5 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
+                      'flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:border-r-0 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
                       activePaymentTab === 'credit-card' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
                     ]" :aria-current="activePaymentTab === 'credit-card' ? 'page' : undefined">
                       <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary lg:h-8 lg:w-8 lg:rounded">
                         <CreditCard class="h-4 w-4 lg:h-5 lg:w-5" />
                       </span>
                       <span>Credit Card</span>
+                    </button>
+                    <button v-if="isTabbyAvailable" type="button" v-on:click="activePaymentTab = 'tabby'" :class="[
+                      'flex min-w-0 flex-col items-center justify-center gap-1.5 px-2 py-3 text-center text-[11px] font-semibold transition-colors lg:w-full lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-4 lg:text-left lg:text-sm',
+                      activePaymentTab === 'tabby' ? 'border-b-2 border-b-primary bg-white text-primary lg:border-b lg:border-l-4' : 'text-slate-600 hover:bg-white'
+                    ]" :aria-current="activePaymentTab === 'tabby' ? 'page' : undefined">
+                      <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-xs font-black text-primary lg:h-8 lg:w-8 lg:rounded">
+                        t
+                      </span>
+                      <span>Tabby</span>
                     </button>
                   <!-- <button type="button" @click="activePaymentTab = 'credit-card'" :class="[
                     'flex w-full min-w-[155px] items-center gap-3 border-r px-4 py-4 text-left text-sm font-medium transition-colors lg:border-b lg:border-r-0',
@@ -165,7 +174,7 @@
                       <button type="button" class="mt-4 rounded bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">View options</button>
                     </div>
                     <ul class="space-y-3 text-sm text-slate-700">
-                      <li class="flex items-center gap-3"><span class="text-primary">✦</span>No processing fees</li>
+                      <li class="flex items-center gap-3"><span class="text-primary">✦</span>Charged in AED by Tabby</li>
                       <li class="flex items-center gap-3"><span class="text-primary">▣</span>Use any card</li>
                       <li class="flex items-center gap-3"><span class="text-primary">♧</span>Buyer protection</li>
                     </ul>
@@ -174,9 +183,15 @@
                   <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p class="text-sm text-slate-500">Total payable amount</p>
-                      <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatPaymentAmount() }}</p>
+                      <p class="mt-1 text-2xl font-bold text-slate-950">{{ formatSummaryTotal() }}</p>
+                      <p v-if="activePaymentTab === 'tabby'" class="mt-1 text-xs text-slate-500">Converted to AED at checkout.</p>
                     </div>
-                    <button type="button" class="inline-flex min-h-12 items-center justify-center rounded bg-primary px-7 py-3 font-semibold uppercase tracking-wide text-white hover:bg-primary/90">Make Payment</button>
+                    <TabbyCheckoutButton
+                      v-if="activePaymentTab === 'tabby' && booking_id"
+                      :booking-id="booking_id"
+                      :disabled="isBookingExpired"
+                    />
+                    <button v-else type="button" disabled class="inline-flex min-h-12 items-center justify-center rounded bg-slate-200 px-7 py-3 font-semibold uppercase tracking-wide text-slate-500">Make Payment</button>
                   </div>
                 </div>
 
@@ -619,9 +634,13 @@
                         0) }}</span>
                     </div>
                   </details>
+                  <div v-if="isCardPaymentTab && paymentMoney" class="flex p-2 justify-between items-center">
+                    <span class="text-xs sm:text-sm text-gray-600">{{ activePaymentTab === 'tabby' ? 'Tabby' : 'Card' }} Processing Fee ({{ activeCharge.percentage }}%)</span>
+                    <span class="text-xs sm:text-sm font-medium">{{ formatCardFeeAmount() }}</span>
+                  </div>
                   <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
                     <span class="text-base sm:text-sm font-semibold text-gray-900">Total Amount</span>
-                    <span class="text-sm sm:text-lg font-bold text-primary">{{ formatPaymentAmount() }}</span>
+                    <span class="text-sm sm:text-lg font-bold text-primary">{{ formatSummaryTotal() }}</span>
                   </div>
                 </div>
               </div>
@@ -787,6 +806,8 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import CheckoutLoadingOverlay from "@/components/common/CheckoutLoadingOverlay.vue";
 import NomodCheckoutButton from "@/components/payment/NomodCheckoutButton.vue";
+import TabbyCheckoutButton from "@/components/payment/TabbyCheckoutButton.vue";
+import { isTabbyEligiblePhone } from "@/lib/tabbyEligibility";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "axios";
 import apiService from "@/services/store/apiService";
@@ -891,6 +912,13 @@ const bookingContact = computed(() => {
   };
 });
 
+/** Tabby is only offered for UAE/KSA mobile numbers entered by the customer. */
+const isTabbyAvailable = computed(() => isTabbyEligiblePhone(bookingContact.value.phone));
+
+watch(isTabbyAvailable, (available) => {
+  if (!available && activePaymentTab.value === 'tabby') activePaymentTab.value = 'wallet';
+});
+
 /**
  * Read the permanent amount created from the checkout quote for this booking.
  */
@@ -909,6 +937,44 @@ const paymentMoney = computed(() => {
     currency: String(currencyCode).toUpperCase(),
   };
 });
+
+/** Admin-configured Nomod/Tabby charges, used only to preview the total. */
+const nomodCharge = ref({ percentage: 2.5, fixed: 0 });
+const tabbyCharge = ref({ percentage: 0, fixed: 0 });
+
+const isCardPaymentTab = computed(() => ['debit-card', 'credit-card', 'tabby'].includes(activePaymentTab.value));
+const activeCharge = computed(() => (activePaymentTab.value === 'tabby' ? tabbyCharge.value : nomodCharge.value));
+
+/** Mirror the backend checkoutMoney(); the backend stays the source of truth. */
+const cardFeeAmount = computed(() => {
+  if (!paymentMoney.value || Number.isNaN(paymentMoney.value.amount)) return 0;
+
+  const fee = (paymentMoney.value.amount * activeCharge.value.percentage) / 100 + activeCharge.value.fixed;
+  return Math.round(fee * 100) / 100;
+});
+
+async function fetchNomodCharge() {
+  try {
+    const response = await apiService.getCustomerSettings();
+    const settings = response?.data?.data;
+    const percentage = Number(settings?.nomod_percentage_charge);
+    const fixed = Number(settings?.nomod_fixed_charge);
+
+    nomodCharge.value = {
+      percentage: Number.isFinite(percentage) ? percentage : 2.5,
+      fixed: Number.isFinite(fixed) ? fixed : 0,
+    };
+
+    const tabbyPercentage = Number(settings?.tabby_percentage_charge);
+    const tabbyFixed = Number(settings?.tabby_fixed_charge);
+    tabbyCharge.value = {
+      percentage: Number.isFinite(tabbyPercentage) ? tabbyPercentage : 0,
+      fixed: Number.isFinite(tabbyFixed) ? tabbyFixed : 0,
+    };
+  } catch (error) {
+    console.error('Failed to load card charge settings:', error);
+  }
+}
 
 /** Read the immutable AED value used for wallet eligibility checks. */
 const walletRequiredAed = computed(() => {
@@ -938,6 +1004,19 @@ function formatPaymentAmount() {
   }
 
   return formatAmountWithCurrency(paymentMoney.value.amount, paymentMoney.value.currency);
+}
+
+function formatCardFeeAmount() {
+  return paymentMoney.value ? formatAmountWithCurrency(cardFeeAmount.value, paymentMoney.value.currency) : '';
+}
+
+/** Total shown in the summary, including the card fee when a card tab is active. */
+function formatSummaryTotal() {
+  if (!isCardPaymentTab.value || !paymentMoney.value || Number.isNaN(paymentMoney.value.amount)) {
+    return formatPaymentAmount();
+  }
+
+  return formatAmountWithCurrency(paymentMoney.value.amount + cardFeeAmount.value, paymentMoney.value.currency);
 }
 
 /**
@@ -2044,6 +2123,7 @@ onMounted(async () => {
   booking_id = route.query.booking_id;
   pnr = route.query.pnr;
   await Promise.all([fetchAgent(), fetchAgentLedger(), fetchBookingDetails(), fetchCustomerMarginValues(),
+    fetchNomodCharge(),
   ]);
   void pollAtPnr();
 });

@@ -18,7 +18,7 @@ class RecoverPendingAtNomodFulfilments extends Command
     {
         $expired = 0;
         PaymentAttempt::query()
-            ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [PaymentAttempt::PROVIDER_NOMOD, PaymentAttempt::PROVIDER_TABBY])
             ->whereIn('status', [PaymentAttempt::STATUS_CREATED, PaymentAttempt::STATUS_INITIATING])
             ->whereHas('booking', fn ($query) => $query
                 ->whereNotNull('payment_expires_at')
@@ -36,7 +36,7 @@ class RecoverPendingAtNomodFulfilments extends Command
             });
 
         $pendingIds = PaymentAttempt::query()
-            ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [PaymentAttempt::PROVIDER_NOMOD, PaymentAttempt::PROVIDER_TABBY])
             ->where('status', PaymentAttempt::STATUS_PAID)
             ->where('fulfilment_status', PaymentAttempt::FULFILMENT_PENDING)
             ->whereHas('booking', fn ($query) => $query->whereRaw('LOWER(flight_provider) = ?', ['at']))
@@ -48,7 +48,7 @@ class RecoverPendingAtNomodFulfilments extends Command
 
         $quarantined = 0;
         PaymentAttempt::query()
-            ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [PaymentAttempt::PROVIDER_NOMOD, PaymentAttempt::PROVIDER_TABBY])
             ->where('status', PaymentAttempt::STATUS_PAID)
             ->where('fulfilment_status', PaymentAttempt::FULFILMENT_PROCESSING)
             ->where('fulfilment_started_at', '<=', now()->subMinutes(10))

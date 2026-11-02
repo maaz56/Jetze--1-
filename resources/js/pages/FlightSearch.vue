@@ -3513,6 +3513,7 @@ watch(isLoggedIn, (newVal) => {
                     <div
                         :class="[
                             'flight-results-search__hero',
+                            !isSearchCompact && 'flight-results-search__hero--expanded',
                             modelValue.flightType === 'multi-city' && !isSearchCompact && 'flight-results-search__hero--multicity',
                             isSearchCompact && 'flight-results-search__hero--compact',
                         ]"
@@ -6391,14 +6392,17 @@ watch(isLoggedIn, (newVal) => {
     transform: translateY(-50%);
 }
 
-/* Keep every multi-city row inside the blue search area instead of lifting it
-   under the navigation with the default vertically-centred form layout. */
+/* Expanded forms can be taller than the original fixed-height hero. Keep them
+   in normal document flow so neither standard nor multi-city searches can
+   intrude into the navigation or overlap the loading state below. */
+.flight-results-search__hero--expanded,
 .flight-results-search__hero--multicity {
     height: auto;
     min-height: 0;
     padding: 1rem 0;
 }
 
+.flight-results-search__hero--expanded .flight-results-search__form,
 .flight-results-search__hero--multicity .flight-results-search__form {
     position: relative;
     top: auto;

@@ -84,7 +84,7 @@ class AtNomodFulfilmentService
                 ->lockForUpdate()
                 ->find($paymentAttemptId);
 
-            if (! $attempt || $attempt->provider !== PaymentAttempt::PROVIDER_NOMOD || $attempt->status !== PaymentAttempt::STATUS_PAID) {
+            if (! $attempt || ! in_array($attempt->provider, [PaymentAttempt::PROVIDER_NOMOD, PaymentAttempt::PROVIDER_TABBY], true) || $attempt->status !== PaymentAttempt::STATUS_PAID) {
                 return null;
             }
 

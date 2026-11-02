@@ -197,6 +197,15 @@ export const clientRoutes = [
                     requiresAuth: true,
                 },
             },
+            {
+                path: "payment/tabby/:outcome(success|failure|cancelled)",
+                name: "TabbyPaymentReturn",
+                component: () => import("@/pages/payment/NomodReturn.vue"),
+                meta: {
+                    requiresAuth: true,
+                    gateway: "tabby",
+                },
+            },
             // Blog pages are rendered by Laravel Blade.
             // {
             //     path: "/blog",

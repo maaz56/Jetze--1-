@@ -43,7 +43,7 @@ class CancelBookingJob implements ShouldQueue
 
         $nomodAttempt = PaymentAttempt::query()
             ->where('booking_id', $booking->id)
-            ->where('provider', PaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [PaymentAttempt::PROVIDER_NOMOD, PaymentAttempt::PROVIDER_TABBY])
             ->latest('id')
             ->first();
 

@@ -28,10 +28,13 @@ use App\Http\Controllers\Api\HolidayPackageController;
 use App\Http\Controllers\Api\HotDealController;
 use App\Http\Controllers\Api\HotelController;
 use App\Http\Controllers\Api\HotelNomodCheckoutController;
+use App\Http\Controllers\Api\HotelTabbyCheckoutController;
 use App\Http\Controllers\Api\ModifyRequestController;
 use App\Http\Controllers\Api\NewsletterSubscriberController;
 use App\Http\Controllers\Api\NomodCheckoutController;
 use App\Http\Controllers\Api\NomodWebhookController;
+use App\Http\Controllers\Api\TabbyCheckoutController;
+use App\Http\Controllers\Api\TabbyWebhookController;
 use App\Http\Controllers\Api\OfflineBookingController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PromoImageController;
@@ -72,6 +75,11 @@ Route::prefix('hotels')->group(function () {
     Route::post('payments/nomod/checkout', [HotelNomodCheckoutController::class, 'store'])
         ->middleware(['auth:sanctum', 'throttle:10,1']);
     Route::get('payments/nomod/{paymentAttempt}/status', [HotelNomodCheckoutController::class, 'show'])
+        ->middleware(['auth:sanctum', 'throttle:30,1'])
+        ->whereUuid('paymentAttempt');
+    Route::post('payments/tabby/checkout', [HotelTabbyCheckoutController::class, 'store'])
+        ->middleware(['auth:sanctum', 'throttle:10,1']);
+    Route::get('payments/tabby/{paymentAttempt}/status', [HotelTabbyCheckoutController::class, 'show'])
         ->middleware(['auth:sanctum', 'throttle:30,1'])
         ->whereUuid('paymentAttempt');
     Route::get('bookings', [HotelController::class, 'bookings'])->middleware('auth:sanctum');
@@ -132,6 +140,15 @@ Route::middleware(['auth:sanctum', 'throttle:30,1'])
     ->get('payments/nomod/{paymentAttempt}/status', [NomodCheckoutController::class, 'show'])
     ->whereUuid('paymentAttempt');
 Route::post('webhooks/nomod', [NomodWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1');
+
+// Tabby: the status endpoint also verifies and captures from the Tabby API.
+Route::middleware(['auth:sanctum', 'throttle:10,1'])
+    ->post('payments/tabby/checkout', [TabbyCheckoutController::class, 'store']);
+Route::middleware(['auth:sanctum', 'throttle:30,1'])
+    ->get('payments/tabby/{paymentAttempt}/status', [TabbyCheckoutController::class, 'show'])
+    ->whereUuid('paymentAttempt');
+Route::post('webhooks/tabby', [TabbyWebhookController::class, 'handle'])
     ->middleware('throttle:120,1');
 
 Route::middleware(['auth:sanctum'])->group(function () {

@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   Wallet,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
 
@@ -36,6 +36,11 @@ let timer;
 
 const booking = computed(() => hotelStore.getBooking);
 const isProcessing = computed(() => hotelStore.getIsBooking);
+/** Backend decides from the customer's mobile number (UAE/KSA only). */
+const isTabbyAvailable = computed(() => booking.value?.tabby_eligible === true);
+watch(isTabbyAvailable, (available) => {
+  if (!available && paymentMethod.value === "tabby") paymentMethod.value = "wallet";
+});
 const isExpired = computed(
   () => remainingSeconds.value <= 0 || booking.value?.status === "expired",
 );
@@ -122,12 +127,12 @@ const completePayment = async () => {
   if (!booking.value?.booking_id || isExpired.value) return;
   errorMessage.value = "";
 
-  if (paymentMethod.value === "card") {
+  if (paymentMethod.value === "card" || paymentMethod.value === "tabby") {
     isStartingCardPayment.value = true;
     try {
-      const response = await apiService.createHotelNomodCheckout(
-        booking.value.booking_id,
-      );
+      const response = paymentMethod.value === "tabby"
+        ? await apiService.createHotelTabbyCheckout(booking.value.booking_id)
+        : await apiService.createHotelNomodCheckout(booking.value.booking_id);
       const checkoutUrl = response?.data?.checkout_url;
       const parsedUrl = new URL(checkoutUrl);
       if (parsedUrl.protocol !== "https:")
@@ -246,7 +251,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
             </div>
 
             <!-- Method Selection Tabs -->
-            <div class="grid grid-cols-2 border-b border-slate-200 p-2 gap-2 bg-slate-100/70">
+            <div :class="['grid border-b border-slate-200 p-2 gap-2 bg-slate-100/70', isTabbyAvailable ? 'grid-cols-3' : 'grid-cols-2']">
               <button
                 type="button"
                 class="flex items-center justify-center gap-2 rounded border px-4 py-3 text-xs font-bold transition shadow-xs"
@@ -273,6 +278,21 @@ onBeforeUnmount(() => window.clearInterval(timer));
               >
                 <CreditCard class="h-4 w-4" />
                 <span>Debit / Credit Card</span>
+              </button>
+
+              <button
+                v-if="isTabbyAvailable"
+                type="button"
+                class="flex items-center justify-center gap-2 rounded border px-4 py-3 text-xs font-bold transition shadow-xs"
+                :class="
+                  paymentMethod === 'tabby'
+                    ? 'border-slate-200 bg-white text-primary'
+                    : 'border-transparent text-slate-600 hover:bg-white/50 hover:text-slate-900'
+                "
+                @click="paymentMethod = 'tabby'"
+              >
+                <span class="flex h-4 w-4 items-center justify-center rounded bg-primary/15 text-[10px] font-black">t</span>
+                <span>Tabby</span>
               </button>
             </div>
 
@@ -307,6 +327,21 @@ onBeforeUnmount(() => window.clearInterval(timer));
                 <p class="text-xs text-slate-600 leading-relaxed">
                   Upon clicking confirm, the booking will be verified and submitted directly to the provider for instant voucher issuance.
                 </p>
+              </div>
+
+              <!-- Tabby View -->
+              <div v-else-if="paymentMethod === 'tabby'" class="space-y-5">
+                <div class="rounded border border-slate-200 bg-slate-50/90 p-4 space-y-3">
+                  <p class="text-xs font-extrabold text-slate-900">Tabby · Pay in 4, no interest</p>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    You will be redirected to Tabby to split this payment into 4 interest-free instalments. Tabby charges in AED, so the amount is converted at checkout.
+                  </p>
+                </div>
+
+                <div class="rounded border border-slate-200 bg-slate-50/60 p-4 space-y-1">
+                  <p class="text-xs text-muted-foreground font-medium">Total payable (before Tabby fee, if any):</p>
+                  <p class="text-2xl font-black text-slate-900">{{ formatMoney(total) }}</p>
+                </div>
               </div>
 
               <!-- Card View -->
@@ -348,6 +383,8 @@ onBeforeUnmount(() => window.clearInterval(timer));
                     ? "Reservation Expired"
                     : paymentMethod === "wallet"
                     ? "Pay with Wallet & Confirm Booking"
+                    : paymentMethod === "tabby"
+                    ? "Proceed to Tabby Checkout"
                     : "Proceed to Nomod Secure Checkout"
                 }}
               </Button>

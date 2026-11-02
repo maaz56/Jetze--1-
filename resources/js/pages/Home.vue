@@ -8,9 +8,9 @@ import Footer from '@/components/common/Footer.vue';
 // Served by Laravel from public/; bound so Vite does not try to bundle them.
 // Keep these in sync with the preload links in welcome.blade.php.
 const heroImage = {
-    mobile: '/images/hero/banner-mobile.webp',
-    srcset: '/images/hero/banner-1280.webp 1280w, /images/hero/banner-1920.webp 1920w, /images/hero/banner-2560.webp 2560w',
-    fallback: '/banner.jpg',
+    mobile: '/images/hero/banner-v2-mobile.webp',
+    srcset: '/images/hero/banner-v2-1280.webp 1280w, /images/hero/banner-v2-1920.webp 1920w, /images/hero/banner-v2-2560.webp 2560w',
+    fallback: '/banner-v2.jpg',
 };
 </script>
 

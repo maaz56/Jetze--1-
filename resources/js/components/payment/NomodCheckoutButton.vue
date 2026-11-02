@@ -54,7 +54,7 @@ const startCheckout = async () => {
                 <div>
                     <h2 class="font-semibold text-slate-900">Secure Card Payment</h2>
                     <p class="mt-1 text-sm leading-5 text-slate-600">
-                        Pay securely using your debit or credit card. A 2.5% processing fee is applied to the booking total; your wallet balance will not be used.
+                        Pay securely using your debit or credit card. An additional processing fee applies to card payments; your wallet balance will not be used.
                     </p>
                 </div>
             </div>

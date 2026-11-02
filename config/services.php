@@ -87,4 +87,34 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Tabby Pay-in-4
+    |--------------------------------------------------------------------------
+    |
+    | The secret key and webhook secret must only ever be used by Laravel. The
+    | public key is safe for frontend promo widgets. Tabby only settles in the
+    | configured region currency, so other booking currencies are converted.
+    |
+    */
+    'tabby' => [
+        'secret_key' => trim((string) env('TABBY_SECRET_KEY')),
+        'public_key' => trim((string) env('TABBY_PUBLIC_KEY')),
+        'merchant_code' => trim((string) env('TABBY_MERCHANT_CODE')),
+        'base_url' => rtrim(env('TABBY_API_BASE_URL', 'https://api.tabby.ai'), '/'),
+        'currency' => strtoupper(env('TABBY_CURRENCY', 'AED')),
+        // Tabby is only offered when the customer's mobile has one of these
+        // country calling codes (UAE, KSA). Mirrored in resources/js/lib/tabbyEligibility.js.
+        'allowed_phone_codes' => array_values(array_filter(array_map('trim', explode(',', env('TABBY_ALLOWED_PHONE_CODES', '971,966'))))),
+        'timeout' => (int) env('TABBY_TIMEOUT_SECONDS', 15),
+        'webhook_secret' => env('TABBY_WEBHOOK_SECRET'),
+        'webhook_header' => env('TABBY_WEBHOOK_HEADER', 'X-Tabby-Webhook-Secret'),
+        'webhook_url' => env('TABBY_WEBHOOK_URL', rtrim(env('APP_URL', ''), '/').'/api/webhooks/tabby'),
+        'redirects' => [
+            'success' => env('TABBY_SUCCESS_URL', rtrim(env('APP_URL', ''), '/').'/payment/tabby/success'),
+            'failure' => env('TABBY_FAILURE_URL', rtrim(env('APP_URL', ''), '/').'/payment/tabby/failure'),
+            'cancelled' => env('TABBY_CANCELLED_URL', rtrim(env('APP_URL', ''), '/').'/payment/tabby/cancelled'),
+        ],
+    ],
+
 ];

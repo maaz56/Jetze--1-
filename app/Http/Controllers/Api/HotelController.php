@@ -12,6 +12,7 @@ use App\Models\HotelSearchSession;
 use App\Models\TboHotel;
 use App\Models\TboHotelCity;
 use App\Models\TboHotelCountry;
+use App\Services\TabbyService;
 use App\Services\TboHotelService;
 use App\Services\CurrencyConversionService;
 use App\Services\HotelPriceQuoteService;
@@ -1000,7 +1001,7 @@ class HotelController extends Controller
             }
             if (HotelPaymentAttempt::query()
                 ->where('hotel_booking_id', $booking->id)
-                ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
+                ->whereIn('provider', [HotelPaymentAttempt::PROVIDER_NOMOD, HotelPaymentAttempt::PROVIDER_TABBY])
                 ->whereIn('status', [
                     HotelPaymentAttempt::STATUS_INITIATING,
                     HotelPaymentAttempt::STATUS_CREATED,
@@ -2209,6 +2210,7 @@ class HotelController extends Controller
             'reservation_expires_at' => $reservationExpiresAt?->toIso8601String(),
             'remaining_seconds' => $reservationExpiresAt ? max(0, now()->diffInSeconds($reservationExpiresAt, false)) : 0,
             'price_snapshot' => $this->normalizeBookingPriceSnapshot($booking->priceSnapshot),
+            'tabby_eligible' => app(TabbyService::class)->isEligiblePhone($booking->phone_number),
             'guests' => $includeGuests
                 ? $booking->guests
                     ->sortBy(fn ($guest) => sprintf('%03d-%03d', $guest->room_index, $guest->guest_index))

@@ -19,6 +19,12 @@ Schedule::command('payments:nomod:recover-tbo-fulfilments')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Safety net for Tabby payments whose webhook and customer return were both
+// missed; the reconciler is idempotent, so overlap with webhooks is harmless.
+Schedule::command('payments:tabby:sync-pending')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 Schedule::command('popular-routes:refresh-prices')
     ->everyFifteenMinutes()
     ->withoutOverlapping()

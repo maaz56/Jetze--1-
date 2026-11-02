@@ -19,7 +19,7 @@ class RecoverPendingTboNomodFulfilments extends Command
     {
         $expired = 0;
         HotelPaymentAttempt::query()
-            ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [HotelPaymentAttempt::PROVIDER_NOMOD, HotelPaymentAttempt::PROVIDER_TABBY])
             ->whereIn('status', [
                 HotelPaymentAttempt::STATUS_CREATED,
                 HotelPaymentAttempt::STATUS_INITIATING,
@@ -41,7 +41,7 @@ class RecoverPendingTboNomodFulfilments extends Command
             });
 
         $pendingIds = HotelPaymentAttempt::query()
-            ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [HotelPaymentAttempt::PROVIDER_NOMOD, HotelPaymentAttempt::PROVIDER_TABBY])
             ->where('status', HotelPaymentAttempt::STATUS_PAID)
             ->where('fulfilment_status', HotelPaymentAttempt::FULFILMENT_PENDING)
             ->pluck('id');
@@ -52,7 +52,7 @@ class RecoverPendingTboNomodFulfilments extends Command
 
         $quarantined = 0;
         HotelPaymentAttempt::query()
-            ->where('provider', HotelPaymentAttempt::PROVIDER_NOMOD)
+            ->whereIn('provider', [HotelPaymentAttempt::PROVIDER_NOMOD, HotelPaymentAttempt::PROVIDER_TABBY])
             ->where('status', HotelPaymentAttempt::STATUS_PAID)
             ->where('fulfilment_status', HotelPaymentAttempt::FULFILMENT_PROCESSING)
             ->where('fulfilment_started_at', '<=', now()->subMinutes(10))

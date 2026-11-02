@@ -11,6 +11,8 @@ class PaymentAttempt extends Model
 
     public const PROVIDER_NOMOD = 'nomod';
 
+    public const PROVIDER_TABBY = 'tabby';
+
     public const STATUS_INITIATING = 'initiating';
 
     public const STATUS_CREATED = 'created';
@@ -45,8 +47,11 @@ class PaymentAttempt extends Model
             'percentage_fee' => 'decimal:8',
             'fixed_fee' => 'decimal:8',
             'fee_amount' => 'decimal:8',
+            'provider_amount' => 'decimal:8',
+            'exchange_rate' => 'decimal:12',
             'checkout_created_at' => 'datetime',
             'paid_at' => 'datetime',
+            'captured_at' => 'datetime',
             'failed_at' => 'datetime',
             'fulfilment_started_at' => 'datetime',
             'fulfilment_completed_at' => 'datetime',

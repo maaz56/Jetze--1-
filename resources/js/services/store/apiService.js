@@ -197,6 +197,13 @@ export default {
         return apiClient.get(`/hotels/payments/nomod/${paymentAttempt}/status`);
     },
 
+    createHotelTabbyCheckout(bookingId) {
+        return apiClient.post("/hotels/payments/tabby/checkout", { hotel_booking_id: bookingId });
+    },
+    getHotelTabbyPaymentStatus(paymentAttempt) {
+        return apiClient.get(`/hotels/payments/tabby/${paymentAttempt}/status`);
+    },
+
     refreshHotelBookingDetails(bookingId) {
         return apiClient.post(`/hotels/bookings/${bookingId}/details`);
     },
@@ -280,6 +287,12 @@ export default {
     },
     getNomodPaymentStatus(paymentAttempt) {
         return apiClient.get(`/payments/nomod/${paymentAttempt}/status`);
+    },
+    createTabbyCheckout(bookingId) {
+        return apiClient.post("/payments/tabby/checkout", { booking_id: bookingId });
+    },
+    getTabbyPaymentStatus(paymentAttempt) {
+        return apiClient.get(`/payments/tabby/${paymentAttempt}/status`);
     },
     checkPaymentStatus(params) {
         return apiClient.get("/check-payment-status", {
