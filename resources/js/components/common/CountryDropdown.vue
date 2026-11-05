@@ -48,7 +48,8 @@ watch(() => props.modelValue, (newVal) => {
     } else if (typeof newVal === 'string') {
         // If keyValue is provided, find the country object by that key
         if (props.keyValue) {
-            const country = countries.value.find(c => c[props.keyValue] === newVal);
+            const target = newVal.toLowerCase();
+            const country = countries.value.find(c => String(c[props.keyValue] ?? '').toLowerCase() === target);
             selectedCountry.value = country || {};
         } else {
             // If no keyValue, just set the name property
@@ -78,15 +79,29 @@ const filteredCountries = computed(() => {
     // Take up to 47 from rest (since 3 priority countries)
     return [...priorityCountries, ...restCountries.slice(0, 47)];
   }
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return countries.value;
   return countries.value.filter(country =>
-    country.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    country.name.toLowerCase().includes(query) ||
+    String(country.code ?? '').toLowerCase() === query
   );
 });
+// Printable keys (and Backspace/Space) must stay in the search box; let
+// Escape/arrows/Enter through so the menu stays keyboard-navigable.
+const onSearchKeydown = (event) => {
+  if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
+    event.stopPropagation();
+  }
+};
+// Clear the search when the menu closes so it reopens with the full list.
+const onOpenChange = (open) => {
+  if (!open) searchQuery.value = "";
+};
 
 </script>
 
 <template>
-  <DropdownMenu>
+  <DropdownMenu @update:open="onOpenChange">
     <DropdownMenuTrigger as-child class="hover:text-black">
       <Button type="button" variant="outline" :class="['!bg-white flex gap-2 w-full items-center justify-start h-10 px-3 relative', props.triggerClass]">
         <img v-if="props.leftIcon" :src="props.leftIcon" class="w-5 h-5 opacity-70 mr-2" alt="icon" />
@@ -100,7 +115,10 @@ const filteredCountries = computed(() => {
     <DropdownMenuContent class="w-56 ">
       <DropdownMenuLabel>
     <div class="relative">
-      <Input v-model="searchQuery" class="pl-10 h-8" placeholder="Search country..." />
+      <!-- Stop key events reaching the menu: its typeahead otherwise steals focus
+           from this input after the first character typed. -->
+      <Input v-model="searchQuery" class="pl-10 h-8" placeholder="Search country..."
+        @keydown="onSearchKeydown" />
       <Search :size="16" class="absolute top-1/2 left-3 transform -translate-y-1/2 text-gray-400" />
     </div>
       </DropdownMenuLabel>

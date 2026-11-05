@@ -1449,6 +1449,10 @@ class AtFlightTransformer
                     continue;
                 }
 
+                if ($this->isUnpricedTaxFare($fareJourney)) {
+                    continue;
+                }
+
                 if (empty($flight['DepartureTerminal']) && !empty($fareJourney['DepartureTerminal'])) {
                     $flight['DepartureTerminal'] = $fareJourney['DepartureTerminal'];
                 }
@@ -1539,6 +1543,35 @@ class AtFlightTransformer
     private function hasValidFare($amount): bool
     {
         return is_numeric($amount) && bccomp((string) $amount, '0', 8) >= 0;
+    }
+
+    /**
+     * Some AT sources (notably Provider "AM") return fares whose taxes were not
+     * priced yet: MisEShare reads "A~<base>~0~0~..." and NetFare is only the
+     * base fare. AT's own portal hides these; showing them makes the carrier
+     * look far cheaper than it is (e.g. PR AED 5,740 vs the real AED 8,560).
+     *
+     * MisEShare is "<pax>~<base>~<tax>~<total>~...". A fare is rejected only
+     * when it is priced (NetFare > 0) and both per-pax tax and total are zero.
+     * LCC all-in fares ("A~1449.00~0~1449.00") carry a total and are kept, as
+     * are zero-priced return legs that only reference the onward fare.
+     */
+    private function isUnpricedTaxFare(array $journey): bool
+    {
+        $netFare = $journey['NetFare'] ?? null;
+        if (!is_numeric($netFare) || bccomp((string) $netFare, '0', 8) <= 0) {
+            return false;
+        }
+
+        $parts = explode('~', trim((string) ($journey['MisEShare'] ?? '')));
+        if (count($parts) < 4 || !is_numeric($parts[1]) || bccomp($parts[1], '0', 8) <= 0) {
+            return false;
+        }
+
+        $isZero = static fn (string $value): bool => is_numeric($value)
+            && bccomp($value, '0', 8) === 0;
+
+        return $isZero($parts[2]) && $isZero($parts[3]);
     }
 
     private function addDuration(string $dateTime, string $duration): string

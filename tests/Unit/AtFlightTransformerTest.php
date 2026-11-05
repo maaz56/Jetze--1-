@@ -298,6 +298,49 @@ it('rejects non-positive return identifiers and fares without a provider', funct
         ->and($missingProvider['flights'])->toBe([]);
 });
 
+it('drops round-trip fares whose taxes AT has not priced yet', function () {
+    $returnLeg = fn (array $overrides): array => atJourney(array_merge([
+        'FlightNo' => '658', 'From' => 'MNL', 'To' => 'DXB', 'NetFare' => 0, 'GrossFare' => 0,
+        'JourneyKey' => 'PR,658,MNL,DXB,2027-01-18T13:30:00,2027-01-18T18:45:00,1,1,09h 15m ,',
+    ], $overrides));
+    $onwardKey = 'PR,659,DXB,MNL,2026-12-13T20:25:00,2026-12-14T08:40:00,1,1,08h 15m ,';
+
+    // Real values from the DXB-MNL 2 ADT search: AM sends base only (2 x 2870).
+    $processed = (new AtFlightTransformer())->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [
+            ['Journey' => [
+                atJourney(['Provider' => 'AM', 'Index' => 'AM|1', 'ReturnIdentifier' => 1, 'VAC' => 'PR', 'FlightNo' => '659',
+                    'JourneyKey' => $onwardKey, 'FBC' => 'QFRFAE', 'NetFare' => 5740, 'GrossFare' => 5740,
+                    'MisEShare' => 'A~2870.0~0~0~2 Pc~~~0~0']),
+                atJourney(['Provider' => '1G', 'Index' => '1G|176', 'ReturnIdentifier' => 176, 'VAC' => 'PR', 'FlightNo' => '659',
+                    'JourneyKey' => $onwardKey, 'FBC' => 'QFRFAE', 'NetFare' => 8560, 'GrossFare' => 8560,
+                    'MisEShare' => 'A~2660~1620~0~2 Pc~~~0~0']),
+            ]],
+            ['Journey' => [
+                $returnLeg(['Provider' => 'AM', 'Index' => 'AM|1', 'ReturnIdentifier' => 1, 'VAC' => 'PR', 'MisEShare' => 'A~0~0~0~2 Pc~~~0~0']),
+                $returnLeg(['Provider' => '1G', 'Index' => '1G|176', 'ReturnIdentifier' => 176, 'VAC' => 'PR', 'MisEShare' => 'A~0~0~0~2 Pc~~~0~0']),
+            ]],
+        ],
+    ], ['flight_type' => 'return', 'fare_type' => 'RS']);
+
+    expect($processed['flights'])->toHaveCount(1)
+        ->and(array_column($processed['flights'][0]['onward']['fares'], 'NetFare'))->toBe([8560])
+        ->and(array_column($processed['flights'][0]['return']['fares'], 'Provider'))->toBe(['1G']);
+});
+
+it('keeps all-in LCC fares that report zero tax but a per-passenger total', function () {
+    $processed = (new AtFlightTransformer())->atFlightProcessor([
+        'CurrencyCode' => 'AED',
+        'Trips' => [[
+            'Journey' => [atJourney(['Provider' => 'TF', 'NetFare' => 2898, 'GrossFare' => 2898,
+                'MisEShare' => 'A~1449.00~0~1449.00~~~~0~0'])],
+        ]],
+    ], ['flight_type' => 'one-way', 'fare_type' => 'OW']);
+
+    expect($processed['flights'])->toHaveCount(1);
+});
+
 it('keeps one-way fares supplied by a provider different from the validating carrier', function () {
     $transformer = new AtFlightTransformer();
 
