@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   Check,
   ChevronDown,
@@ -35,12 +35,37 @@ const emits = defineEmits([
   "toggleRooms",
   "chooseRoom",
   "selectRoom",
+  "imageVisible",
 ]);
 
 // Image gallery management
 const currentImageIndex = ref(0);
 const loadedImages = ref(new Set());
 const failedImages = ref(new Set());
+const cardRef = ref(null);
+let imageVisibilityObserver = null;
+
+onMounted(() => {
+  if (!cardRef.value) return;
+
+  if (!("IntersectionObserver" in window)) {
+    emits("imageVisible", props.hotel);
+    return;
+  }
+
+  imageVisibilityObserver = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+
+    emits("imageVisible", props.hotel);
+    imageVisibilityObserver?.disconnect();
+    imageVisibilityObserver = null;
+  }, { rootMargin: "200px 0px" });
+  imageVisibilityObserver.observe(cardRef.value);
+});
+
+onBeforeUnmount(() => {
+  imageVisibilityObserver?.disconnect();
+});
 
 const allImages = computed(() => {
   const list = Array.isArray(props.hotel?.images) ? props.hotel.images.filter(Boolean) : [];
@@ -215,13 +240,14 @@ const roomImage = (room) => {
 
 <template>
   <article
+    ref="cardRef"
     class="overflow-hidden rounded border border-slate-200/90 bg-white text-slate-900 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md"
   >
     <!-- HORIZONTAL 3-COLUMN CARD (Mobile: stacked) -->
-    <div class="flex flex-col lg:flex-row lg:items-stretch">
+    <div class="flex flex-col lg:h-[240px] lg:flex-row lg:items-stretch">
       
       <!-- COLUMN 1: IMAGE (LEFT) -->
-      <div class="relative h-52 w-full shrink-0 overflow-hidden bg-slate-100 lg:h-auto lg:w-[260px]">
+      <div class="relative h-52 w-full shrink-0 overflow-hidden bg-slate-100 lg:h-[240px] lg:w-[260px]">
         <template v-if="activeImage && !failedImages.has(activeImage)">
           <img
             :src="activeImage"

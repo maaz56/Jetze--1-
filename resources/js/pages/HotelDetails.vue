@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import HotelStepIndicator from "@/components/hotel/HotelStepIndicator.vue";
 import { useHotelStore } from "@/services/stores/hotel";
+import { useAuthStore } from "@/services/stores/auth";
 import { getSelectedCurrencyCode } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -44,6 +45,7 @@ import { useRoute, useRouter } from "vue-router";
 const route = useRoute();
 const router = useRouter();
 const hotelStore = useHotelStore();
+const authStore = useAuthStore();
 
 const hotel = ref(null);
 const isLoading = ref(true);
@@ -346,6 +348,12 @@ const loadHotelDetails = async () => {
 const continueToCheckout = async (targetRoom = null) => {
   const searchSessionId = String(route.query.search_session_id || "");
   const room = targetRoom || selectedRoom.value;
+
+  if (!authStore.isAuthenticated) {
+    prebookError.value = "Please sign in or create an account to reserve this room.";
+    if (!authStore.isDialogOpen) authStore.openDialog();
+    return;
+  }
 
   if (!searchSessionId || !room?.booking_code) {
     prebookError.value = "Select an available room before continuing.";

@@ -68,6 +68,8 @@ Route::middleware('auth:sanctum')->get('hakimi-booking-details', [BookingControl
 Route::prefix('hotels')->group(function () {
     Route::get('suggestions', [HotelController::class, 'suggestions']);
     Route::post('search', [HotelController::class, 'search']);
+    Route::post('search/more', [HotelController::class, 'searchMore']);
+    Route::post('images', [HotelController::class, 'images']);
     Route::post('details', [HotelController::class, 'details']);
     Route::post('prebook', [HotelController::class, 'prebook'])->middleware('auth:sanctum');
     Route::get('prebooks/{prebookUuid}', [HotelController::class, 'showPrebook'])->middleware('auth:sanctum')->whereUuid('prebookUuid');

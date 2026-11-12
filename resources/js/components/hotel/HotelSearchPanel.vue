@@ -27,6 +27,7 @@ const props = defineProps({
   checkOut: { type: String, default: "" },
   rooms: { type: Array, default: null },
   nationality: { type: String, default: "" },
+  uaeResident: { type: Boolean, default: false },
   isLoading: { type: Boolean, default: false },
   embedded: { type: Boolean, default: false },
   standaloneRedirect: { type: Boolean, default: false },
@@ -38,6 +39,7 @@ const emits = defineEmits([
   "update:checkOut",
   "update:rooms",
   "update:nationality",
+  "update:uaeResident",
   "search",
 ]);
 
@@ -73,6 +75,7 @@ const internalDestination = ref(props.destination || null);
 const internalCheckIn = ref(props.checkIn || tomorrowString);
 const internalCheckOut = ref(props.checkOut || dayAfterTomorrowString);
 const internalNationality = ref(props.nationality || "PK");
+const internalUaeResident = ref(Boolean(props.uaeResident));
 const internalRooms = ref(
   props.rooms && props.rooms.length
     ? JSON.parse(JSON.stringify(props.rooms))
@@ -109,6 +112,12 @@ watch(
   }
 );
 watch(
+  () => props.uaeResident,
+  (val) => {
+    internalUaeResident.value = Boolean(val);
+  }
+);
+watch(
   () => props.rooms,
   (val) => {
     if (val && val.length) {
@@ -131,6 +140,16 @@ const guestsFieldRef = ref(null);
 const destinationError = ref(false);
 const datesError = ref(false);
 const validationMessage = ref("");
+const isUaeDestination = computed(
+  () => String(internalDestination.value?.country_code || "").toUpperCase() === "AE"
+);
+
+watch(isUaeDestination, (isUae) => {
+  if (!isUae && internalUaeResident.value) {
+    internalUaeResident.value = false;
+    emits("update:uaeResident", false);
+  }
+});
 
 // Autocomplete suggestions
 const destinationSuggestions = ref([]);
@@ -445,6 +464,11 @@ const updateNationality = (code) => {
   emits("update:nationality", code);
 };
 
+const updateUaeResidency = (value) => {
+  internalUaeResident.value = Boolean(value);
+  emits("update:uaeResident", internalUaeResident.value);
+};
+
 // --- Recent Searches ---
 const recentSearches = ref([]);
 
@@ -497,9 +521,11 @@ const applyRecentSearch = async (item) => {
     emits("update:rooms", internalRooms.value);
   }
   if (item.guest_nationality) {
-    internalNationality.value = item.guest_nationality;
-    emits("update:nationality", item.guest_nationality);
+    const passportNationality = item.passport_nationality || item.guest_nationality;
+    internalNationality.value = passportNationality;
+    emits("update:nationality", passportNationality);
   }
+  updateUaeResidency(Boolean(item.is_uae_resident));
   await nextTick();
   submitSearch();
 };
@@ -589,7 +615,9 @@ const submitSearch = async () => {
   }
 
   // Ensure nationality exists
-  const nationality = (internalNationality.value || "PK").toUpperCase();
+  const passportNationality = (internalNationality.value || "PK").toUpperCase();
+  const isUaeResident = isUaeDestination.value && internalUaeResident.value;
+  const nationality = isUaeResident ? "AE" : passportNationality;
 
   const formattedRooms = internalRooms.value.map((room) => ({
     adults: Number(room.adults || 1),
@@ -602,6 +630,8 @@ const submitSearch = async () => {
     check_in: internalCheckIn.value,
     check_out: internalCheckOut.value,
     guest_nationality: nationality,
+    passport_nationality: passportNationality,
+    is_uae_resident: isUaeResident,
     rooms: formattedRooms,
   };
 
@@ -614,9 +644,11 @@ const submitSearch = async () => {
         destination_type: internalDestination.value.type,
         destination_value: internalDestination.value.value,
         destination_label: internalDestination.value.label,
+        destination_country_code: internalDestination.value.country_code || "",
         check_in: internalCheckIn.value,
         check_out: internalCheckOut.value,
-        guest_nationality: nationality,
+        guest_nationality: passportNationality,
+        is_uae_resident: isUaeResident ? "1" : "0",
         rooms: JSON.stringify(formattedRooms),
         search_key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       },
@@ -993,6 +1025,26 @@ const submitSearch = async () => {
                 trigger-class="!h-9 !rounded !border-border !bg-background !px-3 !text-xs !font-semibold !text-foreground"
                 @update:model-value="updateNationality"
               />
+
+              <div
+                v-if="isUaeDestination"
+                class="mt-3 rounded border border-primary/20 bg-primary/5 p-3"
+              >
+                <label class="flex cursor-pointer items-start gap-2.5">
+                  <input
+                    :checked="internalUaeResident"
+                    type="checkbox"
+                    class="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary/30"
+                    @change="updateUaeResidency($event.target.checked)"
+                  />
+                  <span class="min-w-0">
+                    <span class="block text-xs font-bold text-foreground">Guest is a UAE resident</span>
+                    <span class="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                      Select this only if the staying guest is a UAE resident. We will request the applicable UAE resident rates from the hotel.
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             <!-- Room List -->

@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  ChevronDown,
   Clock3,
   CreditCard,
   Hotel,
@@ -32,6 +33,7 @@ const remainingSeconds = ref(0);
 const customerDetails = ref([]);
 const email = ref("");
 const phoneNumber = ref("");
+const isRoomTermsExpanded = ref(false);
 let countdownTimer;
 
 const prebook = computed(() => hotelStore.getPrebook);
@@ -43,6 +45,33 @@ const supplements = computed(() =>
     .flat(2)
     .filter((supplement) => supplement && typeof supplement === "object"),
 );
+const disclosureItems = (value) => {
+  const formatItem = (item) => {
+    if (typeof item === "string" || typeof item === "number") return String(item).trim();
+    if (!item || typeof item !== "object") return "";
+
+    const preferredValue = [
+      item.Description,
+      item.Text,
+      item.Message,
+      item.Condition,
+      item.Name,
+      item.Value,
+    ].find((entry) => typeof entry === "string" || typeof entry === "number");
+
+    if (preferredValue !== undefined) return String(preferredValue).trim();
+
+    return Object.entries(item)
+      .filter(([, entry]) => typeof entry === "string" || typeof entry === "number")
+      .map(([key, entry]) => `${key}: ${entry}`)
+      .join(" · ");
+  };
+
+  const values = Array.isArray(value) ? value.flat(Infinity) : [value];
+  return [...new Set(values.map(formatItem).filter(Boolean))];
+};
+const roomPromotions = computed(() => disclosureItems(prebook.value?.room?.room_promotion));
+const rateConditions = computed(() => disclosureItems(prebook.value?.room?.rate_conditions));
 const roomName = computed(() => {
   const name = prebook.value?.room?.name;
   return Array.isArray(name)
@@ -401,6 +430,57 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer));
                 <span class="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">Jetze Wallet</span>
               </div>
             </div>
+
+            <!-- Final PreBook disclosures, immediately before payment/reservation -->
+            <section
+              v-if="prebook.room.inclusion || roomPromotions.length || rateConditions.length"
+              class="overflow-hidden rounded border border-primary/25 bg-primary/5 shadow-xs"
+              aria-label="Final room terms"
+            >
+              <button
+                type="button"
+                class="flex w-full items-center gap-2.5 p-4 text-left transition-colors hover:bg-primary/10"
+                :aria-expanded="isRoomTermsExpanded"
+                @click="isRoomTermsExpanded = !isRoomTermsExpanded"
+              >
+                <Info class="h-4 w-4 shrink-0 text-primary" />
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm font-extrabold text-slate-900">Final room terms</span>
+                  <span class="mt-0.5 block text-xs text-slate-600">Review hotel-provided inclusions and conditions before payment.</span>
+                </span>
+                <span class="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-primary">
+                  {{ isRoomTermsExpanded ? "Hide" : "View" }} details
+                  <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': isRoomTermsExpanded }" />
+                </span>
+              </button>
+
+              <div v-if="isRoomTermsExpanded" class="border-t border-primary/15 px-4 pb-4">
+                <div v-if="prebook.room.inclusion" class="pt-3">
+                  <p class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Inclusions</p>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-700">{{ prebook.room.inclusion }}</p>
+                </div>
+
+                <div v-if="roomPromotions.length" class="mt-3 border-t border-primary/15 pt-3">
+                  <p class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Room promotion</p>
+                  <ul class="mt-1.5 space-y-1.5 text-xs leading-relaxed text-slate-700">
+                    <li v-for="(promotion, index) in roomPromotions" :key="`promotion-${index}`" class="flex gap-2">
+                      <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span>{{ promotion }}</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div v-if="rateConditions.length" class="mt-3 border-t border-primary/15 pt-3">
+                  <p class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Rate conditions</p>
+                  <ul class="mt-1.5 space-y-1.5 text-xs leading-relaxed text-slate-700">
+                    <li v-for="(condition, index) in rateConditions" :key="`condition-${index}`" class="flex gap-2">
+                      <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span>{{ condition }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </section>
 
             <!-- Submit CTA -->
             <div class="flex flex-col gap-3 rounded border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">

@@ -14,6 +14,10 @@ export const useHotelStore = defineStore("hotel", {
         bookingMeta: null,
         isLoadingSuggestions: false,
         isSearching: false,
+        isLoadingMoreHotels: false,
+        hasMoreSearchResults: false,
+        processedHotelCodeCount: 0,
+        totalHotelCodeCount: 0,
         isPrebooking: false,
         isBooking: false,
         isLoadingBookingDetails: false,
@@ -33,6 +37,10 @@ export const useHotelStore = defineStore("hotel", {
         getBookingMeta: (state) => state.bookingMeta,
         getIsLoadingSuggestions: (state) => state.isLoadingSuggestions,
         getIsSearching: (state) => state.isSearching,
+        getIsLoadingMoreHotels: (state) => state.isLoadingMoreHotels,
+        getHasMoreSearchResults: (state) => state.hasMoreSearchResults,
+        getProcessedHotelCodeCount: (state) => state.processedHotelCodeCount,
+        getTotalHotelCodeCount: (state) => state.totalHotelCodeCount,
         getIsPrebooking: (state) => state.isPrebooking,
         getIsBooking: (state) => state.isBooking,
         getIsLoadingBookingDetails: (state) => state.isLoadingBookingDetails,
@@ -61,6 +69,10 @@ export const useHotelStore = defineStore("hotel", {
             this.providerStatus = null;
             this.hotels = [];
             this.searchSessionId = null;
+            this.isLoadingMoreHotels = false;
+            this.hasMoreSearchResults = false;
+            this.processedHotelCodeCount = 0;
+            this.totalHotelCodeCount = 0;
             this.validationErrors = {};
 
             try {
@@ -68,7 +80,12 @@ export const useHotelStore = defineStore("hotel", {
                 this.hotels = response.data.data?.hotels || [];
                 this.searchSessionId = response.data.data?.search_session_id || null;
                 this.providerStatus = response.data.provider_status || null;
-                this.errorMessage = this.hotels.length ? "" : response.data.message || "No hotels available.";
+                this.hasMoreSearchResults = Boolean(response.data.data?.has_more);
+                this.processedHotelCodeCount = Number(response.data.data?.processed_code_count || 0);
+                this.totalHotelCodeCount = Number(response.data.data?.total_code_count || 0);
+                this.errorMessage = this.hotels.length || this.hasMoreSearchResults
+                    ? ""
+                    : response.data.message || "No hotels available.";
 
                 return response.data;
             } catch (error) {
@@ -81,6 +98,50 @@ export const useHotelStore = defineStore("hotel", {
             }
         },
 
+        async loadMoreHotelResults(params) {
+            if (this.isLoadingMoreHotels || !params?.search_session_id) {
+                return null;
+            }
+
+            this.isLoadingMoreHotels = true;
+
+            try {
+                const response = await apiService.loadMoreHotels(params);
+
+                if (this.searchSessionId !== params.search_session_id) {
+                    return response.data;
+                }
+
+                const incomingHotels = response.data.data?.hotels || [];
+                const hotelsByCode = new Map(
+                    [...this.hotels, ...incomingHotels]
+                        .filter((hotel) => hotel?.hotel_code)
+                        .map((hotel) => [String(hotel.hotel_code), hotel]),
+                );
+
+                this.hotels = Array.from(hotelsByCode.values());
+                this.hasMoreSearchResults = Boolean(response.data.data?.has_more);
+                this.processedHotelCodeCount = Number(
+                    response.data.data?.processed_code_count || this.processedHotelCodeCount,
+                );
+                this.totalHotelCodeCount = Number(
+                    response.data.data?.total_code_count || this.totalHotelCodeCount,
+                );
+                this.errorMessage = this.hotels.length || this.hasMoreSearchResults
+                    ? ""
+                    : this.errorMessage;
+
+                return response.data;
+            } finally {
+                this.isLoadingMoreHotels = false;
+            }
+        },
+
+        async fetchHotelImages(params) {
+            const response = await apiService.getHotelImages(params);
+            return response.data;
+        },
+
         async prebookHotel(params) {
             this.isPrebooking = true;
             this.resetCheckout();
@@ -90,7 +151,9 @@ export const useHotelStore = defineStore("hotel", {
                 this.prebook = response.data.data || null;
                 return response.data;
             } catch (error) {
-                this.errorMessage = error.response?.data?.message || "Unable to confirm this room. Please try again.";
+                this.errorMessage = error.response?.status === 401
+                    ? "Please sign in to reserve this room."
+                    : error.response?.data?.message || "Unable to confirm this room. Please try again.";
                 throw error;
             } finally {
                 this.isPrebooking = false;
@@ -232,6 +295,10 @@ export const useHotelStore = defineStore("hotel", {
             this.hotels = [];
             this.searchSessionId = null;
             this.providerStatus = null;
+            this.isLoadingMoreHotels = false;
+            this.hasMoreSearchResults = false;
+            this.processedHotelCodeCount = 0;
+            this.totalHotelCodeCount = 0;
             this.hotelDetails = null;
             this.prebook = null;
             this.booking = null;

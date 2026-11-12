@@ -32,6 +32,14 @@ use Throwable;
 
 class HotelController extends Controller
 {
+    // Keep city searches light: 50 codes per provider request, with up to three
+    // requests in one on-demand wave.
+    private const HOTEL_SEARCH_BATCH_SIZE = 50;
+
+    private const HOTEL_SEARCH_MAX_CONCURRENT_BATCHES = 3;
+
+    private const SEARCH_CARD_IMAGE_LIMIT = 8;
+
     public function __construct(
         protected TboHotelService $tboHotelService,
         protected CurrencyConversionService $currencyConversionService,
@@ -174,10 +182,13 @@ class HotelController extends Controller
             ];
         })->values()->all();
 
+        $initialHotelCodes = $hotelCodes->take(self::HOTEL_SEARCH_BATCH_SIZE)->values();
+        $remainingHotelCodes = $hotelCodes->slice(self::HOTEL_SEARCH_BATCH_SIZE)->values();
+
         $tboRequest = [
             'CheckIn' => Carbon::parse($validated['check_in'])->toDateString(),
             'CheckOut' => Carbon::parse($validated['check_out'])->toDateString(),
-            'HotelCodes' => $hotelCodes->implode(','),
+            'HotelCodes' => $initialHotelCodes->implode(','),
             'GuestNationality' => strtoupper($validated['guest_nationality']),
             'PaxRooms' => $paxRooms,
             'ResponseTime' => (float) config('tbohotel.timeout_search', 23),
@@ -192,7 +203,8 @@ class HotelController extends Controller
         Log::info('TBO Hotel Search Outgoing Request', [
             'destination_type' => $destination['type'],
             'destination_code' => $destination['value'],
-            'hotel_code_count' => $hotelCodes->count(),
+            'hotel_code_count' => $initialHotelCodes->count(),
+            'total_hotel_code_count' => $hotelCodes->count(),
             'request' => $tboRequest,
         ]);
 
@@ -211,6 +223,14 @@ class HotelController extends Controller
                 'message' => 'Hotel provider search failed. Please try again.',
             ], 502);
         }
+
+        $tboResponse['_BatchSearch'] = [
+            'remaining_hotel_codes' => $remainingHotelCodes->all(),
+            'total_code_count' => $hotelCodes->count(),
+            'processed_code_count' => $initialHotelCodes->count(),
+            'batch_size' => self::HOTEL_SEARCH_BATCH_SIZE,
+            'max_concurrent_batches' => self::HOTEL_SEARCH_MAX_CONCURRENT_BATCHES,
+        ];
 
         $session = HotelSearchSession::create([
             'uuid' => (string) Str::uuid(),
@@ -238,8 +258,274 @@ class HotelController extends Controller
             'data' => [
                 'search_session_id' => $session->uuid,
                 'hotels' => $hotels->values(),
+                'has_more' => $remainingHotelCodes->isNotEmpty(),
+                'processed_code_count' => $initialHotelCodes->count(),
+                'total_code_count' => $hotelCodes->count(),
             ],
         ], $this->httpStatusForProviderStatus($statusCode));
+    }
+
+    /** Load the next city-search wave: at most three concurrent 50-code batches. */
+    public function searchMore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'search_session_id' => ['required', 'uuid'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
+        ]);
+
+        $lock = Cache::lock('hotel-search-more:'.$validated['search_session_id'], 90);
+
+        if (! $lock->get()) {
+            return response()->json([
+                'message' => 'Additional hotel results are already loading.',
+            ], 409);
+        }
+
+        try {
+            $session = HotelSearchSession::where('uuid', $validated['search_session_id'])->first();
+
+            if (! $session) {
+                return response()->json(['message' => 'Hotel search session was not found. Please search again.'], 404);
+            }
+
+            if ($session->expires_at?->isPast()) {
+                return response()->json(['message' => 'Hotel search session has expired. Please search again.'], 422);
+            }
+
+            if ($session->user_id && $session->user_id !== optional($request->user())->id) {
+                return response()->json(['message' => 'This hotel search session belongs to another user.'], 403);
+            }
+
+            $storedResponse = is_array($session->tbo_response) ? $session->tbo_response : [];
+            $batchState = is_array($storedResponse['_BatchSearch'] ?? null)
+                ? $storedResponse['_BatchSearch']
+                : [];
+            $remainingCodes = collect($batchState['remaining_hotel_codes'] ?? [])
+                ->map(static fn ($code): string => trim((string) $code))
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($remainingCodes->isEmpty()) {
+                return response()->json([
+                    'message' => 'All available hotel-code batches have been processed.',
+                    'data' => [
+                        'hotels' => [],
+                        'has_more' => false,
+                        'processed_code_count' => (int) ($batchState['processed_code_count'] ?? 0),
+                        'total_code_count' => (int) ($batchState['total_code_count'] ?? 0),
+                    ],
+                ]);
+            }
+
+            $waveCodeLimit = self::HOTEL_SEARCH_BATCH_SIZE * self::HOTEL_SEARCH_MAX_CONCURRENT_BATCHES;
+            $waveCodes = $remainingCodes->take($waveCodeLimit)->values();
+            $codesAfterWave = $remainingCodes->slice($waveCodeLimit)->values();
+            $baseRequest = is_array($session->tbo_request) ? $session->tbo_request : [];
+            $payloads = $waveCodes
+                ->chunk(self::HOTEL_SEARCH_BATCH_SIZE)
+                ->map(function (Collection $codes) use ($baseRequest): array {
+                    $payload = $baseRequest;
+                    $payload['HotelCodes'] = $codes->implode(',');
+                    $payload['IsDetailedResponse'] = false;
+                    $payload['Filters']['NoOfRooms'] = max(1, (int) data_get($payload, 'Filters.NoOfRooms', 1));
+
+                    return $payload;
+                })
+                ->values()
+                ->all();
+
+            Log::info('TBO Hotel Progressive Search Wave Started', [
+                'search_session_id' => $session->uuid,
+                'batch_count' => count($payloads),
+                'hotel_code_count' => $waveCodes->count(),
+                'remaining_after_wave' => $codesAfterWave->count(),
+            ]);
+
+            $batchResults = $this->tboHotelService->searchConcurrent($payloads);
+            $newHotelResults = collect();
+            $batchErrors = [];
+
+            foreach ($batchResults as $index => $batchResult) {
+                $providerResponse = $batchResult['response'] ?? null;
+
+                if (! is_array($providerResponse)) {
+                    $batchErrors[] = [
+                        'batch_number' => $index + 1,
+                        'message' => $batchResult['error'] ?? 'No response received from TBO.',
+                    ];
+                    continue;
+                }
+
+                $statusCode = (int) data_get($providerResponse, 'Status.Code', 500);
+                if (! in_array($statusCode, [200, 201], true)) {
+                    $batchErrors[] = [
+                        'batch_number' => $index + 1,
+                        'status' => data_get($providerResponse, 'Status'),
+                    ];
+                }
+
+                $newHotelResults = $newHotelResults->concat(
+                    collect($providerResponse['HotelResult'] ?? [])->filter(fn ($hotel) => is_array($hotel)),
+                );
+            }
+
+            $newHotelResults = $newHotelResults
+                ->unique(fn (array $hotel) => (string) ($hotel['HotelCode'] ?? ''))
+                ->values();
+
+            DB::transaction(function () use ($session, $newHotelResults, $codesAfterWave, $waveCodes): void {
+                $lockedSession = HotelSearchSession::query()->lockForUpdate()->findOrFail($session->id);
+                $response = is_array($lockedSession->tbo_response) ? $lockedSession->tbo_response : [];
+                $existingHotels = collect($response['HotelResult'] ?? [])
+                    ->filter(fn ($hotel) => is_array($hotel));
+                $response['HotelResult'] = $existingHotels
+                    ->concat($newHotelResults)
+                    ->unique(fn (array $hotel) => (string) ($hotel['HotelCode'] ?? ''))
+                    ->values()
+                    ->all();
+                $state = is_array($response['_BatchSearch'] ?? null) ? $response['_BatchSearch'] : [];
+                $state['remaining_hotel_codes'] = $codesAfterWave->all();
+                $state['processed_code_count'] = (int) ($state['processed_code_count'] ?? 0) + $waveCodes->count();
+                $response['_BatchSearch'] = $state;
+                $lockedSession->update(['tbo_response' => $response]);
+            });
+
+            $session->refresh();
+            $updatedState = data_get($session->tbo_response, '_BatchSearch', []);
+            $displayCurrency = $this->currencyCodeForRequest($request, $validated['currency_code'] ?? null);
+            $normalizedHotels = $this->normalizeSearchResults([
+                'HotelResult' => $newHotelResults->all(),
+            ], $displayCurrency);
+
+            Log::info('TBO Hotel Progressive Search Wave Completed', [
+                'search_session_id' => $session->uuid,
+                'batch_count' => count($payloads),
+                'hotel_result_count' => $normalizedHotels->count(),
+                'batch_errors' => $batchErrors,
+                'has_more' => ! empty($updatedState['remaining_hotel_codes']),
+            ]);
+
+            return response()->json([
+                'message' => 'Additional hotel results loaded.',
+                'data' => [
+                    'hotels' => $normalizedHotels->values(),
+                    'has_more' => ! empty($updatedState['remaining_hotel_codes']),
+                    'processed_code_count' => (int) ($updatedState['processed_code_count'] ?? 0),
+                    'total_code_count' => (int) ($updatedState['total_code_count'] ?? 0),
+                    'batch_errors' => $batchErrors,
+                ],
+            ]);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** Fetch property image URLs for trusted search results without persisting static content. */
+    public function images(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'search_session_id' => ['required', 'uuid'],
+            // HotelDetails returns a very large static payload. Search-card images
+            // are therefore fetched for one visible card at a time.
+            'hotel_codes' => ['required', 'array', 'size:1'],
+            'hotel_codes.*' => ['required', 'string', 'max:100', 'distinct'],
+            'language' => ['nullable', 'string', 'size:2'],
+        ]);
+
+        $session = HotelSearchSession::where('uuid', $validated['search_session_id'])->first();
+
+        if (! $session) {
+            return response()->json(['message' => 'Hotel search session was not found. Please search again.'], 404);
+        }
+
+        if ($session->expires_at?->isPast()) {
+            return response()->json(['message' => 'Hotel search session has expired. Please search again.'], 422);
+        }
+
+        if ($session->user_id && $session->user_id !== optional($request->user())->id) {
+            return response()->json(['message' => 'This hotel search session belongs to another user.'], 403);
+        }
+
+        $allowedCodes = collect($session->tbo_response['HotelResult'] ?? [])
+            ->filter(fn ($hotel) => is_array($hotel))
+            ->pluck('HotelCode')
+            ->map(fn ($code): string => (string) $code)
+            ->flip();
+        $hotelCodes = collect($validated['hotel_codes'])
+            ->map(fn ($code): string => trim((string) $code))
+            ->filter(fn (string $code): bool => $allowedCodes->has($code))
+            ->unique()
+            ->values();
+
+        if ($hotelCodes->isEmpty()) {
+            return response()->json([
+                'message' => 'None of the requested hotels belong to this search session.',
+            ], 422);
+        }
+
+        Log::info('TBO Hotel Search Image Enrichment Request', [
+            'search_session_id' => $session->uuid,
+            'hotel_codes' => $hotelCodes->all(),
+            'room_details_required' => false,
+        ]);
+
+        try {
+            $tboResponse = $this->tboHotelService->hotelDetails(
+                $hotelCodes->first(),
+                strtoupper((string) ($validated['language'] ?? 'EN')),
+                false,
+                false,
+            );
+        } catch (Throwable $e) {
+            Log::warning('Unable to fetch TBO search-card image URLs', [
+                'search_session_id' => $session->uuid,
+                'hotel_codes' => $hotelCodes->all(),
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Hotel images could not be loaded right now.',
+            ], 502);
+        }
+
+        $statusCode = (int) data_get($tboResponse, 'Status.Code', 500);
+        if ($statusCode !== 200) {
+            return response()->json([
+                'message' => $this->statusMessage($statusCode, data_get($tboResponse, 'Status.Description')),
+                'provider_status' => data_get($tboResponse, 'Status'),
+            ], $this->httpStatusForProviderStatus($statusCode));
+        }
+
+        $imagesByHotel = collect($tboResponse['HotelDetails'] ?? [])
+            ->filter(fn ($hotel) => is_array($hotel) && ! empty($hotel['HotelCode']))
+            ->mapWithKeys(function (array $hotel): array {
+                // Search cards need a small gallery only. Full room/property imagery
+                // remains available from the selected hotel's detail flow.
+                $images = collect([$hotel['Image'] ?? null])
+                    ->concat($hotel['Images'] ?? [])
+                    ->filter(fn ($image) => is_string($image) && $image !== '')
+                    ->unique()
+                    ->take(self::SEARCH_CARD_IMAGE_LIMIT)
+                    ->values()
+                    ->all();
+
+                return [(string) $hotel['HotelCode'] => $images];
+            });
+
+        Log::info('TBO Hotel Search Image Enrichment Completed', [
+            'search_session_id' => $session->uuid,
+            'requested_hotel_count' => $hotelCodes->count(),
+            'returned_hotel_count' => $imagesByHotel->count(),
+            'returned_image_count' => $imagesByHotel->flatten(1)->count(),
+        ]);
+
+        return response()->json([
+            'message' => 'Hotel image URLs fetched successfully.',
+            'data' => [
+                'images_by_hotel' => $imagesByHotel->all(),
+            ],
+        ]);
     }
 
     /** Refresh one selected hotel's detailed availability in its active search session. */
@@ -1538,12 +1824,11 @@ class HotelController extends Controller
             'hotel' => collect([(string) $value]),
             'city' => TboHotel::where('city_code', $value)
                 ->orderBy('hotel_name')
-                ->limit(100)
                 ->pluck('hotel_code'),
             'country' => TboHotel::where('country_code', strtoupper($value))
                 ->orderBy('city_name')
                 ->orderBy('hotel_name')
-                ->limit(100)
+                ->limit(self::HOTEL_SEARCH_BATCH_SIZE)
                 ->pluck('hotel_code'),
         };
     }

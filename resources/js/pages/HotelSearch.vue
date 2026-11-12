@@ -16,6 +16,7 @@ import {
   CircleDollarSign,
   Globe2,
   Hotel,
+  Loader2,
   MapPin,
   Minus,
   Plus,
@@ -25,7 +26,7 @@ import {
   Users,
   X,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { debounce } from "lodash";
 import { getSelectedCurrencyCode } from "@/lib/utils";
@@ -112,6 +113,7 @@ const nights = computed(() => {
 const checkInInput = ref(null);
 const checkOutInput = ref(null);
 const guestNationality = ref("pk");
+const isUaeResident = ref(false);
 const rooms = ref([
   {
     adults: 1,
@@ -143,6 +145,9 @@ const isMobileFilterOpen = ref(false);
 const refundableFilter = ref("all");
 const isLoadingSuggestions = computed(() => hotelStore.getIsLoadingSuggestions);
 const isSearching = computed(() => hotelStore.getIsSearching);
+const isLoadingMoreHotels = computed(() => hotelStore.getIsLoadingMoreHotels);
+const processedHotelCodeCount = computed(() => hotelStore.getProcessedHotelCodeCount);
+const totalHotelCodeCount = computed(() => hotelStore.getTotalHotelCodeCount);
 const hotelResults = computed(() => hotelStore.getHotels);
 const searchSessionId = computed(() => hotelStore.getSearchSessionId);
 const providerStatus = computed(() => hotelStore.getProviderStatus);
@@ -278,6 +283,12 @@ const sortedFilteredHotelResults = computed(() => {
   }
   return list;
 });
+
+const HOTEL_RESULTS_PER_PAGE = 50;
+const visibleHotelLimit = ref(HOTEL_RESULTS_PER_PAGE);
+const visibleSortedFilteredHotelResults = computed(() =>
+  sortedFilteredHotelResults.value.slice(0, visibleHotelLimit.value),
+);
 
 const activeFiltersCount = computed(() => {
   let count = 0;
@@ -448,6 +459,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleClickOutsideGuestsPanel);
   fetchSuggestions.cancel();
+  progressiveSearchRun += 1;
+  loadMoreObserver?.disconnect();
+  pendingPropertyImageCodes.clear();
 });
 
 const destinationIcon = (type) => {
@@ -458,14 +472,197 @@ const destinationIcon = (type) => {
   return MapPin;
 };
 
+let progressiveSearchRun = 0;
+// A HotelDetails response contains full property metadata, not only an image.
+// Fetch one visible card at a time to keep browser, PHP, and TBO load bounded.
+const PROPERTY_IMAGE_BATCH_SIZE = 1;
+const PROPERTY_IMAGE_MAX_CONCURRENT_BATCHES = 1;
+const pendingPropertyImageCodes = new Set();
+const requestedPropertyImageCodes = new Set();
+let propertyImageWorkerPromise = null;
+let activePropertyImageSessionId = null;
+let activePropertyImageRunId = 0;
+let loadMoreObserver = null;
+const isLoadingNextHotelPage = ref(false);
+const loadMoreSentinel = ref(null);
+const MAX_AVAILABILITY_WAVES_PER_PAGE = 1;
+
+const drainPropertyImageQueue = async (sessionId, runId) => {
+  while (
+    runId === progressiveSearchRun &&
+    runId === activePropertyImageRunId &&
+    sessionId === activePropertyImageSessionId &&
+    pendingPropertyImageCodes.size
+  ) {
+    const waveSize = PROPERTY_IMAGE_BATCH_SIZE * PROPERTY_IMAGE_MAX_CONCURRENT_BATCHES;
+    const waveCodes = Array.from(pendingPropertyImageCodes).slice(0, waveSize);
+    waveCodes.forEach((code) => {
+      pendingPropertyImageCodes.delete(code);
+      requestedPropertyImageCodes.add(code);
+    });
+
+    const batches = [];
+    for (let index = 0; index < waveCodes.length; index += PROPERTY_IMAGE_BATCH_SIZE) {
+      batches.push(waveCodes.slice(index, index + PROPERTY_IMAGE_BATCH_SIZE));
+    }
+
+    const results = await Promise.allSettled(
+      batches.map((hotelCodes) => hotelStore.fetchHotelImages({
+        search_session_id: sessionId,
+        hotel_codes: hotelCodes,
+        language: "EN",
+      })),
+    );
+
+    if (
+      runId !== progressiveSearchRun ||
+      runId !== activePropertyImageRunId ||
+      sessionId !== activePropertyImageSessionId
+    ) {
+      return;
+    }
+
+    const nextImages = { ...propertyImagesByHotel.value };
+    results.forEach((result) => {
+      if (result.status !== "fulfilled") return;
+
+      Object.entries(result.value?.data?.images_by_hotel || {}).forEach(([hotelCode, images]) => {
+        nextImages[String(hotelCode)] = Array.isArray(images) ? images.filter(Boolean) : [];
+      });
+    });
+    propertyImagesByHotel.value = nextImages;
+  }
+};
+
+const startPropertyImageWorker = () => {
+  if (
+    propertyImageWorkerPromise ||
+    !pendingPropertyImageCodes.size ||
+    !activePropertyImageSessionId
+  ) {
+    return;
+  }
+
+  const sessionId = activePropertyImageSessionId;
+  const runId = activePropertyImageRunId;
+  propertyImageWorkerPromise = drainPropertyImageQueue(sessionId, runId)
+    .finally(() => {
+      propertyImageWorkerPromise = null;
+      startPropertyImageWorker();
+    });
+};
+
+const queuePropertyImages = (hotels, sessionId, runId) => {
+  if (!sessionId || runId !== progressiveSearchRun) return;
+
+  activePropertyImageSessionId = sessionId;
+  activePropertyImageRunId = runId;
+  (hotels || []).forEach((hotel) => {
+    const hotelCode = String(hotel?.hotel_code || "");
+    const existingImages = Array.isArray(hotel?.images) ? hotel.images.filter(Boolean) : [];
+
+    if (
+      hotelCode &&
+      !existingImages.length &&
+      !requestedPropertyImageCodes.has(hotelCode) &&
+      !pendingPropertyImageCodes.has(hotelCode)
+    ) {
+      pendingPropertyImageCodes.add(hotelCode);
+    }
+  });
+  startPropertyImageWorker();
+};
+
+const loadAvailableHotelResultsUntil = async (targetResultCount, sessionId, runId) => {
+  let waveCount = 0;
+
+  while (
+    runId === progressiveSearchRun &&
+    sessionId === hotelStore.getSearchSessionId &&
+    hotelStore.getHasMoreSearchResults &&
+    hotelResults.value.length < targetResultCount &&
+    waveCount < MAX_AVAILABILITY_WAVES_PER_PAGE
+  ) {
+    waveCount += 1;
+
+    try {
+      const response = await hotelStore.loadMoreHotelResults({
+        search_session_id: sessionId,
+        currency_code: getSelectedCurrencyCode(),
+      });
+
+      if (!response || !response.data?.has_more) {
+        break;
+      }
+    } catch {
+      // Initial results remain usable if a background batch cannot be loaded.
+      break;
+    }
+  }
+};
+
+const loadNextHotelPage = async () => {
+  const sessionId = searchSessionId.value;
+  const runId = progressiveSearchRun;
+
+  if (
+    !sessionId ||
+    isLoadingNextHotelPage.value ||
+    isSearching.value ||
+    isLoadingMoreHotels.value ||
+    (!hotelStore.getHasMoreSearchResults && visibleHotelLimit.value >= hotelResults.value.length)
+  ) {
+    return;
+  }
+
+  isLoadingNextHotelPage.value = true;
+  visibleHotelLimit.value += HOTEL_RESULTS_PER_PAGE;
+
+  try {
+    if (hotelResults.value.length < visibleHotelLimit.value && hotelStore.getHasMoreSearchResults) {
+      await loadAvailableHotelResultsUntil(visibleHotelLimit.value, sessionId, runId);
+    }
+  } finally {
+    isLoadingNextHotelPage.value = false;
+  }
+};
+
+const observeLoadMoreSentinel = async () => {
+  await nextTick();
+  loadMoreObserver?.disconnect();
+
+  if (!loadMoreSentinel.value) return;
+
+  loadMoreObserver = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      void loadNextHotelPage();
+    }
+  }, { rootMargin: "200px 0px" });
+  loadMoreObserver.observe(loadMoreSentinel.value);
+};
+
+watch(
+  () => [
+    visibleSortedFilteredHotelResults.value.length,
+    visibleHotelLimit.value,
+    hotelStore.getHasMoreSearchResults,
+    isLoadingMoreHotels.value,
+  ],
+  () => { void observeLoadMoreSentinel(); },
+  { flush: "post" },
+);
+
 const searchHotels = async (payload) => {
+  const runId = ++progressiveSearchRun;
   formErrorMessage.value = "";
 
   if (payload) {
     if (payload.destination) selectedDestination.value = payload.destination;
     if (payload.check_in) checkIn.value = payload.check_in;
     if (payload.check_out) checkOut.value = payload.check_out;
-    if (payload.guest_nationality) guestNationality.value = payload.guest_nationality;
+    if (payload.passport_nationality) guestNationality.value = payload.passport_nationality;
+    else if (payload.guest_nationality) guestNationality.value = payload.guest_nationality;
+    if (typeof payload.is_uae_resident === "boolean") isUaeResident.value = payload.is_uae_resident;
     if (payload.rooms) rooms.value = payload.rooms;
   }
 
@@ -487,6 +684,13 @@ const searchHotels = async (payload) => {
   }
 
   try {
+    visibleHotelLimit.value = HOTEL_RESULTS_PER_PAGE;
+    isLoadingNextHotelPage.value = false;
+    loadMoreObserver?.disconnect();
+    pendingPropertyImageCodes.clear();
+    requestedPropertyImageCodes.clear();
+    activePropertyImageSessionId = null;
+    activePropertyImageRunId = runId;
     expandedHotelCodes.value = new Set();
     selectedBookingCode.value = "";
     roomChoices.value = {};
@@ -495,11 +699,16 @@ const searchHotels = async (payload) => {
     loadingRoomDetailsHotelCodes.value = new Set();
     loadedRoomImageUrls.value = new Set();
     failedRoomImageUrls.value = new Set();
-    await hotelStore.searchHotels({
+    const guestNationalityForSearch =
+      String(selectedDestination.value?.country_code || "").toUpperCase() === "AE" && isUaeResident.value
+        ? "AE"
+        : guestNationality.value.toUpperCase();
+
+    const response = await hotelStore.searchHotels({
       destination: selectedDestination.value,
       check_in: checkIn.value,
       check_out: checkOut.value,
-      guest_nationality: guestNationality.value.toUpperCase(),
+      guest_nationality: guestNationalityForSearch,
       rooms: rooms.value.map((room) => ({
         adults: Number(room.adults || 1),
         children: room.children_ages ? room.children_ages.length : (Number(room.children) || 0),
@@ -512,6 +721,11 @@ const searchHotels = async (payload) => {
       },
       currency_code: getSelectedCurrencyCode(),
     });
+
+    const sessionId = response.data?.search_session_id;
+    if (sessionId && response.data?.has_more) {
+      void loadAvailableHotelResultsUntil(HOTEL_RESULTS_PER_PAGE, sessionId, runId);
+    }
 
   } catch (error) {
     formErrorMessage.value = hotelStore.getErrorMessage || error.response?.data?.message || "Hotel search failed. Please try again.";
@@ -810,11 +1024,13 @@ const loadSearchFromRoute = async (query = route.query) => {
     type: String(destinationType),
     value: String(destinationValue),
     label: String(destinationLabel),
+    country_code: query.destination_country_code ? String(query.destination_country_code).toUpperCase() : null,
   };
   destinationQuery.value = String(destinationLabel);
   checkIn.value = query.check_in ? String(query.check_in) : checkIn.value;
   checkOut.value = query.check_out ? String(query.check_out) : checkOut.value;
   guestNationality.value = query.guest_nationality ? String(query.guest_nationality).toLowerCase() : guestNationality.value;
+  isUaeResident.value = String(query.is_uae_resident || "0") === "1";
 
   const parsedRooms = parseRoomsQuery(query.rooms);
   if (parsedRooms) {
@@ -854,6 +1070,7 @@ watch(
           v-model:checkOut="checkOut"
           v-model:rooms="rooms"
           v-model:nationality="guestNationality"
+          v-model:uae-resident="isUaeResident"
           :is-loading="isSearching"
           :embedded="props.embedded"
           @search="searchHotels"
@@ -887,7 +1104,7 @@ watch(
       </div>
 
       <!-- SKELETON LOADERS (WHEN SEARCHING) -->
-      <div v-if="isSearching" class="space-y-4">
+      <div v-if="isSearching || (isLoadingMoreHotels && !hotelResults.length)" class="space-y-4">
         <div class="flex items-center justify-between border-b border-border pb-3">
           <div class="space-y-1">
             <div class="h-6 w-48 animate-pulse rounded bg-muted" />
@@ -965,7 +1182,7 @@ watch(
             <!-- HOTEL CARDS LIST -->
             <div v-if="sortedFilteredHotelResults.length" class="space-y-4">
               <HotelCard
-                v-for="hotelItem in sortedFilteredHotelResults"
+                v-for="hotelItem in visibleSortedFilteredHotelResults"
                 :key="hotelItem.hotel_code"
                 :hotel="hotelItem"
                 :nights="nights"
@@ -976,11 +1193,42 @@ watch(
                 :is-room-details-loading="isRoomDetailsLoading(hotelItem)"
                 :room-details-map="roomDetailsByHotel[String(hotelItem.hotel_code)] || {}"
                 :property-images="propertyImagesByHotel[String(hotelItem.hotel_code)] || []"
+                @image-visible="queuePropertyImages([hotelItem], searchSessionId, progressiveSearchRun)"
                 @view-deal="viewHotelDetails(hotelItem)"
                 @toggle-rooms="toggleHotelRooms(hotelItem)"
                 @choose-room="(h, r) => chooseRoom(h, r)"
                 @select-room="(h, r) => { chooseRoom(h, r); selectChosenRoom(h); }"
               />
+
+              <div
+                v-if="isLoadingMoreHotels"
+                class="rounded border border-primary/20 bg-primary/5 p-4"
+              >
+                <div class="mb-3 flex items-center gap-2 text-xs font-semibold text-primary">
+                  <Loader2 class="h-4 w-4 animate-spin" />
+                  <span>Loading more available properties…</span>
+                  <span v-if="totalHotelCodeCount" class="ml-auto text-[11px] font-medium text-muted-foreground">
+                    {{ Math.min(processedHotelCodeCount, totalHotelCodeCount) }} of {{ totalHotelCodeCount }} checked
+                  </span>
+                </div>
+                <div class="space-y-3">
+                  <HotelCardSkeleton v-for="n in 2" :key="`more-${n}`" />
+                </div>
+              </div>
+
+              <div
+                v-if="visibleHotelLimit < sortedFilteredHotelResults.length || hotelStore.getHasMoreSearchResults"
+                ref="loadMoreSentinel"
+                class="flex min-h-14 items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-xs font-medium text-muted-foreground"
+              >
+                <template v-if="isLoadingMoreHotels || isLoadingNextHotelPage">
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin text-primary" />
+                  Loading the next available properties…
+                </template>
+                <template v-else>
+                  Scroll down to load more properties
+                </template>
+              </div>
             </div>
 
             <!-- EMPTY FILTER STATE (Hotels exist, but filters matched 0) -->
