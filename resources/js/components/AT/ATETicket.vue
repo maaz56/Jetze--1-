@@ -56,7 +56,7 @@ const useDefaultLogo = (event) => {
 
 const status = computed(() => (props.booking?.status || "").toLowerCase());
 const statusTone = computed(() => {
-    if (["ticketed", "confirmed", "issued", "booked"].includes(status.value)) return "ok";
+    if (["ticketed", "confirmed", "booked"].includes(status.value)) return "ok";
     if (["pending", "requested", "hold"].includes(status.value)) return "warn";
     if (["cancelled", "canceled", "failed", "voided", "expired"].includes(status.value)) return "bad";
     return "info";

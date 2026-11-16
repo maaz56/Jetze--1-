@@ -256,7 +256,7 @@ class TabbyCheckoutController extends Controller
             ]);
         }
 
-        if (in_array(strtolower((string) $booking->status), ['ticketed', 'issued', 'voided', 'cancelled'], true)) {
+        if (in_array(strtolower((string) $booking->status), ['ticketed', 'voided', 'cancelled'], true)) {
             throw ValidationException::withMessages([
                 'booking_id' => 'This booking is not eligible for a new payment checkout.',
             ]);

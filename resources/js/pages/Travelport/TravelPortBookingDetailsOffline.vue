@@ -759,14 +759,14 @@
                                 </DialogContent>
                             </Dialog>
                             <button
-                                :disabled="['canceled', 'issued', 'ticketed', 'void_requested', 'voided'].includes(booking?.status)"
+                                :disabled="['canceled', 'ticketed', 'void_requested', 'voided'].includes(booking?.status)"
                                 v-if="booking?.status === 'booked'"
                                 @click="openDialog"
                                 class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary/50 disabled:cursor-not-allowed flex items-center gap-2">
                                 Issue Ticket
                             </button>
                             <button
-                                :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                                :disabled="['canceled', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
                                 v-if="booking?.status === 'booked'"
                                 @click="isDialogOpen = true"
                                 class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary/50 disabled:cursor-not-allowed flex items-center gap-2">

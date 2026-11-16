@@ -1350,7 +1350,7 @@ class BookingController extends Controller
                 return response()->json(["message" => "This is not an AT booking."], 422);
             }
 
-            if (in_array(strtolower((string) $booking->status), ["ticketed", "issued"], true)) {
+            if (strtolower((string) $booking->status) === 'ticketed') {
                 return response()->json([
                     "message" => "A ticketed booking must be voided before a cancellation email can be sent.",
                 ], 422);
@@ -1398,7 +1398,7 @@ class BookingController extends Controller
                 return response()->json(["message" => "Booking not found."], 404);
             }
 
-            if (in_array(strtolower((string) $booking->status), ["ticketed", "issued"], true)) {
+            if (strtolower((string) $booking->status) === 'ticketed') {
                 return response()->json([
                     "message" => "A ticketed booking must be voided before a cancellation email can be sent.",
                 ], 422);
@@ -1466,7 +1466,7 @@ class BookingController extends Controller
         }
 
         $status = strtolower((string) ($status ?? $booking->status ?? ''));
-        if (!in_array($status, ['booked', 'canceled', 'cancelled', 'ticketed', 'issued'], true)) {
+        if (!in_array($status, ['booked', 'canceled', 'cancelled', 'ticketed'], true)) {
             return;
         }
 
@@ -1484,7 +1484,7 @@ class BookingController extends Controller
         foreach ($recipients as $email) {
             $mail = match ($status) {
                 'canceled', 'cancelled' => new BookingCanceledMail($email, $booking, $flightDataForMail),
-                'ticketed', 'issued' => new BookingConfirmedMail($email, $booking, $flightDataForMail),
+                'ticketed' => new BookingConfirmedMail($email, $booking, $flightDataForMail),
                 default => new BookingCreatedMail($email, $booking, $flightDataForMail),
             };
 
@@ -1510,7 +1510,7 @@ class BookingController extends Controller
             }
             $request->validate([
                 'bookingId' => ['required', 'integer'],
-                'booking_status' => ['required', 'string', 'in:ticketed,issued'],
+                'booking_status' => ['required', 'string', 'in:ticketed'],
                 'pnr' => ['nullable', 'string', 'max:255'],
             ]);
 
@@ -1530,7 +1530,7 @@ class BookingController extends Controller
                 ], 422);
             }
 
-            if (in_array(strtolower((string) $booking->status), ['ticketed', 'issued'], true)) {
+            if (strtolower((string) $booking->status) === 'ticketed') {
                 return response()->json([
                     'message' => 'This booking has already been ticketed.',
                 ], 409);
@@ -1739,7 +1739,7 @@ class BookingController extends Controller
     {
         Log::info($request);
         $request->validate([
-            'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed,booked,issued,requested,voided',
+            'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed,booked,requested,voided',
             'airline_pnr' => 'nullable|string',
             'ticket_number' => 'nullable|string',
         ]);

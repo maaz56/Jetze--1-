@@ -160,7 +160,7 @@ const getRemainingTime = (expiry) => {
 
 const isVoidDisabled = (booking) => {
     const status = booking?.status?.toLowerCase();
-    if (!['ticketed', 'issued'].includes(status) || !booking?.issuance_date) return true;
+    if (!['ticketed'].includes(status) || !booking?.issuance_date) return true;
 
     const issuanceDate = moment(booking.issuance_date);
     if (!issuanceDate.isValid()) return true;
@@ -879,7 +879,7 @@ function getDisplayStatus(status) {
 
 function getItineraryDocumentLabel(status) {
     const normalized = (status || "").toLowerCase();
-    if (["ticketed", "issued"].includes(normalized)) return "E-Ticket";
+    if (["ticketed"].includes(normalized)) return "E-Ticket";
     if (["canceled", "cancelled"].includes(normalized)) return "Canceled Itinerary";
     if (normalized === "booked") return "On Hold Itinerary";
     if (!normalized) return "Itinerary";
@@ -1165,7 +1165,7 @@ onMounted(() => {
                         Pay Now
                     </button>
                     <button
-                            :disabled="[ 'canceled','issued', 'ticketed', 'voided'].includes(booking?.status.toLowerCase())"
+                            :disabled="[ 'canceled','ticketed', 'voided'].includes(booking?.status.toLowerCase())"
                             @click="isDialogOpen = true"
                             class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                             Cancel Booking

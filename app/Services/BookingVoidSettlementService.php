@@ -35,9 +35,9 @@ class BookingVoidSettlementService
                 return $existing;
             }
 
-            if (!in_array(strtolower((string) $lockedBooking->status), ['ticketed', 'issued'], true)) {
+            if (strtolower((string) $lockedBooking->status) !== 'ticketed') {
                 throw ValidationException::withMessages([
-                    'booking' => 'Only ticketed or issued bookings can be voided.',
+                    'booking' => 'Only ticketed bookings can be voided.',
                 ]);
             }
 

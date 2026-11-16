@@ -742,7 +742,7 @@ onMounted(async () => {
                 <!-- Cancel Booking Dialog -->
                 <button
                     @click="isDialogOpen = true"
-                    :disabled="actionLoading || ['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                    :disabled="actionLoading || ['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status?.toLowerCase())"
                     class="flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                     {{
@@ -750,8 +750,6 @@ onMounted(async () => {
                             ? "Canceled"
                             : booking?.status?.toLowerCase() === "ticketed"
                             ? "Ticketed"
-                            : booking?.status?.toLowerCase() === "issued"
-                            ? "Issued"
                             : "Cancel Booking"
                     }}
                 </button>
@@ -803,7 +801,7 @@ onMounted(async () => {
 
                 <!-- Confirm Booking Button & Dialog -->
                 <button
-                    :disabled="actionLoading || ['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                    :disabled="actionLoading || ['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status?.toLowerCase())"
                     @click="handleConfirmDialogOpen"
                     class="flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
@@ -1008,7 +1006,7 @@ onMounted(async () => {
                                         <span class="font-medium">Status:</span>
                                         <span
                                             :class="{
-                                                'font-bold text-green-600': ['booked', 'confirmed', 'ticketed', 'issued'].includes(String(booking.status).toLowerCase()),
+                                                'font-bold text-green-600': ['booked', 'confirmed', 'ticketed'].includes(String(booking.status).toLowerCase()),
                                                 'font-bold text-yellow-600': ['pending', 'held'].includes(String(booking.status).toLowerCase()),
                                                 'font-bold text-red-600': ['cancelled', 'canceled', 'failed', 'voided'].includes(String(booking.status).toLowerCase()),
                                                 'capitalize font-semibold print:text-gray-900': true,
@@ -1272,7 +1270,7 @@ onMounted(async () => {
                                             {{ traveller.nationality || traveller.cnic || "N/A" }}
                                         </td>
                                         <td class="font-mono px-4 py-4 text-slate-950 print:text-gray-800">
-                                            {{ traveller.ticket_no || hakimi?.airlinePnr || booking.airline_pnr || booking.itinerary_ref || "Issued" }}
+                                            {{ traveller.ticket_no || hakimi?.airlinePnr || booking.airline_pnr || booking.itinerary_ref || "N/A" }}
                                         </td>
                                     </tr>
                                     <tr v-if="!booking.pessangers?.length">

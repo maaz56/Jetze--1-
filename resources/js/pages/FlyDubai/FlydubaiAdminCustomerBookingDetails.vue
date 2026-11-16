@@ -619,14 +619,12 @@ onMounted(() => {
                     </Dialog>
 
                     <button @click="isDialogOpen = true"
-                        :disabled="['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                        :disabled="['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status?.toLowerCase())"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed">
                         {{ booking?.status?.toLowerCase() === 'canceled'
                             ? 'Canceled'
                             : booking?.status?.toLowerCase() === 'ticketed'
                                 ? 'Ticketed'
-                                : booking?.status?.toLowerCase() === 'issued'
-                                    ? 'Issued'
                                     : 'Cancel Booking'
                         }}
 
@@ -707,7 +705,7 @@ onMounted(() => {
                         </div>
                     </div>
                     <button
-                        :disabled="['canceled', 'issued', 'requested', 'ticketed', 'voided'].includes(booking?.status)"
+                        :disabled="['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
                         @click="handleConfirmDialogOpen"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed">
                         Confirm Booking

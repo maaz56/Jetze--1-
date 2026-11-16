@@ -14,26 +14,31 @@ class FlightBookings extends Model
     public const SETTLED_PASSENGER_STATUSES = ['voided', 'refunded'];
 
     /** Booking statuses whose amount is debited from the customer/agent wallet ledger. */
-    public const WALLET_DEBIT_STATUSES = ['ticketed', 'issued', 'voided', 'refunded', 'partially_voided', 'partially_refunded'];
+    public const WALLET_DEBIT_STATUSES = ['ticketed', 'voided', 'refunded', 'partially_voided', 'partially_refunded'];
 
     /**
      * Bookings whose amount is debited from the wallet. Card / one-bill approved
-     * payments, and issued bookings with an external transaction id, are paid
-     * outside the wallet.
+     * payments are paid outside the wallet.
      */
     public function scopeChargedToWallet($query)
     {
         return $query->whereIn('status', self::WALLET_DEBIT_STATUSES)
-            ->where(fn ($q) => $q->whereNull('t_status')->orWhere('t_status', '!=', 'approved'))
-            ->where(fn ($q) => $q->whereNull('tid')->orWhere('status', '!=', 'issued'));
+            ->where(fn ($q) => $q->whereNull('t_status')->orWhere('t_status', '!=', 'approved'));
     }
 
     /** Same rule as scopeChargedToWallet() for an already loaded booking. */
     public function isChargedToWallet(): bool
     {
         return in_array($this->status, self::WALLET_DEBIT_STATUSES, true)
-            && $this->t_status !== 'approved'
-            && ($this->tid === null || $this->status !== 'issued');
+            && $this->t_status !== 'approved';
+    }
+
+    /** Keep legacy clients from creating the retired `issued` status. */
+    public function setStatusAttribute($value): void
+    {
+        $this->attributes['status'] = strtolower((string) $value) === 'issued'
+            ? 'ticketed'
+            : $value;
     }
 
     protected static function booted(): void

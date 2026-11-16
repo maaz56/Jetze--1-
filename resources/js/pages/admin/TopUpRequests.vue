@@ -90,7 +90,7 @@ onMounted(() => {
                             <tr v-for="deposit in agentsDepositData.deposits" :key="deposit.id"
                                 class="bg-white border-b hover:bg-gray-50">
                                 <td class="px-4 py-3 font-medium">
-                                    <span class="text-white bg-accent rounded-full px-3 py-1">
+                                    <span class="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 font-semibold text-primary">
                                         {{ deposit.receipt_reference || "_" }}
                                     </span>
                                 </td>

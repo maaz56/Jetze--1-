@@ -77,7 +77,6 @@ const statusOptions = [
     // "pending",
     // "approved",
     // "confirmed",
-    "issued",
     "ticketed",
     "requested",
     "voided",

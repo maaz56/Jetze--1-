@@ -902,7 +902,7 @@ function confirmBooking() {
         pnr: bookingDetails?.value[0]?.pnr,
         bookingId: bookingDetails?.value?.id,
         booking_uuid: pnrData.value?.data?.uuid,
-        booking_status: paymentMethod.value === 'hold' ? 'booked' : paymentMethod.value === 'pay' ? 'ticketed' : paymentMethod.value === 'card' ? 'issued' : 'booked',
+        booking_status: paymentMethod.value === 'hold' ? 'booked' : ['pay', 'card'].includes(paymentMethod.value) ? 'ticketed' : 'booked',
         booking_source: route.query.flight_source,
         amount: parseFloat(pnrData?.value?.data?.billable_price).toFixed(2),
     }).then(() => {

@@ -477,7 +477,7 @@ onMounted(async () => {
                 </button>
 
                 <button
-                    :disabled="['ticketed', 'issued', 'canceled', 'voided'].includes(String(booking.status).toLowerCase())"
+                    :disabled="['ticketed', 'canceled', 'voided'].includes(String(booking.status).toLowerCase())"
                     @click="goToPaymentView"
                     class="flex items-center gap-2 rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -486,7 +486,7 @@ onMounted(async () => {
                 </button>
 
                 <button
-                    :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(String(booking.status).toLowerCase())"
+                    :disabled="['canceled', 'ticketed', 'voided'].includes(String(booking.status).toLowerCase())"
                     @click="isDialogOpen = true"
                     class="flex items-center gap-2 rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -595,7 +595,7 @@ onMounted(async () => {
                                             <span class="font-medium">Status:</span>
                                             <span
                                                 :class="{
-                                                    'font-bold text-green-600': ['booked', 'confirmed', 'ticketed', 'issued'].includes(String(booking.status).toLowerCase()),
+                                                    'font-bold text-green-600': ['booked', 'confirmed', 'ticketed'].includes(String(booking.status).toLowerCase()),
                                                     'font-bold text-yellow-600': ['pending', 'held'].includes(String(booking.status).toLowerCase()),
                                                     'font-bold text-red-600': ['cancelled', 'canceled', 'failed', 'voided'].includes(String(booking.status).toLowerCase()),
                                                     'capitalize font-semibold print:text-gray-900': true,
@@ -874,7 +874,7 @@ onMounted(async () => {
                                                 {{ traveller.nationality || traveller.cnic || "N/A" }}
                                             </td>
                                             <td class="font-mono px-4 py-4 text-slate-950 print:text-gray-800">
-                                                {{ traveller.ticket_no || hakimi?.airlinePnr || booking.airline_pnr || booking.itinerary_ref || "Issued" }}
+                                                {{ traveller.ticket_no || hakimi?.airlinePnr || booking.airline_pnr || booking.itinerary_ref || "N/A" }}
                                             </td>
                                         </tr>
                                         <tr v-if="!booking.pessangers?.length">

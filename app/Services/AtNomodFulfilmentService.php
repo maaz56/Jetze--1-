@@ -93,7 +93,7 @@ class AtNomodFulfilmentService
                 return null;
             }
 
-            if (in_array(strtolower((string) $booking->status), ['ticketed', 'issued'], true)) {
+            if (strtolower((string) $booking->status) === 'ticketed') {
                 if ($attempt->fulfilment_status !== PaymentAttempt::FULFILMENT_COMPLETED) {
                     $attempt->update([
                         'fulfilment_status' => PaymentAttempt::FULFILMENT_COMPLETED,

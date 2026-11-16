@@ -998,7 +998,7 @@ function getDisplayStatus(status) {
 
 function getItineraryDocumentLabel(status) {
     const normalized = (status || "").toLowerCase();
-    if (["ticketed", "issued"].includes(normalized)) return "E-Ticket";
+    if (["ticketed"].includes(normalized)) return "E-Ticket";
     if (["canceled", "cancelled"].includes(normalized)) return "Canceled Itinerary";
     if (normalized === "booked") return "On Hold Itinerary";
     if (!normalized) return "Itinerary";
@@ -1347,13 +1347,13 @@ onMounted(() => {
                         </DialogContent>
                     </Dialog>
                     <button
-                        :disabled="['canceled', 'issued', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
-                        @click="handleApprovalDialogOpen"
+                        :disabled="['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
+                        @click="showDialog = true"
                         class="px-3 py-1.5 text-xs font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
                         Approve
                     </button>
                     <button
-                        :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                        :disabled="['canceled', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
                         @click="isDialogOpen = true"
                         class="px-3 py-1.5 text-xs font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
                         Cancel Booking

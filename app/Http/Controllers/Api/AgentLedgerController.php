@@ -374,7 +374,7 @@ class AgentLedgerController extends Controller
 
     public function profitLossReport(Request $request)
     {
-        $query = FlightBookings::with(['user.agentData'])->whereIn('status', ['ticketed', 'issued']);
+        $query = FlightBookings::with(['user.agentData'])->where('status', 'ticketed');
         // ✅ Filter by agent_id
         if ($request->filled('agent_id')) {
             $query->where('agent_id', $request->agent_id);

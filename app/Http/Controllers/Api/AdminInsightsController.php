@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 class AdminInsightsController extends Controller
 {
     /** Statuses that count as a completed sale. */
-    private const SOLD_STATUSES = ['ticketed', 'issued'];
+    private const SOLD_STATUSES = ['ticketed'];
 
     public function overview(Request $request)
     {

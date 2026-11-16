@@ -156,7 +156,7 @@ const getVoidRemainingTime = (issuanceDate) => {
 
 const isVoidDisabled = (booking) => {
     const status = booking?.status?.toLowerCase();
-    if (!['ticketed', 'issued'].includes(status) || !booking?.issuance_date) return true;
+    if (!['ticketed'].includes(status) || !booking?.issuance_date) return true;
 
     const issuedAt = moment(booking.issuance_date);
     if (!issuedAt.isValid()) return true;
@@ -603,7 +603,7 @@ function getDisplayStatus(status) {
 
 function getItineraryDocumentLabel(status) {
     const normalized = (status || "").toLowerCase();
-    if (["ticketed", "issued"].includes(normalized)) return "E-Ticket";
+    if (["ticketed"].includes(normalized)) return "E-Ticket";
     if (["canceled", "cancelled"].includes(normalized)) return "Canceled Itinerary";
     if (normalized === "booked") return "On Hold Itinerary";
     if (!normalized) return "Itinerary";
@@ -771,7 +771,7 @@ onMounted(() => {
                             <ClockIcon class="h-4 w-4" />
                             Expires in: {{ getRemainingTime(booking.expiry_time) }}
                         </div>
-                        <!-- <div v-else-if="['ticketed', 'issued'].includes(booking?.status?.toLowerCase())"
+                        <!-- <div v-else-if="['ticketed'].includes(booking?.status?.toLowerCase())"
                             :class="[
                                 'mr-auto inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-semibold',
                                 isVoidDisabled(booking)
@@ -859,13 +859,13 @@ onMounted(() => {
                             </DialogContent>
                         </Dialog>
                         <button
-                            :disabled="['canceled', 'issued', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
+                            :disabled="['canceled', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
                             @click="openDialog"
                             class="px-3 py-1.5 text-xs font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
                             Approve
                         </button>
                         <button
-                            :disabled="['canceled', 'issued', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
+                            :disabled="['canceled', 'ticketed', 'voided'].includes(booking?.status?.toLowerCase())"
                             @click="isDialogOpen = true"
                             class="px-3 py-1.5 text-xs font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
                             Cancel Booking
