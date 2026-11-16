@@ -1,11 +1,12 @@
 
 <?php
 
-// routes/channels.php
-
 use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Auth; // Make sure Auth is imported
 
-Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
+/*
+ * Every notification is delivered to the intended user's own private
+ * channel. Never authorise a client to listen to another user's channel.
+ */
+Broadcast::channel('users.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });

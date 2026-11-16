@@ -38,6 +38,7 @@ import { formatAmount } from '@/lib/utils';
 import FlightBookingChart from '@/components/common/FlightBookingChart.vue';
 import depositChart from '@/components/common/depositChart.vue';
 import UserChart from '@/components/common/UserChart.vue';
+import TravelTodayWidget from '@/components/common/TravelTodayWidget.vue';
 
 const store = useStore();
 const userStore = useUserStore();
@@ -122,6 +123,7 @@ onMounted(() => {
 
 <template>
   <div class="bg-gray-50 min-h-screen p-4  max-sm:p-1">
+    <TravelTodayWidget />
     <!-- Booking Overview Section -->
     <div class="bg-white mb-6 rounded-xl  overflow-hidden transform transition-all duration-300 hover:shadow-xl">
       <div class="bg-primary p-4">

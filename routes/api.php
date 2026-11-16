@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\SegmentMarginController;
 use App\Http\Controllers\Api\SeoSettingController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\TravelCalendarController;
 use App\Http\Controllers\Api\UmrahPackageController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisaController;
@@ -60,6 +61,7 @@ use Illuminate\Support\Facades\Route;
 
 // Register broadcasting routes for API clients (token-based authentication)
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
+require __DIR__ . '/channels.php';
 
 Route::post('/login/request-otp', [AuthenticatedSessionController::class, 'requestLoginOtp']);
 Route::post('/login/verify-otp', [AuthenticatedSessionController::class, 'verifyLoginOtp']);
@@ -159,6 +161,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
 
+    Route::get('admin/insights', [\App\Http\Controllers\Api\AdminInsightsController::class, 'overview']);
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
     Route::delete('/delete-activity-logs', [ActivityLogController::class, 'delete']);
 
@@ -302,10 +305,12 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('get-customer-margin-values', [CustomerMarginController::class, 'index']);
     Route::post('save-customer-margin-values', [CustomerMarginController::class, 'update']);
 
-    Route::get('/notifications', [NotificationController::class, 'getNotifications']);
-    Route::post('/notifications/read/{id}', [NotificationController::class, 'isReadNotification']);
+    Route::get('/notifications', [NotificationController::class, 'getNotifications'])->middleware('auth:sanctum');
+    Route::post('/notifications/read/{id}', [NotificationController::class, 'isReadNotification'])->middleware('auth:sanctum');
     // Route::delete('/notifications/{id}', [NotificationController::class, 'deleteNotification']);
-    Route::delete('/notifications/clear-all', [NotificationController::class, 'clearAllNotifications']);
+    Route::delete('/notifications/clear-all', [NotificationController::class, 'clearAllNotifications'])->middleware('auth:sanctum');
+    Route::get('/travel-calendar', [TravelCalendarController::class, 'calendar'])->middleware('auth:sanctum');
+    Route::get('/travellers-by-date', [TravelCalendarController::class, 'travellers'])->middleware('auth:sanctum');
 
     // ///////public
 

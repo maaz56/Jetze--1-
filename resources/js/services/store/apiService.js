@@ -553,6 +553,9 @@ export default {
         return apiClient.post("/update-card-allowance", params);
     },
 
+    getAdminInsights(params) {
+        return apiClient.get("/admin/insights", { params });
+    },
     getActivityLogs(params) {
         return apiClient.get("/activity-logs", {
             params: params,
@@ -912,6 +915,12 @@ export default {
     },
     clearAllNotifications() {
         return apiClient.delete("/notifications/clear-all");
+    },
+    getTravellerCalendar(params) {
+        return apiClient.get("/travel-calendar", { params });
+    },
+    getTravellersByDate(params) {
+        return apiClient.get("/travellers-by-date", { params });
     },
 
     saveKeys(params) {

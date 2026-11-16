@@ -1400,6 +1400,11 @@ function scrollToSearchTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function modifySearch() {
+    isSearchCompact.value = false;
+    nextTick(scrollToSearchTop);
+}
+
 function applyAllFilters() {
     refreshFilteredFlights();
 }
@@ -4534,6 +4539,18 @@ watch(isLoggedIn, (newVal) => {
                                     : "Your selected filters are too strict. Try clearing some filters to see more flight options."
                             }}
                         </p>
+                        <div v-if="showNoFlightsState" class="mt-5 flex flex-wrap justify-center gap-3">
+                            <Button type="button" @click="searchFlights">
+                                Search Again
+                            </Button>
+                            <Button
+                                type="button"
+                                class="border border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
+                                @click="modifySearch"
+                            >
+                                Modify Search
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

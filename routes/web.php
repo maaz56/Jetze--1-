@@ -5,9 +5,6 @@ use App\Http\Controllers\BlogPageController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\Auth\GoogleController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Broadcast;
-
-Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::get('/auth/google', [GoogleController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);

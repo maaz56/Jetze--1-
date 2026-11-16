@@ -105,7 +105,7 @@ class RegisteredUserController extends Controller
             // ===================================================
             Auth::login($user);
             DB::commit();
-            
+
             return response()->json([
                 'success' => true,
                 'user' => $user,

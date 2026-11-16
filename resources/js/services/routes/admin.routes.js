@@ -12,6 +12,18 @@ export const adminRoutes = [
                 component: () => import("@/pages/admin/Dashboard.vue"),
                 meta: { requiredRole: 'admin' }
             },
+            {
+                path: "travel-calendar",
+                name: "TravelCalendar",
+                component: () => import("@/pages/admin/TravelCalendar.vue"),
+                meta: { requiredRole: 'admin' },
+            },
+            {
+                path: "marketing-insights",
+                name: "MarketingInsights",
+                component: () => import("@/pages/admin/MarketingInsights.vue"),
+                meta: { requiredRole: 'admin' },
+            },
             // add
              {
                 path: "promotions",

@@ -81,6 +81,8 @@ class FlightController extends Controller
 
     public function index(Request $request)
     {
+        \App\Models\FlightSearch::record($request);
+
         // Determine the flight type
         $flightType = $request->flightType;
 
@@ -356,6 +358,8 @@ class FlightController extends Controller
         if (strtoupper((string) $request->input('airline')) !== 'AT') {
             abort(422, 'This streaming endpoint currently supports AT searches only.');
         }
+
+        \App\Models\FlightSearch::record($request);
 
         $flightType = $request->input('flightType');
         $params = [

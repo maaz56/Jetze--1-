@@ -54,6 +54,20 @@
             :class="{ 'admin-sidebar-icon-active': $route.name === 'AdminCustomerBookings' }" />
           Bookings
         </router-link>
+        <router-link :to="{ name: 'TravelCalendar' }"
+          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'TravelCalendar' }"
+          v-if="authStore.hasPermission('view-bookings')">
+          <Notebook class="admin-sidebar-icon"
+            :class="{ 'admin-sidebar-icon-active': $route.name === 'TravelCalendar' }" />
+          Travel Calendar
+        </router-link>
+        <router-link :to="{ name: 'MarketingInsights' }"
+          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'MarketingInsights' }"
+          v-if="authStore.user.role === 'admin'">
+          <TrendingUp class="admin-sidebar-icon"
+            :class="{ 'admin-sidebar-icon-active': $route.name === 'MarketingInsights' }" />
+          Insights
+        </router-link>
         <router-link :to="{ name: 'AdminHotelBookings' }"
           class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }"
           v-if="authStore.hasPermission('view-bookings')">
@@ -209,6 +223,7 @@ import {
   ChevronLeft,
   ChevronRight,
   XCircle,
+  TrendingUp,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from "vue";
 import { useStore } from 'vuex';

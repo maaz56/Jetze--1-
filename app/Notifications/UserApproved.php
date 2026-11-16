@@ -10,8 +10,6 @@ use App\Models\User;
 
 class UserApproved extends Notification
 {
-    // use Queueable; // Not needed if not queued
-
     public $user;
 
     public function __construct(User $user)
@@ -21,7 +19,7 @@ class UserApproved extends Notification
 
     public function via($notifiable)
     {
-        return ['mail', 'database', 'broadcast'];
+        return ['database', 'broadcast', 'mail'];
     }
 
     public function toMail($notifiable)
@@ -35,16 +33,12 @@ class UserApproved extends Notification
     public function toArray($notifiable)
     {
         return [
-            'id' => $this->id,
-            'data' => [
-                'user_id' => $this->user->id,
-                'name' => $this->user->name,
-                'email' => $this->user->email,
-                'type' => 'user_approved',
-                'heading' => 'Account Approved',
-                'description' => 'Your account has been approved by the admin.'
-            ],
-            'read_at' => null
+            'user_id' => $this->user->id,
+            'name' => $this->user->name,
+            'email' => $this->user->email,
+            'type' => 'user_approved',
+            'heading' => 'Account Approved',
+            'description' => 'Your account has been approved by the admin.',
         ];
     }
 
@@ -53,13 +47,8 @@ class UserApproved extends Notification
         return new BroadcastMessage($this->toArray($notifiable));
     }
 
-    public function broadcastOn()
-    {
-        return ['is-approved-' . $this->user->id];
-    }
-
     public function broadcastAs()
     {
-        return 'approval-event';
+        return 'user-approved';
     }
 }

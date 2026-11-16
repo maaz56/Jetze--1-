@@ -11,7 +11,8 @@ import {
 import { useAuthStore } from "@/services/stores/auth";
 import { Bell } from 'lucide-vue-next';
 import Pusher from 'pusher-js';
-import { computed, defineProps, onBeforeUnmount, onMounted, ref } from 'vue';
+import apiClient from '@/config/axios';
+import { computed, defineProps, onBeforeUnmount, watch } from 'vue';
 import { useStore } from 'vuex';
 
 const props = defineProps({
@@ -33,13 +34,8 @@ const authStore = useAuthStore();
 const store = useStore();
 const user = computed(() => authStore.user);
 
-// Notifications array for real-time updates
-const notifications = ref([]);
-const messages = ref([]); // For storing received messages
-let notificationInterval = null;
 let pusher = null;
 let channel = null;
-let channelEvent = null;
 
 const fetchedNotifications = computed(() => store.getters['notification/notifications'] || []);
 const isLoading = computed(() => store.getters['notification/isLoading']);
@@ -66,44 +62,72 @@ const notificationButtonClass = computed(() => {
     return props.buttonClass || "rounded-full h-10 w-10 sm:h-11 sm:w-11 hover:bg-white/20";
 });
 
-onMounted(() => {
-    fetchNotifications();
-    // Listen for notifications on user-specific channel
-    const pusherKey = import.meta.env.VITE_APP_PUSHER_APP_KEY;
-    notificationInterval = setInterval(() => {
-        pusher = new Pusher(pusherKey, {
-            cluster: 'ap2'
-        });
-        const userId = user.value?.id;
-        if (userId || props.isAdmin) {
-            const subscribe = props.isAdmin ? 'admin-notification' : `is-approved-${userId}`;
-            channelEvent = props.isAdmin ? 'admin-event' : `approval-event`;
-            channel = pusher.subscribe(subscribe);
-            channel.bind(channelEvent, function (data) {
-                // Make data reactive and commit to Vuex state
-                const reactiveData = { ...data };
-                const currentNotifications = store.getters['notification/notifications'] || [];
-                store.commit('notification/setNotifications', [reactiveData, ...currentNotifications]);
-            });
-            clearInterval(notificationInterval);
-            notificationInterval = null;
-        }
-    }, 10000);
-});
-
-onBeforeUnmount(() => {
-    if (notificationInterval) {
-        clearInterval(notificationInterval);
-        notificationInterval = null;
-    }
-
-    if (channel && channelEvent) {
-        channel.unbind(channelEvent);
+function disconnectPusher() {
+    if (channel) {
+        pusher?.unsubscribe(channel.name);
+        channel = null;
     }
 
     if (pusher) {
         pusher.disconnect();
+        pusher = null;
     }
+}
+
+function connectPusher(userId) {
+    disconnectPusher();
+
+    const pusherKey = import.meta.env.VITE_APP_PUSHER_APP_KEY;
+    if (!pusherKey || !userId) return;
+
+    pusher = new Pusher(pusherKey, {
+        cluster: import.meta.env.VITE_APP_PUSHER_APP_CLUSTER || 'ap2',
+        forceTLS: true,
+        channelAuthorization: {
+            customHandler: async ({ socketId, channelName }, callback) => {
+                try {
+                    const response = await apiClient.post('broadcasting/auth', {
+                        socket_id: socketId,
+                        channel_name: channelName,
+                    });
+                    callback(null, response.data);
+                } catch (error) {
+                    callback(error, null);
+                }
+            },
+        },
+    });
+
+    channel = pusher.subscribe(`private-users.${userId}`);
+    channel.bind('user-approved', handleNotification);
+    channel.bind('new-user-registered', handleNotification);
+}
+
+function handleNotification(data) {
+    const currentNotifications = store.getters['notification/notifications'] || [];
+    // Laravel broadcasts notification fields at the top level, whereas the
+    // notifications API returns them inside `data`. Keep both sources in one
+    // shape so the title, description, and linked user ID render consistently.
+    const notification = {
+        id: data.id,
+        type: data.type,
+        data: data.data || data,
+        read_at: data.read_at || null,
+        created_at: data.created_at || new Date().toISOString(),
+    };
+
+    if (!currentNotifications.some((current) => current.id === notification.id)) {
+        store.commit('notification/setNotifications', [notification, ...currentNotifications]);
+    }
+}
+
+watch(user, (currentUser) => {
+    fetchNotifications();
+    connectPusher(currentUser?.id);
+}, { immediate: true });
+
+onBeforeUnmount(() => {
+    disconnectPusher();
 });
 </script>
 

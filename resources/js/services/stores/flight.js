@@ -4,6 +4,18 @@ import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import { toast } from "vue3-toastify";
 
+const MAX_MISSING_RESPONSE_RETRIES = 2;
+const retryDelay = (attempt) => new Promise((resolve) => {
+    setTimeout(resolve, 400 * attempt);
+});
+
+const isMissingJsonResponseError = (error) =>
+    error?.missingResponse === true ||
+    (error?.isAxiosError === true && !error.response);
+
+const isMissingStreamResponseError = (error) =>
+    error?.missingResponse === true || error instanceof TypeError;
+
 export const useFlightStore = defineStore("flight", {
     state: () => ({
         flights: null,
@@ -31,7 +43,7 @@ export const useFlightStore = defineStore("flight", {
         getValidationErrors: (state) => state.validationErrors,
     },
     actions: {
-        async fetchFlights(params) {
+        async fetchFlights(params, retryCount = 0) {
             this.isFlightLoading = true;
             try {
                 // Prepare parameters, ensuring trips array is properly formatted for multi-city
@@ -50,6 +62,12 @@ export const useFlightStore = defineStore("flight", {
                 const response = await apiService.get("/flights", {
                     params: requestParams,
                 });
+
+                if (!response?.data) {
+                    const error = new Error("Flight search returned no response.");
+                    error.missingResponse = true;
+                    throw error;
+                }
 
 
                 // Log response for debugging
@@ -71,9 +89,22 @@ export const useFlightStore = defineStore("flight", {
                 this.sooperFlights = response.data.sooper_flights;
                 this.validationErrors = [];
             } catch (error) {
+                if (
+                    retryCount < MAX_MISSING_RESPONSE_RETRIES &&
+                    isMissingJsonResponseError(error)
+                ) {
+                    await retryDelay(retryCount + 1);
+                    return this.fetchFlights(params, retryCount + 1);
+                }
+
                 console.error("Error fetching flights:", error);
+                // A missing response is not a successful flight search. Clear
+                // stale results so the search page can render its no-results
+                // state after all providers have completed.
+                this.flights = [];
+                this.sooperFlights = [];
                 toast(
-                    "Failed to fetch flights. Please check your input and try again.",
+                    "No flights found. Please try another route or date.",
                     {
                         type: "error",
                     },
@@ -93,7 +124,7 @@ export const useFlightStore = defineStore("flight", {
                 this.isFlightLoading = false;
             }
         },
-        async streamAtFlights(params) {
+        async streamAtFlights(params, retryCount = 0) {
             this.isFlightLoading = true;
             this.sooperFlights = [];
             this.validationErrors = [];
@@ -133,8 +164,10 @@ export const useFlightStore = defineStore("flight", {
                     body: JSON.stringify(params),
                 });
 
-                if (!response.ok || !response.body) {
-                    throw new Error(`AT stream request failed (${response.status})`);
+                if (!response?.ok || !response.body) {
+                    const error = new Error(`AT stream request failed (${response?.status ?? "no response"})`);
+                    error.missingResponse = !response || !response.body;
+                    throw error;
                 }
 
                 const reader = response.body.getReader();
@@ -200,9 +233,18 @@ export const useFlightStore = defineStore("flight", {
                 flushPendingFlights();
                 if (streamError) throw streamError;
             } catch (error) {
+                if (
+                    retryCount < MAX_MISSING_RESPONSE_RETRIES &&
+                    isMissingStreamResponseError(error)
+                ) {
+                    await retryDelay(retryCount + 1);
+                    return this.streamAtFlights(params, retryCount + 1);
+                }
+
                 console.error("Error streaming AT flights:", error);
-                toast(error.message || "AT flight search failed. Please try again.", { type: "error" });
-                this.validationErrors = [{ message: error.message || "AT flight search failed." }];
+                this.sooperFlights = [];
+                toast("No flights found. Please try another route or date.", { type: "error" });
+                this.validationErrors = [{ message: "No flights found." }];
                 throw error;
             } finally {
                 this.isFlightLoading = false;

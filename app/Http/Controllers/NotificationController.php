@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
@@ -12,16 +11,14 @@ class NotificationController extends Controller
     public function getNotifications()
     {
         $user = Auth::user();
-        $notifications = Notification::where('notifiable_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $notifications = $user->notifications()->latest()->get();
         return response()->json($notifications);
     }
 
     // Mark a notification as read
     public function isReadNotification($id)
     {
-        $notification = Notification::find($id);
+        $notification = Auth::user()->notifications()->find($id);
         if (!$notification) {
             return response()->json(['success' => false, 'message' => 'Notification not found.'], 404);
         }
@@ -46,7 +43,7 @@ class NotificationController extends Controller
     public function clearAllNotifications()
     {
         $user = Auth::user();
-        Notification::where('notifiable_id', $user->id)->delete();
+        $user->notifications()->delete();
         return response()->json(['success' => true]);
     }
 }
