@@ -3,6 +3,9 @@ namespace App\Services;
 use App\Models\Country;
 use App\Transformers\AtFlightTransformer;
 use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Promise\Create;
+use Psr\Http\Message\RequestInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Request;
@@ -20,6 +23,8 @@ class AtApiService
     private const DM_VALIDATION_CACHE_PREFIX = 'AT_DM_VALIDATION_';
     private const ACCESS_TOKEN_CACHE_KEY = 'AT_ACCESS_TOKEN';
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
+    // Signature calls to make when AT answers without a usable token.
+    private const ACCESS_TOKEN_MAX_ATTEMPTS = 2;
     private const WEB_SETTINGS_CACHE_TTL_MINUTES = 60;
     private const HTTP_TIMEOUT_SECONDS = 300;
     private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
@@ -50,7 +55,11 @@ class AtApiService
     public function __construct()
     {
 
+        $stack = HandlerStack::create();
+        $stack->push($this->refreshTokenOnUnauthorizedMiddleware(), 'at_refresh_token_on_401');
+
         $this->client = new Client([
+            'handler' => $stack,
             'verify' => config('at.ca_bundle'),
             'timeout' => self::HTTP_TIMEOUT_SECONDS,
             'connect_timeout' => self::HTTP_CONNECT_TIMEOUT_SECONDS,
@@ -69,14 +78,111 @@ class AtApiService
 
 
 
-    protected function getAccessToken()
+    /**
+     * Return a valid AT access token.
+     *
+     * A cached token is used only when it is present and non-empty. Otherwise
+     * (nothing cached, empty/null token, or $forceRefresh after a 401) the
+     * signature API is called again and the new token is cached. If AT answers
+     * without a token, the call is repeated before giving up.
+     */
+    protected function getAccessToken(bool $forceRefresh = false)
     {
-        $cachedAccessToken = $this->getCachedAccessToken();
+        if ($forceRefresh) {
+            $this->forgetCachedAccessToken();
+        } else {
+            $cachedAccessToken = $this->getCachedAccessToken();
 
-        if ($cachedAccessToken) {
-            return $cachedAccessToken;
+            if ($cachedAccessToken) {
+                return $cachedAccessToken;
+            }
         }
 
+        $accessToken = null;
+
+        for ($attempt = 1; $attempt <= self::ACCESS_TOKEN_MAX_ATTEMPTS; $attempt++) {
+            $accessToken = $this->requestNewAccessToken();
+
+            if (is_array($accessToken) && !empty($accessToken['Token'])) {
+                $this->cacheAccessToken($accessToken);
+
+                return $accessToken;
+            }
+
+            Log::warning('AT access token missing in signature response.', [
+                'attempt' => $attempt,
+                'max_attempts' => self::ACCESS_TOKEN_MAX_ATTEMPTS,
+            ]);
+        }
+
+        Log::error('AT access token could not be obtained. Check AT_MERCHANT_ID / AT_API_KEY credentials.');
+
+        return $accessToken;
+    }
+
+    private function forgetCachedAccessToken(): void
+    {
+        try {
+            Cache::forget(self::ACCESS_TOKEN_CACHE_KEY);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to clear AT access token from cache.', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Guzzle middleware: when AT rejects a request with 401 (expired/invalid
+     * token, e.g. a stale cached one), fetch a fresh token, save it, and send
+     * the same request once more with the new Authorization header.
+     */
+    private function refreshTokenOnUnauthorizedMiddleware(): callable
+    {
+        return function (callable $handler): callable {
+            return function (RequestInterface $request, array $options) use ($handler) {
+                // Returns a retried promise when the request was a 401 that a
+                // fresh token can fix, or null to leave the outcome untouched.
+                $retryWithFreshToken = function (?int $status) use ($handler, $request, $options) {
+                    $isSignatureCall = str_contains($request->getUri()->getPath(), '/Utils/Signature');
+
+                    if ($status !== 401 || $isSignatureCall || !empty($options['at_token_refreshed'])) {
+                        return null;
+                    }
+
+                    Log::warning('AT returned 401. Fetching a fresh access token and retrying once.', [
+                        'path' => $request->getUri()->getPath(),
+                    ]);
+
+                    $fresh = $this->getAccessToken(true);
+
+                    if (!is_array($fresh) || empty($fresh['Token'])) {
+                        return null;
+                    }
+
+                    $options['at_token_refreshed'] = true;
+
+                    return $handler($request->withHeader('Authorization', $fresh['Token']), $options);
+                };
+
+                // Depending on where this middleware sits relative to Guzzle's
+                // http_errors step, a 401 arrives as a response or an exception.
+                return $handler($request, $options)->then(
+                    fn ($response) => $retryWithFreshToken($response->getStatusCode()) ?? $response,
+                    function ($reason) use ($retryWithFreshToken) {
+                        $status = $reason instanceof RequestException
+                            ? $reason->getResponse()?->getStatusCode()
+                            : null;
+
+                        return $retryWithFreshToken($status) ?? Create::rejectionFor($reason);
+                    }
+                );
+            };
+        };
+    }
+
+    /** Call AT's signature API once. Returns the decoded response (may lack a token). */
+    private function requestNewAccessToken(): ?array
+    {
         $signaturePayload = [];
 
         try {
@@ -112,13 +218,9 @@ class AtApiService
                 Log::warning('AT access token response missing token.', [
                     'response' => $accessToken,
                 ]);
-
-                return $accessToken;
             }
 
-            $this->cacheAccessToken($accessToken);
-
-            return $accessToken;
+            return is_array($accessToken) ? $accessToken : null;
 
         } catch (RequestException $e) {
 
