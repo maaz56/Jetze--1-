@@ -29,6 +29,10 @@ class AtApiService
     private const PNR_HTTP_CONNECT_TIMEOUT_SECONDS = 10;
     private const SEARCH_MAX_POLLS = 15;
     private const SEARCH_POLL_INTERVAL_SECONDS = 2;
+    // AT sometimes finishes a search with Completed=true and no trips at all.
+    // Start a brand-new search (new TUI) after a short delay before accepting "no flights".
+    private const SEARCH_EMPTY_COMPLETE_MAX_RETRIES = 1;
+    private const SEARCH_EMPTY_COMPLETE_RETRY_DELAY_SECONDS = 2;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -253,34 +257,80 @@ class AtApiService
             return $this->searchTripsOneByOne($payload, $trips, $headers, $searchUrl, $onBatch);
         }
         Log::info('ExpressSearch payload: '. json_encode($payload));
-        try {
-            $request = new Request(
-                'POST',
-                $searchUrl,
-                $headers,
-                json_encode($payload)
-            );
 
-            $expressSearchStartedAt = microtime(true);
-            $response = $this->client->send($request);
-            $responseBody = json_decode($response->getBody(), true);
-            Log::info('AT ExpressSearch supplier timing.', [
-                'supplier_ms' => round((microtime(true) - $expressSearchStartedAt) * 1000, 2),
-            ]);
+        // Each attempt is a full ExpressSearch (fresh TUI) + GetExpSearch polling.
+        return $this->retryEmptyCompletedSearch(function () use ($searchUrl, $headers, $payload, $onBatch) {
+            try {
+                $request = new Request(
+                    'POST',
+                    $searchUrl,
+                    $headers,
+                    json_encode($payload)
+                );
 
-            if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
-                $this->getWebSettings($responseBody['TUI']);
+                $expressSearchStartedAt = microtime(true);
+                $response = $this->client->send($request);
+                $responseBody = json_decode($response->getBody(), true);
+                Log::info('AT ExpressSearch supplier timing.', [
+                    'supplier_ms' => round((microtime(true) - $expressSearchStartedAt) * 1000, 2),
+                ]);
 
-                return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch);
+                if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
+                    $this->getWebSettings($responseBody['TUI']);
+
+                    return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch);
+                }
+
+                Log::warning('Flight search returned non-success message');
+                return null;
+
+            } catch (RequestException $e) {
+                Log::error('Error searching flights: ' . $e->getMessage());
+                return null;
+            }
+        }, $onBatch, 'ExpressSearch');
+    }
+
+    /**
+     * Run a complete AT search and, when AT finishes (Completed=true) without a
+     * single trip, start a fresh search (new TUI) after a short delay.
+     *
+     * @param callable():?array $search Performs one full search and returns its result.
+     */
+    private function retryEmptyCompletedSearch(callable $search, ?callable $onBatch, string $label): ?array
+    {
+        $retries = 0;
+
+        while (true) {
+            $result = $search();
+
+            if (
+                !is_array($result)
+                || !$this->isEmptyCompletedSearch($result)
+                || $retries >= self::SEARCH_EMPTY_COMPLETE_MAX_RETRIES
+                || connection_aborted()
+            ) {
+                return $result;
             }
 
-            Log::warning('Flight search returned non-success message');
-            return null;
+            $retries++;
+            Log::warning("AT {$label} completed with no trips. Starting a fresh search after delay.", [
+                'tui' => $result['TUI'] ?? null,
+                'retry' => $retries,
+                'max_retries' => self::SEARCH_EMPTY_COMPLETE_MAX_RETRIES,
+                'delay_seconds' => self::SEARCH_EMPTY_COMPLETE_RETRY_DELAY_SECONDS,
+            ]);
 
-        } catch (RequestException $e) {
-            Log::error('Error searching flights: ' . $e->getMessage());
-            return null;
+            // Keep the SSE stream alive while waiting.
+            $this->emitSearchBatch($onBatch, ['Trips' => [], 'Heartbeat' => true], $result, 1);
+            sleep(self::SEARCH_EMPTY_COMPLETE_RETRY_DELAY_SECONDS);
         }
+    }
+
+    private function isEmptyCompletedSearch(array $result): bool
+    {
+        return strtolower((string) ($result['Completed'] ?? '')) === 'true'
+            && !$this->searchResponseHasJourneys($result);
     }
 
     /**
@@ -723,6 +773,18 @@ private function removePreviouslySeenJourneys(array $response, array &$seenJourn
  * - ['Trips' => ['Trip' => [...]]]
  * - ['Trips' => [...]]
  */
+/** True when at least one trip in the response contains a journey. */
+private function searchResponseHasJourneys(?array $response): bool
+{
+    foreach ($this->extractTrips($response['Trips'] ?? []) as $trip) {
+        if (is_array($trip) && !empty($trip['Journey'])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 private function extractTrips($tripsData): array
 {
     if (empty($tripsData)) {
@@ -2096,29 +2158,37 @@ private function extractTrips($tripsData): array
             $tripPayload['Trips'] = [$trip];
 
             try {
-                $request = new Request(
-                    'POST',
-                    $searchUrl,
-                    $headers,
-                    json_encode($tripPayload)
-                );
+                $tripTui = null;
+                $tripResult = $this->retryEmptyCompletedSearch(function () use ($searchUrl, $headers, $tripPayload, $index, &$tripTui) {
+                    $request = new Request(
+                        'POST',
+                        $searchUrl,
+                        $headers,
+                        json_encode($tripPayload)
+                    );
 
-                Log::info('DM flight search request payload for trip ' . ($index + 1) . ': ', $tripPayload);
+                    Log::info('DM flight search request payload for trip ' . ($index + 1) . ': ', $tripPayload);
 
-                $response = $this->client->send($request);
-                $responseBody = json_decode($response->getBody(), true);
-                Log::info('DM flight search response received.', [
-                    'trip_number' => $index + 1,
-                    'success' => isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === 'Success',
-                ]);
+                    $response = $this->client->send($request);
+                    $responseBody = json_decode($response->getBody(), true);
+                    Log::info('DM flight search response received.', [
+                        'trip_number' => $index + 1,
+                        'success' => isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === 'Success',
+                    ]);
 
-                if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
-                    Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
-                    return null;
+                    if (!isset($responseBody['Msg'][0]) || $responseBody['Msg'][0] !== "Success") {
+                        Log::warning('DM flight search returned non-success message for trip ' . ($index + 1));
+                        return null;
+                    }
+
+                    $tripTui = $responseBody['TUI'];
+
+                    return $this->getSearchFlightsRes($tripTui);
+                }, null, 'DM trip ' . ($index + 1) . ' search');
+
+                if ($tripTui !== null) {
+                    $tuis[] = $tripTui;
                 }
-
-                $tuis[] = $responseBody['TUI'];
-                $tripResult = $this->getSearchFlightsRes($responseBody['TUI']);
 
                 if (empty($tripResult) || !is_array($tripResult)) {
                     Log::warning('DM flight search result is empty for trip ' . ($index + 1));
