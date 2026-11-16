@@ -486,18 +486,18 @@ watch(user, (newUser) => {
             <span class="text-2xl font-bold">New Deposit</span>
             <div class="space-y-6">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <div class="grid content-start">
+                    <div class="grid content-start gap-1">
                         <label>Date</label>
                         <Input class="text-black" v-model="date" type="date" />
                     </div>
-                    <div class="grid content-start">
+                    <div class="grid content-start gap-1">
                         <label>Amount</label>
                         <Input type="number" placeholder="Enter amount" v-model="amount" />
                     </div>
-                    <div class="grid content-start">
+                    <div class="grid content-start gap-1">
                         <label>Payment type</label>
                         <Select v-model="paymentType">
-                            <SelectTrigger>
+                            <SelectTrigger class="h-11">
                                 <SelectValue :placeholder="'Select a payment type'" />
                             </SelectTrigger>
                             <SelectContent>
@@ -527,11 +527,11 @@ watch(user, (newUser) => {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div class="grid content-start">
+                    <div class="grid content-start gap-1">
                         <label>Currency</label>
                         <Select v-model="depositCurrency"
                             :disabled="paymentType === 'abhipay-deposit' || selectedBankId !== null">
-                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                            <SelectTrigger class="h-11"><SelectValue placeholder="Select currency" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem v-for="currency in currencies" :key="currency.code" :value="currency.code">
                                     {{ currency.code }}
@@ -540,7 +540,7 @@ watch(user, (newUser) => {
                         </Select>
                     </div>
 
-                    <div class="grid content-start">
+                    <div class="grid content-start gap-1">
                         <label>Additional details</label>
                         <Input placeholder="Details..." v-model="additionalDetails" />
                     </div>
@@ -721,6 +721,11 @@ watch(user, (newUser) => {
                                             }">
                                                 {{ deposit.deposit_status || "_" }}
                                             </span>
+                                            <p v-if="deposit.deposit_status === 'rejected' && deposit.rejection_reason"
+                                                class="mt-1 max-w-[220px] truncate text-xs text-red-600"
+                                                :title="deposit.rejection_reason">
+                                                Reason: {{ deposit.rejection_reason }}
+                                            </p>
                                         </td>
                                         <td class="px-1 py-4">{{ formatAmount(deposit.source_money?.amount ?? deposit.amount, deposit.source_money?.currency ?? deposit.currency) }}</td>
                                         <td class="px-1 py-4">
@@ -869,6 +874,15 @@ watch(user, (newUser) => {
                                                     </button>
 
                                                 </div>
+                                            </div>
+
+                                            <!-- Admin's reason when the deposit was rejected -->
+                                            <div v-if="selectedDeposit?.deposit_status === 'rejected' && selectedDeposit?.rejection_reason"
+                                                class="space-y-1 col-span-2">
+                                                <p class="font-medium text-gray-500">Reason for rejection</p>
+                                                <p class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                                    {{ selectedDeposit.rejection_reason }}
+                                                </p>
                                             </div>
 
                                             <!-- Reference ID (REF_ID from your table) -->
