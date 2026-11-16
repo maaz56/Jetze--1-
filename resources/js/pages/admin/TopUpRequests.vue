@@ -15,7 +15,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { useStore } from "vuex";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { Input } from "@/components/ui/input";
 import {
     Command,
@@ -36,7 +36,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import Calender from "@/components/common/Calender.vue";
-import { Receipt, SaveIcon } from "lucide-vue-next";
+import { Plus, SaveIcon } from "lucide-vue-next";
 import { useUserStore } from "@/services/stores/user";
 import {
     FETCH_TRANSACTIONS,
@@ -84,6 +84,7 @@ const additionalDetails = ref("");
 const formErrors = ref({});
 const formError = ref(null);
 const isSubmitting = ref(false);
+const isAddOpen = ref(false);
 
 const selectedBank = computed(() => banks.value.find((b) => b.id === selectedBankId.value) || null);
 const selectedCustomer = computed(() =>
@@ -171,7 +172,7 @@ async function handleDepositData() {
         data.append("payment_method", "bank");
 
         await store.dispatch(`deposit/${SAVE_DEPOSIT_DATA}`, data);
-        resetDepositForm();
+        isAddOpen.value = false;
         fetchAgentsDeposits();
     } catch (err) {
         const validationErrors = err?.response?.data?.errors || {};
@@ -183,6 +184,12 @@ async function handleDepositData() {
         isSubmitting.value = false;
     }
 }
+
+// Opening starts a clean form; closing (Save, Cancel, X, outside click) discards it.
+watch(isAddOpen, (open) => {
+    formError.value = null;
+    if (!open) resetDepositForm();
+});
 
 function fetchTransactions() {
     store.dispatch("transaction/" + FETCH_TRANSACTIONS);
@@ -221,36 +228,25 @@ onMounted(() => {
         <div>
             <div class="flex items-center justify-between my-8">
                 <span class="text-3xl font-medium">All Top Up Requests</span>
+                <Button class="text-white" @click="isAddOpen = true">
+                    <Plus class="w-4 h-4 mr-2" />
+                    Add Top Up Request
+                </Button>
             </div>
-            <div v-if="banks.length" class="bg-white rounded-lg border overflow-hidden mb-6">
-                <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Select Bank to Deposit</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <button v-for="bank in banks" :key="bank.id" type="button"
-                            class="bg-gray-50 rounded-lg p-4 flex items-center text-left hover:bg-gray-100 transition"
-                            :class="{ 'ring-2 ring-primary': selectedBankId === bank.id }" @click="selectBank(bank)">
-                            <Receipt v-if="!bank?.logo_path" class="h-8 w-8 text-yellow-500 mr-4 shrink-0" />
-                            <img v-else :src="bank.logo_path" :alt="bank.bank_name"
-                                class="h-8 w-8 object-contain mr-4 shrink-0" />
-                            <div>
-                                <p class="text-sm font-medium text-gray-600">{{ bank.bank_name || "N/A" }}</p>
-                                <p class="text-lg font-semibold text-gray-800">{{ bank.account_title || "N/A" }}</p>
-                                <p class="text-sm text-gray-700">Account: {{ bank.account_number || "N/A" }}</p>
-                                <p class="text-sm text-gray-700">IBAN: {{ bank.iban || "N/A" }}</p>
-                                <p class="text-xs font-bold text-primary mt-1">{{ bank.currency }}</p>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <!-- Add top up request -->
+            <Dialog v-model:open="isAddOpen">
+                <DialogContent class="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle class="text-2xl">Add Top Up Request</DialogTitle>
+                        <DialogDescription>
+                            Add a deposit to a customer's account. It is saved as pending until you approve it.
+                        </DialogDescription>
+                    </DialogHeader>
 
-            <div class="bg-white p-6 rounded-lg border mb-6">
-                <h2 class="text-2xl font-bold mb-4">New Deposit</h2>
+                    <div v-if="formError" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
 
-                <div v-if="formError" class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
-
-                <form class="space-y-6" @submit.prevent="handleDepositData">
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <form id="topup-form" class="space-y-6" @submit.prevent="handleDepositData">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="grid gap-1">
                             <label class="text-sm font-medium">Customer <span class="text-red-500">*</span></label>
                             <Popover v-model:open="isCustomerOpen">
@@ -334,21 +330,26 @@ onMounted(() => {
                             <p v-if="formErrors.receipt_image" class="text-xs text-red-600">{{ formErrors.receipt_image }}</p>
                         </div>
 
-                        <div class="grid gap-1 md:col-span-2 xl:col-span-3">
+                        <div class="grid gap-1 md:col-span-2">
                             <label class="text-sm font-medium">Additional details <span class="text-xs text-muted-foreground">(Document Reference)</span></label>
                             <Input v-model="additionalDetails" placeholder="Details..." />
                         </div>
                     </div>
 
-                    <div class="flex justify-end">
-                        <Button type="submit" :disabled="isSubmitting">
+                    </form>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" :disabled="isSubmitting" @click="isAddOpen = false">
+                            Cancel
+                        </Button>
+                        <Button type="submit" form="topup-form" class="text-white" :disabled="isSubmitting">
                             <LoaderIcon v-if="isSubmitting" class="w-4 h-4 mr-2 animate-spin" />
                             <SaveIcon v-else class="w-4 h-4 mr-2" />
-                            {{ isSubmitting ? "Saving..." : "Deposit" }}
+                            {{ isSubmitting ? "Saving..." : "Save Top Up Request" }}
                         </Button>
-                    </div>
-                </form>
-            </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div class="bg-white dark:bg-gray-800 relative sm:rounded-lg overflow-hidden border">
                 <div class="overflow-x-auto">

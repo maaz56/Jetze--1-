@@ -69,7 +69,6 @@ const date = ref(new Date().toISOString().slice(0, 10));
 const amount = ref("");
 const receiptImage = ref(null);
 const receiptInputKey = ref(0);
-const receiptPreview = ref(null);
 const paymentType = ref();
 const selectedBankId = ref(null);
 const selectedCurrencyCode = ref(getSelectedCurrencyCode());
@@ -199,10 +198,7 @@ function fetchBanks() {
 }
 
 const handleReceiptImage = (event) => {
-    if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
     receiptImage.value = event.target.files?.[0] || null;
-    receiptPreview.value = receiptImage.value && ['image/jpeg', 'image/png', 'image/gif'].includes(receiptImage.value.type)
-        && receiptImage.value.size <= 2 * 1024 * 1024 ? URL.createObjectURL(receiptImage.value) : null;
 };
 
 const formatCurrency = (value) => {
@@ -268,8 +264,6 @@ async function handleDepositData() {
         date.value = new Date().toISOString().slice(0, 10);
         amount.value = "";
         receiptImage.value = null;
-        if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
-        receiptPreview.value = null;
         receiptInputKey.value++;
         paymentType.value = "";
         selectedBankId.value = null;
@@ -375,7 +369,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     window.removeEventListener("currency-changed", refreshForCurrencyChange);
-    if (receiptPreview.value) URL.revokeObjectURL(receiptPreview.value);
 });
 
 watch(user, (newUser) => {
@@ -493,21 +486,15 @@ watch(user, (newUser) => {
             <span class="text-2xl font-bold">New Deposit</span>
             <div class="space-y-6">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <div class="grid">
+                    <div class="grid content-start">
                         <label>Date</label>
                         <Input class="text-black" v-model="date" type="date" />
                     </div>
-                    <div class="grid">
+                    <div class="grid content-start">
                         <label>Amount</label>
                         <Input type="number" placeholder="Enter amount" v-model="amount" />
                     </div>
-                    <div class="grid gap-1" v-if="paymentType !== 'abhipay-deposit'">
-                        <label for="receipt-image">Receipt image <span class="text-red-600">*</span></label>
-                        <Input :key="receiptInputKey" id="receipt-image" type="file" accept="image/jpeg,image/png,image/gif" required @change="handleReceiptImage" />
-                        <p class="text-xs text-gray-500">JPEG, PNG or GIF, up to 2 MB. PDF files are not accepted.</p>
-                        <img v-if="receiptPreview" :src="receiptPreview" alt="Selected receipt preview" class="mt-2 max-h-40 rounded border object-contain" />
-                    </div>
-                    <div class="grid">
+                    <div class="grid content-start">
                         <label>Payment type</label>
                         <Select v-model="paymentType">
                             <SelectTrigger>
@@ -540,7 +527,7 @@ watch(user, (newUser) => {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div class="grid">
+                    <div class="grid content-start">
                         <label>Currency</label>
                         <Select v-model="depositCurrency"
                             :disabled="paymentType === 'abhipay-deposit' || selectedBankId !== null">
@@ -553,9 +540,15 @@ watch(user, (newUser) => {
                         </Select>
                     </div>
 
-                    <div class="grid">
+                    <div class="grid content-start">
                         <label>Additional details</label>
                         <Input placeholder="Details..." v-model="additionalDetails" />
+                    </div>
+
+                    <div class="grid min-w-0 content-start gap-1" v-if="paymentType !== 'abhipay-deposit'">
+                        <label for="receipt-image">Receipt image <span class="text-red-600">*</span></label>
+                        <Input :key="receiptInputKey" id="receipt-image" type="file" accept="image/jpeg,image/png,image/gif" required @change="handleReceiptImage" />
+                        <p class="text-xs text-gray-500">JPEG, PNG or GIF, up to 2 MB. PDF files are not accepted.</p>
                     </div>
                 </div>
                 <div v-if="formErrors.length || error" role="alert" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

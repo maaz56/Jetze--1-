@@ -128,7 +128,8 @@ const actions = {
         context.commit(IS_LOADING);
         try {
             const response = await apiService.updateDepositStatus(params);
-            toast('Deposit approved successfully.', {
+            const outcome = { 0: 'set to pending', 1: 'approved', 2: 'rejected' }[params?.status] ?? 'updated';
+            toast(`Deposit ${outcome} successfully.`, {
                 "type": "success",
             })
         } catch (error) {
