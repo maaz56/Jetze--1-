@@ -28,7 +28,11 @@ class SystemNotification extends Notification
 
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
-        return new BroadcastMessage($this->toArray($notifiable));
+        // Laravel replaces `type` with the notification class name on broadcasts,
+        // so keep the real event type (e.g. deposit_submitted) under its own key.
+        return new BroadcastMessage($this->toArray($notifiable) + [
+            'notification_type' => $this->payload['type'] ?? null,
+        ]);
     }
 
     public function broadcastAs(): string

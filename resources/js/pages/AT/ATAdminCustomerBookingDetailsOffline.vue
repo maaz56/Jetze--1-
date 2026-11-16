@@ -89,6 +89,21 @@ const ledgerBalance = computed(() => {
 });
 const hasNegativeLedgerBalance = computed(() => ledgerBalance.value !== null && ledgerBalance.value < 0);
 
+/** Locked AED amount of this booking; the AED ledger must be compared with this, not a provider-currency total. */
+const requiredAed = computed(() => {
+    const booking = bookingDetails.value?.[0];
+
+    return Number(booking?.price_snapshot?.aed_amount ?? booking?.aed_amount);
+});
+/** Balance (AED) cannot cover this booking's locked AED amount. */
+const hasInsufficientBalance = computed(() => !(
+    ledgerBalance.value !== null
+    && Number.isFinite(requiredAed.value)
+    && ledgerBalance.value >= requiredAed.value
+));
+// Why the admin warning is shown: 'negative' ledger or 'insufficient' balance.
+const ledgerWarningType = ref('negative');
+
 /** Read the permanent AED accounting amount locked from the checkout quote. */
 const lockedAdminBookingMoney = computed(() => {
     const booking = bookingDetails.value?.[0];
@@ -333,10 +348,10 @@ function sendEmail() {
 }
 
 
-function fetchAgentLedger() {
+async function fetchAgentLedger() {
     if (agent_id) {
         try {
-            store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
+            await store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
                 userId: agent_id,
             });
             loading.value = false;
@@ -628,17 +643,31 @@ function calculatePnrFinalFare() {
 //     });
 // }
 
-function handleConfirmDialogOpen() {
-    // An admin can still issue a ticket for a customer with a negative ledger,
-    // but must explicitly acknowledge that risk before the ticket is issued.
-    if (isAdmin.value && hasNegativeLedgerBalance.value) {
-        isNegativeLedgerWarningOpen.value = true;
+async function handleConfirmDialogOpen() {
+    // Use the latest ledger so the balance check is never based on stale data.
+    await fetchAgentLedger();
+
+    if (isAdmin.value) {
+        // An admin can still issue a ticket for a customer with a negative or too-low
+        // balance, but must explicitly acknowledge that risk first.
+        if (hasNegativeLedgerBalance.value) {
+            ledgerWarningType.value = 'negative';
+            isNegativeLedgerWarningOpen.value = true;
+            return;
+        }
+
+        if (ledgerBalance.value !== null && Number.isFinite(requiredAed.value) && ledgerBalance.value < requiredAed.value) {
+            ledgerWarningType.value = 'insufficient';
+            isNegativeLedgerWarningOpen.value = true;
+            return;
+        }
+
+        isConfirmDialogOpen.value = true;
         return;
     }
 
-    // Admins confirm operational bookings without using the customer's wallet.
-    // Non-admin customers still require the balance check before confirmation.
-    if (!isAdmin.value && ledgerBalance.value !== null && ledgerBalance.value < totalTicketPrice?.value) {
+    // Customers must have enough AED balance for the locked AED booking amount.
+    if (hasInsufficientBalance.value) {
         isLowBalanceDialogOpen.value = true;
         return;
     }
@@ -1201,7 +1230,7 @@ onMounted(async () => {
                         @click.self="isNegativeLedgerWarningOpen = false">
                         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
                             <div class="flex items-start justify-between mb-4">
-                                <h3 class="text-lg font-medium text-red-700">Negative Ledger Balance</h3>
+                                <h3 class="text-lg font-medium text-red-700">{{ ledgerWarningType === 'negative' ? 'Negative Ledger Balance' : 'Insufficient Balance' }}</h3>
                                 <button @click="isNegativeLedgerWarningOpen = false"
                                     class="text-gray-400 hover:text-gray-500 focus:outline-none" aria-label="Close warning">
                                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1213,7 +1242,8 @@ onMounted(async () => {
 
                             <div class="rounded-md border border-red-200 bg-red-50 p-3">
                                 <p class="text-sm font-medium text-red-800">Customer ledger balance: AED {{ ledgerBalance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
-                                <p class="mt-2 text-sm text-red-700">This customer's ledger is negative. Do you still want to issue this ticket?</p>
+                                <p v-if="ledgerWarningType === 'insufficient'" class="mt-1 text-sm font-medium text-red-800">Booking amount: AED {{ requiredAed?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                                <p class="mt-2 text-sm text-red-700">{{ ledgerWarningType === 'negative' ? "This customer's ledger is negative." : "This customer's balance is not enough to cover this booking." }} Do you still want to issue this ticket?</p>
                             </div>
 
                             <div class="mt-6 flex justify-end space-x-3">
@@ -1272,7 +1302,7 @@ onMounted(async () => {
                         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
                             <div class="flex items-start justify-between mb-4">
                                 <h3 class="text-lg font-medium text-gray-900">Low Balance Warning</h3>
-                                <button @click="isConfirmDialogOpen = false"
+                                <button @click="isLowBalanceDialogOpen = false"
                                     class="text-gray-400 hover:text-gray-500 focus:outline-none">
                                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

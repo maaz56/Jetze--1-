@@ -45,7 +45,7 @@ class NewUserRegistered extends Notification
 
       public function toBroadcast($notifiable)
     {
-        return new BroadcastMessage($this->toArray($notifiable));
+        return new BroadcastMessage($this->toArray($notifiable) + ['notification_type' => 'new_user']);
     }
 
     public function broadcastAs()

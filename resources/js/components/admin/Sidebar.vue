@@ -52,7 +52,10 @@
           v-if="authStore.hasPermission('view-bookings')">
           <Notebook class="admin-sidebar-icon"
             :class="{ 'admin-sidebar-icon-active': $route.name === 'AdminCustomerBookings' }" />
-          Bookings
+          <span class="flex-1">Bookings</span>
+          <span v-if="unreadCount('booking_created') > 0" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+            {{ unreadCount('booking_created') }}
+          </span>
         </router-link>
         <router-link :to="{ name: 'TravelCalendar' }"
           class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'TravelCalendar' }"
@@ -97,7 +100,10 @@
           v-if="authStore.hasPermission('manage-bookings')">
           <Notebook class="admin-sidebar-icon"
             :class="{ 'admin-sidebar-icon-active': $route.name === 'ModifyRequests' }" />
-          Modify Requests
+          <span class="flex-1">Modify Requests</span>
+          <span v-if="unreadCount('modify_request_submitted') > 0" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+            {{ unreadCount('modify_request_submitted') }}
+          </span>
           </router-link>
         <!-- <router-link :to="{ name: 'OfflineBookings' }"
           class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors duration-200" :class="{
@@ -150,6 +156,14 @@
         {{ readAtCounter }}
       </span>
 
+      <!-- New items inside this section (shown while it is collapsed too) -->
+      <span
+        v-if="sectionUnreadCount(section) > 0"
+        class="ml-auto mr-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold normal-case text-white"
+      >
+        {{ sectionUnreadCount(section) }}
+      </span>
+
       <ChevronDown
         :class="{ 'transform rotate-180': openSections[index] }"
         class="w-4 h-4 transition-transform duration-200"
@@ -171,7 +185,13 @@
             :class="{ 'admin-sidebar-icon-active': $route.name === item.to.name }"
           />
 
-          {{ item.name }}
+          <span class="flex-1">{{ item.name }}</span>
+          <span
+            v-if="item.notify && unreadCount(item.notify) > 0"
+            class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
+          >
+            {{ unreadCount(item.notify) }}
+          </span>
         </router-link>
 
       </template>
@@ -225,8 +245,10 @@ import {
   XCircle,
   TrendingUp,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useAttrs, watch } from "vue";
+import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
+import { ADMIN_NOTIFICATION_SECTIONS, notificationKind } from "@/lib/notificationKinds";
 import SocialLinks from "../common/SocialLinks.vue";
 import { GearIcon } from "@radix-icons/vue";
 import { useAuthStore } from "@/services/stores/auth";
@@ -266,6 +288,7 @@ const menuSections = [
         name: "Top up Requests",
         to: { name: "TopUpRequest" },
         icon: Coins,
+        notify: 'deposit_submitted',
         permission: 'manage-finance'
       },
       // { name: "Refund Requests", to: { name: "" }, icon: ArrowLeftRight },
@@ -373,6 +396,7 @@ const menuSections = [
         name: "Customers",
         to: { name: "Customers" },
         icon: Users,
+        notify: 'new_user',
         permission: 'manage-customers'
 
       },
@@ -438,10 +462,39 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
 })
+const route = useRoute();
 const fetchedNotifications = computed(() => store.getters['notification/notifications'] || []);
 const readAtCounter = computed(() => {
   return fetchedNotifications.value.filter(n => !n.read_at).length;
 });
+
+// Unread notifications grouped by kind; updates live (the bell feeds the same store).
+const unreadByKind = computed(() => {
+  const counts = {};
+  for (const n of fetchedNotifications.value) {
+    if (n.read_at) continue;
+    const kind = notificationKind(n);
+    if (kind) counts[kind] = (counts[kind] || 0) + 1;
+  }
+  return counts;
+});
+const unreadCount = (kind) => unreadByKind.value[kind] || 0;
+const sectionUnreadCount = (section) =>
+  (section?.items || []).reduce((sum, item) => sum + (item.notify ? unreadCount(item.notify) : 0), 0);
+
+// A new cancellation request keeps its accurate pending badge in sync.
+watch(() => unreadCount('booking_request_submitted'), () => loadPendingRequestsCount());
+
+// Opening a section marks its notifications as read, which clears the badge.
+function markSectionNotificationsRead(routeName) {
+  for (const [kind, routes] of Object.entries(ADMIN_NOTIFICATION_SECTIONS)) {
+    if (!routes.includes(routeName)) continue;
+    fetchedNotifications.value
+      .filter((n) => !n.read_at && notificationKind(n) === kind)
+      .forEach((n) => store.dispatch('notification/readNotification', { id: n.id }));
+  }
+}
+watch(() => route.name, (name) => markSectionNotificationsRead(name));
 
 // Initialize all sections as closed
 const openSections = ref(menuSections.map(() => false));

@@ -67,10 +67,14 @@ const now = ref(Date.now());
 let countdownInterval;
 const isStatusDialogOpen = ref(false);
 const isNegativeLedgerWarningOpen = ref(false);
+// Why the ledger warning is shown: 'negative' ledger, or 'insufficient' balance.
+const ledgerWarningType = ref('negative');
 const isStatusUpdating = ref(false);
 const statusForm = ref({
     booking_id: null,
     status: "booked",
+    // Locked AED amount of the booking being updated (same basis as the AED ledger).
+    required_aed: null,
 });
 const statusOptions = [
     "booked",
@@ -85,13 +89,24 @@ const statusOptions = [
 ];
 const selectedCustomerLedger = computed(() => store.getters["ledger/agentLedgerData"]);
 const selectedCustomerLedgerBalance = computed(() => {
-    const amount = selectedCustomerLedger.value?.balance_money?.amount ?? selectedCustomerLedger.value?.balance;
+    // `balance` is always the raw AED ledger figure; `balance_money` is only for display.
+    const amount = selectedCustomerLedger.value?.balance ?? selectedCustomerLedger.value?.balance_money?.amount;
     const balance = typeof amount === "string" ? Number(amount.replace(/,/g, "")) : Number(amount);
 
     return Number.isFinite(balance) ? balance : null;
 });
 const isIssuingStatus = computed(() => ["ticketed", "issued"].includes(String(statusForm.value.status).toLowerCase()));
 const hasNegativeSelectedCustomerLedger = computed(() => selectedCustomerLedgerBalance.value !== null && selectedCustomerLedgerBalance.value < 0);
+// Positive balance that still cannot cover this booking's locked AED amount.
+const hasInsufficientSelectedCustomerLedger = computed(() => {
+    const required = Number(statusForm.value.required_aed);
+
+    return selectedCustomerLedgerBalance.value !== null
+        && selectedCustomerLedgerBalance.value >= 0
+        && Number.isFinite(required)
+        && required > 0
+        && selectedCustomerLedgerBalance.value < required;
+});
 
 function filterBookings(type) {
     activeFilter.value = type
@@ -161,6 +176,8 @@ function fetchBookings() {
 async function openStatusDialog(booking) {
     statusForm.value.booking_id = booking.id;
     statusForm.value.status = booking.status || "booked";
+    // Same fallback the ledger uses when it debits a booking: COALESCE(aed_amount, amount).
+    statusForm.value.required_aed = booking.price_snapshot?.aed_amount ?? booking.aed_amount ?? booking.amount ?? null;
 
     // Load the selected customer's ledger, rather than using the admin's own balance.
     if (booking.agent_id) {
@@ -179,6 +196,13 @@ function requestBookingStatusUpdate() {
     }
 
     if (isIssuingStatus.value && hasNegativeSelectedCustomerLedger.value) {
+        ledgerWarningType.value = 'negative';
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
+    if (isIssuingStatus.value && hasInsufficientSelectedCustomerLedger.value) {
+        ledgerWarningType.value = 'insufficient';
         isNegativeLedgerWarningOpen.value = true;
         return;
     }
@@ -523,29 +547,48 @@ onUnmounted(() => clearInterval(countdownInterval));
             </DialogContent>
         </Dialog>
 
-        <div v-if="isNegativeLedgerWarningOpen"
-            class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4"
-            @click.self="isNegativeLedgerWarningOpen = false">
-            <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-                <div class="mb-4 flex items-start justify-between">
-                    <h3 class="text-lg font-medium text-red-700">Negative Ledger Balance</h3>
-                    <button @click="isNegativeLedgerWarningOpen = false" class="text-gray-400 hover:text-gray-500" aria-label="Close warning">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
+        <!-- Uses the same Dialog as the status dialog so it can be closed (it used to be a
+             plain overlay that the modal status dialog blocked clicks on). -->
+        <Dialog v-model:open="isNegativeLedgerWarningOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle class="text-red-700">
+                        {{ ledgerWarningType === 'negative' ? 'Negative Ledger Balance' : 'Insufficient Balance' }}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Review the customer's balance before changing this booking to {{ statusForm.status }}.
+                    </DialogDescription>
+                </DialogHeader>
                 <div class="rounded-md border border-red-200 bg-red-50 p-3">
-                    <p class="text-sm font-medium text-red-800" dir="ltr">Customer ledger balance: -AED {{ formatAmount(Math.abs(selectedCustomerLedgerBalance || 0)) }}</p>
-                    <p class="mt-2 text-sm text-red-700">This customer’s ledger is negative. Do you still want to set this booking to {{ statusForm.status }}?</p>
+                    <p v-if="ledgerWarningType === 'negative'" class="text-sm font-medium text-red-800" dir="ltr">
+                        Customer ledger balance: -AED {{ formatAmount(Math.abs(selectedCustomerLedgerBalance || 0)) }}
+                    </p>
+                    <template v-else>
+                        <p class="text-sm font-medium text-red-800" dir="ltr">
+                            Customer ledger balance: AED {{ formatAmount(selectedCustomerLedgerBalance || 0) }}
+                        </p>
+                        <p class="mt-1 text-sm font-medium text-red-800" dir="ltr">
+                            Booking amount: AED {{ formatAmount(Number(statusForm.required_aed) || 0) }}
+                        </p>
+                    </template>
+                    <p class="mt-2 text-sm text-red-700">
+                        {{ ledgerWarningType === 'negative'
+                            ? 'This customer’s ledger is negative.'
+                            : 'This customer’s balance is not enough to cover this booking.' }}
+                        Do you still want to set this booking to {{ statusForm.status }}?
+                    </p>
                 </div>
-                <div class="mt-6 flex justify-end gap-3">
-                    <button @click="isNegativeLedgerWarningOpen = false" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button @click="continueWithNegativeLedger" :disabled="isStatusUpdating" class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">
+                <DialogFooter>
+                    <button @click="isNegativeLedgerWarningOpen = false"
+                        class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button @click="continueWithNegativeLedger" :disabled="isStatusUpdating"
+                        class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">
                         {{ isStatusUpdating ? 'Updating...' : 'Continue & Update Status' }}
                     </button>
-                </div>
-            </div>
-        </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>

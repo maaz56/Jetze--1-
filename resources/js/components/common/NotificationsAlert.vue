@@ -9,6 +9,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/services/stores/auth";
+import { notificationKind } from "@/lib/notificationKinds";
 import { Bell } from 'lucide-vue-next';
 import Pusher from 'pusher-js';
 import apiClient from '@/config/axios';
@@ -62,11 +63,13 @@ function adminNotificationLink(n) {
     const d = n?.data?.data || n?.data || {};
     let url = d.url || '';
 
-    if (url.includes('/admin/deposit-details') || d.type === 'deposit_submitted') {
+    const kind = notificationKind(n);
+
+    if (url.includes('/admin/deposit-details') || kind === 'deposit_submitted') {
         const id = d.deposit_id || new URLSearchParams(url.split('?')[1] || '').get('DepositId');
         if (id) return `/admin/deposit-details?deposit_id=${id}`;
     }
-    if (d.type === 'new_user' && d.user_id) {
+    if (kind === 'new_user' && d.user_id) {
         return `/admin/customer-details?customer_id=${d.user_id}`;
     }
     if (url) return url;
