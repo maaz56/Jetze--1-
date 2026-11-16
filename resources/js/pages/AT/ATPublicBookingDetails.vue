@@ -1184,7 +1184,7 @@ onMounted(() => {
                     <!-- Print Section - Main Content -->
                     <div :class="isChatOpen && modifyRequestData ? 'w-8/12' : 'w-full'" id="print-section">
                         <ATETicket v-for="booking in bookingDetails" :key="booking.id" :booking="booking"
-                            :agent="agentData?.agent_data" logo="/public/assets/logo.png"
+                            :agent="agentData?.agent_data" logo="/assets/logo.png"
                             :pnr="atPnrReferences.crs" :airline-pnr="atPnrReferences.airline"
                             :pnr-details="pnrDetails"
                             :expiry="booking.status === 'booked' ? getRemainingTime(booking.expiry_time) : ''"

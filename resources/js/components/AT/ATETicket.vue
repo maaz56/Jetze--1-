@@ -45,7 +45,14 @@ const isDense = computed(() => {
 });
 
 const companyName = computed(() => props.agent?.company_name || "Jetze Travels");
-const logoSrc = computed(() => props.logo || props.agent?.logo || "/public/assets/logo.png");
+const defaultLogoSrc = "/assets/logo.png";
+const logoSrc = computed(() => props.logo || props.agent?.logo || defaultLogoSrc);
+const useDefaultLogo = (event) => {
+    const image = event.target;
+    if (image.getAttribute("src") !== defaultLogoSrc) {
+        image.setAttribute("src", defaultLogoSrc);
+    }
+};
 
 const status = computed(() => (props.booking?.status || "").toLowerCase());
 const statusTone = computed(() => {
@@ -277,7 +284,7 @@ const passengerName = (traveller) =>
     <main class="et-ticket" :class="{ 'et-ticket--dense': isDense }">
         <header class="et-head">
             <div class="et-brand">
-                <img :src="logoSrc" :alt="companyName" />
+                <img :src="logoSrc" :alt="companyName" @error="useDefaultLogo" />
                 <div>
                     <h1>{{ companyName.toUpperCase() }}</h1>
                     <p>Your Journey, Our Priority</p>

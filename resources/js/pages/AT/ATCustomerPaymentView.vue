@@ -559,7 +559,7 @@
                       </div>
                       <!-- Flight Path -->
                       <div class="flex-1 flex flex-col items-center">
-                        <p class="text-xs text-gray-500 mb-1">{{ formatDuration(flight.travel_time) }}</p>
+                        <p class="text-xs text-gray-500 mb-1">{{ formatFlightDuration(segment, flight.travel_time) }}</p>
                         <div class="w-full flex items-center">
                           <div class="w-2 h-2 bg-primary rounded-full"></div>
                           <div class="flex-1 h-0.5 bg-gradient-to-r from-primary to-primary/30"></div>
@@ -1402,9 +1402,19 @@ const formatPassengerName = (passenger) => {
     .filter(Boolean)
     .join(' ');
 };
-const formatFlightDuration = (segment) => {
-  const diff = moment(segment.arrival_at).diff(moment(segment.departure_at), 'minutes');
-  return moment.utc(moment.duration(diff, 'minutes').asMilliseconds()).format('HH[h] mm[m]');
+const formatFlightDuration = (segment, fallbackDuration) => {
+  const departure = moment.parseZone(segment?.departure_at);
+  const arrival = moment.parseZone(segment?.arrival_at);
+
+  if (departure.isValid() && arrival.isValid()) {
+    const duration = arrival.diff(departure, 'minutes');
+
+    if (duration >= 0) {
+      return formatDuration(duration);
+    }
+  }
+
+  return formatDuration(fallbackDuration);
 };
 
 const addExtraServicesToBooking = () => {
