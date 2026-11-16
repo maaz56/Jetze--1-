@@ -178,8 +178,8 @@ const isChatOpen = ref(false);
 
 
 
-const booking = ref(null);
 const atPnrReferences = computed(() => {
+    const storedBooking = bookingDetails.value?.[0];
     const flight = pnrData.value?.Trips
         ?.flatMap((trip) => trip?.Journey || [])
         ?.flatMap((journey) => journey?.Segments || [])
@@ -187,8 +187,8 @@ const atPnrReferences = computed(() => {
         ?.find(Boolean);
 
     return {
-        crs: flight?.CRSPNR || booking.value?.itinerary_ref || "-",
-        airline: flight?.APNR || flight?.AirlinePNR || booking.value?.airline_pnr || "-",
+        crs: storedBooking?.itinerary_ref || "-",
+        airline: flight?.APNR || flight?.AirlinePNR || storedBooking?.airline_pnr || "-",
     };
 });
 const flightData = ref(null);
