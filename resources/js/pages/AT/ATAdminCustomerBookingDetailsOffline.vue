@@ -81,6 +81,12 @@ const agentData = computed(() => store.getters["user/agentData"]);
 // const offlineBookings = computed(() => store.getters["flight/bookingData"]);
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const ledgerBalance = computed(() => {
+    const balance = Number(agentLedger.value?.balance);
+
+    return Number.isFinite(balance) ? balance : null;
+});
+const hasNegativeLedgerBalance = computed(() => ledgerBalance.value !== null && ledgerBalance.value < 0);
 
 /** Read the permanent AED accounting amount locked from the checkout quote. */
 const lockedAdminBookingMoney = computed(() => {
@@ -218,6 +224,7 @@ const isDialogOpen = ref(false);
 const isEmailDialogOpen = ref(false);
 const isConfirmDialogOpen = ref(false);
 const isLowBalanceDialogOpen = ref(false);
+const isNegativeLedgerWarningOpen = ref(false);
 const isChargesOpen = ref(false);
 const charges = ref("");
 const chargesDate = ref("");
@@ -570,14 +577,26 @@ function calculatePnrFinalFare() {
 // }
 
 function handleConfirmDialogOpen() {
+    // An admin can still issue a ticket for a customer with a negative ledger,
+    // but must explicitly acknowledge that risk before the ticket is issued.
+    if (isAdmin.value && hasNegativeLedgerBalance.value) {
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
     // Admins confirm operational bookings without using the customer's wallet.
     // Non-admin customers still require the balance check before confirmation.
-    if (!isAdmin.value && agentLedger?.value.balance < totalTicketPrice?.value) {
+    if (!isAdmin.value && ledgerBalance.value !== null && ledgerBalance.value < totalTicketPrice?.value) {
         isLowBalanceDialogOpen.value = true;
         return;
     }
 
     isConfirmDialogOpen.value = true;
+}
+
+function continueWithNegativeLedger() {
+    isNegativeLedgerWarningOpen.value = false;
+    confirmBooking();
 }
 
 function handleCancelBooking() {
@@ -1127,6 +1146,38 @@ onMounted(async () => {
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2">
                         Confirm Booking
                     </button>
+                    <div v-if="isNegativeLedgerWarningOpen"
+                        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                        @click.self="isNegativeLedgerWarningOpen = false">
+                        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+                            <div class="flex items-start justify-between mb-4">
+                                <h3 class="text-lg font-medium text-red-700">Negative Ledger Balance</h3>
+                                <button @click="isNegativeLedgerWarningOpen = false"
+                                    class="text-gray-400 hover:text-gray-500 focus:outline-none" aria-label="Close warning">
+                                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="rounded-md border border-red-200 bg-red-50 p-3">
+                                <p class="text-sm font-medium text-red-800">Customer ledger balance: AED {{ ledgerBalance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                                <p class="mt-2 text-sm text-red-700">This customer's ledger is negative. Do you still want to issue this ticket?</p>
+                            </div>
+
+                            <div class="mt-6 flex justify-end space-x-3">
+                                <button @click="isNegativeLedgerWarningOpen = false"
+                                    class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    Cancel
+                                </button>
+                                <button @click="continueWithNegativeLedger" :disabled="actionLoading"
+                                    class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                    {{ actionLoading ? 'Issuing...' : 'Continue & Issue Ticket' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <div v-if="isConfirmDialogOpen"
                         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
                         @click.self="isConfirmDialogOpen = false">

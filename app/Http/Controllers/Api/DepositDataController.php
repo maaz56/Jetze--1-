@@ -13,6 +13,7 @@ use App\Services\CurrencyConversionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\DepositData;
+use App\Notifications\SystemNotification;
 use Log;
 use Mail;
 use Storage;
@@ -83,6 +84,14 @@ class DepositDataController extends Controller
         $deposit = DepositData::with(['agent.agentData', 'bank'])->find($deposit->id);
         $this->sendDepositRequestMail($deposit);
         $this->sendDepositRequestReceivedMail($deposit);
+        $this->notifyAdmins([
+            'type' => 'deposit_submitted',
+            'heading' => 'New Deposit Request',
+            'description' => "{$deposit->agent?->name} submitted a deposit request.",
+            'deposit_id' => $deposit->id,
+            'user_id' => $deposit->agent_id,
+            'url' => '/admin/deposit-details?DepositId='.$deposit->id,
+        ]);
 
         return response()->json([
             'message' => 'Deposit created successfully',
@@ -313,6 +322,13 @@ class DepositDataController extends Controller
         } elseif ($deposit->deposit_status === 'rejected') {
             $this->sendDepositStatusMail($deposit);
         }
+        $deposit->agent?->notify(new SystemNotification([
+            'type' => 'deposit_'.$deposit->deposit_status,
+            'heading' => 'Deposit Request '.ucfirst($deposit->deposit_status),
+            'description' => "Your deposit request {$deposit->receipt_reference} was {$deposit->deposit_status}.",
+            'deposit_id' => $deposit->id,
+            'url' => '/deposits',
+        ]));
 
         // Log the updated deposit status
         // Log::info('Updated Deposit Status:', [
@@ -369,6 +385,13 @@ class DepositDataController extends Controller
 
         Mail::to($adminEmail)->queue(
             (new DepositRequestMail($adminEmail, $deposit))->afterCommit()
+        );
+    }
+
+    private function notifyAdmins(array $payload): void
+    {
+        User::query()->where('role', 'admin')->each(
+            fn (User $admin) => $admin->notify(new SystemNotification($payload))
         );
     }
 

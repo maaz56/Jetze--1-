@@ -81,9 +81,15 @@ const CustomerMargin = computed(
 
 const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
+const isAdmin = computed(() => user.value?.role === "admin");
 const agentData = computed(() => store.getters["user/agentData"]);
 const bookingDetails = computed(() => store.getters["flight/customerBooking"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const ledgerBalance = computed(() => {
+    const balance = Number(agentLedger.value?.balance);
+    return Number.isFinite(balance) ? balance : null;
+});
+const hasNegativeLedgerBalance = computed(() => ledgerBalance.value !== null && ledgerBalance.value < 0);
 const pnrDetails = computed(() => store.getters["flight/pnrData"]?.data);
 
 const booking_id = route.query.booking_id;
@@ -95,6 +101,7 @@ const isDialogOpen = ref(false);
 const isEmailDialogOpen = ref(false);
 const isConfirmDialogOpen = ref(false);
 const isLowBalanceDialogOpen = ref(false);
+const isNegativeLedgerWarningOpen = ref(false);
 const isVoidDialogOpen = ref(false);
 const pnrData = ref(null);
 const selectedFares = ref([]);
@@ -391,11 +398,30 @@ function fetchCustomerMarginValues() {
 }
 
 function handleConfirmDialogOpen() {
-    if (agentLedger?.value.balance < totalTicketPrice?.value) {
+    if (isAdmin.value && hasNegativeLedgerBalance.value) {
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
+    if (!isAdmin.value && ledgerBalance.value !== null && ledgerBalance.value < totalTicketPrice?.value) {
         isLowBalanceDialogOpen.value = true;
         return;
     }
     isConfirmDialogOpen.value = true;
+}
+
+function handleApprovalDialogOpen() {
+    if (isAdmin.value && hasNegativeLedgerBalance.value) {
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
+    showDialog.value = true;
+}
+
+function continueWithNegativeLedger() {
+    isNegativeLedgerWarningOpen.value = false;
+    confirmBooking();
 }
 
 function handleCancelBooking() {
@@ -475,7 +501,7 @@ function confirmBooking() {
         error.value = "No PNR provided.";
         return;
     }
-    if (agentData.value?.balance < bookingDetails.value[0]?.amount) {
+    if (!isAdmin.value && agentData.value?.balance < bookingDetails.value[0]?.amount) {
         error.value = "Customer balance is not enough to confirm the booking.";
         return;
     }
@@ -1322,7 +1348,7 @@ onMounted(() => {
                     </Dialog>
                     <button
                         :disabled="['canceled', 'issued', 'ticketed', 'requested', 'voided'].includes(booking?.status)"
-                        @click="showDialog = true"
+                        @click="handleApprovalDialogOpen"
                         class="px-3 py-1.5 text-xs font-medium text-white bg-primary/90 rounded-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
                         Approve
                     </button>
@@ -1405,6 +1431,29 @@ onMounted(() => {
                         <div class="mt-5 flex justify-end space-x-2">
                             <button @click="isDialogOpen = false" class="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                             <button @click="handleCancelBooking" class="px-3 py-1.5 bg-red-600 border border-transparent rounded-md text-xs font-medium text-white hover:bg-red-700">Confirm Cancellation</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="isNegativeLedgerWarningOpen"
+                    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                    @click.self="isNegativeLedgerWarningOpen = false">
+                    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-5 transform transition-all">
+                        <div class="flex items-start justify-between mb-3">
+                            <h3 class="text-base font-medium text-red-700">Negative Ledger Balance</h3>
+                            <button @click="isNegativeLedgerWarningOpen = false" class="text-gray-400 hover:text-gray-500 focus:outline-none" aria-label="Close warning">
+                                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="rounded-md border border-red-200 bg-red-50 p-3">
+                            <p class="text-sm font-medium text-red-800">Customer ledger balance: AED {{ ledgerBalance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                            <p class="mt-2 text-xs text-red-700">This customer's ledger is negative. Do you still want to issue this ticket?</p>
+                        </div>
+                        <div class="mt-5 flex justify-end space-x-2">
+                            <button @click="isNegativeLedgerWarningOpen = false" class="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button @click="continueWithNegativeLedger" class="px-3 py-1.5 bg-red-600 border border-transparent rounded-md text-xs font-medium text-white hover:bg-red-700">Continue & Issue Ticket</button>
                         </div>
                     </div>
                 </div>

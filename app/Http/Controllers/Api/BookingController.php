@@ -17,6 +17,7 @@ use App\Models\Passenger;
 use App\Models\Segment;
 use App\Models\Slice;
 use App\Models\User;
+use App\Notifications\SystemNotification;
 use App\Services\AirSialApiService;
 use App\Services\FlyDubaiApiService;
 use App\Services\OneApiService;
@@ -817,6 +818,19 @@ class BookingController extends Controller
             }
         }
         $flightBooking = FlightBookings::with(['pessangers', 'user.agentData'])->where('id', $flightBooking->id)->first();
+        $pnr = $flightBooking->itinerary_ref ?? $flightBooking->pnr ?? 'N/A';
+        $notification = [
+            'type' => 'booking_created',
+            'heading' => 'New Flight Booking',
+            'description' => "A flight booking was created for PNR {$pnr}.",
+            'booking_id' => $flightBooking->id,
+            'pnr' => $pnr,
+            'url' => '/admin/admin-customer-booking-layout?booking_id='.$flightBooking->id,
+        ];
+        User::query()->where('role', 'admin')->each(
+            fn (User $admin) => $admin->notify(new SystemNotification($notification))
+        );
+        $flightBooking->user?->notify(new SystemNotification($notification));
         Log::info('Expiry Time: ' . $expiryTime);
         CancelBookingJob::dispatch($flightBooking)->delay($expiryTime);
 

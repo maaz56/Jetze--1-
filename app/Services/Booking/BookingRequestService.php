@@ -9,6 +9,7 @@ use App\Models\BookingRequest;
 use App\Models\FlightBookings;
 use App\Models\FlightPassenger;
 use App\Models\User;
+use App\Notifications\SystemNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -283,6 +284,16 @@ class BookingRequestService
 
     private function notifyAdmin(BookingRequest $request): void
     {
+        $pnr = $request->booking?->itinerary_ref ?? $request->booking?->pnr ?? 'N/A';
+        User::query()->where('role', 'admin')->each(fn (User $admin) => $admin->notify(new SystemNotification([
+            'type' => 'booking_request_submitted',
+            'heading' => 'New '.ucfirst($request->type).' Request',
+            'description' => "A {$request->type} request was submitted for PNR {$pnr}.",
+            'booking_id' => $request->booking_id,
+            'booking_request_id' => $request->id,
+            'url' => '/admin/booking-requests',
+        ])));
+
         if (!config('app.booking_email_notifications', true)) {
             return;
         }
@@ -300,6 +311,15 @@ class BookingRequestService
 
     private function notifyRequester(BookingRequest $request): void
     {
+        $request->requester?->notify(new SystemNotification([
+            'type' => 'booking_request_'.$request->status,
+            'heading' => ucfirst($request->type).' Request '.ucfirst($request->status),
+            'description' => "Your {$request->type} request has been {$request->status}.",
+            'booking_id' => $request->booking_id,
+            'booking_request_id' => $request->id,
+            'url' => '/booking-requests',
+        ]));
+
         if (!config('app.booking_email_notifications', true)) {
             return;
         }

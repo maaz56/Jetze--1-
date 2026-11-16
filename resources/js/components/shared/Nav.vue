@@ -63,6 +63,13 @@ const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const ledgerBalanceAmount = computed(() => {
+    const amount = agentLedger.value?.balance_money?.amount ?? agentLedger.value?.balance;
+    const numericAmount = typeof amount === "string" ? Number(amount.replace(/,/g, "")) : Number(amount);
+
+    return Number.isFinite(numericAmount) ? numericAmount : 0;
+});
+const hasNegativeLedgerBalance = computed(() => ledgerBalanceAmount.value < 0);
 const currencies = computed(() => store.getters["currency/currencies"] || []);
 const selectedCurrencyCode = ref(getSelectedCurrencyCode());
 const currencyOptions = computed(() => {
@@ -185,6 +192,13 @@ function formatBalanceAmount(amount) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
+}
+
+function formatLedgerBalance() {
+    const absoluteBalance = Math.abs(ledgerBalanceAmount.value);
+    const sign = hasNegativeLedgerBalance.value ? "-" : "";
+
+    return `${sign}${selectedCurrencySymbol.value} ${formatBalanceAmount(absoluteBalance)}`;
 }
 
 // Nav links featuring core travel booking services (Flights, Hotels, Holidays, Visas, Umrah)
@@ -376,10 +390,10 @@ onUnmounted(() => {
                                 </span>
                             </button>
                             <div class="flex items-center gap-2">
-                                <span :class="['text-[11px] tracking-wider font-bold', isTransparent ? 'text-white' : 'text-slate-500']">Balance:</span>
-                                <div :class="['flex items-center font-bold text-xs sm:text-sm', isTransparent ? 'text-white' : 'text-emerald-400']">
+                                <span :class="['text-[11px] tracking-wider font-bold', hasNegativeLedgerBalance ? (isTransparent ? 'text-red-100' : 'text-red-600') : (isTransparent ? 'text-white' : 'text-slate-500')]">Balance:</span>
+                                <div :class="['flex items-center font-bold text-xs sm:text-sm', hasNegativeLedgerBalance ? (isTransparent ? 'text-red-200' : 'text-red-600') : (isTransparent ? 'text-white' : 'text-emerald-400')]">
                                     <Wallet class="h-3.5 w-3.5 mr-1 shrink-0" />
-                                    <span>{{ selectedCurrencySymbol }} {{ formatBalanceAmount(agentLedger?.balance_money?.amount) }}</span>
+                                    <span dir="ltr">{{ formatLedgerBalance() }}</span>
                                 </div>
                                 <button
                                     @click="goToDashboard('deposits')"
@@ -503,9 +517,9 @@ onUnmounted(() => {
                                             </div>
 
                                             <!-- Agent Balance (if available) -->
-                                            <div v-if="agentLedger?.balance_money" class="mt-2.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                                                <span class="font-medium text-slate-500">Balance:</span>
-                                                <span class="font-extrabold text-emerald-600">{{ selectedCurrencySymbol }} {{ formatBalanceAmount(agentLedger.balance_money.amount) }}</span>
+                                            <div v-if="agentLedger?.balance_money || agentLedger?.balance !== undefined" class="mt-2.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                                                <span :class="['font-medium', hasNegativeLedgerBalance ? 'text-red-600' : 'text-slate-500']">Balance:</span>
+                                                <span dir="ltr" :class="['font-extrabold', hasNegativeLedgerBalance ? 'text-red-600' : 'text-emerald-600']">{{ formatLedgerBalance() }}</span>
                                             </div>
 
                                             <!-- Quick Action Links -->

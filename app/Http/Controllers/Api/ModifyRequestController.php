@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ModifyRequest;
 use App\Models\User;
+use App\Notifications\SystemNotification;
 use Illuminate\Http\Request;
 use Log;
 
@@ -47,6 +48,15 @@ class ModifyRequestController extends Controller
         }
 
         $modifyRequest->save();
+        $modifyRequest->load('booking', 'user');
+        User::query()->where('role', 'admin')->each(fn (User $admin) => $admin->notify(new SystemNotification([
+            'type' => 'modify_request_submitted',
+            'heading' => 'New Modify Request',
+            'description' => "{$modifyRequest->user?->name} submitted a booking modification request.",
+            'booking_id' => $modifyRequest->booking_id,
+            'modify_request_id' => $modifyRequest->id,
+            'url' => '/admin/modify-requests',
+        ], true)));
         
         return response()->json($modifyRequest, 201);
     }
@@ -167,6 +177,14 @@ class ModifyRequestController extends Controller
 
         $modifyRequest->status = $validated['status'];
         $modifyRequest->save();
+        $modifyRequest->user?->notify(new SystemNotification([
+            'type' => 'modify_request_'.$modifyRequest->status,
+            'heading' => 'Modify Request '.ucfirst($modifyRequest->status),
+            'description' => "Your booking modification request has been {$modifyRequest->status}.",
+            'booking_id' => $modifyRequest->booking_id,
+            'modify_request_id' => $modifyRequest->id,
+            'url' => '/customer-bookings-details?booking_id='.$modifyRequest->booking_id,
+        ], true));
 
         Log::info('ModifyRequest status updated: ', $modifyRequest->toArray());
 

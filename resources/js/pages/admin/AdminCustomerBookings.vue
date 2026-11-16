@@ -43,6 +43,7 @@ import {
     FETCH_BOOKING_DATA,
     CUSTOMER_BOOKINGS,
     APPROVE_BOOKING,
+    FETCH_AGENT_LEDGER,
 } from "@/services/store/actions.type";
 import moment from "moment";
 import Badge from "@/components/ui/badge/Badge.vue";
@@ -65,6 +66,8 @@ const activeFilter = ref('all');
 const now = ref(Date.now());
 let countdownInterval;
 const isStatusDialogOpen = ref(false);
+const isNegativeLedgerWarningOpen = ref(false);
+const isStatusUpdating = ref(false);
 const statusForm = ref({
     booking_id: null,
     status: "booked",
@@ -81,6 +84,15 @@ const statusOptions = [
     "canceled",
     // "rejected",
 ];
+const selectedCustomerLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const selectedCustomerLedgerBalance = computed(() => {
+    const amount = selectedCustomerLedger.value?.balance_money?.amount ?? selectedCustomerLedger.value?.balance;
+    const balance = typeof amount === "string" ? Number(amount.replace(/,/g, "")) : Number(amount);
+
+    return Number.isFinite(balance) ? balance : null;
+});
+const isIssuingStatus = computed(() => ["ticketed", "issued"].includes(String(statusForm.value.status).toLowerCase()));
+const hasNegativeSelectedCustomerLedger = computed(() => selectedCustomerLedgerBalance.value !== null && selectedCustomerLedgerBalance.value < 0);
 
 function filterBookings(type) {
     activeFilter.value = type
@@ -147,22 +159,53 @@ function fetchBookings() {
     });
 }
 
-function openStatusDialog(booking) {
+async function openStatusDialog(booking) {
     statusForm.value.booking_id = booking.id;
     statusForm.value.status = booking.status || "booked";
+
+    // Load the selected customer's ledger, rather than using the admin's own balance.
+    if (booking.agent_id) {
+        await store.dispatch(`ledger/${FETCH_AGENT_LEDGER}`, {
+            userId: booking.agent_id,
+            currency_code: "AED",
+        });
+    }
+
     isStatusDialogOpen.value = true;
 }
 
-function updateBookingStatus() {
+function requestBookingStatusUpdate() {
     if (!statusForm.value.booking_id || !statusForm.value.status) {
         return;
     }
+
+    if (isIssuingStatus.value && hasNegativeSelectedCustomerLedger.value) {
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
+    updateBookingStatus();
+}
+
+function continueWithNegativeLedger() {
+    isNegativeLedgerWarningOpen.value = false;
+    updateBookingStatus();
+}
+
+function updateBookingStatus() {
+    if (isStatusUpdating.value) {
+        return;
+    }
+
+    isStatusUpdating.value = true;
     store.dispatch("flight/" + APPROVE_BOOKING, {
         booking_id: statusForm.value.booking_id,
         status: statusForm.value.status,
     }).then(() => {
         isStatusDialogOpen.value = false;
         fetchBookings();
+    }).finally(() => {
+        isStatusUpdating.value = false;
     });
 }
 
@@ -471,12 +514,37 @@ onUnmounted(() => clearInterval(countdownInterval));
                         class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">
                         Cancel
                     </button>
-                    <button @click="updateBookingStatus"
-                        class="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90">
-                        Save
+                    <button @click="requestBookingStatusUpdate" :disabled="isStatusUpdating"
+                        class="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">
+                        {{ isStatusUpdating ? 'Saving...' : 'Save' }}
                     </button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <div v-if="isNegativeLedgerWarningOpen"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4"
+            @click.self="isNegativeLedgerWarningOpen = false">
+            <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+                <div class="mb-4 flex items-start justify-between">
+                    <h3 class="text-lg font-medium text-red-700">Negative Ledger Balance</h3>
+                    <button @click="isNegativeLedgerWarningOpen = false" class="text-gray-400 hover:text-gray-500" aria-label="Close warning">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="rounded-md border border-red-200 bg-red-50 p-3">
+                    <p class="text-sm font-medium text-red-800" dir="ltr">Customer ledger balance: -AED {{ formatAmount(Math.abs(selectedCustomerLedgerBalance || 0)) }}</p>
+                    <p class="mt-2 text-sm text-red-700">This customer’s ledger is negative. Do you still want to set this booking to {{ statusForm.status }}?</p>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button @click="isNegativeLedgerWarningOpen = false" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button @click="continueWithNegativeLedger" :disabled="isStatusUpdating" class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">
+                        {{ isStatusUpdating ? 'Updating...' : 'Continue & Update Status' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </section>
 </template>

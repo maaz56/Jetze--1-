@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use App\Models\User;
 
@@ -18,7 +19,15 @@ class NewUserRegistered extends Notification
 
     public function via($notifiable)
     {
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', 'mail'];
+    }
+
+    public function toMail($notifiable)
+    {
+        return (new MailMessage)
+            ->subject('New User Registered')
+            ->line("{$this->user->name} ({$this->user->email}) has registered on ".config('app.name').'.')
+            ->action('View Users', url('/admin/users'));
     }
 
     public function toArray($notifiable)

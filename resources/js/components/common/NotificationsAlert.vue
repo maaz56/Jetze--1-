@@ -101,6 +101,7 @@ function connectPusher(userId) {
     channel = pusher.subscribe(`private-users.${userId}`);
     channel.bind('user-approved', handleNotification);
     channel.bind('new-user-registered', handleNotification);
+    channel.bind('system-notification', handleNotification);
 }
 
 function handleNotification(data) {
@@ -173,7 +174,7 @@ onBeforeUnmount(() => {
                            
                             <div class="mt-2" v-if="props.isAdmin">
                                 <router-link target="_blank"
-                                    :to="`/admin/user-details?user_id=${n?.data?.user_id|| n?.data?.data?.user_id}`">View Details</router-link>
+                                    :to="n?.data?.url || n?.data?.data?.url || `/admin/user-details?user_id=${n?.data?.user_id || n?.data?.data?.user_id}`">View Details</router-link>
                             </div>
                         </div>
                     </DropdownMenuItem>

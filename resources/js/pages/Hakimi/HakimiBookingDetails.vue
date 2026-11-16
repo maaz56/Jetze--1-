@@ -81,6 +81,11 @@ const isAdmin = computed(() => user.value?.role === "admin" || props.audience ==
 const agentData = computed(() => store.getters["user/agentData"]);
 const storeBookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
+const ledgerBalance = computed(() => {
+    const balance = Number(agentLedger.value?.balance);
+    return Number.isFinite(balance) ? balance : null;
+});
+const hasNegativeLedgerBalance = computed(() => ledgerBalance.value !== null && ledgerBalance.value < 0);
 const livePnrData = computed(() => store.getters["flight/pnrData"]);
 
 const booking = computed(() => {
@@ -229,6 +234,7 @@ const isDialogOpen = ref(false);
 const isEmailDialogOpen = ref(false);
 const isConfirmDialogOpen = ref(false);
 const isLowBalanceDialogOpen = ref(false);
+const isNegativeLedgerWarningOpen = ref(false);
 const isChargesOpen = ref(false);
 const charges = ref("");
 const chargesDate = ref("");
@@ -404,11 +410,21 @@ async function saveCharges() {
 }
 
 function handleConfirmDialogOpen() {
-    if (!isAdmin.value && agentLedger.value?.balance < totalTicketPrice.value) {
+    if (isAdmin.value && hasNegativeLedgerBalance.value) {
+        isNegativeLedgerWarningOpen.value = true;
+        return;
+    }
+
+    if (!isAdmin.value && ledgerBalance.value !== null && ledgerBalance.value < totalTicketPrice.value) {
         isLowBalanceDialogOpen.value = true;
         return;
     }
     isConfirmDialogOpen.value = true;
+}
+
+function continueWithNegativeLedger() {
+    isNegativeLedgerWarningOpen.value = false;
+    confirmBooking();
 }
 
 async function cancelBooking() {
@@ -793,6 +809,33 @@ onMounted(async () => {
                 >
                     Confirm Booking
                 </button>
+
+                <div
+                    v-if="isNegativeLedgerWarningOpen"
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+                    @click.self="isNegativeLedgerWarningOpen = false"
+                >
+                    <div class="w-full max-w-md transform rounded-lg bg-white p-6 shadow-xl transition-all">
+                        <div class="mb-4 flex items-start justify-between">
+                            <h3 class="text-lg font-medium text-red-700">Negative Ledger Balance</h3>
+                            <button @click="isNegativeLedgerWarningOpen = false" class="text-gray-400 hover:text-gray-500 focus:outline-none" aria-label="Close warning">
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="rounded-md border border-red-200 bg-red-50 p-3">
+                            <p class="text-sm font-medium text-red-800">Customer ledger balance: AED {{ ledgerBalance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                            <p class="mt-2 text-sm text-red-700">This customer's ledger is negative. Do you still want to issue this ticket?</p>
+                        </div>
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button @click="isNegativeLedgerWarningOpen = false" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button @click="continueWithNegativeLedger" :disabled="actionLoading" class="rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                {{ actionLoading ? "Issuing..." : "Continue & Issue Ticket" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <div
                     v-if="isConfirmDialogOpen"
