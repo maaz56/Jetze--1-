@@ -225,7 +225,6 @@ export const SEND_ADD_TO_CART = "sendAddToCart";
 
 
 export const SEND_PRICE_REQUEST = "sendPriceRequest";
-export const SEND_SOOPER_QOUTE = "sendSooperQuote";
 export const FETCH_ANCILLARIES = "fetchAncillaries";
 export const PATCH_ANCILLARIES = "patchAncillaries";
 

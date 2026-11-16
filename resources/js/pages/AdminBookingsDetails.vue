@@ -1,8 +1,6 @@
 <script setup>
 
 import { useRoute, useRouter } from 'vue-router';
-import SabreBookingDetailsOffline from './Sabre/SabreBookingDetailsOffline.vue';
-import AirsialBookingDetailsOffline from './Airsial/AirsialBookingDetailsOffline.vue';
 import HakimiBookingDetails from './Hakimi/HakimiBookingDetails.vue';
 import { onMounted, ref } from 'vue';
 const router = useRouter();
@@ -15,7 +13,5 @@ onMounted(()=>{
 })
 </script>
 <template>
-    <SabreBookingDetailsOffline v-if="provider === 'sabre' && flight_mode === 'B2B'" />
-    <AirsialBookingDetailsOffline v-if="provider === 'airsial' && flight_mode === 'B2B'" />
     <HakimiBookingDetails v-if="String(provider || '').toLowerCase() === 'hakimi'" />
 </template>

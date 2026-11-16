@@ -76,7 +76,7 @@
                             $totalFlights = count($flights);
                             $providerRaw = (string) ($booking->flight_provider ?? $flightData['provider']['name'] ?? '');
                             $providerLower = strtolower(trim($providerRaw));
-                            $flightProvider = $providerLower === 'oneapi' ? 'OneApi' : 'travelport';
+                            $flightProvider = $providerLower === 'hakimi' ? 'hakimi' : 'at';
                             $flightMode = (string) ($booking->booking_mode ?? 'B2C');
                             $bookingSource = (string) ($booking->booking_source ?? 'web');
                             $bookingId = (string) ($booking->id ?? '');

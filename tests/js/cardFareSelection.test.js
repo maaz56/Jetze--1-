@@ -11,7 +11,3 @@ test("selects a leg fare without changing the other leg", () => {
 test("selects both references of a provider-approved return combination", () => {
     assert.deepEqual(updateCardFareReferences(["old-out", "old-return"], 0, { fare_references: ["new-out", "new-return"] }), ["new-out", "new-return"]);
 });
-
-test("selects a shared Travelport fare across the legs", () => {
-    assert.deepEqual(updateCardFareReferences(["first", "second"], 0, { ref_id: "shared" }, true), ["shared", "shared"]);
-});

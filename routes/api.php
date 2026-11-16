@@ -22,7 +22,6 @@ use App\Http\Controllers\Api\DepositController;
 use App\Http\Controllers\Api\DepositDataController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\FlightController;
-use App\Http\Controllers\Api\FlyDubaiController;
 use App\Http\Controllers\Api\GroupTicketController;
 use App\Http\Controllers\Api\HolidayPackageController;
 use App\Http\Controllers\Api\HotDealController;
@@ -206,7 +205,6 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('flight-quotes/{quoteUuid}', [FlightController::class, 'showPriceQuote'])->middleware('auth:sanctum');
     Route::get('flight/{id}/{supplier}/{isSooperFlight}', [FlightController::class, 'show']);
     Route::get('flight-quotation', [FlightController::class, 'sendQuotation']);
-    Route::get('booking-details', [FlightController::class, 'getBookingDetails']);
 
     Route::post('updateAirlineMargin', [AirlineController::class, 'updateAirline']);
     Route::post('airlines', [AirlineController::class, 'store']);
@@ -333,7 +331,6 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::post('sort-flights', [FlightController::class, 'sortFlights']);
     Route::get('flights', [FlightController::class, 'index']);
     Route::post('ancillaries', [BookingController::class, 'getAncillaries']);
-    Route::post('patch-ancillaries', [BookingController::class, 'patchAncillaries']);
     Route::post('cancel-pnr', [BookingController::class, 'cancelPnrDetails']);
 
     Route::post('confirm-pnr', [BookingController::class, 'confirmPnr']);
@@ -411,10 +408,7 @@ Route::get('get-customer-margin-values', [CustomerMarginController::class, 'inde
 Route::get('countries', [CountryController::class, 'index']);
 Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
 Route::get('get-customer-flight-booking-details', [BookingController::class, 'getCustomerBookingDetails']);
-Route::post('send-sooper-quote', [BookingController::class, 'sendSooperQuote']);
-Route::post('send-add-to-cart', [FlyDubaiController::class, 'AddToCart']);
 Route::get('ancillaries', [BookingController::class, 'getAncillaries']);
-Route::post('patch-ancillaries', [BookingController::class, 'patchAncillaries']);
 Route::get('get-pnr-details', [BookingController::class, 'getPnrDetails']);
 Route::get('get-pnr-data', [BookingController::class, 'getPnrData']);
 Route::get('get-public-bookings', [BookingController::class, 'getPublicBookings']);

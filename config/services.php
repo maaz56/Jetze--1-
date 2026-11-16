@@ -35,18 +35,6 @@ return [
         ],
     ],
 
-    'duffel' => [
-        'key' => env('DUFFEL_API_KEY'),
-        'url' => env('DUFFEL_BASE_URL'),
-        'version' => env('DUFFEL_API_VERSION'),
-    ],
-
-    'amadeus' => [
-        'key' => env('AMADEUS_API_KEY'),
-        'secret' => env('AMADEUS_API_SECRET'),
-        'url' => env('AMADEUS_BASE_URL'),
-        'version' => env('AMADEUS_API_VERSION'),
-    ],
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

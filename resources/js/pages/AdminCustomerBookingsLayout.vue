@@ -4,10 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import apiService from '@/config/axios';
 
 const bookingDetailsComponents = {
-    'sabre:B2C': defineAsyncComponent(() => import('./Sabre/SabreAdminCustomerBookingDetails.vue')),
-    'airsial:B2C': defineAsyncComponent(() => import('./Airsial/AirsialAdminCustomerBookingDetails.vue')),
-    'travelport:B2C': defineAsyncComponent(() => import('./Travelport/TravelPortAdminCustomerBookingDetails.vue')),
-    'OneApi:B2C': defineAsyncComponent(() => import('./OneApi/OneApiAdminCustomerBookingDetails.vue')),
     'at:B2C': defineAsyncComponent(() => import('./AT/ATAdminCustomerBookingDetailsOffline.vue')),
     'hakimi:B2C': defineAsyncComponent(() => import('./Hakimi/HakimiBookingDetails.vue')),
 };

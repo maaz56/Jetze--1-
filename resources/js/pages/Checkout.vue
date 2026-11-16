@@ -1,12 +1,6 @@
 <script setup>
-import SabreCustomerFlightCheckout from '@/pages/Sabre/SabreCustomerFlightCheckout.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { watch } from 'vue';
-import PIACustomerFlightCheckout from './PIA/PIACustomerFlightCheckout.vue';
-import AirsialCustomerFlightCheckout from './Airsial/AirsialCustomerFlightCheckout.vue';
-import FlydubaiCustomerFlightCheckout from './FlyDubai/FlydubaiCustomerFlightCheckout.vue';
-import TravelPortCustomerFlightCheckout from './Travelport/TravelPortCustomerFlightCheckout.vue';
-import OneApiCustomerFlightCheckout from './OneApi/OneApiCustomerFlightCheckout.vue';
 import ATCustomerFlightCheckout from './AT/ATCustomerFlightCheckout.vue';
 const router = useRouter();
 const route = useRoute();
@@ -16,12 +10,6 @@ watch(provider,()=>{
 })
 </script>
 <template>
-    <SabreCustomerFlightCheckout v-if="provider === 'sabre' && flight_mode === 'B2C'" />
-    <PIACustomerFlightCheckout v-if="provider === 'PIA' && flight_mode === 'B2C'" />
-    <AirsialCustomerFlightCheckout v-if="provider === 'airsial' && flight_mode === 'B2C'" />
-    <FlydubaiCustomerFlightCheckout v-if="provider === 'flydubai' && flight_mode === 'B2C'" />
-    <TravelPortCustomerFlightCheckout v-if="provider === 'travelport' && flight_mode === 'B2C'" />
-    <OneApiCustomerFlightCheckout v-if="provider === 'OneApi' && flight_mode === 'B2C'" />
     <!-- Hakimi currently shares the AT checkout form, but has no ancillary flow. -->
     <ATCustomerFlightCheckout v-if="(provider === 'at' || provider === 'hakimi') && flight_mode === 'B2C'" />
 </template>

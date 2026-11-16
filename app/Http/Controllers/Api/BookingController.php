@@ -18,11 +18,6 @@ use App\Models\Segment;
 use App\Models\Slice;
 use App\Models\User;
 use App\Notifications\SystemNotification;
-use App\Services\AirSialApiService;
-use App\Services\FlyDubaiApiService;
-use App\Services\OneApiService;
-use App\Services\PIAApiService;
-use App\Services\SabreApiService;
 use App\Services\AtApiService;
 use App\Services\HakimiApiService;
 use App\Services\AtPreBookingSsrLimitService;
@@ -34,9 +29,6 @@ use App\Services\ProviderBookingEventService;
 use App\Transformers\AtAncillaryTransformer;
 
 // use App\Services\SafepayService;
-use App\Services\SooperApiService;
-use App\Services\TravelPortService;
-use App\Services\UtilityService;
 use Carbon\Carbon;
 use GuzzleHttp\Promise\Utils;
 use Illuminate\Http\Request;
@@ -50,17 +42,8 @@ use Mail;
 
 class BookingController extends Controller
 {
-    protected $sabreApiService;
-
     protected $safepayService;
 
-    protected $sooperApiService;
-    protected $airsialApiService;
-    protected $piaApiService;
-    protected $flydubaiApiService;
-    protected $oneApiService;
-    protected $travelportApiService;
-    protected $utilityService;
     protected $priceQuoteService;
     protected $agentWalletBalanceService;
     protected $bookingPricingService;
@@ -70,14 +53,6 @@ class BookingController extends Controller
     protected $hakimiApiService;
 
     public function __construct(
-        SabreApiService $sabreApiService,
-        SooperApiService $sooperApiService,
-        AirSialApiService $airsialApiService,
-        PIAApiService $piaApiService,
-        FlyDubaiApiService $flydubaiApiService,
-        TravelPortService $travelportApiService,
-        OneApiService $oneApiService,
-        UtilityService $utilityService,
         PriceQuoteService $priceQuoteService,
         AgentWalletBalanceService $agentWalletBalanceService,
         BookingPricingService $bookingPricingService,
@@ -86,15 +61,7 @@ class BookingController extends Controller
         AtPreBookingSsrLimitService $atPreBookingSsrLimitService,
         HakimiApiService $hakimiApiService,
     ) {
-        $this->sabreApiService = $sabreApiService;
         // $this->safepayService = $safepayService;
-        $this->sooperApiService = $sooperApiService;
-        $this->travelportApiService = $travelportApiService;
-        $this->airsialApiService = $airsialApiService;
-        $this->piaApiService = $piaApiService;
-        $this->flydubaiApiService = $flydubaiApiService;
-        $this->oneApiService = $oneApiService;
-        $this->utilityService = $utilityService;
         $this->priceQuoteService = $priceQuoteService;
         $this->agentWalletBalanceService = $agentWalletBalanceService;
         $this->bookingPricingService = $bookingPricingService;
@@ -421,117 +388,6 @@ class BookingController extends Controller
 
         } else {
             switch ($request->flight_provider) {
-                case 'sooper':
-                    $localPnr = "null";
-                    $pnr = null;
-                    return;
-                    // $pnr = $this->sooperApiService->sooperReservation($request['travellers']);
-                    $response = json_decode($pnr, true); // assuming $json contains your JSON string
-                    $pnrResponse = json_encode($response);
-                    // Log::info("Sooper PNR Response:", ['response' => $response]);
-                    // $itineraryRef = $response['data']['providers'][0]['pnr'];
-                    // $itineraryRef = $pnr;
-                    // Log::info($itineraryRef);
-                    $flightData = json_encode($flightData);
-                    break;
-
-                case 'sabre':
-                    $localPnr = "null";
-                    $pnr = null;
-                    // $pnrResponse = '{"CreatePassengerNameRecordRS":{"ApplicationResults":{"status":"Complete","Success":[{"timeStamp":"2025-10-06T20:05:54.618Z"}],"Warning":[{"type":"Validation","timeStamp":"2025-10-06T20:05:52.621Z","SystemSpecificResults":[{"Message":[{"code":"WARN.SWS.CLIENT.VALIDATION_FAILED","content":"EnhancedAirBookRQ: SegmentSelect@RPH does not match any other @RPH"}]}]},{"type":"BusinessLogic","timeStamp":"2025-10-06T20:05:53.077Z","SystemSpecificResults":[{"Message":[{"code":"WARN.SWS.HOST.ERROR_IN_RESPONSE","content":"SpecialServiceLLSRQ: USE 3 ENTRY TO INPUT FACTS"}]}]}]},"ItineraryRef":{"ID":"YMNLRX"},"AirBook":{"OriginDestinationOption":{"FlightSegment":[{"ArrivalDateTime":"12-31T09:45","DepartureDateTime":"12-31T08:00","eTicket":true,"FlightNumber":"0302","NumberInParty":"001","ResBookDesigCode":"V","Status":"NN","DestinationLocation":{"LocationCode":"LHE"},"MarketingAirline":{"Code":"PK","FlightNumber":"0302"},"OriginLocation":{"LocationCode":"KHI"}},{"ArrivalDateTime":"01-05T18:45","DepartureDateTime":"01-05T17:00","eTicket":true,"FlightNumber":"0305","NumberInParty":"001","ResBookDesigCode":"U","Status":"NN","DestinationLocation":{"LocationCode":"KHI"},"MarketingAirline":{"Code":"PK","FlightNumber":"0305"},"OriginLocation":{"LocationCode":"LHE"}}]}},"TravelItineraryRead":{"TravelItinerary":{"CustomerInfo":{"Address":{"AddressLine":[{"Id":"7","type":"O","content":"FLY UNIQUE"},{"Id":"8","type":"O","content":"65-B GULFISHAN"},{"Id":"9","type":"O","content":"LAHORE, PB PK"},{"Id":"10","type":"O","content":"59300"}]},"ContactNumbers":{"ContactNumber":[{"LocationCode":"ISB","Phone":"923056074127-H-1.1","RPH":"001","Id":"6"}]},"PaymentInfo":{"Payment":{"Form":[{"RPH":"001","Id":"13","Text":["CASH"]}]}},"PersonName":[{"WithInfant":"false","NameNumber":"01.01","PassengerType":"ADT","RPH":"1","elementId":"pnr-3.1","GivenName":"ANWAR MR","Surname":"AHMAD"}]},"ItineraryInfo":{"ReservationItems":{"Item":[{"RPH":"1","FlightSegment":[{"AirMilesFlown":"0634","ArrivalDateTime":"12-31T09:45","DayOfWeekInd":"3","DepartureDateTime":"2025-12-31T08:00","SegmentBookedDate":"2025-10-06T15:05:00","ElapsedTime":"01.45","eTicket":true,"FlightNumber":"0302","NumberInParty":"01","ResBookDesigCode":"V","SegmentNumber":"0001","SmokingAllowed":false,"SpecialMeal":false,"Status":"HK","StopQuantity":"00","IsPast":false,"CodeShare":false,"Id":"11","DestinationLocation":{"LocationCode":"LHE"},"Equipment":{"AirEquipType":"320"},"MarketingAirline":{"Code":"PK","FlightNumber":"0302","ResBookDesigCode":"V","Banner":"MARKETED BY PAKISTAN INTL AIRLINES"},"OperatingAirline":[{"Code":"PK","FlightNumber":"0302","ResBookDesigCode":"V","Banner":"OPERATED BY PAKISTAN INTL AIRLINES"}],"OperatingAirlinePricing":{"Code":"PK"},"DisclosureCarrier":{"Code":"PK","DOT":false,"Banner":"PAKISTAN INTL AIRLINES"},"OriginLocation":{"LocationCode":"KHI"},"SupplierRef":{"ID":"DCPK"},"UpdatedArrivalTime":"12-31T09:45","UpdatedDepartureTime":"12-31T08:00","Cabin":{"Code":"Y","SabreCode":"Y","Name":"ECONOMY","ShortName":"ECONOMY","Lang":"EN"}}],"Product":{"ProductDetails":{"productCategory":"AIR","ProductName":{"type":"AIR","content":""},"Air":{"sequence":1,"segmentAssociationId":2,"DepartureAirport":"KHI","ArrivalAirport":"LHE","EquipmentType":"320","MarketingAirlineCode":"PK","MarketingFlightNumber":"302","MarketingClassOfService":"V","Cabin":{"code":"Y","sabreCode":"Y","name":"ECONOMY","shortName":"ECONOMY","lang":"EN"},"ElapsedTime":105,"AirMilesFlown":634,"FunnelFlight":false,"ChangeOfGauge":false,"DisclosureCarrier":{"Code":"PK","DOT":false,"Banner":"PAKISTAN INTL AIRLINES"},"AirlineRefId":"DCPK","Eticket":true,"DepartureDateTime":"2025-12-31T08:00:00","ArrivalDateTime":"2025-12-31T09:45:00","FlightNumber":"302","ClassOfService":"V","ActionCode":"HK","NumberInParty":1,"inboundConnection":false,"outboundConnection":false,"ScheduleChangeIndicator":false,"SegmentBookedDate":"2025-10-06T15:05:00"}}}},{"RPH":"2","FlightSegment":[{"AirMilesFlown":"0634","ArrivalDateTime":"01-05T18:45","DayOfWeekInd":"1","DepartureDateTime":"2026-01-05T17:00","SegmentBookedDate":"2025-10-06T15:05:00","ElapsedTime":"01.45","eTicket":true,"FlightNumber":"0305","NumberInParty":"01","ResBookDesigCode":"U","SegmentNumber":"0002","SmokingAllowed":false,"SpecialMeal":false,"Status":"HK","StopQuantity":"00","IsPast":false,"CodeShare":false,"Id":"12","DestinationLocation":{"LocationCode":"KHI"},"Equipment":{"AirEquipType":"320"},"MarketingAirline":{"Code":"PK","FlightNumber":"0305","ResBookDesigCode":"U","Banner":"MARKETED BY PAKISTAN INTL AIRLINES"},"OperatingAirline":[{"Code":"PK","FlightNumber":"0305","ResBookDesigCode":"U","Banner":"OPERATED BY PAKISTAN INTL AIRLINES"}],"OperatingAirlinePricing":{"Code":"PK"},"DisclosureCarrier":{"Code":"PK","DOT":false,"Banner":"PAKISTAN INTL AIRLINES"},"OriginLocation":{"LocationCode":"LHE"},"SupplierRef":{"ID":"DCPK"},"UpdatedArrivalTime":"01-05T18:45","UpdatedDepartureTime":"01-05T17:00","Cabin":{"Code":"Y","SabreCode":"Y","Name":"ECONOMY","ShortName":"ECONOMY","Lang":"EN"}}],"Product":{"ProductDetails":{"productCategory":"AIR","ProductName":{"type":"AIR","content":""},"Air":{"sequence":2,"segmentAssociationId":3,"DepartureAirport":"LHE","ArrivalAirport":"KHI","EquipmentType":"320","MarketingAirlineCode":"PK","MarketingFlightNumber":"305","MarketingClassOfService":"U","Cabin":{"code":"Y","sabreCode":"Y","name":"ECONOMY","shortName":"ECONOMY","lang":"EN"},"ElapsedTime":105,"AirMilesFlown":634,"FunnelFlight":false,"ChangeOfGauge":false,"DisclosureCarrier":{"Code":"PK","DOT":false,"Banner":"PAKISTAN INTL AIRLINES"},"AirlineRefId":"DCPK","Eticket":true,"DepartureDateTime":"2026-01-05T17:00:00","ArrivalDateTime":"2026-01-05T18:45:00","FlightNumber":"305","ClassOfService":"U","ActionCode":"HK","NumberInParty":1,"inboundConnection":false,"outboundConnection":false,"ScheduleChangeIndicator":false,"SegmentBookedDate":"2025-10-06T15:05:00"}}}}]},"Ticketing":[{"RPH":"01","TicketTimeLimit":"TAW/"}]},"ItineraryRef":{"AirExtras":false,"ID":"YMNLRX","InhibitCode":"U","PartitionID":"AA","PrimeHostID":"1B","Source":{"AAA_PseudoCityCode":"8BBD","CreateDateTime":"2025-10-06T15:05","CreationAgent":"AFU","HomePseudoCityCode":"8BBD","PseudoCityCode":"8BBD","ReceivedFrom":"Jetze-DEV","LastUpdateDateTime":"2025-10-06T15:05","SequenceNumber":"1"}},"RemarkInfo":{},"OpenReservationElements":{"OpenReservationElement":[{"id":"3","type":"FP","displayIndex":1,"elementId":"pnr-or-3","FormOfPayment":{"migrated":false,"Cash":{"Text":"CASH"}}}]}}}},"Links":[{"rel":"self","href":"https://api.platform.sabre.com/v2.5.0/passenger/records?mode=create"},{"rel":"linkTemplate","href":"https://api.platform.sabre.com/<version>/passenger/records?mode=<mode>"}]}';
-                    $pnrResponse = $this->sabreApiService->createPNR($customer, $flightData, $fareRefernce);
-
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-
-                    $response = json_decode($pnrResponse, true);
-                    Log::info('Sabre PNR Response:');
-                    Log::info($response);
-
-                    $itineraryRef = null;
-                    if ($flightData['provider']['source'] == 'SB-NDC') {
-                        $itineraryRef = $response['order']['pnrLocator'] ?? null;
-                    } else {
-                        $itineraryRef = $response['CreatePassengerNameRecordRS']['ItineraryRef']['ID'] ?? null;
-                    }
-
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-
-                    $flightData = json_encode($flightData);
-                    break;
-
-                case 'airsial':
-                    $localPnr = "null";
-                    $pnr = null;
-                    // $pnrResponse = '{"Response":{"message":"PNR successfully created ","Data":{"PNR":"19Z8GE","validTill":"11-10-2025 14:37"}},"Success":true}';
-                    $pnrResponse = $this->airsialApiService->createBooking($customer, $flightData, $fareRefernce);
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    // $pnrResponse = json_decode($pnrResponse,true);
-                    $itineraryRef = $pnrResponse['Response']['Data']['PNR'] ?? null;
-
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $pnrResponse = json_encode($pnrResponse);
-                    $flightData = json_encode($flightData);
-                    break;
-                case 'PIA':
-                    $localPnr = "null";
-                    $pnr = null;
-                    $pnrResponse = $this->piaApiService->createBooking($customer, $fareRefernce);
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $itineraryRef = $pnrResponse['Response']['Data']['PNR'] ?? null;
-
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $pnrResponse = json_encode($pnrResponse);
-                    $flightData = json_encode($flightData);
-                    break;
-                case 'flydubai':
-                    $localPnr = "null";
-                    $pnr = null;
-
-                    $pnrResponse = $this->flydubaiApiService->AddToCart($customer, $fareRefernce);
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $itineraryRef = $pnrResponse['Response']['Data']['PNR'] ?? null;
-
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $pnrResponse = json_encode($pnrResponse);
-                    $flightData = json_encode($flightData);
-                    break;
-
-                case 'travelport':
-                    $localPnr = "null";
-                    $pnr = null;
-                    $pnrResponse = $this->travelportApiService->bookFlight($customer);
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
-                    $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][1]['Confirmation']['Locator']['value'] ?? null;
-                    if($flightData['provider']['contentSource'] == 'NDC'){
-                    $itineraryRef = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][2]['Confirmation']['Locator']['value'] ?? null;
-                    $airlinePnr = $pnrResponse['ReservationResponse']['Reservation']['Receipt'][0]['Confirmation']['Locator']['value'] ?? null;
-
-                    }
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $pnrResponse = json_encode($pnrResponse);
-                    $flightData = json_encode($flightData);
-                    break;
                 case 'at':
                     $localPnr = "null";
                     $pnr = null;
@@ -625,37 +481,6 @@ class BookingController extends Controller
                     $pnrResponse = json_encode($response);
                     $flightData = json_encode($flightData);
                     break;
-                case 'OneApi':
-                    $localPnr = "null";
-                    $pnr = null;
-                    $pnrResponse = $this->oneApiService->bookFlight($customer);
-                    if ($pnrResponse === null) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    if ($pnrResponse instanceof \Illuminate\Http\JsonResponse) {
-                        return $pnrResponse;
-                    }
-                    if (isset($pnrResponse['error'])) {
-                        return response()->json([
-                            'message' => $pnrResponse['message'] ?? 'Failed to create booking. Please try again later.',
-                            'error' => $pnrResponse['error'],
-                            'raw' => $pnrResponse['raw'] ?? null,
-                        ], 422);
-                    }
-                    // $pnrResponse = json_decode($pnrResponse, true);
-                    $bookingRefId = $pnrResponse['Body']['OTA_AirBookRS']['AirReservation']['BookingReferenceID'] ?? null;
-                    Log::info('OneApi Booking Reference ID:', ['bookingRefId' => $bookingRefId]);
-                    $bookingRefId = is_array($bookingRefId) && isset($bookingRefId[0]) ? $bookingRefId : [$bookingRefId];
-                    $itineraryRef = $bookingRefId[0]['@attributes']['ID'] ?? null;
-                    $expiryTime = $pnrResponse['Body']['OTA_AirBookRS']['AirReservation']['Ticketing']['@attributes']['TicketTimeLimit'] ?? null;
-                    $expiryTime = Carbon::parse($expiryTime);
-
-                    if (!$itineraryRef) {
-                        return response()->json(['message' => 'Failed to create booking. Please try again later.'], 500);
-                    }
-                    $pnrResponse = json_encode($pnrResponse);
-                    $flightData = json_encode($flightData);
-                    break;
                 default:
                     return response()->json(['message' => 'Invalid flight provider specified.'], 400);
             }
@@ -670,7 +495,6 @@ class BookingController extends Controller
             'pnr' => $pnrResponse,
             'expiry_time' => $expiryTime
         ]);
-        // $pnr = $this->sabreApiService->createPNR($customer, $flightData);
 
         $validated = Validator::make($request->all(), [
             'main_contact.email' => 'required|email',
@@ -1170,22 +994,7 @@ class BookingController extends Controller
         Log::info($request);
         $pnrData = null;
         $booking = $this->findBookingForProviderEvent($request);
-        if ($request->flight_provider == 'sabre') {
-
-            $pnrData = $this->sabreApiService->getBookingDetails($request);
-        } else if ($request->flight_provider == 'travelport') {
-            $pnrData = $this->travelportApiService->getBookingDetails($request->pnr);
-
-        } else if ($request->flight_provider == 'airsial') {
-            $airsialApiService = new AirSialApiService();
-            $pnrData = $airsialApiService->getBookingDetails($request);
-
-
-        } else if ($request->flight_provider == 'OneApi') {
-            $oneApiService = new OneApiService();
-            $pnrData = $oneApiService->readBooking($request->pnr);
-            Log::info('OneApi PNR Details:', ['pnrData' => $pnrData]);
-        } else if( $request->flight_provider == 'at') {
+        if ($request->flight_provider == 'at') {
             $atApiService = new AtApiService();
             // AT RetrieveBooking requires the supplier transaction ID, while
             // the booking list displays the CRS PNR in itinerary_ref.
@@ -1243,108 +1052,7 @@ class BookingController extends Controller
     public function cancelPnrDetails(Request $request)
     {
         Log::info($request);
-        if ($request->booking_source == 'sooper') {
-            Log::info('Canceling booking via Sooper API');
-            $body = [
-                'booking_uuid' => $request->booking_uuid,
-                'billable_price' => $request->billable_price,
-                'currency' => $request->currency,
-            ];
-            $res = $this->sooperApiService->cancelSooperBooking($body);
-            Log::info($res);
-            if ($res['status'] == false) {
-                return response()->json([
-                    'message' => 'Booking cancellation failed',
-                    'error' => $res['message']
-                ], 400);
-
-            }
-
-            $request->validate([
-                'booking_status' => 'required|string', // Example statuses
-                'pnr' => 'nullable|string', // PNR can be null for certain statuses
-            ]);
-            $booking = FlightBookings::where('id', $request->bookingId)->first();
-            // Update status and PNR
-            $booking->status = $request->booking_status;
-            $booking->pnr = $request->pnr;
-            $booking->save();
-            $this->providerBookingEventService->record(
-                $booking,
-                'sooper',
-                'cancel',
-                $res,
-                $request->pnr,
-            );
-            $this->sendBookingCanceledMail($booking);
-
-            Log::info($booking);
-            return response()->json([
-                'message' => 'Booking Canceled successfully',
-                'booking' => $booking,
-            ]);
-
-        } elseif ($request->booking_source == 'sabre') {
-            if ($request->flight_source == 'SB-NDC') {
-                Log::info('Canceling booking via Sabre NDC API');
-                $pnrStatus = $this->sabreApiService->cancelNDCOrder($request->orderId);
-            } else {
-                Log::info('Canceling booking via Sabre Classic API');
-                $pnrStatus = $this->sabreApiService->cancelBooking($request->pnr);
-            }
-            if ($pnrStatus) {
-                $booking = FlightBookings::where('id', $request->bookingId)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-                $this->providerBookingEventService->record(
-                    $booking,
-                    'sabre',
-                    'cancel',
-                    $pnrStatus,
-                    $request->pnr,
-                );
-                $this->sendBookingCanceledMail($booking);
-            }
-            return $pnrStatus;
-        } else if ($request->booking_source == 'travelport') {
-            Log::info('Canceling booking via Travelport API');
-            $pnrStatus = $this->travelportApiService->cancelReservation($request->pnr);
-            Log::info($pnrStatus);
-            if (!$pnrStatus) {
-               return response()->json([
-                    'message' => 'Booking cancellation failed',
-                    'error' => 'Unable to cancel booking with Travelport API'
-                ], 400);
-            }
-             $booking = FlightBookings::where('id', $request->bookingId)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-                $this->providerBookingEventService->record(
-                    $booking,
-                    'travelport',
-                    'cancel',
-                    $pnrStatus,
-                    $request->pnr,
-                );
-                $this->sendBookingCanceledMail($booking);
-            return $pnrStatus;
-        }else if ($request->booking_source == 'OneApi') {
-              $booking = FlightBookings::where('id', $request->bookingId)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-                $this->providerBookingEventService->record(
-                    $booking,
-                    'oneapi',
-                    'cancel',
-                    null,
-                    $request->pnr,
-                );
-                $this->sendBookingCanceledMail($booking);
-                return response()->json([
-                    'message' => 'Booking Canceled successfully',
-                    'booking' => $booking,
-                ]);
-        } else if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "at") {
+        if (strtolower((string) ($request->booking_source ?? $request->flight_provider)) === "at") {
             $validated = $request->validate(["bookingId" => ["required", "integer"]]);
             $booking = FlightBookings::find($validated["bookingId"]);
 
@@ -1551,46 +1259,7 @@ class BookingController extends Controller
         }
 
         $res = null;
-        if ($request->flight_provider == 'sooper') {
-            $res = '[]';
-            // $res = $this->sooperApiService->confrimSooperBooking($request);
-            Log::info($res);
-
-            if ($res['status'] == false) {
-                return response()->json([
-                    'message' => 'Booking confirmation failed',
-                    'error' => $res['message']
-                ], 400);
-
-            }
-        } else if ($request->flight_provider == 'sabre') {
-            $res = '[]';
-            // $res = $this->sabreApiService->confirmTicket($request->pnr);
-        } else if ($request->flight_provider == 'OneApi') {
-            $res = '[]';
-            $res = $this->oneApiService->confirmTicket($request);
-            if ( !$res) {
-                return response()->json([
-                    'message' =>  'Booking confirmation failed',
-                    
-                ], 400);
-            }
-        } else if ($request->flight_provider == 'airsial') {
-            $res = '[]';
-            // $res = $this->airsialApiService->confirmTicket($request->pnr);
-        } else if ($request->flight_provider == 'travelport') {
-            $res = '[]';
-            $res = $this->travelportApiService->confirmTicket($request);
-            if ($res['status'] == false) {
-                Log::info($res);
-                return response()->json([
-                    'message' => 'Booking confirmation failed',
-                    'error' => $res['error']
-                ], 400);
-
-            }
-
-        }else if ($flightProvider === 'at') {
+        if ($flightProvider === 'at') {
 
             // Never trust the amount (or reservation payload) posted by the
             // browser. The server-side price snapshot is the source of truth.
@@ -1893,47 +1562,7 @@ class BookingController extends Controller
      public function sendPriceRequest(Request $request)
     {
         $response = null;
-        if ($request->flight_provider == 'travelport') {
-            Log::info('Fetching quote via Travelport API');
-
-            $response = $this->travelportApiService->travelportPrice($request);
-            // $response = json_decode($response, true);
-            if (isset($response['OfferListResponse']['Result']['Error']) && count($response['OfferListResponse']['Result']['Error']) > 0) {
-                $errors = $response['OfferListResponse']['Result']['Error'];
-                $firstError = is_array($errors) ? ($errors[0] ?? []) : $errors;
-                $errorMessage =
-                    $firstError['Description'] ??
-                    $firstError['Message'] ??
-                    $firstError['ErrorMessage'] ??
-                    'Failed Price Request';
-                return response()->json([
-                    'message' => $errorMessage,
-                    'errors' => $errors,
-                    'price_response' => $response,
-                ], 422);
-            } else {
-
-                $fareRules = $this->travelportApiService->getFareRules($response['OfferListResponse']['Identifier']['value'] ?? null);
-            }
-        } else if ($request->flight_provider == 'OneApi') {
-            $response = $this->oneApiService->validatePriceWithBundle($request);
-            if ($response instanceof \Illuminate\Http\JsonResponse) {
-                return $response;
-            }
-            if (isset($response['error'])) {
-                return response()->json([
-                    'message' => $response['message'] ?? 'Failed to validate price with bundle',
-                    'error' => $response['error'],
-                    'raw' => $response['raw'] ?? null,
-                ], 422);
-            }
-            if (!$response) {
-                return response()->json([
-                    'message' => 'Failed to validate price with bundle',
-                    // 'error' => $response['error'] ?? 'Unknown error'
-                ], 400);
-            }
-        } else if ($request->flight_provider == 'AT') {
+        if ($request->flight_provider == 'AT') {
             $atApiService = new AtApiService();
             $priceResponse = $atApiService->sendPriceRequest($request);
             if (!$priceResponse) {
@@ -1960,33 +1589,7 @@ class BookingController extends Controller
     {
         $response = null;
         $promise1 = null;
-        if ($request->flight_provider == 'sooper') {
-            $response = $this->sooperApiService->fetchAncillaries($request);
-            // Log::info(json_encode($response, JSON_PRETTY_PRINT));
-            if (!$response) {
-                return response()->json([
-                    'message' => 'No ancillaries found',
-                ], 404);
-            }
-        } else if ($request->flight_provider == 'OneApi') {
-
-            $baggages = $this->oneApiService->fetchBaggage($request);
-            // $baggages = json_decode($baggages,true);
-
-            Log::info(json_encode($baggages));
-
-            $meals = $this->oneApiService->fetchMeals($request);
-            // $meals = json_decode($meals, true);
-            Log::info(json_encode($meals));
-            $seats = $this->oneApiService->fetchSeats($request);
-            Log::info(json_encode($seats));
-            $response = [
-                "baggage" => $baggages,
-                "meals" => $meals,
-                "seats" => $seats,
-            ];
-
-        } else if (strtolower($request->flight_provider) === 'at') {
+        if (strtolower($request->flight_provider) === 'at') {
             $atApiService = new AtApiService();
             $quote = null;
 
@@ -2034,29 +1637,6 @@ class BookingController extends Controller
             'seatMap' => $promise1,
         ], 200);
 
-    }
-
-    public function patchAncillaries(Request $request)
-    {
-
-        $response = null;
-        if ($request['flight_provider'] == 'sooper') {
-            $response = $this->sooperApiService->patchAncillaries($request['params']);
-        } else if ($request['flight_provider'] == 'OneApi') {
-            $response = $this->oneApiService->priceWithBundle_ssr($request);
-            if ($response instanceof \Illuminate\Http\JsonResponse) {
-                return $response;
-            }
-            if (isset($response['error'])) {
-                return response()->json([
-                    'message' => $response['message'] ?? 'Ancillaries failed to patch',
-                    'error' => $response['error'],
-                    'raw' => $response['raw'] ?? null,
-                ], 422);
-            }
-        }
-        Log::info(json_encode($response, JSON_PRETTY_PRINT));
-        return response()->json($response, 200);
     }
 
     public function voidRequest(Request $request)
@@ -2118,66 +1698,9 @@ class BookingController extends Controller
             ]);
         }
 
-        if ($request->flight_provider == 'sooper') {
-            Log::info('Voiding booking via Sooper API', $request->all());
-            $body = [
-                'booking_uuid' => $request->booking_uuid,
-                'billable_price' => $request->billable_price,
-                'currency' => $request->currency,
-            ];
-            $res = $this->sooperApiService->voidSooperBooking($body);
-            // Update status and PNR
-            Log::info($booking->status);
-            $booking->status = $request->booking_status;
-            $booking->save();
-            $this->providerBookingEventService->record(
-                $booking,
-                'sooper',
-                'void',
-                $res,
-                $request->pnr,
-            );
-            return response()->json([
-                'message' => 'Booking voided successfully',
-                'booking' => $booking,
-            ]);
-        } else if ($request->flight_provider == 'travelport') {
-            Log::info('Voiding booking via TravePort API', $request->all());
-            $res= null;
-            $pnr = $request->pnr;
-            if($request->booking_source == 'NDC'){
-
-                $res = $this->travelportApiService->voidReservation($pnr);
-            } else if ($request->booking_source == 'GDS') {
-                $res = $this->travelportApiService->voidGDSReservation($pnr);
-            }
-
-            if (!($res['success'] ?? false)) {
-                return response()->json([
-                    'message' => $res['error'] ?? 'Failed to void booking on Travelport',
-                    'error_response' => $res['data'] ?? null,
-                ], 422);
-            }
-
-            // Update status and PNR
-            
-            Log::info($booking->status);
-            $booking->status = $request->booking_status;
-            $booking->save();
-            $this->providerBookingEventService->record(
-                $booking,
-                'travelport',
-                'void',
-                $res,
-                $request->pnr,
-            );
-            return response()->json([
-                'message' => 'Booking voided successfully',
-                'booking' => $booking,
-                'travelport_response' => $res['data'] ?? null,
-            ]);
-        }
-
+        return response()->json([
+            'message' => 'Voiding is not supported for this flight provider.',
+        ], 422);
     }
 
     public function getPublicBookings(Request $request)

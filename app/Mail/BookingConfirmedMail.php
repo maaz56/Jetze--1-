@@ -79,11 +79,8 @@ class BookingConfirmedMail extends Mailable implements ShouldQueue
         $providerRaw = (string) ($this->booking->flight_provider ?? ($this->flightData['provider']['name'] ?? ''));
         $providerLower = strtolower(trim($providerRaw));
         $flightProvider = match ($providerLower) {
-            'oneapi' => 'OneApi',
-            'sabre' => 'sabre',
-            'airsial' => 'airsial',
-            'travelport' => 'travelport',
-            default => 'travelport',
+            'hakimi' => 'hakimi',
+            default => 'at',
         };
 
         $flightMode = (string) ($this->booking->booking_mode ?? 'B2C');

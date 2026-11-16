@@ -63,9 +63,7 @@ const isDepositLoading = ref(false);
 
 function normalizeFlightProvider(provider) {
     if (!provider) return null;
-    const normalized = String(provider).toLowerCase();
-    if (normalized === "oneapi") return "OneApi";
-    return normalized;
+    return String(provider).toLowerCase();
 }
 
 function getBookingRouteName() {

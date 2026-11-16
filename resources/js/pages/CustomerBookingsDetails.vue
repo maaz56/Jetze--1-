@@ -1,14 +1,10 @@
 <script setup>
 
 import { useRoute, useRouter } from 'vue-router';
-import SabrePublicBookingDetails from './Sabre/SabrePublicBookingDetails.vue';
-import ArisialPublicBookingDetails from './Airsial/ArisialPublicBookingDetails.vue';
 import { FETCH_PNR_DATA } from '@/services/store/actions.type';
 import { useStore } from 'vuex';
 import { onMounted } from 'vue';
 import { ref } from 'vue';
-import TravelPortPublicBookingDetails from './Travelport/TravelPortPublicBookingDetails.vue';
-import OneApiPublicBookingDetails from './OneApi/OneApiPublicBookingDetails.vue';
 import ATPublicBookingDetails from './AT/ATPublicBookingDetails.vue';
 import HakimiPublicBookingDetails from './Hakimi/HakimiPublicBookingDetails.vue';
 const router = useRouter();
@@ -23,10 +19,6 @@ onMounted(() => {
 });
 </script>
 <template>
-    <SabrePublicBookingDetails v-if="provider === 'sabre' && flight_mode === 'B2C'" />
-    <ArisialPublicBookingDetails v-if="provider === 'airsial' && flight_mode === 'B2C'" />
-    <TravelPortPublicBookingDetails v-if="provider === 'travelport' && flight_mode === 'B2C'" />
-    <OneApiPublicBookingDetails v-if="provider === 'OneApi' && flight_mode === 'B2C'" />
     <ATPublicBookingDetails v-if="provider === 'at' && flight_mode === 'B2C'" />
     <HakimiPublicBookingDetails v-if="String(provider || '').toLowerCase() === 'hakimi'" />
 </template>

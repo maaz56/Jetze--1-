@@ -34,18 +34,12 @@ class AdminInsightsController extends Controller
     }
 
     /**
-     * Sales channel of a booking: the supplier it was booked with. These are
-     * the providers FlightController searches through FlightAggregationService
-     * (and AT, which has its own streaming search). Keys are matched against
-     * the lower-cased flight_provider saved on the booking.
+     * Sales channel of a booking: the supplier it was booked with (AT, which has
+     * its own streaming search, and Hakimi). Keys are matched against the
+     * lower-cased flight_provider saved on the booking; historical bookings
+     * from other suppliers fall back to their upper-cased provider name.
      */
     private const PROVIDER_CHANNELS = [
-        'travelport' => 'Travelport',
-        'sabre' => 'Sabre',
-        'flydubai' => 'flydubai',
-        'airsial' => 'AirSial',
-        'pia' => 'PIA',
-        'oneapi' => 'OneApi',
         'hakimi' => 'Hakimi',
         'at' => 'AT',
     ];
@@ -53,16 +47,6 @@ class AdminInsightsController extends Controller
     private function channel(?string $provider, ?string $contentSource): string
     {
         $provider = strtolower(trim((string) $provider));
-        $source = strtolower((string) $contentSource);
-
-        // Travelport and Sabre sell GDS and NDC content; show which one.
-        foreach (['travelport', 'sabre'] as $gds) {
-            if (str_contains($provider, $gds)) {
-                $label = self::PROVIDER_CHANNELS[$gds];
-
-                return str_contains($source, 'ndc') || str_contains($provider, 'ndc') ? "$label NDC" : "$label GDS";
-            }
-        }
 
         return self::PROVIDER_CHANNELS[$provider] ?? ($provider !== '' ? strtoupper($provider) : 'Other');
     }

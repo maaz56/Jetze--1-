@@ -52,14 +52,6 @@ class SegmentMarginController extends Controller
         return response()->json(['message' => 'Segment margin deleted successfully']);
     }
 
-    public function getProviders()
-    {
-        return response()->json([
-            ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
-            ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
-        ]);
-    }
 
     /** Validate scope/exclusions and normalize the legacy multi-airline column. */
     private function validatedMargin(Request $request): array

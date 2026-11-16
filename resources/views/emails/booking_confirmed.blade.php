@@ -77,11 +77,8 @@
                                     $providerRaw = (string) ($booking->flight_provider ?? $flightData['provider']['name'] ?? '');
                                     $providerLower = strtolower(trim($providerRaw));
                                     $flightProvider = match ($providerLower) {
-                                        'oneapi' => 'OneApi',
-                                        'sabre' => 'sabre',
-                                        'airsial' => 'airsial',
-                                        'travelport' => 'travelport',
-                                        default => 'travelport',
+                                        'hakimi' => 'hakimi',
+                                        default => 'at',
                                     };
                                     $flightMode = (string) ($booking->booking_mode ?? 'B2C');
                                     $bookingSource = (string) ($booking->booking_source ?? 'web');

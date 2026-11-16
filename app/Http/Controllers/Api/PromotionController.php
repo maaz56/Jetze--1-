@@ -55,15 +55,6 @@ class PromotionController extends Controller
         return response()->json(['message' => 'Promotion deleted successfully']);
     }
 
-    public function getProviders()
-    {
-        // These are based on FlightController.php
-        return response()->json([
-            ['identifier' => 'OneApi', 'name' => 'OneApi'],
-            ['identifier' => 'TravelPort-GDS', 'name' => 'TravelPort-GDS'],
-            ['identifier' => 'TravelPort-NDC', 'name' => 'TravelPort-NDC'],
-        ]);
-    }
 
     /** Validate rule conditions and force all flat commercial values into AED. */
     private function validatedPromotion(Request $request): array

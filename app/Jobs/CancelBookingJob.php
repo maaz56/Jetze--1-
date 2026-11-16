@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\FlightBookings;
 use App\Models\PaymentAttempt;
-use App\Services\TravelPortService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,7 +21,7 @@ class CancelBookingJob implements ShouldQueue
     {
         $this->booking = $booking;
     }
-    public function handle(TravelPortService $travelportApiService)
+    public function handle()
     {
         // This delayed job contains a serialized snapshot. Reload the current
         // booking so a later payment/ticketing transition is respected.
@@ -59,36 +58,8 @@ class CancelBookingJob implements ShouldQueue
             return;
         }
       
-        if ($booking->flight_provider == 'travelport') {
-            Log::info('Canceling booking via Travelport API');
-            
-            $pnrStatus = $travelportApiService->cancelReservation($booking->itinerary_ref);
-            Log::info($pnrStatus);
-            if ($pnrStatus != null) {
-                $booking = FlightBookings::where('id', $booking->id)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-            }
-        } else if($booking->flight_provider == "OneApi") {
-            Log::info('Canceling booking via OneApi API');
-            // $pnrStatus = $oneApiService->cancelReservation($this->booking->itinerary_ref);
-            // Log::info($pnrStatus);
-            // if ($pnrStatus != null) {
-                $booking = FlightBookings::where('id', $booking->id)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-            // }
-        } else if ($booking->flight_provider == 'airsial') {
-            Log::info('Canceling booking via Airsial API');
-            // $pnrStatus = $airsialApiService->cancelReservation($this->booking->itinerary_ref);
-            // Log::info($pnrStatus);
-            // if ($pnrStatus != null) {
-                $booking = FlightBookings::where('id', $booking->id)->first();
-                $booking->status = 'canceled';
-                $booking->save();
-            // }
-        }
-
+        // AT and Hakimi bookings are held and released by their own flows; there is
+        // no supplier-side auto-cancel to perform here.
 
         //     $booking = FlightBookings::where('id', $this->bookingId)->first();
         //    // Log::info($booking );

@@ -1081,8 +1081,7 @@ const fetchFlights = () => {
 
     if (searchParams) {
         localStorage.setItem("previous_search", JSON.stringify(searchParams));
-        // const prioritizedProviders = ["SABRE", "EMIRATES", "TURKISH", "NUFLIGHTS"];
-        // const reorderedProviders = [
+                // const reorderedProviders = [
         //     ...providers.value.filter(p => !prioritizedProviders.includes(p.identifier)),
         //     ...providers.value.filter(p => prioritizedProviders.includes(p.identifier))
         // ];
@@ -1753,7 +1752,6 @@ function cardFareGroups(flight) {
 function selectCardFare(flight, index, fare) {
     const references = updateCardFareReferences(
         cardFareReferences(flight), index, fare,
-        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
     );
     cardFareSelections[cardFareKey(flight)] = references;
 
@@ -1851,7 +1849,6 @@ function bookCardFare(flight, index = 0, fare = null) {
     if (isCheckoutLoading.value || customerSettings.value?.is_booking_allowed !== 1) return;
     const references = fare ? updateCardFareReferences(
         cardFareReferences(flight), index, fare,
-        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
     ) : [...cardFareReferences(flight)];
     const flights = flight?.leg?.flights ?? [];
     if (!flights.length || references.length !== flights.length || flights.some((leg, legIndex) =>
@@ -1870,7 +1867,6 @@ function cardOptionPrice(flight, fare, index) {
     if (fare?.fare_references?.length || (flight?.leg?.flights?.length ?? 0) <= 1) return cardFarePrice(flight, fare);
     const references = updateCardFareReferences(
         cardFareReferences(flight), index, fare,
-        String(flight?.provider?.name ?? "").toLowerCase() === "travelport",
     );
     return selectedCardTotal(flight, references);
 }
@@ -2380,11 +2376,7 @@ function findSegmentName(segmentRefId, segments) {
     return segment ? `${segment.from.iata} → ${segment.to.iata}` : "N/A";
 }
 function selectFares(flightIdx, ref_id) {
-    if (selectedFlight?.value?.provider?.name === "travelport") {
-        selectedFlight?.value?.leg?.flights.forEach((flight, index) => {
-            selectedFares[index] = ref_id;
-        });
-    } else if (hasFareCombinations(selectedFlight.value?.leg)) {
+    if (hasFareCombinations(selectedFlight.value?.leg)) {
         selectFareCombination(selectedFlight.value.leg, selectedFares, flightIdx, ref_id, fareSortAmount);
     } else {
         selectedFares[flightIdx] = ref_id;

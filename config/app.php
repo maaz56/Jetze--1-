@@ -24,10 +24,6 @@ return [
     ],
     'name' => env('APP_NAME', 'Laravel'),
 
-    'sabre' => [
-        'client_secret' => env('SABRE_CLIENT_SECRET'),
-        'base_url' => env('SABRE_BASE_URL'),
-    ],
     /*
     |--------------------------------------------------------------------------
     | Application Environment
