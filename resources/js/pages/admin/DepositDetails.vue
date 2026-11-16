@@ -278,6 +278,13 @@ onMounted(() => {
           </h3>
 
           <div class="grid grid-cols-2 gap-4">
+            <div v-if="depositDetails?.deposit?.agent?.customer?.customer_uid">
+              <h4 class="text-sm font-medium text-gray-500">Customer ID</h4>
+              <p class="mt-1 text-sm font-semibold text-gray-900">
+                {{ depositDetails.deposit.agent.customer.customer_uid }}
+              </p>
+            </div>
+
             <div>
               <h4 class="text-sm font-medium text-gray-500">Agent Name</h4>
               <p class="mt-1 text-sm text-gray-900">

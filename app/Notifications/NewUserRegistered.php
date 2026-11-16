@@ -39,6 +39,7 @@ class NewUserRegistered extends Notification
             'type' => 'new_user',
             'heading' => 'New User Registered',
             'description' => 'A new user has registered.',
+            'url' => \App\Support\AdminNotificationLinks::customer($this->user->id),
         ];
     }
 

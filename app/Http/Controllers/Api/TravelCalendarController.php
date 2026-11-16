@@ -19,7 +19,8 @@ class TravelCalendarController extends Controller
             : now();
 
         $days = FlightBookings::query()
-            ->whereNotIn('flight_bookings.status', ['canceled', 'cancelled', 'voided'])
+            // A traveller belongs on the travel calendar only after a ticket is issued.
+            ->whereIn('flight_bookings.status', ['ticketed', 'issued'])
             ->whereBetween('travel_date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
             ->leftJoin('flight_passengers', 'flight_passengers.booking_id', '=', 'flight_bookings.id')
             ->selectRaw('flight_bookings.travel_date as day')
@@ -44,7 +45,7 @@ class TravelCalendarController extends Controller
         $date = $request->filled('date') ? Carbon::parse($request->date)->toDateString() : now()->toDateString();
 
         $bookings = FlightBookings::query()
-            ->whereNotIn('status', ['canceled', 'cancelled', 'voided'])
+            ->whereIn('status', ['ticketed', 'issued'])
             ->whereDate('travel_date', $date)
             ->with(['pessangers', 'user:id,name'])
             ->orderBy('id')

@@ -327,6 +327,7 @@ onUnmounted(() => clearInterval(countdownInterval));
                                 </th>
                                 <th scope="col" class="px-4 py-3">PNR</th>
                                 <th scope="col" class="px-4 py-3">Supplier</th>
+                                <th scope="col" class="px-4 py-3">Customer ID</th>
                                 <th scope="col" class="px-4 py-3">Customer Email</th>
                                 <th scope="col" class="px-4 py-3">Route</th>
                                 <th scope="col" class="px-4 py-3">
@@ -359,6 +360,7 @@ onUnmounted(() => clearInterval(countdownInterval));
                                     {{ parseFlightData(booking?.flight_data)?.provider?.name.toUpperCase() || 'N/A' }}
                                 </td>
                                 
+                                <td class="px-4 py-3 font-medium">{{ booking?.user?.customer?.customer_uid || "_" }}</td>
                                 <td class="px-4 py-3">{{ booking.agency_email }}</td>
                                 <td px-4 py-3>
                                     <div v-if="booking?.booking_source == 1">

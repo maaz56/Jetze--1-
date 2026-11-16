@@ -55,7 +55,9 @@ class ModifyRequestController extends Controller
             'description' => "{$modifyRequest->user?->name} submitted a booking modification request.",
             'booking_id' => $modifyRequest->booking_id,
             'modify_request_id' => $modifyRequest->id,
-            'url' => '/admin/modify-requests',
+            'url' => $modifyRequest->booking
+                ? \App\Support\AdminNotificationLinks::booking($modifyRequest->booking, ['modify_request_id' => $modifyRequest->id])
+                : '/admin/modify-requests',
         ], true)));
         
         return response()->json($modifyRequest, 201);

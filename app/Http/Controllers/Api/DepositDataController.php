@@ -81,7 +81,7 @@ class DepositDataController extends Controller
             'aed_amount' => $baseMoney['amount'],
         ]);
 
-        $deposit = DepositData::with(['agent.agentData', 'bank'])->find($deposit->id);
+        $deposit = DepositData::with(['agent.agentData', 'agent.customer', 'bank'])->find($deposit->id);
         $this->sendDepositRequestMail($deposit);
         $this->sendDepositRequestReceivedMail($deposit);
         $this->notifyAdmins([
@@ -90,7 +90,7 @@ class DepositDataController extends Controller
             'description' => "{$deposit->agent?->name} submitted a deposit request.",
             'deposit_id' => $deposit->id,
             'user_id' => $deposit->agent_id,
-            'url' => '/admin/deposit-details?DepositId='.$deposit->id,
+            'url' => \App\Support\AdminNotificationLinks::deposit($deposit->id),
         ]);
 
         return response()->json([
@@ -134,7 +134,7 @@ class DepositDataController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            $depositQuery = DepositData::with(['agent.agentData', 'bank'])
+            $depositQuery = DepositData::with(['agent.agentData', 'agent.customer', 'bank'])
                 ->when($request->userId, fn ($query) => $query->where('agent_id', $request->userId));
 
             $totalApprovedDeposits = (clone $depositQuery)
@@ -172,7 +172,7 @@ class DepositDataController extends Controller
             }
 
             $deposits = DepositData::where('agent_id', $agentId)
-                ->with(['agent.agentData', 'bank']) // Include agent and agentData relationship
+                ->with(['agent.agentData', 'agent.customer', 'bank']) // Include agent and agentData relationship
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -204,7 +204,7 @@ class DepositDataController extends Controller
             abort(403, 'Only an admin can view all deposits.');
         }
 
-        $deposits = DepositData::with(['agent.agentData', 'bank'])
+        $deposits = DepositData::with(['agent.agentData', 'agent.customer', 'bank'])
             ->orderBy('date', 'desc')
             ->get()
             ->map(fn (DepositData $deposit) => $this->presentDeposit($deposit, 'AED'));
@@ -316,7 +316,7 @@ class DepositDataController extends Controller
         // Save the updated deposit record
         $deposit->save();
 
-        $deposit = DepositData::with(['agent.agentData', 'bank', 'approver'])->find($deposit->id);
+        $deposit = DepositData::with(['agent.agentData', 'agent.customer', 'bank', 'approver'])->find($deposit->id);
         if ($deposit->deposit_status === 'approved') {
             $this->sendDepositApprovedMail($deposit);
         } elseif ($deposit->deposit_status === 'rejected') {

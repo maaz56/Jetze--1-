@@ -117,7 +117,7 @@ class BookingController extends Controller
         } elseif ($request->booking_mode) {
             $bookingMode = $request->booking_mode;
         }
-        $query = FlightBookings::with(['pessangers', 'user.agentData'])->orderBy('id', 'desc');
+        $query = FlightBookings::with(['pessangers', 'user.agentData', 'user.customer'])->orderBy('id', 'desc');
         if($user->role == 'admin' && $request->user_id){
             Log::info("Admin accessing bookings for user_id: " . $request->user_id);
             $query->where('agent_id', $request->user_id);
@@ -825,12 +825,13 @@ class BookingController extends Controller
             'description' => "A flight booking was created for PNR {$pnr}.",
             'booking_id' => $flightBooking->id,
             'pnr' => $pnr,
-            'url' => '/admin/admin-customer-booking-layout?booking_id='.$flightBooking->id,
+            'url' => \App\Support\AdminNotificationLinks::booking($flightBooking),
         ];
         User::query()->where('role', 'admin')->each(
             fn (User $admin) => $admin->notify(new SystemNotification($notification))
         );
-        $flightBooking->user?->notify(new SystemNotification($notification));
+        // The booking owner must not receive an /admin/... link they can't open.
+        $flightBooking->user?->notify(new SystemNotification(['url' => null] + $notification));
         Log::info('Expiry Time: ' . $expiryTime);
         CancelBookingJob::dispatch($flightBooking)->delay($expiryTime);
 
@@ -1831,7 +1832,7 @@ class BookingController extends Controller
         Log::info($request);
         $requestedUserId = $request->user_id ?? $request->userId;
 
-        $query = FlightBookings::with('pessangers')
+        $query = FlightBookings::with(['pessangers', 'user.customer'])
             ->where('booking_mode', 'B2C')
             ->orderBy('id', 'desc');
 

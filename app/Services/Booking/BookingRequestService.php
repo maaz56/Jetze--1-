@@ -291,7 +291,9 @@ class BookingRequestService
             'description' => "A {$request->type} request was submitted for PNR {$pnr}.",
             'booking_id' => $request->booking_id,
             'booking_request_id' => $request->id,
-            'url' => '/admin/booking-requests',
+            'url' => $request->booking
+                ? \App\Support\AdminNotificationLinks::booking($request->booking)
+                : '/admin/booking-requests',
         ])));
 
         if (!config('app.booking_email_notifications', true)) {

@@ -69,7 +69,7 @@ class UserController extends Controller
 
         $user = Auth::user();
 
-        $query = User::query()->with('agentData')->orderBy('created_at', 'desc');
+        $query = User::query()->with(['agentData', 'customer'])->orderBy('created_at', 'desc');
 
 
         // Admin can see all users, salesman can see only their own
@@ -86,6 +86,9 @@ class UserController extends Controller
                 $q->where("name", "LIKE", "%" . $searchQuery . "%")
                     ->orWhere("email", "LIKE", "%" . $searchQuery . "%")
                     ->orWhere("role", "LIKE", "%" . $searchQuery . "%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($searchQuery) {
+                        $customerQuery->where("customer_uid", "LIKE", "%" . $searchQuery . "%");
+                    })
                     ->orWhereHas('agentData', function ($agentQuery) use ($searchQuery) {
                         $agentQuery->where("company_name", "LIKE", "%" . $searchQuery . "%")
                             ->orWhere("ceo_contact", "LIKE", "%" . $searchQuery . "%")
@@ -199,7 +202,7 @@ class UserController extends Controller
      */
     public function show(string $id)
     {
-        $user = User::where('id', $id)->first();
+        $user = User::with('customer')->where('id', $id)->first();
         if (!$user) {
             return response()->json([
                 'success' => false,

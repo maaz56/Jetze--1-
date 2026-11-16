@@ -55,6 +55,24 @@ function readNotification(id) {
 function clearAllNotifications() {
     store.dispatch('notification/clearAllNotifications');
 }
+// Resolve the admin page a notification should open. New notifications already
+// carry the correct URL; this also repairs notifications stored earlier with a
+// wrong link so they open exactly like the sidebar/list pages do.
+function adminNotificationLink(n) {
+    const d = n?.data?.data || n?.data || {};
+    let url = d.url || '';
+
+    if (url.includes('/admin/deposit-details') || d.type === 'deposit_submitted') {
+        const id = d.deposit_id || new URLSearchParams(url.split('?')[1] || '').get('DepositId');
+        if (id) return `/admin/deposit-details?deposit_id=${id}`;
+    }
+    if (d.type === 'new_user' && d.user_id) {
+        return `/admin/customer-details?customer_id=${d.user_id}`;
+    }
+    if (url) return url;
+    if (d.user_id) return `/admin/user-details?user_id=${d.user_id}`;
+    return '/admin/dashboard';
+}
 const readAtCounter = computed(() => {
     return fetchedNotifications.value.filter(n => !n.read_at).length;
 });
@@ -174,7 +192,7 @@ onBeforeUnmount(() => {
                            
                             <div class="mt-2" v-if="props.isAdmin">
                                 <router-link target="_blank"
-                                    :to="n?.data?.url || n?.data?.data?.url || `/admin/user-details?user_id=${n?.data?.user_id || n?.data?.data?.user_id}`">View Details</router-link>
+                                    :to="adminNotificationLink(n)">View Details</router-link>
                             </div>
                         </div>
                     </DropdownMenuItem>

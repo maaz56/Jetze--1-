@@ -240,7 +240,7 @@ onMounted(() => {
                                     {{ moment(booking.created_at).format("DD-MMM-YYYY HH:mm") }}
                                 </td>
                                 <td class="px-4 py-3">
-                                    {{ booking?.user?.agent_data?.agent_uid }}_{{ booking.id + 1000 }}</td>
+                                    {{ booking?.user?.agent_data?.agent_uid || booking?.user?.customer?.customer_uid }}_{{ booking.id + 1000 }}</td>
                                 <td class="px-4 py-3">
                                     {{ booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr }}
                                 </td>
