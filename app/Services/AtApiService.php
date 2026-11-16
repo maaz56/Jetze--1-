@@ -206,14 +206,14 @@ class AtApiService
                 $headers,
                 json_encode($signaturePayload)
             );
-
+            Log::info(json_encode($signaturePayload));
             $response = $this->client->send($request, [
                 'timeout' => self::SIGNATURE_HTTP_TIMEOUT_SECONDS,
                 'connect_timeout' => self::PNR_HTTP_CONNECT_TIMEOUT_SECONDS,
             ]);
             $responseBody = (string) $response->getBody();
             $accessToken = json_decode($responseBody, true);
-
+            Log::info(json_encode($accessToken));
             if (!is_array($accessToken) || empty($accessToken['Token'])) {
                 Log::warning('AT access token response missing token.', [
                     'response' => $accessToken,
