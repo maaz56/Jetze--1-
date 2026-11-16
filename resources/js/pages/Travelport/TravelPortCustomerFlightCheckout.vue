@@ -88,6 +88,7 @@ import { toast } from "vue3-toastify";
 import Tesseract from "tesseract.js";
 import CountryDropdown from "@/components/common/CountryDropdown.vue";
 import Calender from '@/components/common/CheckoutCalender.vue';
+import { isTravellerDobValid } from '@/lib/travellerDob';
 const already_booked = computed(() => store.getters["flight/already_booked"]);
 const route = useRoute();
 const store = useStore();
@@ -103,6 +104,21 @@ const amount = ref(0);
 const passengerCount = ref(0);
 const currentSlide = ref(0);
 const todayDate = new Date();
+
+// Calendar limits (DOB / passport expiry) — same rules as Dreamscape
+function getDateInputValue(yearOffset = 0, dayOffset = 0) {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + yearOffset);
+    date.setDate(date.getDate() + dayOffset);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+const dobMinDate = computed(() => getDateInputValue(-100));
+const expiryMinDate = computed(() => getDateInputValue(0, 1));
+const expiryMaxDate = computed(() => getDateInputValue(20));
+const todayDateStr = computed(() => getDateInputValue(0));
 const bookingDetails = computed(() => store.getters["flight/bookingDetails"]);
 const priceRes = computed(() => store.getters["flight/priceRes"]);
 const fareRules = computed(() => store.getters["flight/fareRules"]);
@@ -495,29 +511,15 @@ const validateExpiryDate = (date) => {
 const validateDob = (dob, type) => {
     if (!validateDate(dob)) return false;
 
+    // Date of birth cannot be in the future
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const birthDate = new Date(dob);
-    const age = today.getFullYear() - birthDate.getFullYear();
+    birthDate.setHours(0, 0, 0, 0);
+    if (birthDate > today) return false;
 
-    // Check if birthday has occurred this year
-    const hasBirthdayOccurred =
-        today.getMonth() > birthDate.getMonth() ||
-        (today.getMonth() === birthDate.getMonth() &&
-            today.getDate() >= birthDate.getDate());
-
-    const adjustedAge = hasBirthdayOccurred ? age : age - 1;
-
-    // Validate age based on passenger type
-    switch (type) {
-        case "ADT": // Adult
-            return adjustedAge >= 12;
-        case "CNN": // Child
-            return adjustedAge >= 2 && adjustedAge < 12;
-        case "INF": // Infant
-            return adjustedAge < 2;
-        default:
-            return true;
-    }
+    // Age limits per passenger type (same rules the calendar enforces)
+    return isTravellerDobValid(dob, type);
 };
 // Main validation function
 const validateForm = () => {
@@ -2566,7 +2568,9 @@ watch(
                                                                     2</span>
                                                             </Label>
                                                             <Calender v-model="traveller.dob" type="date"
-                                                                :maxValue="todayDate.toISOString().split('T')[0]"
+                                                                :dob-type="traveller.type"
+                                                                :minValue="dobMinDate"
+                                                                :maxValue="todayDateStr"
                                                                 :id="`date-of-birth-${index}`"
                                                                 placeholder="Date Of Birth"
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.dob`) }"
@@ -2664,6 +2668,8 @@ watch(
                                                                 Date <span class="text-red-500">*</span></Label>
                                                             <Calender v-model="traveller.expiryDate"
                                                                 :id="`expiry-date-${index}`"
+                                                                :minValue="expiryMinDate"
+                                                                :maxValue="expiryMaxDate"
                                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
                                                                 type="date"
                                                                 class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />

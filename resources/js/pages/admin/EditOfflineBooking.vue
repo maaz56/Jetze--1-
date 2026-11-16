@@ -334,7 +334,7 @@
                                                     *Age Less than 2
                                                 </span>
                                             </Label>
-                                            <Calender v-model="traveller.dob" type="date" :id="`date-of-birth-${index}`"
+                                            <Calender v-model="traveller.dob" type="date" :dob-type="traveller.type" :minValue="dobMinDate" :maxValue="todayDate" :id="`date-of-birth-${index}`"
                                                 placeholder="Date Of Birth"
                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.dob`) }"
                                                 class="w-full h-8 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
@@ -405,6 +405,7 @@
                                                 Expiry Date <span class="text-red-500">*</span>
                                             </Label>
                                             <Calender v-model="traveller.expiryDate" :id="`expiry-date-${index}`"
+                                                :minValue="expiryMinDate" :maxValue="expiryMaxDate"
                                                 :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
                                                 type="date"
                                                 class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
@@ -528,6 +529,20 @@ const selectedAgent = ref(null);
 const bookingAmount = ref("");
 const bookingPnr = ref("");
 const todayDate = ref(new Date().toISOString().split('T')[0]);
+
+// Calendar limits (DOB / passport expiry) — same rules as Dreamscape
+function getDateInputValue(yearOffset = 0, dayOffset = 0) {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + yearOffset);
+    date.setDate(date.getDate() + dayOffset);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+const dobMinDate = computed(() => getDateInputValue(-100));
+const expiryMinDate = computed(() => getDateInputValue(0, 1));
+const expiryMaxDate = computed(() => getDateInputValue(20));
 const airports = computed(() => store.getters["airport/airports"]);
 const offlineBookingDetails = computed(() => {
     const details = store.getters["offlineBooking/offlineBookingDetails"];
