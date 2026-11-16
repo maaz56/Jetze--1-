@@ -48,17 +48,32 @@ class AtFreeSsrBaggageTransformer
                             $weight = $weights[0];
                         }
 
+                        // AT sometimes puts both bags in PieceDescription, for
+                        // example "1 Piece equal 23KG,1 Piece equal 7 Kg". Split
+                        // it at the commas: the first part is checked baggage and
+                        // the last is cabin baggage. When Description already has
+                        // its own "<checked>, <cabin>" split, that one is used.
+                        [$pieceChecked, $pieceCabin] = $this->splitCheckedAndCabin($pieceDescription);
+                        $descriptionHasCabin = trim(explode(',', $description, 2)[1] ?? '') !== '';
+                        $splitFromPieceDescription = !$descriptionHasCabin && $pieceChecked !== null && $pieceCabin !== null;
+
+                        if ($splitFromPieceDescription) {
+                            [$splitPieces, $splitWeight] = $this->allowanceFromText($pieceChecked);
+                            $pieces = $splitPieces ?: $pieces;
+                            $weight = $splitWeight ?? $weight;
+                        }
+
                         $policies[] = [
                             'type' => 'checkIn',
                             'pieces' => $pieces,
                             'weight' => $weight,
-                            'description' => $checkedDescription ?: ($description !== '' ? 'Checked baggage unavailable' : ($this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
+                            'description' => $splitFromPieceDescription ? $pieceChecked : ($checkedDescription ?: ($description !== '' ? 'Checked baggage unavailable' : ($this->checkedDescription($pieces, $weight, $pieceDescription) ?: (
                                 isset($weights[1]) ? $this->weightDescription($weights[0]) : $checkedText
-                            ))),
+                            )))),
                             // Preserve AT's detailed wording (for example,
                             // "1 BAG UP TO 7KG, 1 BAG UP TO 12 KG") for the
                             // baggage sheet without replacing its short allowance.
-                            'detail_description' => trim($pieceDescription, " ,") ?: null,
+                            'detail_description' => $splitFromPieceDescription ? null : (trim($pieceDescription, " ,") ?: null),
                             'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
                             'segment_ref_id' => $segmentRefId,
                             'source' => 'free_ssr',
@@ -66,6 +81,21 @@ class AtFreeSsrBaggageTransformer
 
                         // AT lists "<checked>, <cabin>" (e.g. "25 Kg, 7 Kg"),
                         // and the cabin allowance varies by fare (5 Kg, 7 Kg...).
+                        if ($splitFromPieceDescription) {
+                            [$cabinPieces, $cabinWeight] = $this->allowanceFromText($pieceCabin);
+                            $policies[] = [
+                                'type' => 'carry',
+                                'pieces' => $cabinPieces ?: 1,
+                                'weight' => $cabinWeight,
+                                'description' => $pieceCabin,
+                                'detail_description' => null,
+                                'traveler_type' => $this->travelerType($ssr['PTC'] ?? 'ADT'),
+                                'segment_ref_id' => $segmentRefId,
+                                'source' => 'free_ssr',
+                            ];
+                            continue;
+                        }
+
                         $cabinDescription = trim(explode(',', $description, 2)[1] ?? '');
                         [$cabinPieces, $cabinWeight] = $this->allowanceFromText($cabinDescription);
                         if ($cabinWeight !== null) {
@@ -86,6 +116,22 @@ class AtFreeSsrBaggageTransformer
         }
 
         return ['baggage_policies' => $policies];
+    }
+
+    /**
+     * Split "<checked>,<...>,<cabin>" into [first, last] (trimmed). Returns
+     * [null, null] unless there are at least two non-empty parts.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function splitCheckedAndCabin(string $text): array
+    {
+        $parts = array_values(array_filter(
+            array_map('trim', explode(',', $text)),
+            static fn (string $part): bool => $part !== '',
+        ));
+
+        return count($parts) >= 2 ? [$parts[0], $parts[count($parts) - 1]] : [null, null];
     }
 
     private function allowanceFromText(string $text): array
