@@ -14,8 +14,11 @@ const props = defineProps({
     expiry: { type: String, default: "" },
     source: { type: String, default: "" },
     showFare: { type: Boolean, default: true },
+    editable: { type: Boolean, default: false },
     fareColumns: { type: Array, default: () => ["Sector", "Subtotal", "Taxes + Fees", "Grand total"] },
 });
+
+const emit = defineEmits(["edit-pnr", "edit-ticket-number"]);
 
 const parseJson = (value) => {
     if (value && typeof value === "object") return value;
@@ -257,6 +260,7 @@ const atTicketNumber = (traveller, index) => {
 };
 
 const ticketNumber = (traveller, index) =>
+    traveller?.ticketNumber ||
     props.pnrDetails?.flightTickets?.[index]?.number ||
     props.pnrDetails?.booking_details?.[index]?.ticket_no ||
     atTicketNumber(traveller, index) ||
@@ -321,7 +325,23 @@ const passengerName = (traveller) =>
         <div class="et-meta">
             <div><span class="et-lbl">Reference No.</span><span class="et-val">{{ booking?.id }}</span></div>
             <div><span class="et-lbl">Date of booking</span><span class="et-val">{{ bookingDate }}</span></div>
-            <div><span class="et-lbl">PNR</span><span class="et-val">{{ crsPnr }}</span></div>
+            <div>
+                <span class="et-lbl et-editable-label">
+                    PNR
+                    <button
+                        v-if="editable"
+                        type="button"
+                        class="et-edit-btn print:hidden"
+                        :aria-label="crsPnr === '-' ? 'Add PNR' : 'Edit PNR'"
+                        :title="crsPnr === '-' ? 'Add PNR' : 'Edit PNR'"
+                        @click="emit('edit-pnr')"
+                    >
+                        <svg v-if="crsPnr === '-'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" /><path d="m13.5 7.5 3 3" /></svg>
+                    </button>
+                </span>
+                <span class="et-val">{{ crsPnr }}</span>
+            </div>
             <div><span class="et-lbl">Airline PNR</span><span class="et-val">{{ airlinePnrValue }}</span></div>
             <div v-if="source"><span class="et-lbl">Booking source</span><span class="et-val">{{ source }}</span></div>
         </div>
@@ -400,7 +420,23 @@ const passengerName = (traveller) =>
                 <div><span class="et-lbl">Gender</span><span class="et-val">{{ genderLabel(traveller?.gender) }}</span></div>
                 <div><span class="et-lbl">Nationality</span><span class="et-val">{{ nationalityLabel(traveller?.nationality)
                         }}</span></div>
-                <div><span class="et-lbl">Ticket No</span><span class="et-val">{{ ticketNumber(traveller, index) }}</span></div>
+                <div>
+                    <span class="et-lbl et-editable-label">
+                        Ticket No
+                        <button
+                            v-if="editable"
+                            type="button"
+                            class="et-edit-btn print:hidden"
+                            :aria-label="ticketNumber(traveller, index) === 'N/A' ? 'Add ticket number' : 'Edit ticket number'"
+                            :title="ticketNumber(traveller, index) === 'N/A' ? 'Add ticket number' : 'Edit ticket number'"
+                            @click="emit('edit-ticket-number', { traveller, index, value: ticketNumber(traveller, index) })"
+                        >
+                            <svg v-if="ticketNumber(traveller, index) === 'N/A'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" /><path d="m13.5 7.5 3 3" /></svg>
+                        </button>
+                    </span>
+                    <span class="et-val">{{ ticketNumber(traveller, index) }}</span>
+                </div>
             </div>
         </section>
 
@@ -661,6 +697,36 @@ const passengerName = (traveller) =>
     color: var(--et-muted);
     font-weight: 500;
     margin-bottom: 2px;
+}
+
+.et-editable-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.et-edit-btn {
+    display: inline-flex;
+    height: 18px;
+    width: 18px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--et-blue) 30%, transparent);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--et-blue);
+    cursor: pointer;
+}
+
+.et-edit-btn:hover {
+    background: var(--et-tint);
+}
+
+.et-edit-btn svg {
+    width: 11px;
+    height: 11px;
 }
 
 .et-val {

@@ -1198,8 +1198,13 @@ class BookingController extends Controller
             $crsPnr = $this->atCrsPnr($pnrData);
             $airlinePnr = $this->atAirlinePnr($pnrData);
             if ($booking && ($crsPnr || $airlinePnr)) {
-                if ($crsPnr) {
+                // A manually maintained PNR is stored in both `pnr` and
+                // `itinerary_ref`. Do not overwrite it each time AT's
+                // RetrieveBooking endpoint is called; only seed an empty
+                // legacy record from the supplier response.
+                if ($crsPnr && blank($booking->itinerary_ref)) {
                     $booking->itinerary_ref = $crsPnr;
+                    $booking->pnr = $crsPnr;
                 }
                 if ($airlinePnr) {
                     $booking->airline_pnr = $airlinePnr;
@@ -2262,6 +2267,49 @@ class BookingController extends Controller
 
         return response()->json([
             'message' => 'Ticket numbers updated successfully',
+        ]);
+    }
+
+    /** Update the manually maintained ticket PNR or one passenger's e-ticket number. */
+    public function updateTicketDetails(Request $request, FlightBookings $booking)
+    {
+        $validated = $request->validate([
+            'pnr' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'itinerary_ref' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'passenger_id' => ['required_without_all:pnr,itinerary_ref', 'nullable', 'integer'],
+            'ticket_number' => ['required_with:passenger_id', 'nullable', 'string', 'max:255'],
+        ]);
+
+        $user = $request->user();
+        if (! $user || ($user->role !== 'admin' && (int) $booking->agent_id !== (int) $user->id)) {
+            abort(403, 'You are not allowed to update this ticket.');
+        }
+
+        if (array_key_exists('pnr', $validated) || array_key_exists('itinerary_ref', $validated)) {
+            $pnr = $validated['pnr'] ?? $validated['itinerary_ref'];
+            $pnr = filled($pnr) ? trim($pnr) : null;
+
+            // Keep both legacy PNR columns aligned. Airline PNR is a separate
+            // supplier value and must never be changed by this editor.
+            $booking->pnr = $pnr;
+            $booking->itinerary_ref = $pnr;
+            $booking->save();
+        }
+
+        if (array_key_exists('passenger_id', $validated)) {
+            $passenger = $booking->pessangers()
+                ->whereKey($validated['passenger_id'])
+                ->firstOrFail();
+
+            $passenger->ticketNumber = filled($validated['ticket_number'])
+                ? trim($validated['ticket_number'])
+                : null;
+            $passenger->save();
+        }
+
+        return response()->json([
+            'message' => 'Ticket details updated successfully.',
+            'booking' => $booking->fresh('pessangers'),
         ]);
     }
 

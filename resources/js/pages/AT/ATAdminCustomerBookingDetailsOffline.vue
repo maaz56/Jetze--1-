@@ -37,6 +37,7 @@ import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
+import apiService from "@/config/axios";
 import { cn, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
 
 import {
@@ -230,6 +231,10 @@ const charges = ref("");
 const chargesDate = ref("");
 const chargesDec = ref("");
 const validationErrors = ref([]);
+const isTicketDetailDialogOpen = ref(false);
+const isSavingTicketDetail = ref(false);
+const ticketDetailError = ref("");
+const ticketDetailForm = ref({ type: "pnr", passengerId: null, value: "" });
 const passengerCount = ref();
 const agentAmount = ref();
 const agentDiscount = ref();
@@ -248,10 +253,57 @@ const atPnrReferences = computed(() => {
         ?.find(Boolean);
 
     return {
-        crs: flight?.CRSPNR || booking.value?.itinerary_ref || "-",
+        crs: booking.value?.itinerary_ref || flight?.CRSPNR || "-",
         airline: flight?.APNR || flight?.AirlinePNR || booking.value?.airline_pnr || "-",
     };
 });
+const ticketDetailDialogTitle = computed(() =>
+    ticketDetailForm.value.type === "pnr" ? "Update PNR" : "Update Ticket Number"
+);
+
+function openPnrEditor() {
+    ticketDetailForm.value = {
+        type: "pnr",
+        passengerId: null,
+        value: atPnrReferences.value.crs === "-" ? "" : atPnrReferences.value.crs,
+    };
+    ticketDetailError.value = "";
+    isTicketDetailDialogOpen.value = true;
+}
+
+function openTicketNumberEditor({ traveller, value }) {
+    ticketDetailForm.value = {
+        type: "ticket",
+        passengerId: traveller.id,
+        value: value === "N/A" ? "" : value,
+    };
+    ticketDetailError.value = "";
+    isTicketDetailDialogOpen.value = true;
+}
+
+async function saveTicketDetail() {
+    if (!booking.value) return;
+
+    isSavingTicketDetail.value = true;
+    ticketDetailError.value = "";
+
+    try {
+        const payload = ticketDetailForm.value.type === "pnr"
+            ? { pnr: ticketDetailForm.value.value }
+            : {
+                passenger_id: ticketDetailForm.value.passengerId,
+                ticket_number: ticketDetailForm.value.value,
+            };
+
+        await apiService.patch(`bookings/${booking.value.id}/ticket-details`, payload);
+        isTicketDetailDialogOpen.value = false;
+        await fetchBookingDetails();
+    } catch (err) {
+        ticketDetailError.value = err.response?.data?.message || "Ticket details could not be updated.";
+    } finally {
+        isSavingTicketDetail.value = false;
+    }
+}
 const flightData = ref(null);
 const isDetailsInfoVisible = ref(true);
 const totalTicketPrice = ref(0);
@@ -1257,7 +1309,9 @@ onMounted(async () => {
                     <ATETicket v-for="booking in bookingDetails" :key="booking.id" :booking="booking"
                         :agent="agentData?.agent_data" :pnr="atPnrReferences.crs"
                         :airline-pnr="atPnrReferences.airline" :pnr-details="pnrDetails"
-                        :show-fare="isDetailsInfoVisible">
+                        :show-fare="isDetailsInfoVisible" :editable="true"
+                        @edit-pnr="openPnrEditor"
+                        @edit-ticket-number="openTicketNumberEditor">
                         <template #fare-rows>
                             <tr v-if="pnrDetails?.fares?.length">
                                 <td>
@@ -1309,6 +1363,39 @@ onMounted(async () => {
                         </template>
                     </ATETicket>
                 </div>
+            </div>
+
+            <div
+                v-if="isTicketDetailDialogOpen"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden"
+                @click.self="isTicketDetailDialogOpen = false"
+            >
+                <form class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl" @submit.prevent="saveTicketDetail">
+                    <div class="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">{{ ticketDetailDialogTitle }}</h2>
+                            <p class="mt-1 text-sm text-gray-500">{{ ticketDetailForm.type === 'pnr' ? 'Enter the booking PNR shown on this e-ticket.' : 'Enter the e-ticket number for this passenger.' }}</p>
+                        </div>
+                        <button type="button" class="text-xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close" @click="isTicketDetailDialogOpen = false">×</button>
+                    </div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">
+                        {{ ticketDetailForm.type === 'pnr' ? 'PNR' : 'Ticket number' }}
+                    </label>
+                    <input
+                        v-model.trim="ticketDetailForm.value"
+                        type="text"
+                        required
+                        maxlength="255"
+                        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                    <p v-if="ticketDetailError" class="mt-2 text-sm text-red-600">{{ ticketDetailError }}</p>
+                    <div class="mt-5 flex justify-end gap-3">
+                        <button type="button" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200" @click="isTicketDetailDialogOpen = false">Cancel</button>
+                        <button type="submit" :disabled="isSavingTicketDetail" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">
+                            {{ isSavingTicketDetail ? 'Saving...' : 'Save' }}
+                        </button>
+                    </div>
+                </form>
             </div>
             
         </div>

@@ -298,6 +298,8 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::delete('delete-travellers', [AgentTravellerController::class, 'destroy']);
     Route::get('get-my-travellers', [BookingController::class, 'getMyTravellers']);
     Route::post('assign-ticket-number', [BookingController::class, 'assignTicketNumber']);
+    Route::patch('bookings/{booking}/ticket-details', [BookingController::class, 'updateTicketDetails'])
+        ->middleware('auth:sanctum');
 
     Route::post('update-booking', [AdminSettingsController::class, 'updateBooking']);
     Route::get('get-booking-status-settings', [AdminSettingsController::class, 'getBookiongStatusSettings']);
