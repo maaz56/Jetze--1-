@@ -434,6 +434,7 @@ Route::get('zoho-contacts', [ZohoController::class, 'fetchOrCreateCustomer']);
 Route::get('create-invoice', [ZohoController::class, 'createInvoice']);
 
 Route::post('save-request', [ModifyRequestController::class, 'store']);
+Route::post('open-modify-request-chat', [ModifyRequestController::class, 'openChat']);
 Route::get('fetch-requests', [ModifyRequestController::class, 'index']);
 Route::get('fetch-modify-request-data', [ModifyRequestController::class, 'fetchModifyRequestData']);
 Route::post('update-modify-request-status', [ModifyRequestController::class, 'updateStatus']);

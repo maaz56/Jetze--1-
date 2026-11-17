@@ -49,6 +49,16 @@ import flight from "@/services/store/flight";
 
 const store = useStore();
 const authStore = useAuthStore();
+const props = defineProps({
+    embedded: {
+        type: Boolean,
+        default: false,
+    },
+    highlightRequestId: {
+        type: [String, Number],
+        default: null,
+    },
+});
 
 const requests = computed(() => store.getters["modifyRequest/requests"]);
 
@@ -104,7 +114,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <section>
+    <section :class="props.embedded ? 'p-6' : ''">
         <div>
             <!-- <div class="flex items-center justify-between mb-4">
                 <span class="text-3xl font-medium">Bookings</span>
@@ -205,7 +215,8 @@ onMounted(() => {
                         </thead>
                         <tbody>
                             <tr v-for="request in requests" :key="request.id"
-                                class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                :class="{ 'bg-primary/5': String(request.id) === String(props.highlightRequestId) }">
                                 <!-- Request Date -->
                                 <td class="px-4 py-3">
                                     {{ moment(request.created_at).format("MM-DD-YYYY hh:mm A") }}

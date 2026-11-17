@@ -29,7 +29,7 @@ import {
 import { calculateLayover, formatDateTime, getFormattedDates, getDuration, calculateLayoverTime, getAdjustedDateTime } from "@/lib/utils";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
 import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
@@ -51,6 +51,7 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import { ChatBubbleIcon } from "@radix-icons/vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import apiService from "@/config/axios";
+import { subscribeToPrivateChannel } from "@/services/realtime/pusher";
 
 const store = useStore();
 const route = useRoute();
@@ -151,6 +152,7 @@ function formatBookingAddOnsAmount(amount) {
 
 const isDialogOpen = ref(false);
 const isChatOpen = ref(false);
+const isOpeningChat = ref(false);
 const modifyDialogOpen = ref(false);
 const selectedReason = ref("");
 const message = ref("");
@@ -158,6 +160,31 @@ const replyMessage = ref("");
 const replyLoading = ref(false);
 
 const modifyRequestData = computed(() => store.getters["modifyRequest/requestData"]);
+let unsubscribeModifyRequest = null;
+
+function subscribeToModifyRequest() {
+    unsubscribeModifyRequest?.();
+    const modifyRequestId = modifyRequestData.value?.id;
+    if (!modifyRequestId) return;
+
+    unsubscribeModifyRequest = subscribeToPrivateChannel(
+        `modify-requests.${modifyRequestId}`,
+        "modify-request-message",
+        (event) => {
+            if (Number(event.modify_request_id) === Number(modifyRequestId)) {
+                fetchModifyRequestData(event.modify_request_id);
+            }
+        },
+    );
+}
+
+watch(() => modifyRequestData.value?.id, (modifyRequestId) => {
+    subscribeToModifyRequest();
+    if (modifyRequestId && route.query.chat === '1') {
+        isChatOpen.value = true;
+    }
+}, { immediate: true });
+onUnmounted(() => unsubscribeModifyRequest?.());
 
 const now = ref(Date.now());
 
@@ -192,12 +219,12 @@ function handleLogin() {
     authStore.openDialog();
 }
 
-function fetchModifyRequestData() {
-    if (booking_id) {
-        store.dispatch(`modifyRequest/${FETCH_MODIFY_REQUEST_DATA}`, {
-            booking_id: booking_id,
-        });
-    }
+function fetchModifyRequestData(modifyRequestId = route.query.modify_request_id) {
+    if (!booking_id && !modifyRequestId) return;
+
+    return store.dispatch(`modifyRequest/${FETCH_MODIFY_REQUEST_DATA}`, modifyRequestId
+        ? { modify_request_id: modifyRequestId }
+        : { booking_id });
 }
 
 function sendReply() {
@@ -383,8 +410,35 @@ const printBooking = () => {
     document.body.removeChild(printContainer);
 };
 
-const toggleChatOpen = () => {
-    isChatOpen.value = !isChatOpen.value;
+const toggleChatOpen = async () => {
+    if (isChatOpen.value) {
+        isChatOpen.value = false;
+        return;
+    }
+
+    if (modifyRequestData.value) {
+        isChatOpen.value = true;
+        return;
+    }
+
+    if (!user_id.value) {
+        handleLogin();
+        return;
+    }
+
+    const currentBookingId = booking.value?.id || booking_id;
+    if (!currentBookingId) return;
+
+    isOpeningChat.value = true;
+    try {
+        const response = await apiService.post('/open-modify-request-chat', { booking_id: currentBookingId });
+        await fetchModifyRequestData(response.data?.data?.id);
+        isChatOpen.value = true;
+    } catch (error) {
+        alert(error.response?.data?.message || 'Unable to open chat. Please try again.');
+    } finally {
+        isOpeningChat.value = false;
+    }
 };
 
 function goToPaymentView() {
@@ -469,14 +523,6 @@ onMounted(async () => {
                 </button>
 
                 <button
-                    :disabled="!!modifyRequestData"
-                    @click="openModifyRequestDialog"
-                    class="flex items-center gap-2 rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    Modify Request
-                </button>
-
-                <button
                     :disabled="['ticketed', 'canceled', 'voided'].includes(String(booking.status).toLowerCase())"
                     @click="goToPaymentView"
                     class="flex items-center gap-2 rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
@@ -486,19 +532,12 @@ onMounted(async () => {
                 </button>
 
                 <button
-                    :disabled="['canceled', 'ticketed', 'voided'].includes(String(booking.status).toLowerCase())"
-                    @click="isDialogOpen = true"
-                    class="flex items-center gap-2 rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    Cancel Booking
-                </button>
-
-                <button
                     @click="toggleChatOpen"
+                    :disabled="isOpeningChat"
                     class="flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
                 >
                     <ChatBubbleIcon class="h-4 w-4" />
-                    Chat
+                    {{ isOpeningChat ? 'Opening chat...' : 'Chat' }}
                 </button>
             </div>
 

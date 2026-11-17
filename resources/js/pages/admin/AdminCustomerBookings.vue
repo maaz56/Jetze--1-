@@ -10,6 +10,8 @@ import {
     Ban,
     CirclePause,
     CircleX,
+    TicketCheck,
+    Building2,
 } from "lucide-vue-next";
 
 import {
@@ -50,11 +52,27 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import { useUserStore } from "@/services/stores/user";
 import { debounce } from "lodash";
 import { useAuthStore } from "@/services/stores/auth";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import HotelBookings from "@/pages/admin/HotelBookings.vue";
 
 const store = useStore();
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
+
+const activeBookingType = computed(() => route.query.type === "hotels" ? "hotels" : "flights");
+
+function selectBookingType(type) {
+    const query = { ...route.query };
+
+    if (type === "hotels") {
+        query.type = "hotels";
+    } else {
+        delete query.type;
+    }
+
+    router.replace({ name: "AdminCustomerBookings", query });
+}
 
 const bookings = computed(() => store.getters["flight/customerBookings"]);
 
@@ -244,20 +262,49 @@ onUnmounted(() => clearInterval(countdownInterval));
 
 <template>
     <section>
-        <div>
+        <div class="border-b border-gray-200 bg-white">
+            <div class="flex overflow-x-auto scrollbar-hide" role="tablist" aria-label="Booking type">
+                <button
+                    type="button"
+                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
+                    :class="activeBookingType === 'flights' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    :aria-selected="activeBookingType === 'flights'"
+                    role="tab"
+                    @click="selectBookingType('flights')"
+                >
+                    <TicketCheck class="h-4 w-4" aria-hidden="true" />
+                    Bookings Overview
+                </button>
+                <button
+                    type="button"
+                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
+                    :class="activeBookingType === 'hotels' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    :aria-selected="activeBookingType === 'hotels'"
+                    role="tab"
+                    @click="selectBookingType('hotels')"
+                >
+                    <Building2 class="h-4 w-4" aria-hidden="true" />
+                    Hotel Bookings
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white shadow-sm">
+            <div v-if="activeBookingType === 'hotels'" class="p-4 sm:p-8">
+                <HotelBookings embedded />
+            </div>
+
+            <div v-else class="p-4 sm:p-8">
             <!-- <div class="flex items-center justify-between mb-4">
                 <span class="text-3xl font-medium">Bookings</span>
                 <span class="text-3xl font-medium">Total Approved Amount: {{ offlineBookings?.approved_amount}}</span>
                 <span class="text-3xl font-medium">Total Approved: {{ offlineBookings?.approved_count }}</span>
             </div> -->
 
-            <div class="bg-gradient-to-br from-gray-100 to-gray-200 mb-4 ">
-                <div class="max-w-full mx-auto">
-                    <div class="bg-white rounded-lg overflow-hidden">
-                        <div class="p-6">
-                            <h1 class="text-3xl font-bold text-gray-800 mb-6">
+            <div class="mb-6">
+                            <h2 class="mb-6 text-2xl font-bold text-gray-800">
                                 Bookings Overview
-                            </h1>
+                            </h2>
                             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                                 <!-- Total Bookings -->
                                 <div class="bg-blue-50 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
@@ -331,9 +378,6 @@ onUnmounted(() => clearInterval(countdownInterval));
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
             </div>
             <!-- <pre>{{ user_id }}</pre>
             <pre>{{ agentData }}</pre> -->
@@ -495,6 +539,7 @@ onUnmounted(() => clearInterval(countdownInterval));
                     </div>
                 </div>
             </div>
+        </div>
         </div>
 
         <Dialog v-model:open="isStatusDialogOpen">

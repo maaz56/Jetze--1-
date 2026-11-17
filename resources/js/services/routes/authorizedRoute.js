@@ -2,7 +2,7 @@ const customerRoles = ["user", "customer", "agent"];
 
 const adminLandingRoutes = [
     { permission: "view-bookings", route: { name: "AdminCustomerBookings" } },
-    { permission: "manage-bookings", route: { name: "VoidBookings" } },
+    { permission: "manage-bookings", route: { name: "BookingRequests" } },
     { permission: "manage-cms", route: { name: "PopularRoutes" } },
     { permission: "manage-finance", route: { name: "TopUpRequest" } },
     { permission: "manage-settings", route: { name: "CustomerMargin" } },

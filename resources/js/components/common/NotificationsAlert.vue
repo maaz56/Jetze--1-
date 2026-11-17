@@ -10,10 +10,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/services/stores/auth";
 import { notificationKind } from "@/lib/notificationKinds";
+import { subscribeToPrivateChannel } from "@/services/realtime/pusher";
 import { Bell } from 'lucide-vue-next';
-import Pusher from 'pusher-js';
-import apiClient from '@/config/axios';
 import { computed, defineProps, onBeforeUnmount, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 
 const props = defineProps({
@@ -33,10 +33,10 @@ const props = defineProps({
 
 const authStore = useAuthStore();
 const store = useStore();
+const router = useRouter();
 const user = computed(() => authStore.user);
 
-let pusher = null;
-let channel = null;
+let unsubscribeNotifications = null;
 
 const fetchedNotifications = computed(() => store.getters['notification/notifications'] || []);
 const isLoading = computed(() => store.getters['notification/isLoading']);
@@ -46,9 +46,6 @@ function fetchNotifications() {
 }
 function readNotification(id) {
     store.dispatch('notification/readNotification', { id });
-    if (!props.isAdmin) {
-        window.location.reload();
-    }
 }
 // function deleteNotification(id) {
 //     store.dispatch('notification/deleteNotification', { id });
@@ -76,6 +73,11 @@ function adminNotificationLink(n) {
     if (d.user_id) return `/admin/user-details?user_id=${d.user_id}`;
     return '/admin/dashboard';
 }
+
+function openNotification(notification) {
+    readNotification(notification.id);
+    router.push(adminNotificationLink(notification));
+}
 const readAtCounter = computed(() => {
     return fetchedNotifications.value.filter(n => !n.read_at).length;
 });
@@ -84,45 +86,20 @@ const notificationButtonClass = computed(() => {
 });
 
 function disconnectPusher() {
-    if (channel) {
-        pusher?.unsubscribe(channel.name);
-        channel = null;
-    }
-
-    if (pusher) {
-        pusher.disconnect();
-        pusher = null;
-    }
+    unsubscribeNotifications?.();
+    unsubscribeNotifications = null;
 }
 
 function connectPusher(userId) {
     disconnectPusher();
 
-    const pusherKey = import.meta.env.VITE_APP_PUSHER_APP_KEY;
-    if (!pusherKey || !userId) return;
+    if (!userId) return;
 
-    pusher = new Pusher(pusherKey, {
-        cluster: import.meta.env.VITE_APP_PUSHER_APP_CLUSTER || 'ap2',
-        forceTLS: true,
-        channelAuthorization: {
-            customHandler: async ({ socketId, channelName }, callback) => {
-                try {
-                    const response = await apiClient.post('broadcasting/auth', {
-                        socket_id: socketId,
-                        channel_name: channelName,
-                    });
-                    callback(null, response.data);
-                } catch (error) {
-                    callback(error, null);
-                }
-            },
-        },
-    });
-
-    channel = pusher.subscribe(`private-users.${userId}`);
-    channel.bind('user-approved', handleNotification);
-    channel.bind('new-user-registered', handleNotification);
-    channel.bind('system-notification', handleNotification);
+    unsubscribeNotifications = subscribeToPrivateChannel(
+        `users.${userId}`,
+        ['user-approved', 'new-user-registered', 'system-notification'],
+        handleNotification,
+    );
 }
 
 function handleNotification(data) {
@@ -187,16 +164,13 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
                 <div v-else-if="fetchedNotifications.length" class="max-h-60  overflow-y-auto">
-                    <DropdownMenuItem class="my-2" v-for="(n, i) in fetchedNotifications" :key="i"
-                        @click="readNotification(n.id)" :class="{ 'bg-muted': !n.read_at }">
+                    <DropdownMenuItem class="my-2 cursor-pointer" v-for="(n, i) in fetchedNotifications" :key="i"
+                        @click="openNotification(n)" :class="{ 'bg-muted': !n.read_at }">
                         <div>
                             <p class="font-bold">{{ n?.data?.heading || n?.data?.data?.heading }}</p>
                             <p>{{ n?.data?.description || n?.data?.data?.description }}</p>
                            
-                            <div class="mt-2" v-if="props.isAdmin">
-                                <router-link target="_blank"
-                                    :to="adminNotificationLink(n)">View Details</router-link>
-                            </div>
+                            <div class="mt-2 text-xs font-semibold text-primary">Open ticket chat</div>
                         </div>
                     </DropdownMenuItem>
                 </div>

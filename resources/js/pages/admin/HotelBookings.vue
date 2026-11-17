@@ -4,6 +4,13 @@ import apiService from "@/services/store/apiService";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+});
+
 const router = useRouter();
 const bookings = ref([]);
 const meta = ref(null);
@@ -56,11 +63,12 @@ onMounted(loadBookings);
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+  <section :class="props.embedded ? '' : 'mx-auto max-w-7xl px-4 py-7 sm:px-6'">
     <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p class="text-xs font-bold uppercase tracking-wide text-primary">Hotel inventory</p>
-        <h1 class="mt-1 text-2xl font-semibold text-gray-950">Hotel bookings</h1>
+        <p v-if="!props.embedded" class="text-xs font-bold uppercase tracking-wide text-primary">Hotel inventory</p>
+        <h2 v-if="props.embedded" class="text-xl font-semibold text-gray-950">Hotel bookings</h2>
+        <h1 v-else class="mt-1 text-2xl font-semibold text-gray-950">Hotel bookings</h1>
         <p class="mt-1 text-sm text-gray-500">{{ totalLabel }} booking{{ totalLabel === 1 ? "" : "s" }} found.</p>
       </div>
 

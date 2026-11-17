@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import apiService from "@/services/store/apiService";
+import { useAuthStore } from "@/services/stores/auth";
 import { toast } from "vue3-toastify";
 import {
     Clock,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/bookingRequests";
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 const requests = ref([]);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, per_page: 15 });
@@ -177,6 +179,32 @@ async function searchPnr() {
 
 async function submitNewRequest() {
     if (!newReqBooking.value) return;
+
+    if (newReqType.value === "modify") {
+        if (!authStore.user?.id) {
+            newReqError.value = "Please sign in before submitting a modification request.";
+            return;
+        }
+
+        newReqError.value = "";
+        isSubmittingNew.value = true;
+        try {
+            const res = await apiService.saveRequest({
+                booking_id: newReqBooking.value.id,
+                user_id: authStore.user.id,
+                reason: "booking_modification",
+                message: newReqRemarks.value.trim() || undefined,
+            });
+            toast(res.data?.message || "Modification request submitted successfully.", { type: "success" });
+            showNewRequestDialog.value = false;
+        } catch (err) {
+            newReqError.value = errorMessage(err, "Failed to submit modification request.");
+        } finally {
+            isSubmittingNew.value = false;
+        }
+        return;
+    }
+
     if (newReqSelectedPax.value.length === 0) {
         newReqError.value = "Please select at least one passenger.";
         return;
@@ -466,15 +494,15 @@ onMounted(() => {
         <div v-if="showNewRequestDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3">
-                    <div class="font-bold text-gray-900 text-lg">Submit Void or Refund Request</div>
+                    <div class="font-bold text-gray-900 text-lg">{{ newReqType === 'modify' ? 'Submit Modify Request' : 'Submit Void or Refund Request' }}</div>
                     <button @click="showNewRequestDialog = false" class="text-gray-400 hover:text-gray-600">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <div class="flex gap-2">
+                <div class="grid grid-cols-3 gap-2">
                     <button
-                        v-for="option in [{ value: 'void', label: 'Void Request' }, { value: 'refund', label: 'Refund Request' }]"
+                        v-for="option in [{ value: 'void', label: 'Void Request' }, { value: 'refund', label: 'Refund Request' }, { value: 'modify', label: 'Modify Request' }]"
                         :key="option.value"
                         type="button"
                         @click="newReqType = option.value"
@@ -522,7 +550,7 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <div class="space-y-1.5">
+                    <div v-if="newReqType !== 'modify'" class="space-y-1.5">
                         <label class="text-xs font-semibold uppercase text-gray-600">Select Passengers</label>
                         <div class="border rounded-lg divide-y max-h-48 overflow-y-auto">
                             <label
@@ -547,12 +575,12 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-1">
-                        <label class="text-xs font-semibold uppercase text-gray-600">Remarks (Optional)</label>
+                        <label class="text-xs font-semibold uppercase text-gray-600">{{ newReqType === 'modify' ? 'Modification Details (Optional)' : 'Remarks (Optional)' }}</label>
                         <textarea
                             v-model="newReqRemarks"
                             rows="2"
                             maxlength="1000"
-                            placeholder="Reason for cancellation..."
+                            :placeholder="newReqType === 'modify' ? 'Describe the change you need...' : 'Reason for cancellation...'"
                             class="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
                         ></textarea>
                     </div>
@@ -570,7 +598,7 @@ onMounted(() => {
                     <button
                         v-if="newReqBooking"
                         @click="submitNewRequest"
-                        :disabled="isSubmittingNew || newReqSelectedPax.length === 0"
+                        :disabled="isSubmittingNew || (newReqType !== 'modify' && newReqSelectedPax.length === 0)"
                         class="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary/90 rounded-lg inline-flex items-center gap-2 disabled:opacity-50"
                     >
                         <Loader2 v-if="isSubmittingNew" class="w-4 h-4 animate-spin" />

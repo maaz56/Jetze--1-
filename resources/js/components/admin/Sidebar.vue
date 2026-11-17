@@ -71,40 +71,16 @@
             :class="{ 'admin-sidebar-icon-active': $route.name === 'MarketingInsights' }" />
           Insights
         </router-link>
-        <router-link :to="{ name: 'AdminHotelBookings' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }"
-          v-if="authStore.hasPermission('view-bookings')">
-          <Notebook class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': ['AdminHotelBookings', 'AdminHotelBookingDetails'].includes($route.name) }" />
-          Hotel Bookings
-        </router-link>
         <router-link :to="{ name: 'BookingRequests' }"
           class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'BookingRequests' }"
           v-if="authStore.hasPermission('manage-bookings')">
           <XCircle class="admin-sidebar-icon"
             :class="{ 'admin-sidebar-icon-active': $route.name === 'BookingRequests' }" />
-          <span class="flex-1">Cancellation Requests</span>
-          <span v-if="pendingRequestsCount > 0" class="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-gray-900">
-            {{ pendingRequestsCount }}
+          <span class="flex-1">Request Inbox</span>
+          <span v-if="requestInboxCount > 0" class="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-gray-900">
+            {{ requestInboxCount }}
           </span>
         </router-link>
-        <router-link :to="{ name: 'VoidBookings' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'VoidBookings' }"
-          v-if="authStore.hasPermission('manage-bookings')">
-          <Notebook class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'VoidBookings' }" />
-          Void Bookings
-        </router-link>
-        <router-link :to="{ name: 'ModifyRequests' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'ModifyRequests' }"
-          v-if="authStore.hasPermission('manage-bookings')">
-          <Notebook class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'ModifyRequests' }" />
-          <span class="flex-1">Modify Requests</span>
-          <span v-if="unreadCount('modify_request_submitted') > 0" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-            {{ unreadCount('modify_request_submitted') }}
-          </span>
-          </router-link>
         <!-- <router-link :to="{ name: 'OfflineBookings' }"
           class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors duration-200" :class="{
             'bg-secondary text-white font-medium': $route.name === 'OfflineBookings',
@@ -479,6 +455,7 @@ const unreadByKind = computed(() => {
   return counts;
 });
 const unreadCount = (kind) => unreadByKind.value[kind] || 0;
+const requestInboxCount = computed(() => pendingRequestsCount.value + unreadCount('modify_request_submitted'));
 const sectionUnreadCount = (section) =>
   (section?.items || []).reduce((sum, item) => sum + (item.notify ? unreadCount(item.notify) : 0), 0);
 

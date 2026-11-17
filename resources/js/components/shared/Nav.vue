@@ -45,6 +45,7 @@ import {
 } from "@/lib/utils";
 import { useAuthStore } from "@/services/stores/auth";
 import { useStore } from "vuex";
+import NotificationsAlert from "@/components/common/NotificationsAlert.vue";
 
 const props = defineProps({
     isNavTransparent: {
@@ -452,6 +453,14 @@ onUnmounted(() => {
                                 </div>
                                 <ChevronDown :class="['hidden sm:block w-4 h-4', isTransparent ? 'text-slate-200' : 'text-slate-400']" />
                             </button>
+
+                            <NotificationsAlert
+                                v-if="isAuthenticated"
+                                :is-admin="['admin', 'reservation', 'salesman'].includes(user?.role)"
+                                :button-class="isTransparent
+                                    ? 'h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20'
+                                    : 'h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                            />
 
                             <DropdownMenu v-if="isAuthenticated">
                                 <DropdownMenuTrigger as-child>

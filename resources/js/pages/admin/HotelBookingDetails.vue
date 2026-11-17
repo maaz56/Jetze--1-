@@ -86,7 +86,7 @@ onMounted(loadBooking);
 <template>
   <section class="mx-auto max-w-6xl px-4 py-7 sm:px-6">
     <div class="print:hidden mb-5 flex flex-wrap items-center justify-between gap-3">
-      <Button class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700" @click="router.push({ name: 'AdminHotelBookings' })">Back to hotel bookings</Button>
+      <Button class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700" @click="router.push({ name: 'AdminCustomerBookings', query: { type: 'hotels' } })">Back to hotel bookings</Button>
       <div class="flex flex-wrap gap-2">
         <Button class="rounded bg-gray-700 px-4 py-2 text-sm font-semibold text-white" @click="printBooking"><Printer class="mr-2 h-4 w-4" />Print</Button>
         <Button class="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" @click="downloadPdf"><Download class="mr-2 h-4 w-4" />Download PDF</Button>

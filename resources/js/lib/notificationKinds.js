@@ -30,7 +30,7 @@ export function notificationKind(notification) {
 export const ADMIN_NOTIFICATION_SECTIONS = {
     booking_created: ['AdminCustomerBookings', 'AdminCustomerBookingsLayout', 'AdminBookingsDetails'],
     booking_request_submitted: ['BookingRequests'],
-    modify_request_submitted: ['ModifyRequests'],
+    modify_request_submitted: ['BookingRequests'],
     deposit_submitted: ['TopUpRequest', 'DepositDetails'],
     new_user: ['Customers', 'CustomerDetails'],
 };

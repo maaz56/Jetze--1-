@@ -545,8 +545,8 @@ export default {
     cancelBookingRequest(id) {
         return apiClient.post(`/booking-requests/${id}/cancel`);
     },
-    fetchBookingRequestCounts() {
-        return apiClient.get("/booking-requests/counts");
+    fetchBookingRequestCounts(params) {
+        return apiClient.get("/booking-requests/counts", { params });
     },
 
     updateCardAllowance(params) {

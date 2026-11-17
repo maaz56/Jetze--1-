@@ -47,6 +47,12 @@ import { useAuthStore } from "@/services/stores/auth";
 
 const store = useStore();
 const authStore = useAuthStore();
+const props = defineProps({
+    embedded: {
+        type: Boolean,
+        default: false,
+    },
+});
 
 const bookings = computed(() => store.getters["flight/bookingData"]);
 
@@ -105,7 +111,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <section>
+    <section :class="props.embedded ? 'p-6' : ''">
         <div>
             <!-- <div class="flex items-center justify-between mb-4">
                 <span class="text-3xl font-medium">Bookings</span>

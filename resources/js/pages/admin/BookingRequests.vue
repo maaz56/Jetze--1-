@@ -26,6 +26,16 @@ import {
 } from "@/lib/bookingRequests";
 
 const router = useRouter();
+const props = defineProps({
+    embedded: {
+        type: Boolean,
+        default: false,
+    },
+    requestType: {
+        type: String,
+        default: "all",
+    },
+});
 
 const requests = ref([]);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, per_page: 15 });
@@ -33,7 +43,7 @@ const counts = ref({ all: 0, pending: 0, processing: 0, approved: 0, rejected: 0
 const isLoading = ref(false);
 
 const activeStatus = ref("pending");
-const filterType = ref("all");
+const filterType = ref(props.requestType);
 const filterProvider = ref("all");
 const dateFrom = ref("");
 const dateTo = ref("");
@@ -61,6 +71,7 @@ const statusCards = [
 const ticketAmount = computed(() => Number(activeRequest.value?.ticket_amount || 0));
 const penaltyTooHigh = computed(() => Number(penaltyAmount.value || 0) > ticketAmount.value);
 const computedRefundAmount = computed(() => Math.max(0, ticketAmount.value - Number(penaltyAmount.value || 0)));
+const pageTitle = computed(() => props.requestType === "void" ? "Void Requests" : props.requestType === "refund" ? "Refund Requests" : "Cancellation Requests");
 
 const errorMessage = (err, fallback) =>
     err?.response?.data?.message || Object.values(err?.response?.data?.errors || {}).flat()[0] || fallback;
@@ -69,7 +80,7 @@ const canReview = (req) => ["pending", "failed"].includes(req.status);
 
 async function fetchCounts() {
     try {
-        const res = await apiService.fetchBookingRequestCounts();
+        const res = await apiService.fetchBookingRequestCounts({ type: filterType.value });
         counts.value = res.data;
     } catch (err) {
         console.error("Failed to load counts", err);
@@ -115,7 +126,7 @@ function handleTabChange(status) {
 }
 
 function resetFilters() {
-    filterType.value = "all";
+    filterType.value = props.requestType;
     filterProvider.value = "all";
     dateFrom.value = "";
     dateTo.value = "";
@@ -203,11 +214,11 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="p-6 max-w-7xl mx-auto space-y-6">
+    <div :class="props.embedded ? 'space-y-6 p-6' : 'mx-auto max-w-7xl space-y-6 p-6'">
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Void & Refund Requests</h1>
+                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">{{ pageTitle }}</h1>
                 <p class="text-sm text-gray-500 mt-1">
                     Manage customer ticket cancellation and refund requests with safe two-step verification.
                 </p>
@@ -256,6 +267,7 @@ onMounted(() => {
                     />
                 </div>
                 <select
+                    v-if="props.requestType === 'all'"
                     v-model="filterType"
                     @change="fetchRequests(1)"
                     class="py-2 px-3 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"

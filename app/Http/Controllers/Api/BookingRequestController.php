@@ -88,8 +88,17 @@ class BookingRequestController extends Controller
 
     public function counts(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'type' => 'nullable|string|in:all,void,refund',
+        ]);
+
         $user = $request->user();
-        $byStatus = $this->scopedQuery($user)
+        $query = $this->scopedQuery($user);
+        if (($validated['type'] ?? 'all') !== 'all') {
+            $query->where('type', $validated['type']);
+        }
+
+        $byStatus = $query
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -100,7 +109,12 @@ class BookingRequestController extends Controller
         }
 
         if ($this->canManage($user)) {
-            $counts['providers'] = FlightBookings::whereIn('id', BookingRequest::select('booking_id'))
+            $providerRequestQuery = $this->scopedQuery($user);
+            if (($validated['type'] ?? 'all') !== 'all') {
+                $providerRequestQuery->where('type', $validated['type']);
+            }
+
+            $counts['providers'] = FlightBookings::whereIn('id', $providerRequestQuery->select('booking_id'))
                 ->whereNotNull('flight_provider')
                 ->distinct()
                 ->orderBy('flight_provider')

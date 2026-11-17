@@ -33,7 +33,7 @@ import { calculateLayover, formatDateTime, getFormattedDates, getDuration, calcu
 import { useRoute, useRouter } from "vue-router";
 
 import { useStore } from "vuex";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
 import html2canvas from "html2canvas";
 import { cn, formatAmount, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice, sumMoney } from "@/lib/utils";
@@ -62,6 +62,8 @@ import { SEND_EMAIL } from "@/services/store/actions.type";
 import { ChatBubbleIcon } from "@radix-icons/vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
 import ATETicket from "@/components/AT/ATETicket.vue";
+import { subscribeToPrivateChannel } from "@/services/realtime/pusher";
+import apiService from "@/config/axios";
 
 
 const store = useStore();
@@ -175,6 +177,7 @@ const isLowBalanceDialogOpen = ref(false);
 const isVoidDialogOpen = ref(false);
 const pnrData = ref(null);
 const isChatOpen = ref(false);
+const isOpeningChat = ref(false);
 
 
 
@@ -201,6 +204,31 @@ const replyMessage = ref("");
 const replyLoading = ref(false);
 const selectedFares = ref([]);
 const modifyRequestData = computed(() => store.getters["modifyRequest/requestData"]);
+let unsubscribeModifyRequest = null;
+
+function subscribeToModifyRequest() {
+    unsubscribeModifyRequest?.();
+    const modifyRequestId = modifyRequestData.value?.id;
+    if (!modifyRequestId) return;
+
+    unsubscribeModifyRequest = subscribeToPrivateChannel(
+        `modify-requests.${modifyRequestId}`,
+        "modify-request-message",
+        (event) => {
+            if (Number(event.modify_request_id) === Number(modifyRequestId)) {
+                fetchModifyRequestData(event.modify_request_id);
+            }
+        },
+    );
+}
+
+watch(() => modifyRequestData.value?.id, (modifyRequestId) => {
+    subscribeToModifyRequest();
+    if (modifyRequestId && route.query.chat === '1') {
+        isChatOpen.value = true;
+    }
+}, { immediate: true });
+onUnmounted(() => unsubscribeModifyRequest?.());
 
 const now = ref(Date.now())
 
@@ -242,13 +270,13 @@ function handleLogin() {
     authStore.openDialog();
     // store.dispatch('auth/' + SHOW_LOGIN_DIALOG)
 }
-function fetchModifyRequestData() {
-    const booking_id = route.query.booking_id;
-    if (booking_id) {
-        store.dispatch("modifyRequest/" + FETCH_MODIFY_REQUEST_DATA, {
-            booking_id: booking_id,
-        });
-    }
+function fetchModifyRequestData(modifyRequestId = route.query.modify_request_id) {
+    const bookingId = route.query.booking_id;
+    if (!bookingId && !modifyRequestId) return;
+
+    return store.dispatch("modifyRequest/" + FETCH_MODIFY_REQUEST_DATA, modifyRequestId
+        ? { modify_request_id: modifyRequestId }
+        : { booking_id: bookingId });
 }
 function sendReply(newStatus = "pending") {
     if (!replyMessage.value.trim()) return;
@@ -734,8 +762,35 @@ const printBooking = () => {
 
 
 
-const toggleChatOpen = () => {
-    isChatOpen.value = !isChatOpen.value;
+const toggleChatOpen = async () => {
+    if (isChatOpen.value) {
+        isChatOpen.value = false;
+        return;
+    }
+
+    if (modifyRequestData.value) {
+        isChatOpen.value = true;
+        return;
+    }
+
+    if (!user_id.value) {
+        handleLogin();
+        return;
+    }
+
+    const bookingId = bookingDetails.value?.[0]?.id || route.query.booking_id;
+    if (!bookingId) return;
+
+    isOpeningChat.value = true;
+    try {
+        const response = await apiService.post('/open-modify-request-chat', { booking_id: bookingId });
+        await fetchModifyRequestData(response.data?.data?.id);
+        isChatOpen.value = true;
+    } catch (error) {
+        alert(error.response?.data?.message || 'Unable to open chat. Please try again.');
+    } finally {
+        isOpeningChat.value = false;
+    }
 }
 function goToPaymentView() {
     router.push({
@@ -1118,10 +1173,6 @@ onMounted(() => {
                         <span v-if="isDetailsInfoVisible">Hide Fare Details</span>
                         <span v-else>View Fare Details</span>
                     </button>
-                    <button :disabled="modifyRequestData" @click="openModifyRequestDialog"
-                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                        Modify Request
-                    </button>
                     <button
                         :disabled="(bookingDetails?.[0]?.status === 'ticketed') || (bookingDetails?.[0]?.status === 'canceled')"
                         @click="goToPaymentView"
@@ -1129,16 +1180,10 @@ onMounted(() => {
                         <DollarSign class="h-4 w-4" />
                         Pay Now
                     </button>
-                    <button
-                        :disabled="['canceled', 'ticketed', 'voided'].includes(booking?.status.toLowerCase())"
-                        @click="isDialogOpen = true"
-                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                        Cancel Booking
-                    </button>
-                    <button @click="toggleChatOpen"
+                    <button @click="toggleChatOpen" :disabled="isOpeningChat"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2">
                         <ChatBubbleIcon class="h-4 w-4" />
-                        Chat
+                        {{ isOpeningChat ? 'Opening chat...' : 'Chat' }}
                     </button>
 
                 </div>

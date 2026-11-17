@@ -186,13 +186,13 @@ export const adminRoutes = [
             {
                 path: "booking-requests",
                 name: "BookingRequests",
-                component: () => import("@/pages/admin/BookingRequests.vue"),
+                component: () => import("@/pages/admin/RequestInbox.vue"),
                 meta: { permission: 'manage-bookings' }
             },
             {
                 path: "void-bookings",
                 name: "VoidBookings",
-                component: () => import("@/pages/admin/VoidBookings.vue"),
+                redirect: { name: "BookingRequests", query: { inbox: "void" } },
                 meta: { permission: 'manage-bookings' }
             },
             {
@@ -448,7 +448,8 @@ export const adminRoutes = [
              {
                 path: "modify-requests",
                 name: "ModifyRequests",
-                component: () => import("@/pages/admin/ModifyRequests.vue"),
+                redirect: { name: "BookingRequests", query: { inbox: "modify" } },
+                meta: { permission: 'manage-bookings' },
             },
             {
                 path: "popular-routes",
