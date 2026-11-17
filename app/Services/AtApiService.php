@@ -1751,7 +1751,7 @@ private function extractTrips($tripsData): array
 
         $response = $this->startDepositPayment(
             $reservation,
-            (int) ($params['net_amount'] ?? 0),
+            $this->atNumericAmount($params['net_amount'] ?? 0),
             (string) ($params['bookingType'] ?? 'HP'),
         );
 
@@ -1767,7 +1767,7 @@ private function extractTrips($tripsData): array
      *
      * @return array<string, mixed>|null
      */
-    public function startDepositPayment(array $reservation, int $netAmount, string $bookingType = 'HP'): ?array
+    public function startDepositPayment(array $reservation, int|float $netAmount, string $bookingType = 'HP'): ?array
     {
 
         $accessToken = $this->getAccessToken();
@@ -1924,7 +1924,7 @@ private function extractTrips($tripsData): array
      *
      * @return array{held: bool, start_pay: mixed, itinerary_status: mixed, booking_details: mixed}
      */
-    public function holdReservation(array $reservation, int $netAmount): array
+    public function holdReservation(array $reservation, int|float $netAmount): array
     {
         $startPay = $this->startDepositPayment($reservation, $netAmount, 'HB');
         $held = is_array($startPay)

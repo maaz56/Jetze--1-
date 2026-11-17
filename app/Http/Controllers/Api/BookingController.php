@@ -42,6 +42,9 @@ use Mail;
 
 class BookingController extends Controller
 {
+    /** AT may round its returned fare by up to one AED after CreateItinerary. */
+    private const AT_AMOUNT_TOLERANCE = '1.00';
+
     protected $safepayService;
 
     protected $priceQuoteService;
@@ -416,9 +419,29 @@ class BookingController extends Controller
                     // hold now. Non-holdable fares are only saved, and both are
                     // ticketed later by StartPay (HP) on confirm.
                     if ($service->isHoldBooking($flightData, (array) $fareRefernce, $request->input('fareType'))) {
-                        $holdAmount = $priceQuote?->provider_amount;
-                        if (is_numeric($holdAmount) && (float) $holdAmount > 0 && floor((float) $holdAmount) === (float) $holdAmount) {
-                            $atHoldResult = $service->holdReservation($response, (int) $holdAmount);
+                        // StartPay must use AT's final CreateItinerary amount. This
+                        // includes any locked SSRs and can legitimately be decimal.
+                        $holdAmount = $response['NetAmount'] ?? $priceQuote?->provider_amount;
+                        $expectedAmount = $this->atExpectedReservationAmount(
+                            $priceQuote?->provider_amount,
+                            $request->input('quote_ancillary_items', []),
+                        );
+
+                        if (
+                            $expectedAmount !== null
+                            && is_numeric($holdAmount)
+                            && ! $this->atAmountsWithinTolerance($expectedAmount, (string) $holdAmount)
+                        ) {
+                            Log::warning('AT CreateItinerary amount differs from the locked quote by more than the allowed tolerance.', [
+                                'transaction_id' => $response['TransactionID'],
+                                'locked_amount' => $expectedAmount,
+                                'supplier_amount' => $holdAmount,
+                                'tolerance_aed' => self::AT_AMOUNT_TOLERANCE,
+                            ]);
+                        }
+
+                        if (is_numeric($holdAmount) && (float) $holdAmount > 0) {
+                            $atHoldResult = $service->holdReservation($response, (float) $holdAmount);
 
                             // CreateItinerary has no CRSPNR yet; RetrieveBooking
                             // after the hold returns it, so prefer that PNR.
@@ -759,6 +782,39 @@ class BookingController extends Controller
         ]);
 
         return $quote;
+    }
+
+    /** Return the locked AT fare plus selected SSR cost in provider currency. */
+    private function atExpectedReservationAmount(mixed $fareAmount, mixed $ancillaryItems): ?string
+    {
+        if (!is_numeric($fareAmount)) {
+            return null;
+        }
+
+        $total = bcadd((string) $fareAmount, '0', 8);
+
+        foreach ((array) $ancillaryItems as $item) {
+            $amount = is_array($item) ? ($item['provider_amount'] ?? null) : null;
+
+            if (is_numeric($amount)) {
+                $total = bcadd($total, (string) $amount, 8);
+            }
+        }
+
+        return $total;
+    }
+
+    /** AT's post-booking total may vary by up to AED 1.00 due to supplier rounding. */
+    private function atAmountsWithinTolerance(string $expected, string $actual): bool
+    {
+        if (!is_numeric($expected) || !is_numeric($actual)) {
+            return false;
+        }
+
+        $difference = bcsub($expected, $actual, 8);
+        $absoluteDifference = str_starts_with($difference, '-') ? substr($difference, 1) : $difference;
+
+        return bccomp($absoluteDifference, self::AT_AMOUNT_TOLERANCE, 8) <= 0;
     }
 
     private function hakimiBookingFare(array $flight, array $fareReferences): array
@@ -1264,14 +1320,6 @@ class BookingController extends Controller
             // Never trust the amount (or reservation payload) posted by the
             // browser. The server-side price snapshot is the source of truth.
             $lockedProviderAmount = $booking->priceSnapshot?->provider_amount;
-            if (!is_numeric($lockedProviderAmount) || (float) $lockedProviderAmount <= 0
-                || floor((float) $lockedProviderAmount) !== (float) $lockedProviderAmount) {
-                if ($walletPaymentLock) { $walletPaymentLock->release(); }
-                return response()->json([
-                    'message' => 'The locked booking amount is invalid for AT payment.',
-                ], 422);
-            }
-
             $storedReservation = json_decode((string) $booking->pnr_response, true);
             if (!is_array($storedReservation) || empty($storedReservation)) {
                 if ($walletPaymentLock) { $walletPaymentLock->release(); }
@@ -1280,9 +1328,19 @@ class BookingController extends Controller
                 ], 422);
             }
 
+            $supplierPaymentAmount = data_get($storedReservation, 'NetAmount') ?? $lockedProviderAmount;
+            if (!is_numeric($supplierPaymentAmount) || (float) $supplierPaymentAmount <= 0) {
+                if ($walletPaymentLock) { $walletPaymentLock->release(); }
+                return response()->json([
+                    'message' => 'The locked booking amount is invalid for AT payment.',
+                ], 422);
+            }
+
             // Override all payment inputs with trusted booking values.
             $request->merge([
-                'net_amount' => (int) $lockedProviderAmount,
+                // Use AT's stored final total so decimal fares and SSRs are paid
+                // exactly as they were accepted by CreateItinerary.
+                'net_amount' => (float) $supplierPaymentAmount,
                 'pnrData' => $storedReservation,
                 'FareType' => $storedReservation['FareType'] ?? $request->input('FareType'),
                 // Held (HB) and non-held bookings are both ticketed with HP.
@@ -1292,7 +1350,7 @@ class BookingController extends Controller
             Log::info('AT wallet payment using locked booking values', [
                 'booking_id' => $booking->id,
                 'price_snapshot_id' => $booking->price_snapshot_id,
-                'provider_amount' => (int) $lockedProviderAmount,
+                'provider_amount' => $supplierPaymentAmount,
             ]);
 
             $atApiService = new AtApiService();
