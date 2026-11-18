@@ -1810,8 +1810,8 @@ private function extractTrips($tripsData): array
             'BrowserKey' => $this->browserKey,
             'ClientID' => $clientId,
             'TUI' => $TUI,
-            // StartPay HB places the hold; HP issues the ticket.
-            'Hold' => $bookingType === 'HB',
+            // The hold lifecycle is controlled by BookingType; do not set the API Hold flag.
+            'Hold' => false,
             'Promo' => null,
             'PaymentType' => '',
             'BankCode' => '',
