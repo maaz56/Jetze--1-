@@ -5,17 +5,14 @@ import { computed } from "vue";
 // number as text, so the chart is readable without relying on colour alone.
 const props = defineProps({
     title: { type: String, required: true },
-    // [{ label, value }]
     items: { type: Array, default: () => [] },
-    // Text under the total in the middle of the ring, e.g. "bookings".
     unit: { type: String, default: "" },
     format: { type: Function, default: (value) => String(value) },
     emptyText: { type: String, default: "No data" },
-    // Slices beyond this many are merged into "Others".
     maxSlices: { type: Number, default: 5 },
 });
 
-const COLORS = ["#075985", "#0d9488", "#d97706", "#be123c", "#6d28d9", "#64748b"];
+const COLORS = ["#0284c7", "#0d9488", "#d97706", "#e11d48", "#7c3aed", "#64748b"];
 const RADIUS = 42;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -52,12 +49,16 @@ const total = computed(() => slices.value.reduce((sum, item) => sum + item.value
 </script>
 
 <template>
-    <article class="donut-card">
-        <h2 class="donut-title">{{ title }}</h2>
+    <article class="rounded border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">{{ title }}</h2>
+            <span v-if="unit" class="text-[11px] font-medium text-slate-500 uppercase">{{ unit }}</span>
+        </div>
 
-        <div v-if="slices.length" class="donut-body">
-            <div class="donut-ring">
-                <svg viewBox="0 0 100 100" role="img" :aria-label="`${title}: ${slices.map((s) => `${s.label} ${s.percent}%`).join(', ')}`">
+        <div v-if="slices.length" class="flex flex-wrap items-center gap-4 sm:gap-6">
+            <!-- Ring -->
+            <div class="relative h-32 w-32 shrink-0">
+                <svg viewBox="0 0 100 100" class="h-full w-full" role="img" :aria-label="`${title}: ${slices.map((s) => `${s.label} ${s.percent}%`).join(', ')}`">
                     <circle cx="50" cy="50" :r="RADIUS" fill="none" stroke="#f1f5f9" stroke-width="12" />
                     <circle
                         v-for="slice in slices"
@@ -73,129 +74,26 @@ const total = computed(() => slices.value.reduce((sum, item) => sum + item.value
                         transform="rotate(-90 50 50)"
                     />
                 </svg>
-                <div class="donut-center">
-                    <span class="donut-total">{{ format(total) }}</span>
-                    <span v-if="unit" class="donut-unit">{{ unit }}</span>
+                <div class="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
+                    <span class="max-w-full truncate text-sm font-bold text-slate-900 tabular-nums">{{ format(total) }}</span>
+                    <span v-if="unit" class="text-[10px] text-slate-500 uppercase tracking-tight">{{ unit }}</span>
                 </div>
             </div>
 
-            <ul class="donut-legend">
-                <li v-for="slice in slices" :key="slice.label">
-                    <span class="legend-dot" :style="{ backgroundColor: slice.color }"></span>
-                    <span class="legend-label">{{ slice.label }}</span>
-                    <span class="legend-value">{{ slice.percent }}%</span>
+            <!-- Legend -->
+            <ul class="flex min-w-[9rem] flex-1 flex-col gap-2 text-xs">
+                <li v-for="slice in slices" :key="slice.label" class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="h-2.5 w-2.5 shrink-0 rounded-sm" :style="{ backgroundColor: slice.color }"></span>
+                        <span class="truncate text-slate-700 font-medium" :title="slice.label">{{ slice.label }}</span>
+                    </div>
+                    <span class="font-bold text-slate-900 tabular-nums shrink-0">{{ slice.percent }}%</span>
                 </li>
             </ul>
         </div>
 
-        <p v-else class="donut-empty">{{ emptyText }}</p>
+        <div v-else class="py-8 text-center text-xs text-slate-500">
+            {{ emptyText }}
+        </div>
     </article>
 </template>
-
-<style scoped>
-.donut-card {
-    border: 1px solid rgb(226 232 240);
-    border-radius: 1rem;
-    background-color: #fff;
-    padding: 1.125rem;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
-}
-
-.donut-title {
-    margin-bottom: 0.875rem;
-    font-size: 1rem;
-    font-weight: 600;
-    color: rgb(15 23 42);
-}
-
-.donut-body {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1rem 1.25rem;
-}
-
-.donut-ring {
-    position: relative;
-    height: 8.5rem;
-    width: 8.5rem;
-    flex-shrink: 0;
-}
-
-.donut-ring svg {
-    height: 100%;
-    width: 100%;
-}
-
-.donut-center {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 0 1.5rem;
-    text-align: center;
-}
-
-.donut-total {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 1.125rem;
-    font-weight: 700;
-    line-height: 1.2;
-    font-variant-numeric: tabular-nums;
-    color: rgb(15 23 42);
-}
-
-.donut-unit {
-    font-size: 0.6875rem;
-    color: rgb(100 116 139);
-}
-
-.donut-legend {
-    display: flex;
-    min-width: 9rem;
-    flex: 1;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.donut-legend li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8125rem;
-    color: rgb(51 65 85);
-}
-
-.legend-dot {
-    height: 0.625rem;
-    width: 0.625rem;
-    flex-shrink: 0;
-    border-radius: 9999px;
-}
-
-.legend-label {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.legend-value {
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: rgb(15 23 42);
-}
-
-.donut-empty {
-    padding: 2.5rem 0;
-    text-align: center;
-    font-size: 0.875rem;
-    color: rgb(100 116 139);
-}
-</style>

@@ -64,7 +64,7 @@ function handleLogout() {
             </div>
 
             <div class="flex shrink-0 items-center gap-3">
-                <div class="hidden items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 sm:flex">
+                <div class="hidden items-center gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 sm:flex">
                     <Calendar class="h-4 w-4 text-gray-500" />
                     {{ currentDate }}
                 </div>
@@ -72,16 +72,16 @@ function handleLogout() {
                 <NotificationsAlert
                     :isAdmin="true"
                     disable-animation
-                    button-class="h-9 w-9 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    button-class="h-9 w-9 rounded border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 />
 
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <Button
                             variant="ghost"
-                            class="h-10 gap-3 rounded-md border border-gray-200 bg-white px-2 text-gray-800 hover:bg-gray-50"
+                            class="h-10 gap-3 rounded border border-gray-200 bg-white px-2 text-gray-800 hover:bg-gray-50"
                         >
-                            <span class="flex h-7 w-7 items-center justify-center rounded-md bg-gray-900 text-xs font-semibold text-white">
+                            <span class="flex h-7 w-7 items-center justify-center rounded bg-gray-900 text-xs font-semibold text-white">
                                 {{ userInitials }}
                             </span>
                             <span class="hidden max-w-40 flex-col items-start text-left sm:flex">

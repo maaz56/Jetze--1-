@@ -7,6 +7,7 @@ use App\Models\BookingRequest;
 use App\Models\FlightBookings;
 use App\Models\FlightPassenger;
 use App\Models\User;
+use App\Services\Booking\BookingRequestService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -227,6 +228,25 @@ class BookingRequestFlowTest extends TestCase
             ->assertJsonPath('data.status', 'cancelled');
 
         $this->assertSame('ticketed', $this->booking->fresh()->status);
+    }
+
+    public function test_direct_booking_cancellation_closes_pending_requests(): void
+    {
+        $id = $this->actingAs($this->customer)->postJson('/api/booking-requests', [
+            'booking_id' => $this->booking->id,
+            'type' => 'void',
+            'passenger_ids' => $this->paxIds(),
+        ])->assertCreated()->json('data.id');
+
+        $this->booking->update(['status' => 'canceled']);
+        app(BookingRequestService::class)->cancelOpenRequestsForBooking(
+            $this->booking,
+            'The booking was cancelled directly before this request was reviewed.'
+        );
+
+        $this->assertSame('cancelled', BookingRequest::find($id)->status);
+        $this->actingAs($this->admin)->postJson("/api/booking-requests/{$id}/approve")
+            ->assertUnprocessable();
     }
 
     public function test_card_paid_booking_gets_no_wallet_entries(): void

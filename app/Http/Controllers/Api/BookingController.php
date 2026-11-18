@@ -13,6 +13,7 @@ use App\Models\Booking;
 use App\Models\Flight;
 use App\Models\FlightBookings;
 use App\Models\FlightPassenger;
+use App\Models\ModifyRequest;
 use App\Models\Passenger;
 use App\Models\Segment;
 use App\Models\Slice;
@@ -23,6 +24,7 @@ use App\Services\HakimiApiService;
 use App\Services\AtPreBookingSsrLimitService;
 use App\Services\AgentWalletBalanceService;
 use App\Services\BookingPricingService;
+use App\Services\Booking\BookingRequestService;
 use App\Services\BookingVoidSettlementService;
 use App\Services\PriceQuoteService;
 use App\Services\ProviderBookingEventService;
@@ -34,6 +36,7 @@ use GuzzleHttp\Promise\Utils;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -51,6 +54,7 @@ class BookingController extends Controller
     protected $agentWalletBalanceService;
     protected $bookingPricingService;
     protected $bookingVoidSettlementService;
+    protected $bookingRequestService;
     protected $providerBookingEventService;
     protected $atPreBookingSsrLimitService;
     protected $hakimiApiService;
@@ -59,6 +63,7 @@ class BookingController extends Controller
         PriceQuoteService $priceQuoteService,
         AgentWalletBalanceService $agentWalletBalanceService,
         BookingPricingService $bookingPricingService,
+        BookingRequestService $bookingRequestService,
         BookingVoidSettlementService $bookingVoidSettlementService,
         ProviderBookingEventService $providerBookingEventService,
         AtPreBookingSsrLimitService $atPreBookingSsrLimitService,
@@ -68,6 +73,7 @@ class BookingController extends Controller
         $this->priceQuoteService = $priceQuoteService;
         $this->agentWalletBalanceService = $agentWalletBalanceService;
         $this->bookingPricingService = $bookingPricingService;
+        $this->bookingRequestService = $bookingRequestService;
         $this->bookingVoidSettlementService = $bookingVoidSettlementService;
         $this->providerBookingEventService = $providerBookingEventService;
         $this->atPreBookingSsrLimitService = $atPreBookingSsrLimitService;
@@ -1115,6 +1121,7 @@ class BookingController extends Controller
             if (! $booking) {
                 return response()->json(["message" => "Booking not found."], 404);
             }
+            $this->ensureBookingOwnerOrManager($booking, $request->user());
 
             if (strtolower((string) $booking->flight_provider) !== "at") {
                 return response()->json(["message" => "This is not an AT booking."], 422);
@@ -1146,7 +1153,13 @@ class BookingController extends Controller
             }
 
             $providerName = "at";
-            $booking->update(["status" => "canceled"]);
+            DB::transaction(function () use ($booking) {
+                $booking->update(["status" => "canceled"]);
+                $this->cancelOpenApplicationsForBooking(
+                    $booking,
+                    'The booking was cancelled directly before this request was reviewed.'
+                );
+            });
             $this->providerBookingEventService->record(
                 $booking,
                 $providerName,
@@ -1167,6 +1180,11 @@ class BookingController extends Controller
             if (! $booking) {
                 return response()->json(["message" => "Booking not found."], 404);
             }
+            $this->ensureBookingOwnerOrManager($booking, $request->user());
+
+            if (strtolower((string) $booking->flight_provider) !== "hakimi") {
+                return response()->json(["message" => "This is not a Hakimi booking."], 422);
+            }
 
             if (strtolower((string) $booking->status) === 'ticketed') {
                 return response()->json([
@@ -1178,7 +1196,13 @@ class BookingController extends Controller
                 return response()->json(["message" => "This booking has already been cancelled."], 409);
             }
 
-            $booking->update(["status" => "canceled"]);
+            DB::transaction(function () use ($booking) {
+                $booking->update(["status" => "canceled"]);
+                $this->cancelOpenApplicationsForBooking(
+                    $booking,
+                    'The booking was cancelled directly before this request was reviewed.'
+                );
+            });
             $this->providerBookingEventService->record(
                 $booking,
                 "hakimi",
@@ -1471,7 +1495,9 @@ class BookingController extends Controller
     public function approveBooking(Request $request)
     {
         Log::info($request);
+        $this->ensureBookingManager($request->user());
         $request->validate([
+            'booking_id' => 'required|integer|exists:flight_bookings,id',
             'status' => 'required|string|in:pending,approved,rejected,confirmed,canceled,ticketed,booked,requested,voided',
             'airline_pnr' => 'nullable|string',
             'ticket_number' => 'nullable|string',
@@ -1496,6 +1522,13 @@ class BookingController extends Controller
         $booking->save();
 
         if ($previousStatus !== strtolower((string) $booking->status)) {
+            if (in_array(strtolower((string) $booking->status), ['canceled', 'cancelled', 'voided', 'refunded'], true)) {
+                $this->cancelOpenApplicationsForBooking(
+                    $booking,
+                    'The booking status was changed directly before this request was reviewed.'
+                );
+            }
+
             $this->sendBookingStatusMail($booking, $booking->status);
         }
 
@@ -1699,36 +1732,46 @@ class BookingController extends Controller
 
     public function voidRequest(Request $request)
     {
-        Log::info($request);
-        $booking = FlightBookings::where('id', $request->bookingId)->first();
-        if (!$booking) {
-            return response()->json(['message' => 'Booking not found'], 404);
+        $validated = $request->validate([
+            'bookingId' => 'required|integer|exists:flight_bookings,id',
+            'remarks' => 'nullable|string|max:1000',
+        ]);
+        $booking = FlightBookings::findOrFail($validated['bookingId']);
+        $this->ensureBookingOwnerOrManager($booking, $request->user());
+
+        $passengerIds = $booking->pessangers()
+            ->whereNotIn('status', FlightBookings::SETTLED_PASSENGER_STATUSES)
+            ->pluck('id')
+            ->all();
+
+        if ($passengerIds === []) {
+            return response()->json(['message' => 'There are no passengers eligible for a void request.'], 422);
         }
 
-        // Update booking status to voided
-        $booking->status = 'requested';
-        $booking->save();
+        $bookingRequest = $this->bookingRequestService->submit(
+            booking: $booking,
+            user: $request->user(),
+            type: 'void',
+            passengerIds: $passengerIds,
+            remarks: isset($validated['remarks']) ? trim($validated['remarks']) : null,
+        );
 
         return response()->json([
-            'message' => 'Booking voided successfully',
-            'booking' => $booking,
-        ]);
-
-
+            'message' => 'Void request submitted successfully.',
+            'data' => $bookingRequest,
+        ], 201);
     }
 
     public function voidBooking(Request $request)
     {
+        $this->ensureBookingManager($request->user());
         Log::info($request);
-
-        $booking = FlightBookings::where('id', $request->bookingId)->first();
-        if (!$booking) {
-            return response()->json(['message' => 'Booking not found'], 404);
-        }
+        $bookingInput = $request->validate(['bookingId' => 'required|integer|exists:flight_bookings,id']);
+        $booking = FlightBookings::findOrFail($bookingInput['bookingId']);
 
         // AT & Hakimi currently confirm a void locally until a supplier endpoint is available.
         // Financial settlement is created only after this local confirmation succeeds.
-        if (in_array(strtolower((string) $request->flight_provider), ['at', 'hakimi'], true)) {
+        if (in_array(strtolower((string) $booking->flight_provider), ['at', 'hakimi'], true)) {
             $validated = $request->validate([
                 'void_charge_aed' => 'required|numeric|min:0',
                 'void_date' => 'required|date',
@@ -1747,6 +1790,10 @@ class BookingController extends Controller
             // recipients as other cancelled bookings only after settlement
             // has successfully changed the booking status to "voided".
             $booking = $booking->fresh();
+            $this->cancelOpenApplicationsForBooking(
+                $booking,
+                'The booking was voided directly before this request was reviewed.'
+            );
             $this->sendBookingCanceledMail($booking);
 
             return response()->json([
@@ -1892,6 +1939,39 @@ class BookingController extends Controller
             'message' => 'Ticket details updated successfully.',
             'booking' => $booking->fresh('pessangers'),
         ]);
+    }
+
+    private function canManageBookings(?User $user): bool
+    {
+        return (bool) $user && ($user->role === 'admin' || $user->can('manage-bookings'));
+    }
+
+    private function ensureBookingManager(?User $user): void
+    {
+        abort_unless($this->canManageBookings($user), 403, 'Only administrators can perform this booking action.');
+    }
+
+    private function ensureBookingOwnerOrManager(FlightBookings $booking, ?User $user): void
+    {
+        abort_unless(
+            $this->canManageBookings($user) || ($user && (int) $booking->agent_id === (int) $user->id),
+            403,
+            'You are not allowed to manage this booking.'
+        );
+    }
+
+    /** Close pending applications when a booking is changed outside their review flow. */
+    private function cancelOpenApplicationsForBooking(FlightBookings $booking, string $reason): void
+    {
+        $this->bookingRequestService->cancelOpenRequestsForBooking($booking, $reason);
+
+        ModifyRequest::query()
+            ->where('booking_id', $booking->id)
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ]);
     }
 
 

@@ -1,11 +1,23 @@
 <script setup>
+import { computed, onMounted, ref } from "vue";
+import moment from "moment";
+import { toast } from "vue3-toastify";
+import apiService from "@/services/store/apiService";
 import { formatAmount, getSelectedCurrencyCode } from "@/lib/utils";
 import DonutChart from "@/components/common/DonutChart.vue";
-import apiService from "@/services/store/apiService";
-import { Award, Plane, Search, TrendingUp } from "lucide-vue-next";
-import moment from "moment";
-import { computed, onMounted, ref } from "vue";
-import { toast } from "vue3-toastify";
+
+// Icons
+import {
+    Award,
+    Plane,
+    Search,
+    TrendingUp,
+    Calendar,
+    RefreshCw,
+    ArrowRight,
+    Users,
+    CircleDollarSign
+} from "lucide-vue-next";
 
 const presets = [
     { key: "7", label: "Last 7 days", days: 7 },
@@ -33,12 +45,13 @@ const agentChannel = ref("");
 const channels = computed(() => data.value.channels || []);
 const overallAgents = computed(() => data.value.top_agents || []);
 const topAgents = computed(() =>
-    agentChannel.value ? data.value.top_agents_by_channel?.[agentChannel.value] || [] : overallAgents.value,
+    agentChannel.value ? data.value.top_agents_by_channel?.[agentChannel.value] || [] : overallAgents.value
 );
 
 // Compact money for the middle of a ring, e.g. AED 1.2M.
 const compactAmount = (value) =>
     `${getSelectedCurrencyCode()} ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value)}`;
+
 const topAirlines = computed(() => data.value.top_airlines || []);
 const topRoutes = computed(() => data.value.top_searches?.routes || []);
 const totalSearches = computed(() => data.value.top_searches?.total || 0);
@@ -58,7 +71,6 @@ async function fetchInsights() {
         const response = await apiService.getAdminInsights({ from: from.value, to: to.value });
         data.value = response.data || data.value;
 
-        // A channel with no bookings in the new period cannot stay selected.
         if (agentChannel.value && !data.value.top_agents_by_channel?.[agentChannel.value]) {
             agentChannel.value = "";
         }
@@ -86,110 +98,180 @@ onMounted(fetchInsights);
 </script>
 
 <template>
-    <section class="insights-page">
-        <header class="page-head">
-            <div class="flex items-center gap-3">
-                <span class="page-icon"><TrendingUp class="h-6 w-6" /></span>
-                <div>
-                    <h1 class="page-title">Insights</h1>
-                    <p class="page-note">Who books the most, which airlines get booked, and what customers search for.</p>
+    <section class="space-y-6">
+        <!-- Top Page Header -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded bg-primary/10 text-primary">
+                        <TrendingUp class="h-5 w-5" />
+                    </span>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                            Insights & Analytics
+                        </h1>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Customer booking velocity, airline distribution, and travel search patterns
+                        </p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="filters">
-                <div class="preset-group" role="group" aria-label="Date range">
+                <!-- Filters Toolbar -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Presets Group -->
+                    <div class="flex items-center gap-1 rounded border border-slate-200 bg-slate-100 p-1" role="group" aria-label="Date range">
+                        <button
+                            v-for="preset in presets"
+                            :key="preset.key"
+                            type="button"
+                            class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                            :class="activePreset === preset.key ? 'bg-white text-primary shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+                            :aria-pressed="activePreset === preset.key"
+                            @click="applyPreset(preset)"
+                        >
+                            {{ preset.label }}
+                        </button>
+                    </div>
+
+                    <!-- Custom Range -->
+                    <div class="flex items-center gap-1.5 text-xs text-slate-600">
+                        <label class="sr-only" for="insights-from">From date</label>
+                        <input
+                            id="insights-from"
+                            v-model="from"
+                            type="date"
+                            :max="to || today"
+                            class="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            @change="applyCustomRange"
+                        />
+                        <span class="text-slate-400">to</span>
+                        <label class="sr-only" for="insights-to">To date</label>
+                        <input
+                            id="insights-to"
+                            v-model="to"
+                            type="date"
+                            :min="from"
+                            :max="today"
+                            class="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            @change="applyCustomRange"
+                        />
+                    </div>
+
                     <button
-                        v-for="preset in presets"
-                        :key="preset.key"
-                        type="button"
-                        class="preset"
-                        :class="{ 'is-active': activePreset === preset.key }"
-                        :aria-pressed="activePreset === preset.key"
-                        @click="applyPreset(preset)"
+                        @click="fetchInsights"
+                        :disabled="isLoading"
+                        class="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                        title="Refresh Insights"
                     >
-                        {{ preset.label }}
+                        <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoading }" />
+                        <span class="hidden sm:inline">Sync</span>
                     </button>
                 </div>
-                <div class="range">
-                    <label class="sr-only" for="insights-from">From date</label>
-                    <input id="insights-from" v-model="from" type="date" :max="to || today" class="date-input" @change="applyCustomRange" />
-                    <span class="text-slate-400">to</span>
-                    <label class="sr-only" for="insights-to">To date</label>
-                    <input id="insights-to" v-model="to" type="date" :min="from" :max="today" class="date-input" @change="applyCustomRange" />
-                </div>
             </div>
-        </header>
+        </div>
 
-        <!-- Headline figures -->
-        <div class="summary">
-            <div class="summary-card">
-                <span class="summary-label">Best customer</span>
-                <span class="summary-value">{{ bestAgent ? bestAgent.agent : "—" }}</span>
-                <span class="summary-note">
+        <!-- Headline Figures -->
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <!-- Best Customer -->
+            <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Best Customer</span>
+                <p class="mt-2 text-xl font-bold tracking-tight text-slate-900 truncate" :title="bestAgent ? bestAgent.agent : '—'">
+                    {{ bestAgent ? bestAgent.agent : "—" }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-slate-500 truncate">
                     {{ bestAgent ? `${formatAmount(bestAgent.sales)} from ${bestAgent.ticketed} ticketed` : "No bookings in this period" }}
                 </span>
             </div>
-            <div class="summary-card">
-                <span class="summary-label">Ticketed sales (top customers)</span>
-                <span class="summary-value">{{ formatAmount(totalSales) }}</span>
-                <span class="summary-note">{{ topAgents.length }} customer{{ topAgents.length === 1 ? "" : "s" }} with bookings</span>
+
+            <!-- Total Sales -->
+            <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Ticketed Sales (Top Customers)</span>
+                <p class="mt-2 text-xl font-bold tracking-tight text-slate-900">
+                    {{ formatAmount(totalSales) }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-slate-500">
+                    {{ topAgents.length }} customer{{ topAgents.length === 1 ? "" : "s" }} with bookings
+                </span>
             </div>
-            <div class="summary-card">
-                <span class="summary-label">Most booked airline</span>
-                <span class="summary-value">{{ topAirlines[0]?.airline || "—" }}</span>
-                <span class="summary-note">
+
+            <!-- Most Booked Airline -->
+            <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Most Booked Airline</span>
+                <p class="mt-2 text-xl font-bold tracking-tight text-slate-900 truncate" :title="topAirlines[0]?.airline || '—'">
+                    {{ topAirlines[0]?.airline || "—" }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-slate-500">
                     {{ topAirlines[0] ? `${topAirlines[0].bookings} booking${topAirlines[0].bookings === 1 ? "" : "s"}` : "No bookings in this period" }}
                 </span>
             </div>
-            <div class="summary-card">
-                <span class="summary-label">Flight searches</span>
-                <span class="summary-value">{{ totalSearches }}</span>
-                <span class="summary-note">
+
+            <!-- Flight Searches -->
+            <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Flight Searches</span>
+                <p class="mt-2 text-xl font-bold tracking-tight text-slate-900">
+                    {{ totalSearches }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-slate-500 truncate">
                     {{ topRoutes[0] ? `Top route ${topRoutes[0].origin} → ${topRoutes[0].destination}` : "No searches in this period" }}
                 </span>
             </div>
         </div>
 
-        <!-- The same numbers at a glance -->
-        <div class="rings" :class="{ 'is-loading': isLoading }">
+        <!-- Donut Charts Row -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3" :class="{ 'opacity-60': isLoading }">
             <DonutChart
-                title="Bookings by channel"
+                title="Bookings by Channel"
                 unit="bookings"
                 :items="channels.map((row) => ({ label: row.channel, value: row.bookings }))"
-                empty-text="No bookings"
+                empty-text="No channel bookings"
             />
             <DonutChart
-                title="Sales by customer"
+                title="Sales by Customer"
                 unit="ticketed"
                 :format="compactAmount"
                 :items="overallAgents.map((row) => ({ label: row.agent, value: row.sales }))"
                 empty-text="No ticketed sales"
             />
             <DonutChart
-                title="Bookings by airline"
+                title="Bookings by Airline"
                 unit="bookings"
                 :items="topAirlines.map((row) => ({ label: row.airline, value: row.bookings }))"
-                empty-text="No bookings"
+                empty-text="No airline bookings"
             />
         </div>
 
-        <div class="panels" :class="{ 'is-loading': isLoading }" :aria-busy="isLoading">
-            <!-- Top agents -->
-            <article class="panel panel-wide">
-                <header class="panel-head">
-                    <span class="panel-icon"><Award class="h-4 w-4" /></span>
-                    <h2 class="panel-title flex-1">Top customers</h2>
+        <!-- Detail Panels Grid -->
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2" :class="{ 'opacity-60': isLoading }">
+            <!-- Top Customers Table -->
+            <article class="lg:col-span-2 rounded border border-slate-200 bg-white p-5 shadow-xs">
+                <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4 mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-7 w-7 items-center justify-center rounded bg-primary/10 text-primary">
+                            <Award class="h-4 w-4" />
+                        </span>
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Top Customers</h2>
+                            <p class="text-[11px] text-slate-500">Ranked by ticketed sales and total bookings</p>
+                        </div>
+                    </div>
 
-                    <div v-if="channels.length" class="preset-group" role="group" aria-label="Sales channel">
-                        <button type="button" class="preset" :class="{ 'is-active': agentChannel === '' }" :aria-pressed="agentChannel === ''" @click="agentChannel = ''">
+                    <!-- Channel Filter Pills -->
+                    <div v-if="channels.length" class="flex flex-wrap items-center gap-1 rounded border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label="Sales channel">
+                        <button
+                            type="button"
+                            class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                            :class="agentChannel === '' ? 'bg-white text-primary shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+                            :aria-pressed="agentChannel === ''"
+                            @click="agentChannel = ''"
+                        >
                             Overall
                         </button>
                         <button
                             v-for="row in channels"
                             :key="row.channel"
                             type="button"
-                            class="preset"
-                            :class="{ 'is-active': agentChannel === row.channel }"
+                            class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                            :class="agentChannel === row.channel ? 'bg-white text-primary shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
                             :aria-pressed="agentChannel === row.channel"
                             @click="agentChannel = row.channel"
                         >
@@ -199,413 +281,155 @@ onMounted(fetchInsights);
                 </header>
 
                 <div v-if="topAgents.length" class="overflow-x-auto">
-                    <table class="rank-table">
-                        <thead>
+                    <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
                             <tr>
-                                <th class="w-10">#</th>
-                                <th>Customer</th>
-                                <th class="text-right">Bookings</th>
-                                <th class="text-right">Ticketed</th>
-                                <th class="text-right">Sales</th>
+                                <th scope="col" class="w-12 px-4 py-3">#</th>
+                                <th scope="col" class="px-4 py-3">Customer</th>
+                                <th scope="col" class="px-4 py-3 text-right">Bookings</th>
+                                <th scope="col" class="px-4 py-3 text-right">Ticketed</th>
+                                <th scope="col" class="px-4 py-3 text-right">Total Sales</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr v-for="(row, index) in topAgents" :key="row.agent_id">
-                                <td><span class="rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</span></td>
-                                <td>
-                                    <span class="row-name">{{ row.agent }}</span>
-                                    <span class="bar"><span class="bar-fill" :style="{ width: share(row.sales, topAgents, 'sales') + '%' }"></span></span>
+                        <tbody class="divide-y divide-slate-100 bg-white">
+                            <tr v-for="(row, index) in topAgents" :key="row.agent_id" class="transition-colors hover:bg-slate-50/80">
+                                <!-- Rank -->
+                                <td class="whitespace-nowrap px-4 py-3">
+                                    <span
+                                        class="flex h-5 w-5 items-center justify-center rounded text-xs font-bold"
+                                        :class="index < 3 ? 'bg-primary text-white shadow-2xs' : 'bg-slate-100 text-slate-600 border border-slate-200'"
+                                    >
+                                        {{ index + 1 }}
+                                    </span>
                                 </td>
-                                <td class="num">{{ row.bookings }}</td>
-                                <td class="num">{{ row.ticketed }}</td>
-                                <td class="num is-strong">{{ formatAmount(row.sales) }}</td>
+
+                                <!-- Customer & Progress Bar -->
+                                <td class="px-4 py-3 min-w-[200px]">
+                                    <span class="block font-bold text-slate-900 truncate" :title="row.agent">{{ row.agent }}</span>
+                                    <div class="mt-1.5 h-1.5 w-full rounded bg-slate-100 overflow-hidden">
+                                        <div
+                                            class="h-full rounded bg-primary transition-all duration-300"
+                                            :style="{ width: share(row.sales, topAgents, 'sales') + '%' }"
+                                        />
+                                    </div>
+                                </td>
+
+                                <!-- Bookings -->
+                                <td class="whitespace-nowrap px-4 py-3 text-right font-medium text-slate-700 tabular-nums">
+                                    {{ row.bookings }}
+                                </td>
+
+                                <!-- Ticketed -->
+                                <td class="whitespace-nowrap px-4 py-3 text-right font-medium text-emerald-700 tabular-nums">
+                                    {{ row.ticketed }}
+                                </td>
+
+                                <!-- Sales -->
+                                <td class="whitespace-nowrap px-4 py-3 text-right font-bold text-slate-900 tabular-nums">
+                                    {{ formatAmount(row.sales) }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                <p v-else class="panel-empty">No customer bookings in this period.</p>
+
+                <div v-else class="py-12 text-center text-xs text-slate-500">
+                    No customer bookings in this period.
+                </div>
             </article>
 
-            <!-- Airlines by bookings -->
-            <article class="panel">
-                <header class="panel-head">
-                    <span class="panel-icon"><Plane class="h-4 w-4" /></span>
-                    <div>
-                        <h2 class="panel-title">Most booked airlines</h2>
-                        <p class="panel-note">Bookings that weren't cancelled.</p>
-                    </div>
-                </header>
-
-                <ul v-if="topAirlines.length" class="bar-list">
-                    <li v-for="row in topAirlines" :key="row.airline">
-                        <div class="bar-row">
-                            <span class="row-name">{{ row.airline }}</span>
-                            <span class="num is-strong">{{ row.bookings }}</span>
-                        </div>
-                        <span class="bar"><span class="bar-fill" :style="{ width: share(row.bookings, topAirlines, 'bookings') + '%' }"></span></span>
-                        <span class="bar-note">
-                            <span v-for="item in row.channels" :key="item.channel" class="channel-tag">{{ item.channel }} {{ item.bookings }}</span>
-                            {{ row.ticketed }} ticketed · {{ formatAmount(row.sales) }}
+            <!-- Most Booked Airlines -->
+            <article class="rounded border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                    <header class="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                        <span class="flex h-7 w-7 items-center justify-center rounded bg-primary/10 text-primary">
+                            <Plane class="h-4 w-4 -rotate-45" />
                         </span>
-                    </li>
-                </ul>
-                <p v-else class="panel-empty">No airline bookings in this period.</p>
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Most Booked Airlines</h2>
+                            <p class="text-[11px] text-slate-500">Active confirmed and ticketed bookings</p>
+                        </div>
+                    </header>
+
+                    <ul v-if="topAirlines.length" class="space-y-4">
+                        <li v-for="row in topAirlines" :key="row.airline" class="text-xs">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-slate-900 truncate" :title="row.airline">{{ row.airline }}</span>
+                                <span class="font-bold text-slate-900 tabular-nums">{{ row.bookings }} bookings</span>
+                            </div>
+
+                            <div class="mt-1.5 h-1.5 w-full rounded bg-slate-100 overflow-hidden">
+                                <div
+                                    class="h-full rounded bg-primary transition-all duration-300"
+                                    :style="{ width: share(row.bookings, topAirlines, 'bookings') + '%' }"
+                                />
+                            </div>
+
+                            <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                                <span
+                                    v-for="item in row.channels"
+                                    :key="item.channel"
+                                    class="rounded border border-primary/20 bg-primary/10 px-1.5 py-0.2 font-semibold text-primary uppercase text-[10px]"
+                                >
+                                    {{ item.channel }} {{ item.bookings }}
+                                </span>
+                                <span>{{ row.ticketed }} ticketed · {{ formatAmount(row.sales) }}</span>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <div v-else class="py-12 text-center text-xs text-slate-500">
+                        No airline bookings in this period.
+                    </div>
+                </div>
             </article>
 
-            <!-- Most searched routes -->
-            <article class="panel">
-                <header class="panel-head">
-                    <span class="panel-icon"><Search class="h-4 w-4" /></span>
-                    <div>
-                        <h2 class="panel-title">Most searched routes</h2>
-                        <p class="panel-note">A search records its route, not an airline, so this is ranked by route.</p>
-                    </div>
-                </header>
-
-                <ul v-if="topRoutes.length" class="bar-list">
-                    <li v-for="row in topRoutes" :key="row.origin + row.destination">
-                        <div class="bar-row">
-                            <span class="row-name">{{ row.origin }} → {{ row.destination }}</span>
-                            <span class="num is-strong">{{ row.searches }}</span>
+            <!-- Most Searched Routes -->
+            <article class="rounded border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                    <header class="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                        <span class="flex h-7 w-7 items-center justify-center rounded bg-primary/10 text-primary">
+                            <Search class="h-4 w-4" />
+                        </span>
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Most Searched Routes</h2>
+                            <p class="text-[11px] text-slate-500">High-intent customer flight search origins & destinations</p>
                         </div>
-                        <span class="bar"><span class="bar-fill" :style="{ width: share(row.searches, topRoutes, 'searches') + '%' }"></span></span>
-                        <span class="bar-note">Searched by {{ row.agents }} user{{ row.agents === 1 ? "" : "s" }}</span>
-                    </li>
-                </ul>
-                <p v-else class="panel-empty">No flight searches in this period.</p>
+                    </header>
+
+                    <ul v-if="topRoutes.length" class="space-y-4">
+                        <li v-for="row in topRoutes" :key="row.origin + row.destination" class="text-xs">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-800 border border-slate-200">
+                                        {{ row.origin }}
+                                    </span>
+                                    <ArrowRight class="h-3 w-3 text-slate-400" />
+                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-800 border border-slate-200">
+                                        {{ row.destination }}
+                                    </span>
+                                </div>
+                                <span class="font-bold text-slate-900 tabular-nums">{{ row.searches }} searches</span>
+                            </div>
+
+                            <div class="mt-1.5 h-1.5 w-full rounded bg-slate-100 overflow-hidden">
+                                <div
+                                    class="h-full rounded bg-primary transition-all duration-300"
+                                    :style="{ width: share(row.searches, topRoutes, 'searches') + '%' }"
+                                />
+                            </div>
+
+                            <p class="mt-1 text-[11px] text-slate-500">
+                                Searched by {{ row.agents }} user{{ row.agents === 1 ? '' : 's' }}
+                            </p>
+                        </li>
+                    </ul>
+
+                    <div v-else class="py-12 text-center text-xs text-slate-500">
+                        No flight searches in this period.
+                    </div>
+                </div>
             </article>
         </div>
     </section>
 </template>
-
-<style scoped>
-.insights-page {
-    min-height: 100vh;
-    padding: 1.5rem;
-}
-
-.page-head {
-    margin-bottom: 1.25rem;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.page-icon,
-.panel-icon {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    background-color: hsl(var(--primary) / 0.1);
-    color: hsl(var(--primary));
-}
-
-.page-icon {
-    height: 3rem;
-    width: 3rem;
-    border-radius: 0.75rem;
-}
-
-.panel-icon {
-    height: 2rem;
-    width: 2rem;
-    border-radius: 0.5rem;
-}
-
-.page-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-    color: rgb(15 23 42);
-}
-
-.page-note,
-.panel-note,
-.summary-note,
-.bar-note {
-    font-size: 0.8125rem;
-    color: rgb(100 116 139);
-}
-
-.filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.preset-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    border-radius: 0.75rem;
-    background-color: rgb(241 245 249);
-    padding: 0.25rem;
-}
-
-.preset {
-    height: 2rem;
-    border-radius: 0.5rem;
-    padding: 0 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: rgb(71 85 105);
-    transition: background-color 150ms ease, color 150ms ease;
-}
-
-.preset:hover {
-    color: hsl(var(--primary));
-}
-
-.preset.is-active {
-    background-color: #fff;
-    font-weight: 600;
-    color: hsl(var(--primary));
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
-}
-
-.preset:focus-visible,
-.date-input:focus-visible {
-    outline: 2px solid hsl(var(--primary) / 0.5);
-    outline-offset: 2px;
-}
-
-.range {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8125rem;
-}
-
-.date-input {
-    height: 2.5rem;
-    border: 1px solid rgb(203 213 225);
-    border-radius: 0.625rem;
-    background-color: #fff;
-    padding: 0 0.625rem;
-    font-size: 0.8125rem;
-    color: rgb(15 23 42);
-}
-
-.summary {
-    margin-bottom: 1.25rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    gap: 1rem;
-}
-
-.summary-card,
-.panel {
-    border: 1px solid rgb(226 232 240);
-    border-radius: 1rem;
-    background-color: #fff;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
-}
-
-.summary-card {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 1rem 1.125rem;
-}
-
-.summary-label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgb(100 116 139);
-}
-
-.summary-value {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 1.375rem;
-    font-weight: 700;
-    line-height: 1.3;
-    font-variant-numeric: tabular-nums;
-    color: rgb(15 23 42);
-}
-
-.rings {
-    margin-bottom: 1.25rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: 1rem;
-    transition: opacity 150ms ease;
-}
-
-.channel-tag {
-    margin-right: 0.375rem;
-    display: inline-block;
-    border-radius: 9999px;
-    background-color: hsl(var(--primary) / 0.1);
-    padding: 0.0625rem 0.5rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: hsl(var(--primary));
-}
-
-.panels {
-    display: grid;
-    gap: 1.25rem;
-    transition: opacity 150ms ease;
-}
-
-.panels.is-loading,
-.rings.is-loading {
-    opacity: 0.55;
-}
-
-@media (min-width: 1024px) {
-    .panels {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .panel-wide {
-        grid-column: span 2;
-    }
-}
-
-.panel {
-    padding: 1.125rem;
-}
-
-.panel-head {
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.625rem;
-}
-
-.panel-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: rgb(15 23 42);
-}
-
-.panel-empty {
-    padding: 2rem 0;
-    text-align: center;
-    font-size: 0.875rem;
-    color: rgb(100 116 139);
-}
-
-.rank-table {
-    width: 100%;
-    min-width: 34rem;
-    font-size: 0.875rem;
-    color: rgb(51 65 85);
-}
-
-.rank-table th {
-    border-bottom: 1px solid rgb(226 232 240);
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgb(100 116 139);
-}
-
-.rank-table th.text-right {
-    text-align: right;
-}
-
-.rank-table td {
-    border-bottom: 1px solid rgb(241 245 249);
-    padding: 0.75rem;
-    vertical-align: middle;
-}
-
-.rank-table tbody tr:last-child td {
-    border-bottom: 0;
-}
-
-.rank {
-    display: flex;
-    height: 1.625rem;
-    width: 1.625rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9999px;
-    background-color: rgb(241 245 249);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: rgb(71 85 105);
-}
-
-.rank.is-top {
-    background-color: hsl(var(--primary));
-    color: #fff;
-}
-
-.row-name {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 600;
-    color: rgb(15 23 42);
-}
-
-.num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.num.is-strong {
-    font-weight: 700;
-    color: rgb(15 23 42);
-}
-
-.bar {
-    margin-top: 0.375rem;
-    display: block;
-    height: 0.375rem;
-    overflow: hidden;
-    border-radius: 9999px;
-    background-color: rgb(241 245 249);
-}
-
-.bar-fill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background-color: hsl(var(--primary));
-    transition: width 300ms ease;
-}
-
-.bar-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-}
-
-.bar-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    font-size: 0.875rem;
-}
-
-.bar-note {
-    margin-top: 0.25rem;
-    display: block;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .bar-fill,
-    .panels {
-        transition: none;
-    }
-}
-</style>

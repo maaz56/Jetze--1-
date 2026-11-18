@@ -225,7 +225,7 @@ onMounted(() => {
             </div>
             <button
                 @click="refresh"
-                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition"
+                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 shadow-sm transition"
             >
                 <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isLoading }" />
                 Refresh
@@ -239,7 +239,7 @@ onMounted(() => {
                 :key="card.key"
                 @click="handleTabChange(card.key)"
                 :class="[
-                    'p-4 rounded-xl border text-left transition-all',
+                    'p-4 rounded border text-left transition-all',
                     activeStatus === card.key ? `${card.active} shadow-sm` : 'border-gray-200 bg-white hover:border-gray-300',
                 ]"
             >
@@ -253,7 +253,7 @@ onMounted(() => {
         </div>
 
         <!-- Filter bar -->
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div class="bg-white p-4 rounded border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
             <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                 <div class="relative w-full sm:w-64">
                     <Search class="w-4 h-4 text-gray-400 absolute left-3 top-3 pointer-events-none" />
@@ -263,14 +263,14 @@ onMounted(() => {
                         type="text"
                         maxlength="100"
                         placeholder="Search PNR, customer, pax..."
-                        class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     />
                 </div>
                 <select
                     v-if="props.requestType === 'all'"
                     v-model="filterType"
                     @change="fetchRequests(1)"
-                    class="py-2 px-3 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    class="py-2 px-3 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 >
                     <option value="all">All Types</option>
                     <option value="void">Void Only</option>
@@ -279,7 +279,7 @@ onMounted(() => {
                 <select
                     v-model="filterProvider"
                     @change="fetchRequests(1)"
-                    class="py-2 px-3 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    class="py-2 px-3 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 >
                     <option value="all">All Providers</option>
                     <option v-for="provider in counts.providers || []" :key="provider" :value="provider">{{ provider }}</option>
@@ -291,14 +291,14 @@ onMounted(() => {
                     v-model="dateFrom"
                     @change="fetchRequests(1)"
                     type="date"
-                    class="py-1.5 px-2.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="py-1.5 px-2.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <span class="text-gray-400 text-xs">to</span>
                 <input
                     v-model="dateTo"
                     @change="fetchRequests(1)"
                     type="date"
-                    class="py-1.5 px-2.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="py-1.5 px-2.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button @click="resetFilters" class="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-800 transition" title="Reset filters">
                     Clear
@@ -307,7 +307,7 @@ onMounted(() => {
         </div>
 
         <!-- Table -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm text-gray-700">
                     <thead class="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -350,7 +350,7 @@ onMounted(() => {
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase', req.type === 'refund' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800']">
+                                <span :class="['inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase', req.type === 'refund' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800']">
                                     {{ req.type }}
                                 </span>
                             </td>
@@ -381,8 +381,8 @@ onMounted(() => {
                                 </div>
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium', requestStatusStyle(req.status).badge]">
-                                    <span class="w-1.5 h-1.5 rounded-full" :class="requestStatusStyle(req.status).dot"></span>
+                                <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium', requestStatusStyle(req.status).badge]">
+                                    <span class="w-1.5 h-1.5 rounded-sm" :class="requestStatusStyle(req.status).dot"></span>
                                     {{ req.status }}
                                 </span>
                             </td>
@@ -393,16 +393,16 @@ onMounted(() => {
                             </td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
                                 <div class="inline-flex items-center gap-1">
-                                    <button @click="openDetailsModal(req)" class="p-1.5 text-gray-500 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition" title="View Details">
+                                    <button @click="openDetailsModal(req)" class="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-100 transition" title="View Details">
                                         <Eye class="w-4 h-4" />
                                     </button>
-                                    <button @click="navigateToBookingDetails(req)" class="p-1.5 text-primary rounded-lg hover:bg-primary/10 transition" title="Go to Booking Details">
+                                    <button @click="navigateToBookingDetails(req)" class="p-1.5 text-primary rounded hover:bg-primary/10 transition" title="Go to Booking Details">
                                         <CircleChevronRight class="w-4 h-4" />
                                     </button>
                                     <button
                                         v-if="canReview(req)"
                                         @click="openApproveModal(req)"
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition"
                                     >
                                         <Check class="w-3.5 h-3.5" />
                                         Approve
@@ -410,7 +410,7 @@ onMounted(() => {
                                     <button
                                         v-if="canReview(req)"
                                         @click="openRejectModal(req)"
-                                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition"
+                                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition"
                                     >
                                         <X class="w-3.5 h-3.5" />
                                         Reject
@@ -451,7 +451,7 @@ onMounted(() => {
 
         <!-- Approve modal -->
         <div v-if="showApproveDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div class="bg-white rounded max-w-lg w-full p-6 shadow-xl space-y-5 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3">
                     <div class="flex items-center gap-2 text-emerald-700 font-bold text-lg">
                         <CheckCircle2 class="w-5 h-5" />
@@ -462,7 +462,7 @@ onMounted(() => {
                     </button>
                 </div>
 
-                <div class="bg-gray-50 rounded-xl p-4 space-y-2 text-sm border border-gray-100">
+                <div class="bg-gray-50 rounded p-4 space-y-2 text-sm border border-gray-100">
                     <div class="flex justify-between">
                         <span class="text-gray-500">Booking / PNR:</span>
                         <span class="font-semibold text-gray-800">{{ bookingRef(activeRequest?.booking) }}</span>
@@ -485,7 +485,7 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 space-y-1">
+                <div class="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800 space-y-1">
                     <p class="font-semibold flex items-center gap-1">
                         <AlertTriangle class="w-4 h-4 text-blue-600 flex-shrink-0" />
                         Internal cancellation
@@ -509,13 +509,13 @@ onMounted(() => {
                             :max="ticketAmount"
                             step="any"
                             placeholder="0.00"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                         <p v-if="penaltyTooHigh" class="text-[11px] text-rose-600 mt-1">Penalty cannot be more than the ticket amount.</p>
                         <p v-else class="text-[11px] text-gray-400 mt-1">Deducted from the ticket price on void/refund.</p>
                     </div>
 
-                    <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-sm">
+                    <div class="p-3 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between text-sm">
                         <span class="text-emerald-800 font-medium">Refund Amount to Customer:</span>
                         <span class="text-emerald-900 font-bold text-base">{{ formatMoney(computedRefundAmount, activeRequest?.currency) }}</span>
                     </div>
@@ -527,7 +527,7 @@ onMounted(() => {
                             rows="2"
                             maxlength="1000"
                             placeholder="Remarks or reason for customer reference..."
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         ></textarea>
                     </div>
                 </div>
@@ -539,7 +539,7 @@ onMounted(() => {
                     <button
                         @click="confirmApprove"
                         :disabled="isSubmitting || penaltyTooHigh"
-                        class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition disabled:opacity-50 inline-flex items-center gap-2"
+                        class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded shadow-sm transition disabled:opacity-50 inline-flex items-center gap-2"
                     >
                         <RefreshCw v-if="isSubmitting" class="w-4 h-4 animate-spin" />
                         Confirm Approval
@@ -550,7 +550,7 @@ onMounted(() => {
 
         <!-- Reject modal -->
         <div v-if="showRejectDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-5">
+            <div class="bg-white rounded max-w-md w-full p-6 shadow-xl space-y-5">
                 <div class="flex items-center justify-between border-b pb-3">
                     <div class="flex items-center gap-2 text-rose-700 font-bold text-lg">
                         <XCircle class="w-5 h-5" />
@@ -574,7 +574,7 @@ onMounted(() => {
                         rows="3"
                         maxlength="1000"
                         placeholder="Explain why this request is being rejected..."
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-200 focus:border-rose-500"
+                        class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-rose-200 focus:border-rose-500"
                     ></textarea>
                 </div>
 
@@ -585,7 +585,7 @@ onMounted(() => {
                     <button
                         @click="confirmReject"
                         :disabled="isSubmitting"
-                        class="px-5 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50 inline-flex items-center gap-2"
+                        class="px-5 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-sm transition disabled:opacity-50 inline-flex items-center gap-2"
                     >
                         <RefreshCw v-if="isSubmitting" class="w-4 h-4 animate-spin" />
                         Reject Request
@@ -596,7 +596,7 @@ onMounted(() => {
 
         <!-- Details modal -->
         <div v-if="showDetailsDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="bg-white rounded max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3">
                     <div class="font-bold text-gray-900 text-lg">Request #{{ activeRequest?.id }} Details</div>
                     <button @click="showDetailsDialog = false" class="text-gray-400 hover:text-gray-600">
@@ -605,42 +605,42 @@ onMounted(() => {
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 text-sm">
-                    <div class="p-3 bg-gray-50 rounded-lg">
+                    <div class="p-3 bg-gray-50 rounded">
                         <span class="text-xs text-gray-400 block">Type</span>
                         <span class="font-semibold uppercase text-gray-800">{{ activeRequest?.type }}</span>
                     </div>
-                    <div class="p-3 bg-gray-50 rounded-lg">
+                    <div class="p-3 bg-gray-50 rounded">
                         <span class="text-xs text-gray-400 block">Status</span>
                         <span class="font-semibold uppercase text-gray-800">{{ activeRequest?.status }}</span>
                     </div>
-                    <div class="p-3 bg-gray-50 rounded-lg">
+                    <div class="p-3 bg-gray-50 rounded">
                         <span class="text-xs text-gray-400 block">Ticket Amount</span>
                         <span class="font-bold text-gray-900">{{ formatMoney(activeRequest?.ticket_amount, activeRequest?.currency) }}</span>
                     </div>
-                    <div class="p-3 bg-gray-50 rounded-lg">
+                    <div class="p-3 bg-gray-50 rounded">
                         <span class="text-xs text-gray-400 block">Refund Amount</span>
                         <span class="font-bold text-emerald-700">{{ formatMoney(activeRequest?.refund_amount, activeRequest?.currency) }}</span>
                     </div>
                 </div>
 
-                <div v-if="activeRequest?.customer_remarks" class="p-3 bg-gray-50 rounded-lg text-sm">
+                <div v-if="activeRequest?.customer_remarks" class="p-3 bg-gray-50 rounded text-sm">
                     <span class="text-xs font-semibold text-gray-500 uppercase block mb-1">Customer Remarks</span>
                     <p class="text-gray-700">{{ activeRequest.customer_remarks }}</p>
                 </div>
 
-                <div v-if="activeRequest?.admin_remarks" class="p-3 bg-gray-50 rounded-lg text-sm">
+                <div v-if="activeRequest?.admin_remarks" class="p-3 bg-gray-50 rounded text-sm">
                     <span class="text-xs font-semibold text-gray-500 uppercase block mb-1">Admin Remarks</span>
                     <p class="text-gray-700">{{ activeRequest.admin_remarks }}</p>
                 </div>
 
-                <div v-if="activeRequest?.failure_reason" class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <div v-if="activeRequest?.failure_reason" class="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                     <span class="text-xs font-semibold text-red-600 uppercase block mb-1">Failure Reason</span>
                     <p>{{ activeRequest.failure_reason }}</p>
                 </div>
 
                 <div v-if="activeRequest?.passengers?.length > 0" class="space-y-1.5">
                     <span class="text-xs font-semibold text-gray-500 uppercase block">Selected Passengers</span>
-                    <div class="border rounded-lg divide-y text-xs">
+                    <div class="border rounded divide-y text-xs">
                         <div v-for="p in activeRequest.passengers" :key="p.id" class="p-2.5 flex items-center justify-between">
                             <span class="font-medium text-gray-800">
                                 {{ paxName(p) }}
@@ -652,7 +652,7 @@ onMounted(() => {
                 </div>
 
                 <div class="flex justify-end pt-3 border-t">
-                    <button @click="showDetailsDialog = false" class="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                    <button @click="showDetailsDialog = false" class="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded transition">
                         Close
                     </button>
                 </div>

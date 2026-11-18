@@ -1,260 +1,320 @@
 <template>
-    <button
-        @click="toggleSidebar"
-        :class="[
-            'fixed top-1/2 -translate-y-1/2 z-50 lg:hidden bg-white shadow-lg border p-2 transition-all duration-300',
-            isMobileOpen ? 'left-64 rounded-r-lg' : 'left-0 rounded-r-lg'
-        ]"
-        >
-        <ChevronLeft
-            v-if="isMobileOpen"
-            class="w-6 h-6"
-        />
-        <ChevronRight
-            v-else
-            class="w-6 h-6"
-        />
-    </button>
-    <!-- Overlay for mobile -->
-    <div
-      v-if="isMobileOpen"
-      @click="closeSidebar"
-      class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden duration-300"
-    ></div>
+  <!-- Mobile Toggle Button -->
+  <button
+    type="button"
+    @click="toggleSidebar"
+    aria-label="Toggle navigation drawer"
+    :class="[
+      'fixed top-20 z-50 lg:hidden bg-white text-slate-700 shadow-md border border-slate-200 border-l-0 p-2 transition-all duration-300 hover:text-primary hover:bg-slate-50 focus:outline-none',
+      isMobileOpen ? 'left-64 rounded-r' : 'left-0 rounded-r'
+    ]"
+  >
+    <ChevronLeft v-if="isMobileOpen" class="w-5 h-5" />
+    <ChevronRight v-else class="w-5 h-5" />
+  </button>
 
+  <!-- Mobile Backdrop Overlay -->
+  <div
+    v-if="isMobileOpen"
+    @click="closeSidebar"
+    class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300"
+  ></div>
 
-  <aside v-bind="attrs" :class="[
-    'fixed lg:relative w-64 h-screen bg-white border-r border-gray-200 shadow-sm flex flex-col transition-transform duration-300 z-40',
-    isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-]">
-
-
-    <!-- Logo and App Name -->
-    <div class="p-4 border-b border-gray-100 bg-white/30">
-      <router-link :to="{ name: 'Dashboard' }" class="flex items-center space-x-3">
-        <img src="/public/assets/logo.png" alt="logo" class="w-auto h-10" />
+  <!-- Sidebar Aside Container -->
+  <aside
+    v-bind="attrs"
+    :class="[
+      'fixed lg:relative w-64 h-screen bg-white border-r border-slate-200 shadow-xs flex flex-col transition-transform duration-300 ease-in-out z-40 select-none',
+      isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+    ]"
+  >
+    <!-- Brand Header (Pixel-aligned with Nav.vue 64px h-16) -->
+    <div class="h-16 px-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+      <router-link :to="{ name: 'Dashboard' }" class="flex items-center gap-2.5 group min-w-0">
+        <div class="h-9 w-9 rounded border border-slate-200 bg-slate-50 p-1 flex items-center justify-center group-hover:border-primary/40 transition-colors flex-shrink-0">
+          <img src="/public/assets/logo.png" alt="Jetze" class="h-7 w-auto object-contain" />
+        </div>
+        <div class="flex flex-col min-w-0">
+          <span class="text-xs font-bold tracking-tight text-slate-900 group-hover:text-primary transition-colors leading-none truncate">
+            JETZE
+          </span>
+          <span class="text-[11px] font-medium text-slate-500 mt-1 flex items-center gap-1.5 leading-none">
+            <span class="h-1.5 w-1.5 rounded-sm bg-emerald-500 animate-pulse flex-shrink-0"></span>
+            Admin Operations
+          </span>
+        </div>
       </router-link>
+
+      <!-- Mobile Close Button -->
+      <button
+        type="button"
+        @click="closeSidebar"
+        class="lg:hidden p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none"
+        aria-label="Close sidebar"
+      >
+        <X class="w-5 h-5" />
+      </button>
     </div>
 
-    <!-- Navigation Menu -->
-    <nav class="flex-grow overflow-y-auto py-4">
-      <div class="space-y-1 px-3">
-        <router-link :to="{ name: 'Dashboard' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'Dashboard' }"
-          v-if="authStore.user.role === 'admin'">
-          <LayoutDashboard class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'Dashboard' }" />
-          Dashboard
-        </router-link>
-
-        <router-link :to="{ name: 'AdminCustomerBookings' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'AdminCustomerBookings' }"
-          v-if="authStore.hasPermission('view-bookings')">
-          <Notebook class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'AdminCustomerBookings' }" />
-          <span class="flex-1">Bookings</span>
-          <span v-if="unreadCount('booking_created') > 0" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-            {{ unreadCount('booking_created') }}
-          </span>
-        </router-link>
-        <router-link :to="{ name: 'TravelCalendar' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'TravelCalendar' }"
-          v-if="authStore.hasPermission('view-bookings')">
-          <Notebook class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'TravelCalendar' }" />
-          Travel Calendar
-        </router-link>
-        <router-link :to="{ name: 'MarketingInsights' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'MarketingInsights' }"
-          v-if="authStore.user.role === 'admin'">
-          <TrendingUp class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'MarketingInsights' }" />
-          Insights
-        </router-link>
-        <router-link :to="{ name: 'BookingRequests' }"
-          class="admin-sidebar-link" :class="{ 'admin-sidebar-link-active': $route.name === 'BookingRequests' }"
-          v-if="authStore.hasPermission('manage-bookings')">
-          <XCircle class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === 'BookingRequests' }" />
-          <span class="flex-1">Request Inbox</span>
-          <span v-if="requestInboxCount > 0" class="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-gray-900">
-            {{ requestInboxCount }}
-          </span>
-        </router-link>
-        <!-- <router-link :to="{ name: 'OfflineBookings' }"
-          class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors duration-200" :class="{
-            'bg-secondary text-white font-medium': $route.name === 'OfflineBookings',
-            'text-gray-700 hover:bg-white/20 hover:text-gray-900': $route.name !== 'OfflineBookings'
-          }">
-          <Notebook class="w-5 h-5 mr-3 flex-shrink-0"
-            :class="$route.name === 'OfflineBookings' ? 'text-white' : 'text-gray-500'" />
-          Offline Bookings
-        </router-link> -->
-        <!-- <router-link :to="{ name: 'DirectBookings' }"
-          class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors duration-200" :class="{
-            'bg-secondary text-white font-medium': $route.name === 'DirectBookings',
-            'text-gray-700 hover:bg-white/20 hover:text-gray-900': $route.name !== 'DirectBookings'
-          }">
-          <Notebook class="w-5 h-5 mr-3 flex-shrink-0"
-            :class="$route.name === 'DirectBookings' ? 'text-gray-600' : 'text-gray-500'" />
-          Direct Bookings
-        </router-link> -->
-        <!-- <router-link :to="{ name: 'ImportPnr' }"
-          class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors duration-200" :class="{
-            'bg-secondary text-white font-medium': $route.name === 'ImportPnr',
-            'text-gray-700 hover:bg-white/20 hover:text-gray-900': $route.name !== 'ImportPnr'
-          }">
-          <Ticket class="w-5 h-5 mr-3 flex-shrink-0"
-            :class="$route.name === 'ImportPnr' ? 'text-white' : 'text-gray-500'" />
-          Import PNRs
-        </router-link> -->
+    <!-- Quick Navigation Search Bar -->
+    <div class="px-3 pt-2.5 pb-2 border-b border-slate-100 flex-shrink-0">
+      <div class="relative">
+        <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Quick jump / filter..."
+          class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary focus:bg-white transition-all"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          @click="searchQuery = ''"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded focus:outline-none"
+          aria-label="Clear filter"
+        >
+          <X class="w-3 h-3" />
+        </button>
       </div>
+    </div>
 
-      <div class="mt-6 space-y-2">
-  <div
-    v-for="(section, index) in menuSections"
-    :key="index"
-    class="mb-2"
-
-  >
-    <button
-          v-if="section?.items.some(item => !item.permission || authStore.hasPermission(item.permission))"
-
-      @click="toggleSection(index)"
-      class="flex items-center justify-between w-full px-6 py-2 text-xs font-medium text-left text-gray-700 uppercase tracking-wider hover:text-gray-900 focus:outline-none"
-    >
-      {{ section.title }}
-
-      <span
-        v-if="readAtCounter && section.title === 'Agent / Users'"
-        class="ml-auto bg-white/50 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full"
-      >
-        {{ readAtCounter }}
-      </span>
-
-      <!-- New items inside this section (shown while it is collapsed too) -->
-      <span
-        v-if="sectionUnreadCount(section) > 0"
-        class="ml-auto mr-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold normal-case text-white"
-      >
-        {{ sectionUnreadCount(section) }}
-      </span>
-
-      <ChevronDown
-        :class="{ 'transform rotate-180': openSections[index] }"
-        class="w-4 h-4 transition-transform duration-200"
-      />
-    </button>
-
-    <div v-show="openSections[index]" class="mt-1 space-y-1 px-3">
-      <template v-for="item in section?.items" :key="item.name">
+    <!-- Navigation Scrollable Area -->
+    <nav class="flex-grow overflow-y-auto px-3 py-2.5 space-y-3.5 custom-sidebar-scroll">
+      <!-- Main Core Links -->
+      <div v-if="coreLinks.length > 0" class="space-y-1">
+        <div class="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+          <span>Main Menu</span>
+          <span v-if="searchQuery" class="text-[11px] lowercase font-normal text-slate-400">
+            {{ coreLinks.length }} found
+          </span>
+        </div>
 
         <router-link
-          v-if="!item.permission || authStore.hasPermission(item.permission)"
-          :to="item.to"
-          class="admin-sidebar-link"
-          :class="{ 'admin-sidebar-link-active': $route.name === item.to.name }"
+          v-for="link in coreLinks"
+          :key="link.name"
+          :to="link.to"
+          class="group flex items-center justify-between px-2.5 py-1.5 text-[12.5px] font-semibold rounded transition-all duration-150"
+          :class="[
+            isLinkActive(link)
+              ? 'bg-primary text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+          ]"
         >
-          <component
-            :is="item.icon"
-            class="admin-sidebar-icon"
-            :class="{ 'admin-sidebar-icon-active': $route.name === item.to.name }"
-          />
+          <div class="flex items-center gap-2.5 min-w-0">
+            <component
+              :is="link.icon"
+              class="w-4 h-4 flex-shrink-0 transition-colors"
+              :class="isLinkActive(link) ? 'text-white' : 'text-slate-400 group-hover:text-primary'"
+            />
+            <span class="truncate">{{ link.name }}</span>
+          </div>
 
-          <span class="flex-1">{{ item.name }}</span>
-          <span
-            v-if="item.notify && unreadCount(item.notify) > 0"
-            class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
-          >
-            {{ unreadCount(item.notify) }}
-          </span>
+          <div class="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            <!-- Dynamic Badges -->
+            <span
+              v-if="link.badge > 0"
+              class="px-1.5 py-0.5 text-[10px] font-bold rounded leading-none"
+              :class="link.badgeColor"
+            >
+              {{ link.badge }}
+            </span>
+            <!-- Active Indicator Pill -->
+            <span
+              v-else-if="isLinkActive(link)"
+              class="h-1.5 w-1.5 rounded-sm bg-white"
+            ></span>
+          </div>
         </router-link>
+      </div>
 
-      </template>
-    </div>
+      <!-- Collapsible Modules / Sections (One open at a time) -->
+      <div v-if="filteredMenuSections.length > 0" class="space-y-1.5 pt-1 border-t border-slate-100">
+        <div
+          v-for="section in filteredMenuSections"
+          :key="section.title"
+          class="space-y-1"
+        >
+          <!-- Section Header Button -->
+          <button
+            type="button"
+            @click="toggleSection(section.originalIndex)"
+            class="group flex items-center justify-between w-full px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 rounded transition-colors focus:outline-none"
+          >
+            <span class="truncate">{{ section.title }}</span>
 
-  </div>
-</div>
+            <div class="flex items-center gap-1.5 ml-2 flex-shrink-0">
+              <!-- Collapsed Section Unread Badge -->
+              <span
+                v-if="sectionUnreadCount(section) > 0"
+                class="px-1.5 py-0.5 text-[10px] font-bold normal-case text-white bg-rose-500 rounded leading-none"
+              >
+                {{ sectionUnreadCount(section) }}
+              </span>
+
+              <ChevronDown
+                class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200"
+                :class="{ 'rotate-180 text-slate-700': isSectionOpen(section) }"
+              />
+            </div>
+          </button>
+
+          <!-- Section Sub-items with Clean Vertical Guide Line -->
+          <div
+            v-show="isSectionOpen(section)"
+            class="space-y-0.5 border-l-2 border-slate-200/90 ml-3 pl-2 py-0.5 transition-all"
+          >
+            <router-link
+              v-for="item in section.items"
+              :key="item.name"
+              :to="item.to"
+              class="group flex items-center justify-between px-2 py-1 text-[12px] rounded transition-all duration-150"
+              :class="[
+                isItemActive(item)
+                  ? 'bg-primary/10 text-primary font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 font-medium'
+              ]"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <component
+                  :is="item.icon"
+                  class="w-3.5 h-3.5 flex-shrink-0 transition-colors"
+                  :class="isItemActive(item) ? 'text-primary' : 'text-slate-400 group-hover:text-primary'"
+                />
+                <span class="truncate">{{ item.name }}</span>
+              </div>
+
+              <div class="flex items-center gap-1 ml-2 flex-shrink-0">
+                <span
+                  v-if="item.notify && unreadCount(item.notify) > 0"
+                  class="px-1.5 py-0.5 text-[10px] font-bold text-white bg-rose-500 rounded leading-none"
+                >
+                  {{ unreadCount(item.notify) }}
+                </span>
+                <span
+                  v-else-if="isItemActive(item)"
+                  class="h-1.5 w-1.5 rounded-sm bg-primary"
+                ></span>
+              </div>
+            </router-link>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Empty State -->
+      <div
+        v-if="searchQuery && coreLinks.length === 0 && filteredMenuSections.length === 0"
+        class="px-3 py-6 text-center text-xs text-slate-500"
+      >
+        <p class="font-medium text-slate-700">No navigation items found</p>
+        <p class="mt-1 text-[11px] text-slate-400">Try a different search keyword</p>
+        <button
+          type="button"
+          @click="searchQuery = ''"
+          class="mt-2.5 inline-flex items-center px-2.5 py-1 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded transition"
+        >
+          Clear Filter
+        </button>
+      </div>
     </nav>
 
-    <!-- Settings Button -->
-    <div class="p-4 border-t border-gray-100 bg-white">
-      <router-link v-if="authStore.hasPermission('view-activity-logs')" :to="{ name: 'ActivityLog' }"
-        class="admin-sidebar-link w-full" :class="{ 'admin-sidebar-link-active': $route.name === 'ActivityLog' }">
-        <Settings class="admin-sidebar-icon" :class="{ 'admin-sidebar-icon-active': $route.name === 'ActivityLog' }" />
-        User Activities
+    <!-- Bottom Footer / User Activities -->
+    <div class="p-3 border-t border-slate-200 bg-white space-y-2 flex-shrink-0">
+      <router-link
+        v-if="authStore.hasPermission('view-activity-logs')"
+        :to="{ name: 'ActivityLog' }"
+        class="group flex items-center justify-between px-2.5 py-1.5 text-[12.5px] font-semibold rounded transition-all duration-150"
+        :class="[
+          $route.name === 'ActivityLog'
+            ? 'bg-primary text-white shadow-xs'
+            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+        ]"
+      >
+        <div class="flex items-center gap-2.5 min-w-0">
+          <Activity
+            class="w-4 h-4 flex-shrink-0 transition-colors"
+            :class="$route.name === 'ActivityLog' ? 'text-white' : 'text-slate-400 group-hover:text-primary'"
+          />
+          <span class="truncate">User Activities</span>
+        </div>
+        <span
+          v-if="$route.name === 'ActivityLog'"
+          class="h-1.5 w-1.5 rounded-sm bg-white"
+        ></span>
       </router-link>
-    </div>
-    <SocialLinks />
 
+      <!-- System Status / Version Indicator -->
+      <div class="flex items-center justify-between px-2 pt-1 text-xs text-slate-400">
+        <span class="font-medium text-slate-500">Jetze Admin</span>
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+          <span class="h-1.5 w-1.5 rounded-sm bg-emerald-500"></span>
+          Live
+        </span>
+      </div>
+
+      <SocialLinks />
+    </div>
   </aside>
 </template>
 
 <script setup>
 import {
-  ArrowLeftRight,
+  Activity,
   Banknote,
+  CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   DollarSign,
   GalleryHorizontal,
-  Landmark,
+  Inbox,
+  LandmarkIcon,
   LayoutDashboard,
+  MailPlus,
+  MessageSquare,
   Notebook,
-  Package,
-  PencilRuler,
   Plane,
   PlaneIcon,
+  Search,
   Settings,
-  ShoppingCart,
   Shield,
-  Ticket,
+  TagIcon,
+  TrendingUp,
   Truck,
   UserPlus,
   Users,
-  TagIcon,
-  LandmarkIcon,
-  MessageSquare,
-  MailPlus,
-  ChevronLeft,
-  ChevronRight,
-  XCircle,
-  TrendingUp,
+  X,
 } from "lucide-vue-next";
+import { GearIcon } from "@radix-icons/vue";
 import { computed, onBeforeUnmount, onMounted, ref, useAttrs, watch } from "vue";
-import { useRoute } from 'vue-router';
-import { useStore } from 'vuex';
+import { useRoute } from "vue-router";
+import { useStore } from "vuex";
 import { ADMIN_NOTIFICATION_SECTIONS, notificationKind } from "@/lib/notificationKinds";
 import SocialLinks from "../common/SocialLinks.vue";
-import { GearIcon } from "@radix-icons/vue";
 import { useAuthStore } from "@/services/stores/auth";
 import apiService from "@/services/store/apiService";
+
 const store = useStore();
 const authStore = useAuthStore();
+const route = useRoute();
+
 defineOptions({
   inheritAttrs: false,
 });
 const attrs = useAttrs();
+
 const menuSections = [
-  // {
-  //   title: "Agent / Users",
-  //   items: [
-  //     { name: "Agents", to: { name: "Users" }, icon: Users },
-  //     { name: "New Agent", to: { name: "NewUser" }, icon: UserPlus },
-  //   ],
-  // },
-   {
+  {
     title: "CMS",
     items: [
-      { name: "Popular Routes", to: { name: "PopularRoutes" }, icon: PlaneIcon, permission: 'manage-cms' },
-      { name: "Hot Deals", to: { name: "HotDeals" }, icon: PlaneIcon, permission: 'manage-cms' },
-      { name: "Top Airlines", to: { name: "TopAirlines" }, icon: Plane, permission: 'manage-cms' },
-      { name: "Airports", to: { name: "Airports" }, icon: PlaneIcon, permission: 'manage-cms' },
-      { name: "Blogs", to: { name: "Blogs" }, icon: UserPlus, permission: 'manage-cms' },
-      { name: "SEO Settings", to: { name: "SeoSettings" }, icon: Settings, permission: 'manage-cms' },
-      { name: "Reviews", to: { name: "AdminReviews" }, icon: MessageSquare, permission: 'manage-cms' },
-      { name: "Subcribers", to: { name: "Subcribers" }, icon: MailPlus, permission: 'manage-cms' },
-
+      { name: "Popular Routes", to: { name: "PopularRoutes" }, icon: PlaneIcon, permission: "manage-cms" },
+      { name: "Hot Deals", to: { name: "HotDeals" }, icon: PlaneIcon, permission: "manage-cms" },
+      { name: "Top Airlines", to: { name: "TopAirlines" }, icon: Plane, permission: "manage-cms" },
+      { name: "Airports", to: { name: "Airports" }, icon: PlaneIcon, permission: "manage-cms" },
+      { name: "Blogs", to: { name: "Blogs" }, icon: UserPlus, permission: "manage-cms" },
+      { name: "SEO Settings", to: { name: "SeoSettings" }, icon: Settings, permission: "manage-cms" },
+      { name: "Reviews", to: { name: "AdminReviews" }, icon: MessageSquare, permission: "manage-cms" },
+      { name: "Subcribers", to: { name: "Subcribers" }, icon: MailPlus, permission: "manage-cms" },
     ],
   },
   {
@@ -264,55 +324,35 @@ const menuSections = [
         name: "Top up Requests",
         to: { name: "TopUpRequest" },
         icon: Coins,
-        notify: 'deposit_submitted',
-        permission: 'manage-finance'
+        notify: "deposit_submitted",
+        permission: "manage-finance",
       },
-      // { name: "Refund Requests", to: { name: "" }, icon: ArrowLeftRight },
       {
         name: "Other Charges",
         to: { name: "OtherCharges" },
         icon: Truck,
-        permission: 'manage-finance'
+        permission: "manage-finance",
       },
       {
         name: "Banks",
         to: { name: "Banks" },
         icon: Banknote,
-        permission: 'manage-settings'
+        permission: "manage-settings",
       },
       {
         name: "Currencies",
         to: { name: "Currencies" },
         icon: DollarSign,
-        permission: 'manage-settings'
+        permission: "manage-settings",
       },
       {
         name: "Admin Ledger",
         to: { name: "AdminLedger" },
         icon: Banknote,
-        permission: 'view-ledger'
+        permission: "view-ledger",
       },
-      // {
-      //   name: "Profit Loss Report",
-      //   to: { name: "ProfitLossReport" },
-      //   icon: Banknote,
-      //   permission: 'view-ledger'
-      // },
     ],
   },
-  // {
-  //   title: "Travel",
-  //   items: [
-  //     { name: "Visas", to: { name: "Visas" }, icon: Landmark },
-  //     { name: "Holidays", to: { name: "Holidays" }, icon: PencilRuler },
-  //     // { name: "DubaiAttraction", to: { name: "DubaiAttraction" }, icon: PencilRuler },
-  //     {
-  //       name: "Umrah Packages",
-  //       to: { name: "UmrahPackages" },
-  //       icon: Package,
-  //     },
-  //   ],
-  // },
   {
     title: "Marketing",
     items: [
@@ -320,7 +360,7 @@ const menuSections = [
         name: "Banners",
         to: { name: "Banners" },
         icon: GalleryHorizontal,
-        permission: 'manage-marketing'
+        permission: "manage-marketing",
       },
     ],
   },
@@ -331,20 +371,19 @@ const menuSections = [
         name: "Airlines",
         to: { name: "Airlines" },
         icon: Plane,
-        permission: 'manage-airlines'
+        permission: "manage-airlines",
       },
-      // add
       {
         name: "Promotions",
         to: { name: "Promotions" },
         icon: TagIcon,
-        permission: ["airlines_view"]
+        permission: ["airlines_view"],
       },
       {
         name: "Segment Margins",
         to: { name: "SegmentMargins" },
         icon: LandmarkIcon,
-        permission: ["airlines_view"]
+        permission: ["airlines_view"],
       },
     ],
   },
@@ -355,13 +394,13 @@ const menuSections = [
         name: "Staff",
         to: { name: "Staff" },
         icon: Users,
-        permission: 'manage-staff'
+        permission: "manage-staff",
       },
       {
         name: "Roles",
         to: { name: "Roles" },
         icon: Shield,
-        permission: 'manage-roles'
+        permission: "manage-roles",
       },
     ],
   },
@@ -372,79 +411,65 @@ const menuSections = [
         name: "Customers",
         to: { name: "Customers" },
         icon: Users,
-        notify: 'new_user',
-        permission: 'manage-customers'
-
+        notify: "new_user",
+        permission: "manage-customers",
       },
-      // {
-      //   name: "Customer Bookings",
-      //   to: { name: "AdminCustomerBookings" },
-      //   icon: ShoppingCart,
-      // },
       {
         name: "Customer Settings",
         to: { name: "CustomerMargin" },
         icon: GearIcon,
-        permission: 'manage-settings'
+        permission: "manage-settings",
       },
     ],
   },
-
 ];
 
+// Interactive Quick Search State
+const searchQuery = ref("");
+
+// Mobile drawer controls
 const isMobileOpen = ref(false);
-function toggleSidebar(){
-    if(window.innerWidth < 1024){
-        isMobileOpen.value = !isMobileOpen.value;
-        if(isMobileOpen.value){
-            document.body.classList.add('overflow-hidden');
-        } else {
-            document.body.classList.remove('overflow-hidden');
-        }
+function toggleSidebar() {
+  if (window.innerWidth < 1024) {
+    isMobileOpen.value = !isMobileOpen.value;
+    if (isMobileOpen.value) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
     }
+  }
 }
 
-function closeSidebar(){
-    if(window.innerWidth < 1024){
-        isMobileOpen.value = false;
-        document.body.classList.remove('overflow-hidden');
-    }
+function closeSidebar() {
+  if (window.innerWidth < 1024) {
+    isMobileOpen.value = false;
+    document.body.classList.remove("overflow-hidden");
+  }
 }
+
 function handleResize() {
-    // When resizing from mobile to desktop, ensure sidebar is visible
-    if (window.innerWidth > 1024) {
-        // On desktop, close mobile state and reset body overflow
-        isMobileOpen.value = false;
-        document.body.style.overflow = '';
-    }
+  if (window.innerWidth > 1024) {
+    isMobileOpen.value = false;
+    document.body.classList.remove("overflow-hidden");
+  }
 }
+
+// Pending Requests Count
 const pendingRequestsCount = ref(0);
 
 async function loadPendingRequestsCount() {
-  if (!authStore.hasPermission('manage-bookings')) return;
+  if (!authStore.hasPermission("manage-bookings")) return;
   try {
     const res = await apiService.fetchBookingRequestCounts();
     pendingRequestsCount.value = res.data?.pending ?? 0;
   } catch (err) {
-    // The badge is optional; the page itself reports load errors.
+    // Non-blocking notification badge
   }
 }
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  loadPendingRequestsCount()
-})
+// Notifications Integration
+const fetchedNotifications = computed(() => store.getters["notification/notifications"] || []);
 
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-})
-const route = useRoute();
-const fetchedNotifications = computed(() => store.getters['notification/notifications'] || []);
-const readAtCounter = computed(() => {
-  return fetchedNotifications.value.filter(n => !n.read_at).length;
-});
-
-// Unread notifications grouped by kind; updates live (the bell feeds the same store).
 const unreadByKind = computed(() => {
   const counts = {};
   for (const n of fetchedNotifications.value) {
@@ -454,55 +479,216 @@ const unreadByKind = computed(() => {
   }
   return counts;
 });
+
 const unreadCount = (kind) => unreadByKind.value[kind] || 0;
-const requestInboxCount = computed(() => pendingRequestsCount.value + unreadCount('modify_request_submitted'));
+const requestInboxCount = computed(() => pendingRequestsCount.value + unreadCount("modify_request_submitted"));
+
 const sectionUnreadCount = (section) =>
   (section?.items || []).reduce((sum, item) => sum + (item.notify ? unreadCount(item.notify) : 0), 0);
 
-// A new cancellation request keeps its accurate pending badge in sync.
-watch(() => unreadCount('booking_request_submitted'), () => loadPendingRequestsCount());
+watch(() => unreadCount("booking_request_submitted"), () => loadPendingRequestsCount());
 
-// Opening a section marks its notifications as read, which clears the badge.
 function markSectionNotificationsRead(routeName) {
   for (const [kind, routes] of Object.entries(ADMIN_NOTIFICATION_SECTIONS)) {
     if (!routes.includes(routeName)) continue;
     fetchedNotifications.value
       .filter((n) => !n.read_at && notificationKind(n) === kind)
-      .forEach((n) => store.dispatch('notification/readNotification', { id: n.id }));
+      .forEach((n) => store.dispatch("notification/readNotification", { id: n.id }));
   }
 }
-watch(() => route.name, (name) => markSectionNotificationsRead(name));
 
-// Initialize all sections as closed
-const openSections = ref(menuSections.map(() => false));
+// Accordion single-open state: Only one dropdown can be open at a time
+const openSectionIndex = ref(null);
 
-// Toggle section open/closed state
 const toggleSection = (index) => {
-  openSections.value[index] = !openSections.value[index];
+  if (openSectionIndex.value === index) {
+    // If currently open section is clicked, close it
+    openSectionIndex.value = null;
+  } else {
+    // Otherwise open this section and close any previously open section
+    openSectionIndex.value = index;
+  }
 };
+
+function isSectionOpen(section) {
+  if (searchQuery.value.trim()) return true;
+  return openSectionIndex.value === section.originalIndex;
+}
+
+// Active Route Helpers
+function isLinkActive(link) {
+  if (link.activeRoutes && link.activeRoutes.length) {
+    return link.activeRoutes.includes(route.name);
+  }
+  return route.name === link.to.name;
+}
+
+function isItemActive(item) {
+  if (route.name === item.to.name) return true;
+  const relatedRoutes = {
+    TopUpRequest: ["TopUpRequest", "DepositDetails"],
+    Staff: ["Staff", "NewStaff", "UpdateStaff"],
+    Promotions: ["Promotions", "NewPromotion", "UpdatePromotion"],
+    SegmentMargins: ["SegmentMargins", "NewSegmentMargin", "UpdateSegmentMargin"],
+    Customers: ["Customers", "CustomerDetails", "UpdateCustomer"],
+  };
+  return relatedRoutes[item.to.name]?.includes(route.name) ?? false;
+}
+
+// Auto-expand active section on load or route change (single section open)
+function autoExpandActiveSection() {
+  const currentName = route.name;
+  if (!currentName) return;
+
+  for (let index = 0; index < menuSections.length; index++) {
+    const section = menuSections[index];
+    const hasActiveItem = section.items.some((item) => isItemActive(item));
+    if (hasActiveItem) {
+      openSectionIndex.value = index;
+      break;
+    }
+  }
+}
+
+// Core Links definition with dynamic filter
+const coreLinks = computed(() => {
+  const links = [
+    {
+      name: "Dashboard",
+      to: { name: "Dashboard" },
+      icon: LayoutDashboard,
+      visible: authStore.user?.role === "admin",
+      activeRoutes: ["Dashboard"],
+      badge: 0,
+      badgeColor: "",
+    },
+    {
+      name: "Bookings",
+      to: { name: "AdminCustomerBookings" },
+      icon: Notebook,
+      visible: authStore.hasPermission("view-bookings"),
+      activeRoutes: [
+        "AdminCustomerBookings",
+        "Bookings",
+        "AdminHotelBookings",
+        "AdminHotelBookingDetails",
+        "CustomerBookingDetails",
+        "BookingDetails",
+      ],
+      badge: unreadCount("booking_created"),
+      badgeColor: "bg-rose-500 text-white",
+    },
+    {
+      name: "Travel Calendar",
+      to: { name: "TravelCalendar" },
+      icon: CalendarDays,
+      visible: authStore.hasPermission("view-bookings"),
+      activeRoutes: ["TravelCalendar"],
+      badge: 0,
+      badgeColor: "",
+    },
+    {
+      name: "Insights",
+      to: { name: "MarketingInsights" },
+      icon: TrendingUp,
+      visible: authStore.user?.role === "admin",
+      activeRoutes: ["MarketingInsights"],
+      badge: 0,
+      badgeColor: "",
+    },
+    {
+      name: "Request Inbox",
+      to: { name: "BookingRequests" },
+      icon: Inbox,
+      visible: authStore.hasPermission("manage-bookings"),
+      activeRoutes: ["BookingRequests", "VoidBookings"],
+      badge: requestInboxCount.value,
+      badgeColor: "bg-amber-500 text-white",
+    },
+  ];
+
+  const query = searchQuery.value.trim().toLowerCase();
+  return links.filter((link) => {
+    if (!link.visible) return false;
+    if (!query) return true;
+    return link.name.toLowerCase().includes(query);
+  });
+});
+
+// Menu Sections filtered by permissions and search query
+const filteredMenuSections = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+
+  return menuSections
+    .map((section, sectionIndex) => {
+      const authorizedItems = section.items.filter(
+        (item) => !item.permission || authStore.hasPermission(item.permission)
+      );
+
+      if (!query) {
+        return {
+          ...section,
+          originalIndex: sectionIndex,
+          items: authorizedItems,
+          matchesQuery: authorizedItems.length > 0,
+        };
+      }
+
+      const titleMatches = section.title.toLowerCase().includes(query);
+      const matchingItems = authorizedItems.filter((item) =>
+        item.name.toLowerCase().includes(query)
+      );
+
+      return {
+        ...section,
+        originalIndex: sectionIndex,
+        items: titleMatches ? authorizedItems : matchingItems,
+        matchesQuery: titleMatches || matchingItems.length > 0,
+      };
+    })
+    .filter((section) => section.matchesQuery && section.items.length > 0);
+});
+
+// Lifecycle Hooks & Route Watchers
+onMounted(() => {
+  window.addEventListener("resize", handleResize);
+  loadPendingRequestsCount();
+  autoExpandActiveSection();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", handleResize);
+});
+
+watch(
+  () => route.name,
+  (name) => {
+    markSectionNotificationsRead(name);
+    autoExpandActiveSection();
+    if (window.innerWidth < 1024) {
+      closeSidebar();
+    }
+  }
+);
 </script>
 
 <style scoped>
-/* Hide scrollbar for Chrome, Safari and Opera */
-.overflow-y-auto::-webkit-scrollbar {
-  display: none;
+/* Custom slim scrollbar */
+.custom-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-.overflow-y-auto {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
-}
-.overflow-y-auto::-webkit-scrollbar {
-  display: none;
+.custom-sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-.overflow-y-auto {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.custom-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
+.custom-sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 2px;
+}
 </style>

@@ -108,6 +108,10 @@ class BookingRequestService
     public function approve(BookingRequest $request, User $admin, float $penalty = 0.0, ?string $remarks = null): BookingRequest
     {
         $approved = DB::transaction(function () use ($request, $admin, $penalty, $remarks) {
+            // Lock in the same order as direct booking cancellation: booking,
+            // then application. This prevents an approval and cancellation from
+            // each holding one row while waiting for the other.
+            $booking = FlightBookings::with('priceSnapshot')->lockForUpdate()->findOrFail($request->booking_id);
             $locked = BookingRequest::lockForUpdate()->findOrFail($request->id);
             $this->ensureReviewable($locked, 'approved');
 
@@ -119,7 +123,12 @@ class BookingRequestService
                 ]);
             }
 
-            $booking = FlightBookings::with('priceSnapshot')->lockForUpdate()->findOrFail($locked->booking_id);
+            if (in_array(strtolower(trim((string) $booking->status)), self::CLOSED_BOOKING_STATUSES, true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'This request cannot be approved because the booking has already been closed.',
+                ]);
+            }
+
             $requestedPaxIds = $locked->passengers()->pluck('flight_passengers.id')->all();
 
             $alreadySettled = FlightPassenger::whereIn('id', $requestedPaxIds)
@@ -209,6 +218,24 @@ class BookingRequestService
         });
 
         return $cancelled->load(self::RELATIONS);
+    }
+
+    /**
+     * A direct booking cancellation supersedes any customer void/refund
+     * application that has not been decided yet. Keep the application for the
+     * audit trail, but make it terminal so it cannot later be approved and
+     * create a second settlement.
+     */
+    public function cancelOpenRequestsForBooking(FlightBookings $booking, string $reason): int
+    {
+        return BookingRequest::query()
+            ->where('booking_id', $booking->id)
+            ->whereIn('status', BookingRequest::OPEN_STATUSES)
+            ->update([
+                'status' => 'cancelled',
+                'failure_reason' => $reason,
+                'updated_at' => now(),
+            ]);
     }
 
     /**

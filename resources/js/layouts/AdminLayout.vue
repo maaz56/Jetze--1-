@@ -4,11 +4,11 @@ import Sidebar from "@/components/admin/Sidebar.vue";
 </script>
 
 <template>
-    <div class="flex h-screen overflow-hidden">
+    <div class="flex h-screen overflow-hidden bg-slate-50">
         <Sidebar class="flex-shrink-0" />
         <div class="flex min-w-0 flex-grow flex-col overflow-hidden">
             <Nav />
-            <main class="flex-grow overflow-y-auto bg-gray-50 p-4 lg:p-8">
+            <main class="flex-grow overflow-y-auto bg-slate-50/80 p-4 lg:p-6">
                 <router-view></router-view>
             </main>
         </div>
@@ -16,5 +16,4 @@ import Sidebar from "@/components/admin/Sidebar.vue";
 </template>
 
 <style scoped>
-/* Add any component-specific styles here */
 </style>

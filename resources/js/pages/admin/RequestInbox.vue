@@ -11,7 +11,7 @@ const router = useRouter();
 const inboxTabs = ["all", "void", "refund", "modify"];
 
 const activeTab = computed(() =>
-    inboxTabs.includes(route.query.inbox) ? route.query.inbox : "all",
+    inboxTabs.includes(route.query.inbox) ? route.query.inbox : "all"
 );
 
 function selectTab(tab) {
@@ -28,57 +28,62 @@ function selectTab(tab) {
 </script>
 
 <template>
-    <section class="mx-auto max-w-7xl">
-        <div class="border-b border-gray-200 bg-white">
-            <div class="flex overflow-x-auto scrollbar-hide" role="tablist" aria-label="Request inbox section">
+    <section class="space-y-6">
+        <!-- Top Navigation Segmented Tabs Bar -->
+        <div class="rounded border border-slate-200 bg-white p-2 shadow-xs">
+            <div class="flex overflow-x-auto scrollbar-hide gap-1.5" role="tablist" aria-label="Request inbox categories">
                 <button
                     type="button"
-                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
-                    :class="activeTab === 'all' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    class="flex shrink-0 items-center gap-2 rounded px-4 py-2 text-xs font-semibold transition cursor-pointer"
+                    :class="activeTab === 'all' ? 'bg-primary text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
                     :aria-selected="activeTab === 'all'"
                     role="tab"
                     @click="selectTab('all')"
                 >
-                    <Inbox class="h-4 w-4" aria-hidden="true" />
-                    All Requests
+                    <Inbox class="h-4 w-4" />
+                    <span>All Requests</span>
                 </button>
+
                 <button
                     type="button"
-                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
-                    :class="activeTab === 'void' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    class="flex shrink-0 items-center gap-2 rounded px-4 py-2 text-xs font-semibold transition cursor-pointer"
+                    :class="activeTab === 'void' ? 'bg-primary text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
                     :aria-selected="activeTab === 'void'"
                     role="tab"
                     @click="selectTab('void')"
                 >
-                    <Ban class="h-4 w-4" aria-hidden="true" />
-                    Void Requests
+                    <Ban class="h-4 w-4" />
+                    <span>Void Requests</span>
                 </button>
+
                 <button
                     type="button"
-                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
-                    :class="activeTab === 'refund' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    class="flex shrink-0 items-center gap-2 rounded px-4 py-2 text-xs font-semibold transition cursor-pointer"
+                    :class="activeTab === 'refund' ? 'bg-primary text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
                     :aria-selected="activeTab === 'refund'"
                     role="tab"
                     @click="selectTab('refund')"
                 >
-                    <CircleX class="h-4 w-4" aria-hidden="true" />
-                    Refund Requests
+                    <CircleX class="h-4 w-4" />
+                    <span>Refund Requests</span>
                 </button>
+
                 <button
                     type="button"
-                    class="flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:px-6 sm:py-4 sm:text-sm"
-                    :class="activeTab === 'modify' ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                    class="flex shrink-0 items-center gap-2 rounded px-4 py-2 text-xs font-semibold transition cursor-pointer"
+                    :class="activeTab === 'modify' ? 'bg-primary text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'"
                     :aria-selected="activeTab === 'modify'"
                     role="tab"
                     @click="selectTab('modify')"
                 >
-                    <FilePenLine class="h-4 w-4" aria-hidden="true" />
-                    Modify Requests
+                    <FilePenLine class="h-4 w-4" />
+                    <span>Modify Requests</span>
                 </button>
             </div>
         </div>
 
-        <div class="rounded-b-lg bg-white shadow-sm">
+        <!-- Embedded Content View -->
+        <div class="rounded border border-slate-200 bg-white shadow-xs overflow-hidden">
             <AllRequests v-if="activeTab === 'all'" />
             <BookingRequests v-else-if="activeTab === 'void'" embedded request-type="void" />
             <BookingRequests v-else-if="activeTab === 'refund'" embedded request-type="refund" />

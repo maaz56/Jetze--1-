@@ -1,25 +1,126 @@
 <template>
-    <div class="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto bg-white rounded-lg border p-6 sm:p-8">
-            <h1 class="text-2xl font-bold text-gray-900 mb-6">New Offline Booking</h1>
-            <!-- Agent Selection Section -->
-            <div class="mb-6">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Agent Selection</h2>
-                <label for="agent" class="block text-sm font-medium text-gray-700 mb-1">Select Agent</label>
+    <div class="space-y-5">
+        <!-- Top Bar Header -->
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-8 px-2.5 text-xs rounded border-slate-200 text-slate-600 hover:bg-slate-100 max-sm:hidden"
+                    @click="router.back()"
+                >
+                    <ArrowLeft class="w-3.5 h-3.5 mr-1" />
+                    Back
+                </Button>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                        New Offline Flight Booking
+                    </h1>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Issue direct offline airline tickets, passenger manifests, and manual PNR ledger bookings
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <Button
+                    type="button"
+                    class="h-9 px-4 text-xs font-semibold rounded bg-primary text-white hover:bg-primary/90 shadow-xs flex items-center gap-1.5"
+                    :disabled="isSubmitting"
+                    @click="submitForm"
+                >
+                    <Ticket class="w-4 h-4" />
+                    <span>{{ isSubmitting ? 'Processing Booking...' : 'Save Booking' }}</span>
+                </Button>
+            </div>
+        </div>
+
+        <!-- KPI / Configuration Summary Ribbon -->
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div class="rounded border border-slate-200 bg-white p-3.5 shadow-xs">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[11px] font-bold uppercase tracking-wider">Flight Type</span>
+                    <PlaneTakeoff class="h-4 w-4 text-primary" />
+                </div>
+                <div class="mt-1 text-sm font-bold text-slate-900 capitalize">
+                    {{ localValue.flightType.replace('-', ' ') }}
+                </div>
+            </div>
+
+            <div class="rounded border border-slate-200 bg-white p-3.5 shadow-xs">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[11px] font-bold uppercase tracking-wider">Total Travelers</span>
+                    <Users class="h-4 w-4 text-sky-500" />
+                </div>
+                <div class="mt-1 text-sm font-bold text-sky-700">
+                    {{ totalTravelers }} Passenger{{ totalTravelers > 1 ? 's' : '' }}
+                </div>
+            </div>
+
+            <div class="rounded border border-slate-200 bg-white p-3.5 shadow-xs">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[11px] font-bold uppercase tracking-wider">Assigned Agent</span>
+                    <UserCheck class="h-4 w-4 text-emerald-500" />
+                </div>
+                <div class="mt-1 text-xs font-bold text-emerald-700 truncate" :title="selectedAgent?.email || 'Direct Booking'">
+                    {{ selectedAgent ? selectedAgent.email : 'Direct Booking' }}
+                </div>
+            </div>
+
+            <div class="rounded border border-slate-200 bg-white p-3.5 shadow-xs">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[11px] font-bold uppercase tracking-wider">Total Amount</span>
+                    <CreditCard class="h-4 w-4 text-amber-500" />
+                </div>
+                <div class="mt-1 text-sm font-bold text-slate-900">
+                    {{ amount ? `PKR ${Number(amount).toLocaleString()}` : 'PKR 0.00' }}
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. Agent Selection Section -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <UserCheck class="w-4 h-4 text-primary" />
+                        <span>Agent / Partner Assignment</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                        Link this booking to a registered travel agency account or manage as a direct office booking
+                    </p>
+                </div>
+                <span v-if="selectedAgent" class="text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {{ selectedAgent.role || 'Agent' }}
+                </span>
+            </div>
+
+            <div class="max-w-md space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-700">Select Travel Agent</label>
                 <Popover v-model:open="isOpen">
                     <PopoverTrigger
-                        class="w-1/3 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
-                        {{ selectedAgent ? selectedAgent.email : 'Select an agent' }}
+                        class="w-full h-9 px-3 text-left rounded border border-slate-200 bg-white text-xs text-slate-800 hover:bg-slate-50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition flex items-center justify-between"
+                    >
+                        <span class="truncate">{{ selectedAgent ? `${selectedAgent.email} (${selectedAgent.role})` : 'Search & select an agent...' }}</span>
+                        <Search class="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2" />
                     </PopoverTrigger>
-                    <PopoverContent class="w-[300px] p-0">
-                        <Command>
-                            <CommandInput placeholder="Search agents..." v-model="searchQuery" class="h-9" />
-                            <CommandList>
-                                <CommandEmpty>No agents found.</CommandEmpty>
+                    <PopoverContent class="w-[320px] p-0 rounded border border-slate-200 bg-white shadow-lg">
+                        <Command class="rounded border-0">
+                            <CommandInput placeholder="Type email or role to search..." v-model="searchQuery" class="h-9 text-xs" />
+                            <CommandList class="max-h-56">
+                                <CommandEmpty class="p-3 text-xs text-slate-500 text-center">No agents found.</CommandEmpty>
                                 <CommandGroup>
-                                    <CommandItem v-for="user in filteredUsers" :key="user.id" :value="user.email"
-                                        @select="() => { selectAgent(user); isOpen = false; }" class="cursor-pointer">
-                                        {{ user.email }} ({{ user.role }})
+                                    <CommandItem
+                                        v-for="user in filteredUsers"
+                                        :key="user.id"
+                                        :value="user.email"
+                                        @select="() => { selectAgent(user); isOpen = false; }"
+                                        class="cursor-pointer text-xs py-2 px-3 hover:bg-slate-100 flex items-center justify-between"
+                                    >
+                                        <span class="truncate font-medium text-slate-800">{{ user.email }}</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 ml-2 flex-shrink-0">
+                                            {{ user.role }}
+                                        </span>
                                     </CommandItem>
                                 </CommandGroup>
                             </CommandList>
@@ -27,399 +128,597 @@
                     </PopoverContent>
                 </Popover>
             </div>
+        </div>
 
-            <!-- Travel Route Selection Section -->
-            <div class="mb-6">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Travel Route Selection</h2>
-                <div class="flex justify-between">
-                    <Tabs v-model="localValue.flightType" class="w-full">
-                        <TabsList class="grid grid-cols-3 mb-4 bg-white border justify-self-start w-full md:w-fit">
-                            <TabsTrigger value="one-way">One Way</TabsTrigger>
-                            <TabsTrigger value="return">Return</TabsTrigger>
-                            <TabsTrigger value="multi-city">Multi-City</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-                    <div class="flex gap-3 items-center">
-                        <Select v-model="localValue.classType" class="min-w-[140px]">
-                            <SelectTrigger class="gap-2 bg-white text-xs sm:text-sm w-full sm:w-40">
-                                <SelectValue placeholder="Cabin Class" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Y">{{ $t('economy') }}</SelectItem>
-                                <SelectItem value="S">{{ $t('premium_economy') }}</SelectItem>
-                                <SelectItem value="S">{{ $t('business') }}</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Popover>
-                            <PopoverTrigger as-child>
-                                <Button variant="outline" class="text-xs sm:text-sm bg-white">
-                                    {{ totalTravelers }} Traveler{{ totalTravelers > 1 ? 's' : '' }}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent class="w-64 p-4">
-                                <div class="space-y-4">
-                                    <div>
-                                        <Label for="adult-field">Adult</Label>
-                                        <NumberField id="adult-field" v-model="localValue.adult" :min="1"
-                                            :max="maxAdults" @update:modelValue="handleAdultChange">
-                                            <NumberFieldContent>
-                                                <NumberFieldDecrement />
-                                                <NumberFieldInput />
-                                                <NumberFieldIncrement />
-                                            </NumberFieldContent>
-                                        </NumberField>
-                                    </div>
-                                    <div>
-                                        <Label for="child-field">Child</Label>
-                                        <NumberField id="child-field" v-model="localValue.child" :min="0"
-                                            :max="maxChildren" @update:modelValue="handleChildChange">
-                                            <NumberFieldContent>
-                                                <NumberFieldDecrement />
-                                                <NumberFieldInput />
-                                                <NumberFieldIncrement />
-                                            </NumberFieldContent>
-                                        </NumberField>
-                                    </div>
-                                    <div>
-                                        <Label for="infant-field">Infant</Label>
-                                        <NumberField id="infant-field" v-model="localValue.infant" :min="0"
-                                            :max="maxInfants" @update:modelValue="handleInfantChange">
-                                            <NumberFieldContent>
-                                                <NumberFieldDecrement />
-                                                <NumberFieldInput />
-                                                <NumberFieldIncrement />
-                                            </NumberFieldContent>
-                                        </NumberField>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
+        <!-- 2. Travel Route Selection Section -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <PlaneTakeoff class="w-4 h-4 text-primary" />
+                        <span>Travel Route & Schedule</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                        Configure origin, destination, departure dates, flight segments, and cabin tier
+                    </p>
                 </div>
-
-                <div class="gap-2 grid grid-cols-1 md:grid-cols-3"
-                    v-if="localValue.flightType === 'one-way' || localValue.flightType === 'return'">
-                    <div class="w-full">
-                        <Autocomplete v-model="localValue.origin" placeholder="Origin" :source="airports"
-                            :icon="'PlaneTakeoff'" />
-                        <div v-if="errors.origin" class="text-destructive mt-1 text-xs">{{ errors.origin }}</div>
-                    </div>
-                    <div class="w-full">
-                        <Autocomplete v-model="localValue.destination" placeholder="Destination" :source="airports"
-                            :icon="'PlaneLanding'" />
-                        <div v-if="errors.destination" class="text-destructive mt-1 text-xs">{{ errors.destination }}
-                        </div>
-                    </div>
-                    <div class="w-full" v-show="localValue.flightType === 'one-way'">
-                        <Calender v-model="localValue.dateRange.start" :minValue="todayDate" />
-                        <div v-if="errors.start" class="text-destructive mt-1 text-xs">{{ errors.start }}</div>
-                    </div>
-                    <div class="w-full" v-show="localValue.flightType === 'return'">
-                        <DateRangePicker :minValue="todayDate" v-model="localValue.dateRange" />
-                        <div v-if="errors.start" class="text-destructive mt-1 text-xs">{{ errors.start }}</div>
-                        <div v-if="errors.end" class="text-destructive mt-1 text-xs">{{ errors.end }}</div>
-                    </div>
-                </div>
-                <div v-else class="flex gap-2 flex-col">
-                    <div v-for="(trip, index) in localValue.multiCityTrips" :key="index"
-                        class="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3">
-                        <div class="w-full">
-                            <Autocomplete v-model="trip.origin" :label="`From (Trip ${index + 1})`"
-                                :placeholder="$t('origin')" :source="airports" class="w-full" />
-                            <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].origin"
-                                class="text-destructive mt-1 text-xs">
-                                {{ errors.multiCityTrips[index].origin }}
-                            </div>
-                        </div>
-                        <div class="w-full">
-                            <Autocomplete v-model="trip.destination" :label="`To (Trip ${index + 1})`"
-                                :placeholder="$t('destination')" :icon="'PlaneLanding'" :source="airports"
-                                class="w-full" />
-                            <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].destination"
-                                class="text-destructive mt-1 text-xs">
-                                {{ errors.multiCityTrips[index].destination }}
-                            </div>
-                        </div>
-                        <div class="w-full">
-                            <Calender v-model="trip.date"
-                                :minValue="index === 0 ? todayDate : localValue.multiCityTrips[index - 1]?.date || todayDate"
-                                class="w-full" />
-                            <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].date"
-                                class="text-destructive mt-1 text-xs">
-                                {{ errors.multiCityTrips[index].date }}
-                            </div>
-                        </div>
-                        <Button v-if="index >= 2" @click="removeTrip(index)"
-                            class="text-background h-10 bg-red-500 hover:bg-red-600 w-full sm:w-auto">
-                            Remove
-                        </Button>
-                    </div>
-                    <div class="flex justify-start">
-                        <Button variant="link" @click="addTrip">Add Trip</Button>
-                    </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 uppercase font-semibold">
+                        {{ localValue.flightType.replace('-', ' ') }}
+                    </span>
                 </div>
             </div>
 
-            <!-- Travellers Section -->
-            <div class="w-full mx-auto mt-1 bg-white shadow-sm border-gray-200">
-                <div class="p-4 sm:p-6 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
-                    <p class="text-lg sm:text-xl font-semibold text-gray-800">
-                        Traveller Details
-                        <span class="text-sm font-normal text-gray-600 block sm:inline mt-2 sm:mt-0 sm:ml-2">
-                            (Use all given names and surnames exactly as they appear on your passport/ID to avoid
-                            complications.)
-                        </span>
-                    </p>
-                    <div v-if="countdown !== null || countdown == '0'"
-                        class="border bg-white py-1.5 px-2 rounded-md text-primary text-xs sm:text-sm flex items-center h-10">
-                        {{ countdown }}
+            <!-- Route Type & Travelers Controls Bar -->
+            <div class="p-2.5 rounded border border-slate-200 bg-slate-50/80 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <!-- Segmented Trip Type Selector -->
+                <div class="inline-flex items-center rounded border border-slate-200 bg-white p-1 shadow-2xs w-full sm:w-auto">
+                    <button
+                        type="button"
+                        @click="setFlightType('one-way')"
+                        class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded transition-all select-none"
+                        :class="localValue.flightType === 'one-way'
+                            ? 'bg-primary text-white shadow-xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'"
+                    >
+                        <ArrowRight class="w-3.5 h-3.5" />
+                        <span>One Way</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="setFlightType('return')"
+                        class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded transition-all select-none"
+                        :class="localValue.flightType === 'return'
+                            ? 'bg-primary text-white shadow-xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'"
+                    >
+                        <ArrowLeftRight class="w-3.5 h-3.5" />
+                        <span>Round Trip / Return</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="setFlightType('multi-city')"
+                        class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded transition-all select-none"
+                        :class="localValue.flightType === 'multi-city'
+                            ? 'bg-primary text-white shadow-xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'"
+                    >
+                        <Milestone class="w-3.5 h-3.5" />
+                        <span>Multi-City</span>
+                    </button>
+                </div>
+
+                <!-- Right Side: Cabin Class & Travelers -->
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <!-- Cabin Class -->
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-slate-500 hidden sm:inline">Cabin:</span>
+                        <Select v-model="localValue.classType">
+                            <SelectTrigger class="h-9 w-36 rounded border-slate-200 bg-white text-xs font-medium">
+                                <SelectValue placeholder="Cabin Class" />
+                            </SelectTrigger>
+                            <SelectContent class="rounded border-slate-200 bg-white">
+                                <SelectItem value="Y" class="text-xs">{{ $t ? $t('economy') : 'Economy' }}</SelectItem>
+                                <SelectItem value="S" class="text-xs">{{ $t ? $t('premium_economy') : 'Premium Economy' }}</SelectItem>
+                                <SelectItem value="C" class="text-xs">{{ $t ? $t('business') : 'Business' }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Travelers Counter Popover -->
+                    <Popover>
+                        <PopoverTrigger as-child>
+                            <Button variant="outline" class="h-9 px-3 text-xs font-semibold rounded border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                                <Users class="w-3.5 h-3.5 text-slate-500" />
+                                <span>{{ totalTravelers }} Traveler{{ totalTravelers > 1 ? 's' : '' }}</span>
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent class="w-64 p-4 rounded border border-slate-200 bg-white shadow-lg space-y-3.5">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-1.5">
+                                Passenger Allocation
+                            </h4>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <Label for="adult-field" class="text-xs font-semibold text-slate-800">Adult</Label>
+                                        <p class="text-[10px] text-slate-400">12+ years</p>
+                                    </div>
+                                    <NumberField id="adult-field" v-model="localValue.adult" :min="1" :max="maxAdults" @update:modelValue="handleAdultChange" class="w-28">
+                                        <NumberFieldContent class="rounded border border-slate-200">
+                                            <NumberFieldDecrement class="rounded-l text-xs" />
+                                            <NumberFieldInput class="text-xs font-bold" />
+                                            <NumberFieldIncrement class="rounded-r text-xs" />
+                                        </NumberFieldContent>
+                                    </NumberField>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <Label for="child-field" class="text-xs font-semibold text-slate-800">Child</Label>
+                                        <p class="text-[10px] text-slate-400">2 - 11 years</p>
+                                    </div>
+                                    <NumberField id="child-field" v-model="localValue.child" :min="0" :max="maxChildren" @update:modelValue="handleChildChange" class="w-28">
+                                        <NumberFieldContent class="rounded border border-slate-200">
+                                            <NumberFieldDecrement class="rounded-l text-xs" />
+                                            <NumberFieldInput class="text-xs font-bold" />
+                                            <NumberFieldIncrement class="rounded-r text-xs" />
+                                        </NumberFieldContent>
+                                    </NumberField>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <Label for="infant-field" class="text-xs font-semibold text-slate-800">Infant</Label>
+                                        <p class="text-[10px] text-slate-400">Under 2 years</p>
+                                    </div>
+                                    <NumberField id="infant-field" v-model="localValue.infant" :min="0" :max="maxInfants" @update:modelValue="handleInfantChange" class="w-28">
+                                        <NumberFieldContent class="rounded border border-slate-200">
+                                            <NumberFieldDecrement class="rounded-l text-xs" />
+                                            <NumberFieldInput class="text-xs font-bold" />
+                                            <NumberFieldIncrement class="rounded-r text-xs" />
+                                        </NumberFieldContent>
+                                    </NumberField>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            </div>
+
+            <!-- Route Inputs: One-Way Mode -->
+            <div
+                v-if="localValue.flightType === 'one-way'"
+                class="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1"
+            >
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Origin Airport <span class="text-rose-500">*</span></label>
+                    <AdminAirportSelect
+                        v-model="localValue.origin"
+                        placeholder="Select origin airport (e.g. KHI)..."
+                        :source="airports"
+                        icon="PlaneTakeoff"
+                        :has-error="!!errors.origin"
+                    />
+                    <div v-if="errors.origin" class="text-rose-600 text-[11px] font-medium">{{ errors.origin }}</div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-semibold text-slate-700">Destination Airport <span class="text-rose-500">*</span></label>
+                        <button
+                            type="button"
+                            @click="swapAirports"
+                            class="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition"
+                            title="Swap Origin and Destination"
+                        >
+                            <ArrowLeftRight class="w-3 h-3" />
+                            <span>Swap</span>
+                        </button>
+                    </div>
+                    <AdminAirportSelect
+                        v-model="localValue.destination"
+                        placeholder="Select destination airport (e.g. DXB)..."
+                        :source="airports"
+                        icon="PlaneLanding"
+                        :has-error="!!errors.destination"
+                    />
+                    <div v-if="errors.destination" class="text-rose-600 text-[11px] font-medium">{{ errors.destination }}</div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Departure Date <span class="text-rose-500">*</span></label>
+                    <Calender v-model="localValue.dateRange.start" :minValue="todayDate" class="rounded border border-slate-200" />
+                    <div v-if="errors.start" class="text-rose-600 text-[11px] font-medium">{{ errors.start }}</div>
+                </div>
+            </div>
+
+            <!-- Route Inputs: Return / Round Trip Mode -->
+            <div
+                v-else-if="localValue.flightType === 'return'"
+                class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1"
+            >
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Origin Airport <span class="text-rose-500">*</span></label>
+                    <AdminAirportSelect
+                        v-model="localValue.origin"
+                        placeholder="Select origin (e.g. KHI)..."
+                        :source="airports"
+                        icon="PlaneTakeoff"
+                        :has-error="!!errors.origin"
+                    />
+                    <div v-if="errors.origin" class="text-rose-600 text-[11px] font-medium">{{ errors.origin }}</div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-semibold text-slate-700">Destination Airport <span class="text-rose-500">*</span></label>
+                        <button
+                            type="button"
+                            @click="swapAirports"
+                            class="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition"
+                            title="Swap Origin and Destination"
+                        >
+                            <ArrowLeftRight class="w-3 h-3" />
+                            <span>Swap</span>
+                        </button>
+                    </div>
+                    <AdminAirportSelect
+                        v-model="localValue.destination"
+                        placeholder="Select destination (e.g. DXB)..."
+                        :source="airports"
+                        icon="PlaneLanding"
+                        :has-error="!!errors.destination"
+                    />
+                    <div v-if="errors.destination" class="text-rose-600 text-[11px] font-medium">{{ errors.destination }}</div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Departure Date <span class="text-rose-500">*</span></label>
+                    <Calender v-model="localValue.dateRange.start" :minValue="todayDate" class="rounded border border-slate-200" />
+                    <div v-if="errors.start" class="text-rose-600 text-[11px] font-medium">{{ errors.start }}</div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Return Date <span class="text-rose-500">*</span></label>
+                    <Calender
+                        v-model="localValue.dateRange.end"
+                        :minValue="localValue.dateRange.start || todayDate"
+                        class="rounded border border-slate-200"
+                    />
+                    <div v-if="errors.end" class="text-rose-600 text-[11px] font-medium">{{ errors.end }}</div>
+                </div>
+            </div>
+
+            <!-- Route Inputs: Multi-City Mode -->
+            <div v-else class="space-y-3 pt-1">
+                <div
+                    v-for="(trip, index) in localValue.multiCityTrips"
+                    :key="index"
+                    class="p-3.5 rounded border border-slate-200 bg-slate-50/50 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end"
+                >
+                    <div class="sm:col-span-5 space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Segment {{ index + 1 }} Origin <span class="text-rose-500">*</span>
+                        </label>
+                        <AdminAirportSelect
+                            v-model="trip.origin"
+                            :placeholder="`Segment ${index + 1} Origin...`"
+                            :source="airports"
+                            icon="PlaneTakeoff"
+                            :has-error="!!(errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].origin)"
+                        />
+                        <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].origin" class="text-rose-600 text-[11px] font-medium">
+                            {{ errors.multiCityTrips[index].origin }}
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-4 space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Segment {{ index + 1 }} Destination <span class="text-rose-500">*</span>
+                        </label>
+                        <AdminAirportSelect
+                            v-model="trip.destination"
+                            :placeholder="`Segment ${index + 1} Destination...`"
+                            :source="airports"
+                            icon="PlaneLanding"
+                            :has-error="!!(errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].destination)"
+                        />
+                        <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].destination" class="text-rose-600 text-[11px] font-medium">
+                            {{ errors.multiCityTrips[index].destination }}
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2 space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Flight Date <span class="text-rose-500">*</span>
+                        </label>
+                        <Calender
+                            v-model="trip.date"
+                            :minValue="index === 0 ? todayDate : localValue.multiCityTrips[index - 1]?.date || todayDate"
+                            class="w-full rounded border border-slate-200"
+                        />
+                        <div v-if="errors.multiCityTrips && errors.multiCityTrips[index] && errors.multiCityTrips[index].date" class="text-rose-600 text-[11px] font-medium">
+                            {{ errors.multiCityTrips[index].date }}
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-1 flex items-center justify-end">
+                        <Button
+                            v-if="index >= 2"
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="h-10 w-10 p-0 rounded border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300"
+                            @click="removeTrip(index)"
+                            title="Remove Flight Segment"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </Button>
                     </div>
                 </div>
 
-                <div v-for="(traveller, index) in travellers" :key="`traveller-${index}`"
-                    class="border border-gray-100 mt-2 last:border-b-0">
-                    <Accordion type="single" collapsible class="mb-0">
+                <div class="pt-1">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 px-3 text-xs font-semibold rounded border-slate-200 text-primary hover:bg-primary/5 flex items-center gap-1.5"
+                        @click="addTrip"
+                    >
+                        <Plus class="w-3.5 h-3.5" />
+                        <span>Add Flight Segment</span>
+                    </Button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Travellers Section -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Users class="w-4 h-4 text-primary" />
+                        <span>Passenger Manifest Details</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                        Ensure given names and surnames match official passport or government ID exactly
+                    </p>
+                </div>
+
+                <div v-if="countdown !== null && countdown !== '0'" class="px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 text-xs font-mono font-bold flex items-center gap-1 self-start sm:self-auto">
+                    <span>Session: {{ countdown }}</span>
+                </div>
+            </div>
+
+            <!-- Traveler Accordions -->
+            <div class="space-y-3">
+                <div
+                    v-for="(traveller, index) in travellers"
+                    :key="`traveller-${index}`"
+                    class="rounded border border-slate-200 overflow-hidden"
+                >
+                    <Accordion type="single" collapsible class="border-0">
                         <AccordionItem :value="`traveller-${index}`" class="border-0">
-                            <AccordionTrigger
-                                class="p-4 border bg-gray-100 hover:bg-gray-50 transition-colors duration-200 rounded-none"
-                                :aria-expanded="index === 0 ? 'true' : undefined">
-                                <div class="flex items-center justify-between w-full">
+                            <AccordionTrigger class="p-3.5 bg-slate-50/70 hover:bg-slate-100/70 transition-colors border-0">
+                                <div class="flex items-center justify-between w-full pr-3">
                                     <div class="flex items-center gap-3">
-                                        <div
-                                            class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                                            <span class="text-primary font-semibold text-sm">{{ index + 1 }}</span>
+                                        <div class="w-7 h-7 bg-primary/10 rounded text-primary font-bold text-xs flex items-center justify-center">
+                                            {{ index + 1 }}
                                         </div>
-                                        <h3 class="text-lg sm:text-xl font-semibold text-gray-800">
-                                            {{ traveller.type }} Traveller {{ index + 1 }}
-                                        </h3>
+                                        <div class="text-left">
+                                            <h3 class="text-xs sm:text-sm font-bold text-slate-900">
+                                                {{ traveller.type === 'ADT' ? 'Adult' : traveller.type === 'CNN' ? 'Child' : 'Infant' }} Passenger {{ index + 1 }}
+                                            </h3>
+                                            <span class="text-[11px] text-slate-400 font-normal">
+                                                {{ traveller.firstName || traveller.lastName ? `${traveller.title} ${traveller.firstName} ${traveller.lastName}` : 'Incomplete manifest' }}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <button v-if="canRemoveTraveller" @click.stop="removeTraveller(index)"
-                                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:text-destructive h-8 px-3 text-destructive hover:bg-destructive/10">
-                                        <Trash2 class="w-4 h-4 me-2" />
-                                        Delete
+
+                                    <button
+                                        v-if="canRemoveTraveller"
+                                        type="button"
+                                        @click.stop="removeTraveller(index)"
+                                        class="h-7 px-2.5 rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 text-xs font-semibold flex items-center gap-1 transition"
+                                    >
+                                        <Trash2 class="w-3.5 h-3.5" />
+                                        <span>Remove</span>
                                     </button>
                                 </div>
                             </AccordionTrigger>
 
-                            <AccordionContent class="bg-white border-0 p-0">
-                                <!-- Gender Selection -->
-                                <div class="flex justify-between items-center px-4 sm:px-6 py-4">
-                                    <div class="bg-gray-50/50 border-b border-gray-100">
-                                        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-                                            <span class="text-sm font-medium text-gray-700">Gender <span
-                                                    class="text-red-500">*</span></span>
-                                            <RadioGroup class="flex flex-row gap-6" default-value="comfortable"
-                                                :orientation="'horizontal'" v-model="traveller.gender"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.gender`) }">
-                                                <div class="flex items-center space-x-2">
-                                                    <RadioGroupItem id="male" value="M" class="border-gray-300" />
-                                                    <Label for="male"
-                                                        class="text-sm font-medium text-gray-700">Male</Label>
-                                                </div>
-                                                <div class="flex items-center space-x-2">
-                                                    <RadioGroupItem id="female" value="F" class="border-gray-300" />
-                                                    <Label for="female"
-                                                        class="text-sm font-medium text-gray-700">Female</Label>
-                                                </div>
-                                            </RadioGroup>
-                                        </div>
-                                        <div v-if="getErrorPath(`travellers.${index}.gender`)"
-                                            class="error-message text-xs mt-2 text-red-500">
-                                            {{ getErrorPath(`travellers.${index}.gender`) }}
-                                        </div>
+                            <AccordionContent class="p-4 sm:p-5 bg-white border-t border-slate-100 space-y-4">
+                                <!-- Quick-fill Agent Traveller + Gender Row -->
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded bg-slate-50 border border-slate-100">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-xs font-semibold text-slate-700">Gender <span class="text-rose-500">*</span></span>
+                                        <RadioGroup
+                                            v-model="traveller.gender"
+                                            class="flex items-center gap-4"
+                                            :orientation="'horizontal'"
+                                        >
+                                            <div class="flex items-center space-x-1.5">
+                                                <RadioGroupItem id="male" value="M" class="accent-primary" />
+                                                <Label for="male" class="text-xs font-medium text-slate-700 cursor-pointer">Male</Label>
+                                            </div>
+                                            <div class="flex items-center space-x-1.5">
+                                                <RadioGroupItem id="female" value="F" class="accent-primary" />
+                                                <Label for="female" class="text-xs font-medium text-slate-700 cursor-pointer">Female</Label>
+                                            </div>
+                                        </RadioGroup>
                                     </div>
-                                    <Select v-if="agentTravellers.length > 0"
-                                        @update:modelValue="handleSelectedTravellerAgentChange($event, index)">
-                                        <SelectTrigger
-                                            class="h-10 text-sm bg-white w-[200px] border-gray-200 focus:border-primary focus:ring-primary/20">
-                                            <SelectValue placeholder="Select Traveller" />
-                                        </SelectTrigger>
-                                        <SelectContent class="bg-white border-gray-200 w-[200px]">
-                                            <SelectGroup>
-                                                <SelectItem :value="index"
-                                                    v-for="(agentTraveller, index) in agentTravellers"
-                                                    :key="agentTraveller.id">
-                                                    {{ agentTraveller.title }} {{ agentTraveller.first_name }} {{
-                                                    agentTraveller.last_name }}
-                                                </SelectItem>
-                                            </SelectGroup>
-                                        </SelectContent>
-                                    </Select>
+
+                                    <div v-if="agentTravellers.length > 0" class="flex items-center gap-2">
+                                        <span class="text-[11px] text-slate-500">Quick-Fill:</span>
+                                        <Select @update:modelValue="handleSelectedTravellerAgentChange($event, index)">
+                                            <SelectTrigger class="h-8 text-xs bg-white w-48 rounded border-slate-200">
+                                                <SelectValue placeholder="Saved Passenger" />
+                                            </SelectTrigger>
+                                            <SelectContent class="rounded border-slate-200 bg-white">
+                                                <SelectGroup>
+                                                    <SelectItem
+                                                        v-for="(agentTraveller, tIndex) in agentTravellers"
+                                                        :key="agentTraveller.id"
+                                                        :value="tIndex"
+                                                        class="text-xs"
+                                                    >
+                                                        {{ agentTraveller.title }} {{ agentTraveller.first_name }} {{ agentTraveller.last_name }}
+                                                    </SelectItem>
+                                                </SelectGroup>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div v-if="getErrorPath(`travellers.${index}.gender`)" class="text-rose-600 text-[11px] font-medium">
+                                    {{ getErrorPath(`travellers.${index}.gender`) }}
                                 </div>
 
-                                <!-- Personal Information -->
-                                <div class="p-4 sm:p-6">
-                                    <h4 class="text-base font-semibold text-gray-800 mb-4">Personal Information</h4>
-
-                                    <!-- First Grid: Personal Details -->
-                                    <div
-                                        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-                                        <div class="space-y-2">
-                                            <Label :for="`title-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                Title <span class="text-red-500">*</span>
-                                            </Label>
-                                            <Select v-model="traveller.title" :id="`title-${index}`"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.title`) }">
-                                                <SelectTrigger
-                                                    class="h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20">
-                                                    <SelectValue placeholder="Select title" />
-                                                </SelectTrigger>
-                                                <SelectContent class="bg-white border-gray-200">
-                                                    <SelectGroup>
-                                                        <SelectItem value="Mr">Mr</SelectItem>
-                                                        <SelectItem value="Mrs">Mrs</SelectItem>
-                                                        <SelectItem value="Ms">Ms</SelectItem>
-                                                        <SelectItem value="Miss">Miss</SelectItem>
-                                                        <SelectItem value="Mstr">Mstr</SelectItem>
-                                                    </SelectGroup>
-                                                </SelectContent>
-                                            </Select>
-                                            <div v-if="getErrorPath(`travellers.${index}.title`)"
-                                                class="error-message text-xs text-red-500">
-                                                {{ getErrorPath(`travellers.${index}.title`) }}
-                                            </div>
-                                        </div>
-
-                                        <div class="space-y-2">
-                                            <Label :for="`first-name-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                First Name <span class="text-red-500">*</span>
-                                            </Label>
-                                            <Input v-model="traveller.firstName" :id="`first-name-${index}`" type="text"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.firstName`) }"
-                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                placeholder="Enter first name"
-                                                @input="traveller.firstName = $event.target.value.toUpperCase()" />
-                                            <div v-if="getErrorPath(`travellers.${index}.firstName`)"
-                                                class="error-message text-xs text-red-500">
-                                                {{ getErrorPath(`travellers.${index}.firstName`) }}
-                                            </div>
-                                        </div>
-
-                                        <div class="space-y-2">
-                                            <Label :for="`last-name-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                Last Name <span class="text-red-500">*</span>
-                                            </Label>
-                                            <Input v-model="traveller.lastName" :id="`last-name-${index}`" type="text"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.lastName`) }"
-                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                placeholder="Enter last name"
-                                                @input="traveller.lastName = $event.target.value.toUpperCase()" />
-                                            <div v-if="getErrorPath(`travellers.${index}.lastName`)"
-                                                class="error-message text-xs text-red-500">
-                                                {{ getErrorPath(`travellers.${index}.lastName`) }}
-                                            </div>
-                                        </div>
-
-                                        <div class="space-y-2">
-                                            <Label :for="`date-of-birth-${index}`"
-                                                class="text-sm font-medium text-gray-700">
-                                                D.O.B
-                                                <span v-if="traveller.type == 'ADT'"
-                                                    class="text-xs text-red-500 font-normal">
-                                                    *Age Should be 12+
-                                                </span>
-                                                <span v-else-if="traveller.type == 'CNN'"
-                                                    class="text-xs text-red-500 font-normal">
-                                                    *Age 2 to 12 years
-                                                </span>
-                                                <span v-if="traveller.type == 'INF'"
-                                                    class="text-xs text-red-500 font-normal">
-                                                    *Age Less than 2
-                                                </span>
-                                            </Label>
-                                            <Calender v-model="traveller.dob" type="date" :dob-type="traveller.type" :minValue="dobMinDate" :maxValue="todayDate" :id="`date-of-birth-${index}`"
-                                                placeholder="Date Of Birth"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.dob`) }"
-                                                class="w-full h-8 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                            <div v-if="getErrorPath(`travellers.${index}.dob`)"
-                                                class="error-message text-xs text-red-500">
-                                                {{ getErrorPath(`travellers.${index}.dob`) }}
-                                            </div>
-                                        </div>
-                                        <div class="space-y-2">
-                                            <Label :for="`nationality-${index}`"
-                                                class="block text-sm font-medium text-gray-700 mb-1">
-                                                Nationality<span class="required">*</span>
-                                            </Label>
-                                            <CountryDropdown :keyValue="'code'" placeholder="SELECT NATIONALITY"
-                                                v-model="traveller.nationality"
-                                                @update:modelValue="(value) => traveller.issueCountry = value" />
-                                            <div v-if="getErrorPath(`travellers.${index}.nationality`)"
-                                                class="error-message text-xs text-red-500">
-                                                {{ getErrorPath(`travellers.${index}.nationality`) }}
-                                            </div>
+                                <!-- Personal Details Grid -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+                                    <div class="space-y-1">
+                                        <Label :for="`title-${index}`" class="text-xs font-semibold text-slate-700">
+                                            Title <span class="text-rose-500">*</span>
+                                        </Label>
+                                        <Select v-model="traveller.title" :id="`title-${index}`">
+                                            <SelectTrigger class="h-9 text-xs bg-white rounded border-slate-200">
+                                                <SelectValue placeholder="Title" />
+                                            </SelectTrigger>
+                                            <SelectContent class="rounded border-slate-200 bg-white">
+                                                <SelectGroup>
+                                                    <SelectItem value="Mr" class="text-xs">Mr</SelectItem>
+                                                    <SelectItem value="Mrs" class="text-xs">Mrs</SelectItem>
+                                                    <SelectItem value="Ms" class="text-xs">Ms</SelectItem>
+                                                    <SelectItem value="Miss" class="text-xs">Miss</SelectItem>
+                                                    <SelectItem value="Mstr" class="text-xs">Mstr</SelectItem>
+                                                </SelectGroup>
+                                            </SelectContent>
+                                        </Select>
+                                        <div v-if="getErrorPath(`travellers.${index}.title`)" class="text-rose-600 text-[11px] font-medium">
+                                            {{ getErrorPath(`travellers.${index}.title`) }}
                                         </div>
                                     </div>
 
-                                    <!-- Document Information -->
-                                    <h4 class="text-base font-semibold text-gray-800 mb-4">Document Information</h4>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                        <div class="space-y-2">
-                                            <Label :for="`document-type-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                Document Type <span class="text-red-500">*</span>
+                                    <div class="space-y-1">
+                                        <Label :for="`first-name-${index}`" class="text-xs font-semibold text-slate-700">
+                                            First / Given Name <span class="text-rose-500">*</span>
+                                        </Label>
+                                        <Input
+                                            :id="`first-name-${index}`"
+                                            v-model="traveller.firstName"
+                                            type="text"
+                                            placeholder="FIRST NAME"
+                                            class="h-9 text-xs rounded border-slate-200 bg-white uppercase"
+                                            @input="traveller.firstName = $event.target.value.toUpperCase()"
+                                        />
+                                        <div v-if="getErrorPath(`travellers.${index}.firstName`)" class="text-rose-600 text-[11px] font-medium">
+                                            {{ getErrorPath(`travellers.${index}.firstName`) }}
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <Label :for="`last-name-${index}`" class="text-xs font-semibold text-slate-700">
+                                            Last / Surname <span class="text-rose-500">*</span>
+                                        </Label>
+                                        <Input
+                                            :id="`last-name-${index}`"
+                                            v-model="traveller.lastName"
+                                            type="text"
+                                            placeholder="SURNAME"
+                                            class="h-9 text-xs rounded border-slate-200 bg-white uppercase"
+                                            @input="traveller.lastName = $event.target.value.toUpperCase()"
+                                        />
+                                        <div v-if="getErrorPath(`travellers.${index}.lastName`)" class="text-rose-600 text-[11px] font-medium">
+                                            {{ getErrorPath(`travellers.${index}.lastName`) }}
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <Label :for="`date-of-birth-${index}`" class="text-xs font-semibold text-slate-700">
+                                            Date of Birth <span class="text-rose-500">*</span>
+                                        </Label>
+                                        <Calender
+                                            :id="`date-of-birth-${index}`"
+                                            v-model="traveller.dob"
+                                            type="date"
+                                            :dob-type="traveller.type"
+                                            :minValue="dobMinDate"
+                                            :maxValue="todayDate"
+                                            placeholder="YYYY-MM-DD"
+                                            class="h-9 text-xs rounded border-slate-200 bg-white"
+                                        />
+                                        <div v-if="getErrorPath(`travellers.${index}.dob`)" class="text-rose-600 text-[11px] font-medium">
+                                            {{ getErrorPath(`travellers.${index}.dob`) }}
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <Label :for="`nationality-${index}`" class="text-xs font-semibold text-slate-700">
+                                            Nationality <span class="text-rose-500">*</span>
+                                        </Label>
+                                        <CountryDropdown
+                                            :keyValue="'code'"
+                                            placeholder="Nationality"
+                                            v-model="traveller.nationality"
+                                            @update:modelValue="(value) => traveller.issueCountry = value"
+                                            class="h-9 text-xs rounded border-slate-200"
+                                        />
+                                        <div v-if="getErrorPath(`travellers.${index}.nationality`)" class="text-rose-600 text-[11px] font-medium">
+                                            {{ getErrorPath(`travellers.${index}.nationality`) }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Document Information Grid -->
+                                <div class="pt-2 border-t border-slate-100">
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+                                        Passport & Document Verification
+                                    </h4>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                                        <div class="space-y-1">
+                                            <Label :for="`document-type-${index}`" class="text-xs font-semibold text-slate-700">
+                                                Document Type <span class="text-rose-500">*</span>
                                             </Label>
-                                            <Select v-model="traveller.documentType" :id="`document-type-${index}`"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.documentType`) }">
-                                                <SelectTrigger
-                                                    class="h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20">
-                                                    <SelectValue placeholder="Select type" />
+                                            <Select v-model="traveller.documentType" :id="`document-type-${index}`">
+                                                <SelectTrigger class="h-9 text-xs bg-white rounded border-slate-200">
+                                                    <SelectValue placeholder="Passport" />
                                                 </SelectTrigger>
-                                                <SelectContent class="bg-white border-gray-200">
+                                                <SelectContent class="rounded border-slate-200 bg-white">
                                                     <SelectGroup>
-                                                        <SelectItem value="passport">Passport</SelectItem>
+                                                        <SelectItem value="passport" class="text-xs">Passport</SelectItem>
                                                     </SelectGroup>
                                                 </SelectContent>
                                             </Select>
-                                            <div v-if="getErrorPath(`travellers.${index}.documentType`)"
-                                                class="error-message text-xs text-red-500">
+                                            <div v-if="getErrorPath(`travellers.${index}.documentType`)" class="text-rose-600 text-[11px] font-medium">
                                                 {{ getErrorPath(`travellers.${index}.documentType`) }}
                                             </div>
                                         </div>
 
-                                        <div class="space-y-2">
-                                            <Label :for="`document-no-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                Document Number <span class="text-red-500">*</span>
+                                        <div class="space-y-1">
+                                            <Label :for="`document-no-${index}`" class="text-xs font-semibold text-slate-700">
+                                                Passport Number <span class="text-rose-500">*</span>
                                             </Label>
-                                            <Input v-model="traveller.documentNo" :id="`document-no-${index}`"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.documentNo`) }"
+                                            <Input
+                                                :id="`document-no-${index}`"
+                                                v-model="traveller.documentNo"
                                                 type="text"
-                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20"
-                                                placeholder="Enter document number" />
-                                            <div v-if="getErrorPath(`travellers.${index}.documentNo`)"
-                                                class="error-message text-xs text-red-500">
+                                                placeholder="e.g. A12345678"
+                                                class="h-9 text-xs rounded border-slate-200 bg-white uppercase font-mono"
+                                            />
+                                            <div v-if="getErrorPath(`travellers.${index}.documentNo`)" class="text-rose-600 text-[11px] font-medium">
                                                 {{ getErrorPath(`travellers.${index}.documentNo`) }}
                                             </div>
                                         </div>
-                                        <div class=" space-y-2">
-                                            <Label :for="`expiry-date-${index}`"
-                                                class="block text-sm font-medium text-gray-700">
-                                                Expiry Date <span class="text-red-500">*</span>
+
+                                        <div class="space-y-1">
+                                            <Label :for="`expiry-date-${index}`" class="text-xs font-semibold text-slate-700">
+                                                Passport Expiry Date <span class="text-rose-500">*</span>
                                             </Label>
-                                            <Calender v-model="traveller.expiryDate" :id="`expiry-date-${index}`"
-                                                :minValue="expiryMinDate" :maxValue="expiryMaxDate"
-                                                :class="{ 'is-invalid': getErrorPath(`travellers.${index}.expiryDate`) }"
+                                            <Calender
+                                                :id="`expiry-date-${index}`"
+                                                v-model="traveller.expiryDate"
+                                                :minValue="expiryMinDate"
+                                                :maxValue="expiryMaxDate"
                                                 type="date"
-                                                class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                                            <div v-if="getErrorPath(`travellers.${index}.expiryDate`)"
-                                                class="error-message text-xs text-red-500">
+                                                placeholder="YYYY-MM-DD"
+                                                class="h-9 text-xs rounded border-slate-200 bg-white"
+                                            />
+                                            <div v-if="getErrorPath(`travellers.${index}.expiryDate`)" class="text-rose-600 text-[11px] font-medium">
                                                 {{ getErrorPath(`travellers.${index}.expiryDate`) }}
                                             </div>
                                         </div>
 
-                                        <div class="space-y-2">
-                                            <Label :for="`issue-country-${index}`"
-                                                class="block text-sm font-medium text-gray-700 mb-1">
-                                                Issue Country<span class="required">*</span>
+                                        <div class="space-y-1">
+                                            <Label :for="`issue-country-${index}`" class="text-xs font-semibold text-slate-700">
+                                                Issuing Country <span class="text-rose-500">*</span>
                                             </Label>
-                                            <CountryDropdown :keyValue="'code'" placeholder="SELECT ISSUE COUNTRY"
-                                                v-model="traveller.issueCountry" />
-                                            <div v-if="getErrorPath(`travellers.${index}.issueCountry`)"
-                                                class="error-message text-xs text-red-500">
+                                            <CountryDropdown
+                                                :keyValue="'code'"
+                                                placeholder="Issue Country"
+                                                v-model="traveller.issueCountry"
+                                                class="h-9 text-xs rounded border-slate-200"
+                                            />
+                                            <div v-if="getErrorPath(`travellers.${index}.issueCountry`)" class="text-rose-600 text-[11px] font-medium">
                                                 {{ getErrorPath(`travellers.${index}.issueCountry`) }}
                                             </div>
                                         </div>
@@ -429,39 +728,84 @@
                         </AccordionItem>
                     </Accordion>
                 </div>
-                <button type="button" @click="addTraveller" class="mt-2 px-4 py-2 bg-primary text-white rounded-md">Add
-                    Traveller</button>
 
-                <!-- Amount Field -->
-                <div class="flex items-center justify-between mt-6">
-                    <div class="text-gray-700 font-medium">
-                        PNR
-                        <div class="text-xs text-gray-500">Enter PNR</div>
-                    </div>
-                    <div class="w-40">
-                        <Input v-model="bookingPnr" type="text" placeholder="PNR"
-                            class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                    </div>
+                <div class="pt-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 px-3 text-xs font-semibold rounded border-slate-200 text-primary hover:bg-primary/5 flex items-center gap-1.5"
+                        @click="addTraveller"
+                    >
+                        <Plus class="w-3.5 h-3.5" />
+                        <span>Add Another Passenger</span>
+                    </Button>
                 </div>
-                <div class="flex items-center justify-between mt-6">
-                    <div class="text-gray-700 font-medium">
-                        Amount
-                        <div class="text-xs text-gray-500">Enter the total booking amount</div>
-                    </div>
-                    <div class="w-40">
-                        <Input v-model="amount" type="number" min="0" step="0.01" placeholder="Amount"
-                            class="w-full h-10 text-sm bg-white border-gray-200 focus:border-primary focus:ring-primary/20" />
-                    </div>
+            </div>
+        </div>
+
+        <!-- 4. PNR, Amount & Confirmation Section -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <CreditCard class="w-4 h-4 text-emerald-600" />
+                        <span>PNR Record & Financial Settlement</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                        Record global distribution GDS PNR locator and total payable booking ledger amount
+                    </p>
                 </div>
             </div>
 
-            <!-- Submit Button -->
-            <div class="mt-6 flex justify-end">
-                <Button type="submit"
-                    class=" flex justify-end py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-offset-2 focus:ring-primary"
-                    :disabled="isSubmitting" @click="submitForm">
-                    <span v-if="isSubmitting">Processing...</span>
-                    <span v-else>Save Booking</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">GDS / Airline PNR Locator</label>
+                    <Input
+                        v-model="bookingPnr"
+                        type="text"
+                        placeholder="e.g. 6Q8XYZ"
+                        class="h-9 text-xs rounded border-slate-200 bg-white font-mono uppercase font-bold text-slate-900"
+                    />
+                    <p class="text-[10px] text-slate-400">6-character booking reference from Sabre, Amadeus, or airline portal</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">Total Booking Amount (PKR)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">PKR</span>
+                        <Input
+                            v-model="amount"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            class="pl-12 h-9 text-xs rounded border-slate-200 bg-white font-bold text-slate-900"
+                        />
+                    </div>
+                    <p class="text-[10px] text-slate-400">Total payable fare including all taxes and fees</p>
+                </div>
+            </div>
+
+            <!-- Bottom Submit Button -->
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-9 px-3 text-xs rounded border-slate-200 text-slate-600 hover:bg-slate-50"
+                    @click="router.back()"
+                >
+                    Cancel
+                </Button>
+
+                <Button
+                    type="button"
+                    class="h-9 px-6 text-xs font-bold rounded bg-primary text-white hover:bg-primary/90 shadow-xs flex items-center gap-2"
+                    :disabled="isSubmitting"
+                    @click="submitForm"
+                >
+                    <Ticket class="w-4 h-4" />
+                    <span>{{ isSubmitting ? 'Saving Offline Booking...' : 'Save & Issue Booking' }}</span>
                 </Button>
             </div>
         </div>
@@ -490,8 +834,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-import Autocomplete from '@/components/common/Autocomplete.vue';
-import DateRangePicker from '@/components/common/DateRangePicker.vue';
+import AdminAirportSelect from '@/components/admin/AdminAirportSelect.vue';
 import Calender from '@/components/common/Calender.vue';
 import CountryDropdown from '@/components/common/CountryDropdown.vue';
 import { useAuthStore } from "@/services/stores/auth";
@@ -501,6 +844,22 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
 import { FETCH_AIRPORTS, FETCH_TRAVELLERS, SAVE_OFFLINE_BOOKING } from "@/services/store/actions.type";
+import {
+    ArrowLeft,
+    ArrowLeftRight,
+    ArrowRight,
+    Check,
+    CreditCard,
+    Milestone,
+    PlaneLanding,
+    PlaneTakeoff,
+    Plus,
+    Search,
+    Ticket,
+    Trash2,
+    UserCheck,
+    Users,
+} from 'lucide-vue-next';
 
 const store = useStore();
 const userStore = useUserStore();
@@ -541,6 +900,7 @@ const travellers = ref([{
     isOpenIssueCountryDropdown: false,
     showAncillaries: false,
 }]);
+
 const errors = reactive({
     travellers: travellers.value.map(() => ({
         title: "",
@@ -563,13 +923,14 @@ const errors = reactive({
         { origin: "", destination: "", date: "" }
     ]
 });
+
 const searchQuery = ref("");
-const isOpen = ref(false)
+const isOpen = ref(false);
 
 const selectedAgent = ref(null);
 const todayDate = ref(new Date().toISOString().split('T')[0]);
 
-// Calendar limits (DOB / passport expiry) — same rules as Dreamscape
+// Calendar limits (DOB / passport expiry)
 function getDateInputValue(yearOffset = 0, dayOffset = 0) {
     const date = new Date();
     date.setFullYear(date.getFullYear() + yearOffset);
@@ -584,7 +945,7 @@ const expiryMinDate = computed(() => getDateInputValue(0, 1));
 const expiryMaxDate = computed(() => getDateInputValue(20));
 const airports = computed(() => store.getters["airport/airports"]);
 const maxTotal = 9;
-const countdown = ref(null); // Placeholder for countdown
+const countdown = ref(null);
 const amount = ref("");
 const bookingPnr = ref("");
 
@@ -638,7 +999,6 @@ const getErrorPath = (path) => {
 
 // Validation
 function validate() {
-    // Reset errors while preserving structure
     errors.origin = "";
     errors.destination = "";
     errors.start = "";
@@ -740,24 +1100,16 @@ function validate() {
 
 // Watchers for error clearing
 watch(() => localValue.value.origin, (val) => {
-    if (val && errors.origin) {
-        errors.origin = "";
-    }
+    if (val && errors.origin) errors.origin = "";
 });
 watch(() => localValue.value.destination, (val) => {
-    if (val && errors.destination) {
-        errors.destination = "";
-    }
+    if (val && errors.destination) errors.destination = "";
 });
 watch(() => localValue.value.dateRange.start, (val) => {
-    if (val && errors.start) {
-        errors.start = "";
-    }
+    if (val && errors.start) errors.start = "";
 });
 watch(() => localValue.value.dateRange.end, (val) => {
-    if (val && errors.end) {
-        errors.end = "";
-    }
+    if (val && errors.end) errors.end = "";
 });
 watch(() => localValue.value.multiCityTrips.map(t => t.origin), (origins) => {
     origins.forEach((origin, idx) => {
@@ -784,72 +1136,52 @@ watch(() => localValue.value.multiCityTrips.map(t => t.date), (dates) => {
 // Watchers for traveller error clearing
 watch(() => travellers.value.map(t => t.title), (titles) => {
     titles.forEach((title, idx) => {
-        if (title && errors.travellers?.[idx]?.title) {
-            errors.travellers[idx].title = "";
-        }
+        if (title && errors.travellers?.[idx]?.title) errors.travellers[idx].title = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.firstName), (firstNames) => {
     firstNames.forEach((firstName, idx) => {
-        if (firstName && errors.travellers?.[idx]?.firstName) {
-            errors.travellers[idx].firstName = "";
-        }
+        if (firstName && errors.travellers?.[idx]?.firstName) errors.travellers[idx].firstName = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.lastName), (lastNames) => {
     lastNames.forEach((lastName, idx) => {
-        if (lastName && errors.travellers?.[idx]?.lastName) {
-            errors.travellers[idx].lastName = "";
-        }
+        if (lastName && errors.travellers?.[idx]?.lastName) errors.travellers[idx].lastName = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.nationality), (nationalities) => {
     nationalities.forEach((nationality, idx) => {
-        if (nationality && errors.travellers?.[idx]?.nationality) {
-            errors.travellers[idx].nationality = "";
-        }
+        if (nationality && errors.travellers?.[idx]?.nationality) errors.travellers[idx].nationality = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.documentType), (documentTypes) => {
     documentTypes.forEach((documentType, idx) => {
-        if (documentType && errors.travellers?.[idx]?.documentType) {
-            errors.travellers[idx].documentType = "";
-        }
+        if (documentType && errors.travellers?.[idx]?.documentType) errors.travellers[idx].documentType = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.documentNo), (documentNos) => {
     documentNos.forEach((documentNo, idx) => {
-        if (documentNo && errors.travellers?.[idx]?.documentNo) {
-            errors.travellers[idx].documentNo = "";
-        }
+        if (documentNo && errors.travellers?.[idx]?.documentNo) errors.travellers[idx].documentNo = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.expiryDate), (expiryDates) => {
     expiryDates.forEach((expiryDate, idx) => {
-        if (expiryDate && errors.travellers?.[idx]?.expiryDate) {
-            errors.travellers[idx].expiryDate = "";
-        }
+        if (expiryDate && errors.travellers?.[idx]?.expiryDate) errors.travellers[idx].expiryDate = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.issueCountry), (issueCountries) => {
     issueCountries.forEach((issueCountry, idx) => {
-        if (issueCountry && errors.travellers?.[idx]?.issueCountry) {
-            errors.travellers[idx].issueCountry = "";
-        }
+        if (issueCountry && errors.travellers?.[idx]?.issueCountry) errors.travellers[idx].issueCountry = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.dob), (dobs) => {
     dobs.forEach((dob, idx) => {
-        if (dob && errors.travellers?.[idx]?.dob) {
-            errors.travellers[idx].dob = "";
-        }
+        if (dob && errors.travellers?.[idx]?.dob) errors.travellers[idx].dob = "";
     });
 }, { deep: true });
 watch(() => travellers.value.map(t => t.gender), (genders) => {
     genders.forEach((gender, idx) => {
-        if (gender && errors.travellers?.[idx]?.gender) {
-            errors.travellers[idx].gender = "";
-        }
+        if (gender && errors.travellers?.[idx]?.gender) errors.travellers[idx].gender = "";
     });
 }, { deep: true });
 
@@ -976,7 +1308,6 @@ const removeTraveller = (index) => {
     travellers.value.splice(index, 1);
     errors.travellers.splice(index, 1);
 
-    // Adjust counts based on removed traveller type
     if (travellerType === 'ADT' && localValue.value.adult > 1) {
         localValue.value.adult--;
     } else if (travellerType === 'CNN' && localValue.value.child > 0) {
@@ -984,6 +1315,20 @@ const removeTraveller = (index) => {
     } else if (travellerType === 'INF' && localValue.value.infant > 0) {
         localValue.value.infant--;
     }
+};
+
+// Route & flight type handlers
+const setFlightType = (type) => {
+    localValue.value.flightType = type;
+    if (type === 'one-way') {
+        errors.end = "";
+    }
+};
+
+const swapAirports = () => {
+    const temp = localValue.value.origin;
+    localValue.value.origin = localValue.value.destination;
+    localValue.value.destination = temp;
 };
 
 // Add new trip for multi-city
@@ -1013,13 +1358,11 @@ const fetchUsers = () => {
     const effectiveRole = 'agent';
     userStore.fetchUsers({
         search_query: searchQuery.value,
-        // page: route.query.page,
         approval_status: 'all',
         role: effectiveRole,
     });
 };
 
-// Placeholder for fetching agent travellers (replace with actual API call)
 const agentTravellers = computed(() => store.getters["traveller/travellers"]);
 function fetchAgentTravellers() {
     store.dispatch("traveller/" + FETCH_TRAVELLERS);
@@ -1031,10 +1374,9 @@ const selectAgent = (user) => {
     selectedAgent.value = user;
     searchQuery.value = '';
     isOpen.value = false;
-    fetchAgentTravellers(); // Fetch agent travellers when an agent is selected
+    fetchAgentTravellers();
 };
 
-// Handle agent traveller selection
 const handleSelectedTravellerAgentChange = (travellerIndex, index) => {
     const selectedTraveller = agentTravellers.value[travellerIndex];
     if (selectedTraveller) {
@@ -1085,7 +1427,7 @@ onMounted(() => {
     fetchUsers();
     store.dispatch("airport/" + FETCH_AIRPORTS);
     initializeTravellers();
-    fetchAgentTravellers(); // Initialize agentTravellers
+    fetchAgentTravellers();
 });
 
 // Sync travellers with adult/child/infant counts

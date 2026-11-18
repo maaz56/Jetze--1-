@@ -17,41 +17,52 @@ class ModifyRequestController extends Controller
 {
     public function store(Request $request)
     {
-        Log::info('ModifyRequestController@store called with data: ', $request->all());
-
         $validated = $request->validate([
-            'booking_id' => 'required|integer',
-            'user_id' => 'required|integer',
-            'status' => 'string',
-            'reason' => 'string|nullable',
-            'message' => 'string|nullable',
+            'booking_id' => 'required|integer|exists:flight_bookings,id',
+            'reason' => 'nullable|string|max:255',
+            'message' => 'nullable|string|max:2000',
+            'description' => 'nullable|string|max:2000',
         ]);
 
-        // Create the initial ModifyRequest
-        $modifyRequest = new ModifyRequest();
-        $modifyRequest->booking_id = $validated['booking_id'];
-        $modifyRequest->user_id = $validated['user_id'];
-        $modifyRequest->status = $validated['status'] ?? 'pending';
-        $modifyRequest->reason = $validated['reason'] ?? null;
-        $modifyRequest->message = $validated['message'] ?? null;
-        $user = User::find($validated['user_id']);
-        // Initialize messages JSON with the initial message
-        $initialMessage = $validated['message'] ?? null;
-        if ($initialMessage) {
-            $modifyRequest->messages = json_encode([
-                [
-                    'sender' => 'user',
-                    'name' => $user ? $user->name : 'Unknown',
-                    'sender_id' => $validated['user_id'],
-                    'message' => $initialMessage,
-                    'timestamp' => now()
-                ]
-            ]);
-        } else {
-            $modifyRequest->messages = '[]';
-        }
+        $user = $request->user();
+        $initialMessage = trim((string) ($validated['message'] ?? $validated['description'] ?? '')) ?: null;
 
-        $modifyRequest->save();
+        $modifyRequest = DB::transaction(function () use ($validated, $user, $initialMessage) {
+            $booking = FlightBookings::lockForUpdate()->findOrFail($validated['booking_id']);
+            $this->ensureBookingOwnerOrManager($booking, $user);
+
+            if (in_array(strtolower((string) $booking->status), ['canceled', 'cancelled', 'voided', 'refunded', 'expired', 'failed'], true)) {
+                abort(422, 'A modification request cannot be submitted for a closed booking.');
+            }
+
+            $hasPendingRequest = ModifyRequest::query()
+                ->where('booking_id', $booking->id)
+                ->where('user_id', $user->id)
+                ->where('status', 'pending')
+                ->exists();
+            if ($hasPendingRequest) {
+                abort(422, 'A modification request is already pending for this booking.');
+            }
+
+            $modifyRequest = new ModifyRequest();
+            $modifyRequest->booking_id = $booking->id;
+            $modifyRequest->user_id = $user->id;
+            $modifyRequest->status = 'pending';
+            $modifyRequest->reason = $validated['reason'] ?? null;
+            $modifyRequest->message = $initialMessage;
+            $modifyRequest->messages = $initialMessage
+                ? json_encode([[
+                    'sender' => 'user',
+                    'name' => $user->name,
+                    'sender_id' => $user->id,
+                    'message' => $initialMessage,
+                    'timestamp' => now(),
+                ]])
+                : '[]';
+            $modifyRequest->save();
+
+            return $modifyRequest;
+        });
         $modifyRequest->load('booking', 'user');
         $notification = [
             'type' => 'modify_request_submitted',
@@ -136,17 +147,24 @@ class ModifyRequestController extends Controller
         ]);
 
         $user = $request->user();
-        $booking = FlightBookings::findOrFail($validated['booking_id']);
-        $canManageBookings = $user->role === 'admin' || $user->can('manage-bookings');
-        abort_unless($canManageBookings || (int) $booking->agent_id === (int) $user->id, 403, 'You cannot start a chat for this booking.');
+        [$modifyRequest, $wasCreated] = DB::transaction(function () use ($validated, $user) {
+            $booking = FlightBookings::lockForUpdate()->findOrFail($validated['booking_id']);
+            $this->ensureBookingOwnerOrManager($booking, $user);
 
-        $modifyRequest = ModifyRequest::query()
-            ->where('booking_id', $booking->id)
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->first();
+            if (in_array(strtolower((string) $booking->status), ['canceled', 'cancelled', 'voided', 'refunded', 'expired', 'failed'], true)) {
+                abort(422, 'A modification request cannot be opened for a closed booking.');
+            }
 
-        if (!$modifyRequest) {
+            $modifyRequest = ModifyRequest::query()
+                ->where('booking_id', $booking->id)
+                ->where('user_id', $user->id)
+                ->latest('id')
+                ->first();
+
+            if ($modifyRequest) {
+                return [$modifyRequest, false];
+            }
+
             $modifyRequest = ModifyRequest::create([
                 'booking_id' => $booking->id,
                 'user_id' => $user->id,
@@ -154,6 +172,11 @@ class ModifyRequestController extends Controller
                 'reason' => 'booking_chat',
                 'messages' => '[]',
             ]);
+
+            return [$modifyRequest, true];
+        });
+
+        if ($wasCreated) {
             $modifyRequest->load(['booking', 'user']);
 
             $notification = [
@@ -208,13 +231,14 @@ class ModifyRequestController extends Controller
         ], fn ($value) => $value !== null && $value !== ''));
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $user = $request->user();
         $requests = ModifyRequest::with(['booking', 'user'])
+            ->when(! $this->canManageBookings($user), fn ($query) => $query->where('user_id', $user->id))
             ->orderBy('created_at', 'desc')
             ->get();
 
-        Log::info('ModifyRequestController@index retrieved requests: ', $requests->toArray());
         return response()->json([
             'success' => true,
             'data' => $requests
@@ -232,14 +256,16 @@ class ModifyRequestController extends Controller
 
     public function fetchModifyRequestData(Request $request)
     {
-        Log::info('ModifyRequestController@fetchModifyRequestData called with data: ', $request->all());
-
         $validated = $request->validate([
             'modify_request_id' => 'nullable|integer',
             'booking_id' => 'nullable|integer',
         ]);
 
         $query = ModifyRequest::with(['booking', 'user']);
+        $user = $request->user();
+        if (! $this->canManageBookings($user)) {
+            $query->where('user_id', $user->id);
+        }
 
         // Priority 1: modify_request_id
         if (!empty($validated['modify_request_id'])) {
@@ -265,8 +291,6 @@ class ModifyRequestController extends Controller
             ], 200);
         }
 
-        Log::info('ModifyRequest fetched: ', $modifyRequest->toArray());
-
         return response()->json([
             'success' => true,
             'data' => $modifyRequest
@@ -275,11 +299,11 @@ class ModifyRequestController extends Controller
 
     public  function updateStatus(Request $request)
     {
-        Log::info('ModifyRequestController@updateStatus called with data: ', $request->all());
+        abort_unless($this->canManageBookings($request->user()), 403, 'Only administrators can review modification requests.');
 
         $validated = $request->validate([
             'modify_request_id' => 'required|integer',
-            'status' => 'required|string',
+            'status' => 'required|string|in:approved,rejected',
         ]);
 
         $modifyRequest = ModifyRequest::find($validated['modify_request_id']);
@@ -291,8 +315,25 @@ class ModifyRequestController extends Controller
             ], 404);
         }
 
-        $modifyRequest->status = $validated['status'];
-        $modifyRequest->save();
+        if ($modifyRequest->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => "This request cannot be {$validated['status']} from its current status.",
+            ], 422);
+        }
+
+        DB::transaction(function () use ($modifyRequest, $validated, $request) {
+            $lockedRequest = ModifyRequest::lockForUpdate()->findOrFail($modifyRequest->id);
+            if ($lockedRequest->status !== 'pending') {
+                abort(422, "This request cannot be {$validated['status']} from its current status.");
+            }
+
+            $lockedRequest->status = $validated['status'];
+            $lockedRequest->reviewed_by = $request->user()->id;
+            $lockedRequest->reviewed_at = now();
+            $lockedRequest->save();
+        });
+        $modifyRequest->refresh()->load('reviewer:id,name');
         $notification = [
             'type' => 'modify_request_'.$modifyRequest->status,
             'heading' => 'Modify Request '.ucfirst($modifyRequest->status),
@@ -305,12 +346,24 @@ class ModifyRequestController extends Controller
             $this->notifyUser($modifyRequest->user, $notification);
         }
 
-        Log::info('ModifyRequest status updated: ', $modifyRequest->toArray());
-
         return response()->json([
             'success' => true,
             'data' => $modifyRequest
         ]);
+    }
+
+    private function canManageBookings(User $user): bool
+    {
+        return $user->role === 'admin' || $user->can('manage-bookings');
+    }
+
+    private function ensureBookingOwnerOrManager(FlightBookings $booking, User $user): void
+    {
+        abort_unless(
+            $this->canManageBookings($user) || (int) $booking->agent_id === (int) $user->id,
+            403,
+            'You cannot create a modification request for this booking.'
+        );
     }
 
 }

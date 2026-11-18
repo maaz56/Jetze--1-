@@ -1,73 +1,57 @@
 <script setup>
-import Button from "@/components/ui/button/Button.vue";
-import { Switch } from "@/components/ui/switch";
-import Spinner from "@/components/common/Spinner.vue";
-
-import {
-    CalendarIcon,
-    CheckCircleIcon,
-    Receipt,
-    MoveRight,
-    CircleChevronRight,
-    ChevronRight
-} from "lucide-vue-next";
-
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-
-import { calculateLayover, formatDuration } from "@/lib/utils";
-
-import { useStore } from "vuex";
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import { useStore } from "vuex";
+import moment from "moment";
+import { useAuthStore } from "@/services/stores/auth";
+
+// UI Components
+import Button from "@/components/ui/button/Button.vue";
+import Spinner from "@/components/common/Spinner.vue";
+import DateRangePicker from "@/components/common/DateRangePicker.vue";
+
+// Actions
 import {
     FETCH_BOOKINGS,
     FETCH_TRANSACTIONS,
     FETCH_BOOKING_DATA
 } from "@/services/store/actions.type";
-import moment from "moment";
-import Badge from "@/components/ui/badge/Badge.vue";
-import { useUserStore } from "@/services/stores/user";
-import { debounce } from "lodash";
-import { useAuthStore } from "@/services/stores/auth";
-import DateRangePicker from "@/components/common/DateRangePicker.vue";
-import { date } from "zod";
-import flight from "@/services/store/flight";
+
+// Icons
+import {
+    Calendar as CalendarIcon,
+    CheckCircle as CheckCircleIcon,
+    Ban,
+    CirclePause,
+    Search,
+    ChevronRight,
+    Plane,
+    ArrowRight,
+    Copy,
+    Check,
+    RefreshCw
+} from "lucide-vue-next";
 
 const store = useStore();
+const router = useRouter();
 const authStore = useAuthStore();
-const searchQuery = ref();
+
+const searchQuery = ref("");
 const dateRange = ref({
     start: null,
     end: null,
 });
+
 const bookings = computed(() => store.getters["flight/bookingData"]);
 const isLoading = computed(() => store.getters["flight/isLoading"]);
-const transactions = computed(() => store.getters["transaction/transactions"]);
 const user = computed(() => authStore.user);
-const emit = defineEmits(['filter-change']);
-const activeFilter = ref('all');
+const emit = defineEmits(["filter-change"]);
+const activeFilter = ref("all");
+const copiedPnr = ref("");
+const isRefreshing = ref(false);
 
 function filterBookings(type) {
     activeFilter.value = type;
-    //console.log("Filter changed to:", type);
     fetchBookings();
 }
 
@@ -79,15 +63,17 @@ const formatAmount = (amount) => {
 };
 
 const parseFlightData = (flightDataString) => {
+    if (!flightDataString) return null;
+    if (typeof flightDataString === "object") return flightDataString;
     try {
         return JSON.parse(flightDataString);
     } catch (error) {
-        console.error("Error parsing flight data:", error);
         return null;
     }
 };
 
 const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
         weekday: "short",
@@ -97,15 +83,35 @@ const formatDate = (dateString) => {
     });
 };
 
+function copyPnrToClipboard(pnr) {
+    if (!pnr) return;
+    if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(pnr);
+        copiedPnr.value = pnr;
+        setTimeout(() => {
+            if (copiedPnr.value === pnr) copiedPnr.value = "";
+        }, 2000);
+    }
+}
 
 function fetchBookings() {
-    console.log("Fetching bookings with filter:");
     store.dispatch("flight/" + FETCH_BOOKING_DATA, {
-        user_role: user.value.role,
+        user_role: user.value?.role,
         bookingFilter: activeFilter.value,
         searchQuery: searchQuery.value,
         dateRange: dateRange.value
     });
+}
+
+async function refreshAll() {
+    isRefreshing.value = true;
+    try {
+        await fetchBookings();
+    } finally {
+        setTimeout(() => {
+            isRefreshing.value = false;
+        }, 400);
+    }
 }
 
 onMounted(() => {
@@ -114,245 +120,337 @@ onMounted(() => {
 </script>
 
 <template>
-    <section>
-        <div>
-            <div class="bg-gradient-to-br from-gray-100 to-gray-200 mb-4">
-                <div class="max-w-full mx-auto">
-                    <div class="bg-white rounded-lg overflow-hidden">
-                        <div class="p-6">
-                            <h1 class="text-3xl font-bold text-gray-800 mb-6">
-                                Bookings Overview
-                            </h1>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <!-- Total Bookings -->
-                                <div class="bg-blue-100 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
-                                    :class="{ 'ring-2 ring-blue-500': activeFilter === 'all' }"
-                                    @click="filterBookings('all')">
-                                    <CalendarIcon class="h-8 w-8 text-blue-600 mr-4" />
-                                    <div>
-                                        <p class="text-sm font-medium text-blue-700">
-                                            All Bookings
-                                        </p>
-                                        <p class="text-2xl font-bold text-blue-900">
-                                            {{ bookings?.total_count || 0 }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <!-- Ticketed -->
-                                <div class="bg-green-100 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
-                                    :class="{ 'ring-2 ring-green-500': activeFilter === 'ticketed' }"
-                                    @click="filterBookings('ticketed')">
-                                    <CheckCircleIcon class="h-8 w-8 text-green-600 mr-4" />
-                                    <div>
-                                        <p class="text-sm font-medium text-green-700">
-                                            Ticketed
-                                        </p>
-                                        <p class="text-2xl font-bold text-green-900">
-                                            {{ bookings?.total_ticketed || 0 }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <!-- Total Canceled -->
-                                <div class="bg-red-100 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
-                                    :class="{ 'ring-2 ring-red-500': activeFilter === 'canceled' }"
-                                    @click="filterBookings('canceled')">
-                                    <Ban class="h-8 w-8 text-red-600 mr-4" />
-                                    <div>
-                                        <p class="text-sm font-medium text-red-700">
-                                            Total Canceled
-                                        </p>
-                                        <p class="text-2xl font-bold text-red-900">
-                                            {{ bookings?.total_canceled || 0 }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <!-- On Hold -->
-                                <div class="bg-yellow-100 rounded-lg p-4 flex items-center cursor-pointer transition-all hover:shadow-md"
-                                    :class="{ 'ring-2 ring-yellow-500': activeFilter === 'booked' }"
-                                    @click="filterBookings('booked')">
-                                    <CirclePause class="h-8 w-8 text-yellow-600 mr-4" />
-                                    <div>
-                                        <p class="text-sm font-medium text-yellow-700">
-                                            On Hold
-                                        </p>
-                                        <p class="text-2xl font-bold text-yellow-900">
-                                            {{ bookings?.total_booked || 0 }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <section class="space-y-6">
+        <!-- Page Header -->
+        <div class="rounded border border-slate-200 bg-white p-5 shadow-xs">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                        B2B Agent Bookings
+                    </h1>
+                    <p class="text-xs text-slate-500 mt-1">
+                        Monitor wholesale ticket issuance, agent bookings, itineraries, and PNR status
+                    </p>
                 </div>
+                <button
+                    @click="refreshAll"
+                    :disabled="isRefreshing"
+                    class="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                >
+                    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+                    <span>Sync</span>
+                </button>
             </div>
-            <div class="w-full md:w-1/2 mb-2 ">
-                <div class="flex items-center gap-2">
-                    <label for="simple-search" class="sr-only">Search</label>
-                    <div class="relative w-full">
-                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                            <svg aria-hidden="true" class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor"
-                                viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <path fill-rule="evenodd"
-                                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                                    clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <input @change="fetchBookings()" v-model="searchQuery" type="text" id="simple-search" class="border bg-white h-10 border-gray-300 text-gray-900 text-sm rounded-lg 
-         focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 p-2 
-         dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 
-         dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" placeholder="Search" />
+        </div>
 
+        <!-- KPI Filter Cards -->
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <!-- All Bookings -->
+            <div
+                @click="filterBookings('all')"
+                class="rounded border p-4 transition-all cursor-pointer"
+                :class="activeFilter === 'all' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-600">All Bookings</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded bg-slate-100 text-slate-700">
+                        <CalendarIcon class="h-3.5 w-3.5" />
+                    </span>
+                </div>
+                <p class="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                    {{ bookings?.total_count || 0 }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-slate-500">Total B2B records</span>
+            </div>
+
+            <!-- Ticketed -->
+            <div
+                @click="filterBookings('ticketed')"
+                class="rounded border p-4 transition-all cursor-pointer"
+                :class="activeFilter === 'ticketed' ? 'border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-600' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-emerald-700">Ticketed</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded bg-emerald-100 text-emerald-700">
+                        <CheckCircleIcon class="h-3.5 w-3.5" />
+                    </span>
+                </div>
+                <p class="mt-2 text-2xl font-bold tracking-tight text-emerald-950">
+                    {{ bookings?.total_ticketed || 0 }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-emerald-700">Confirmed tickets</span>
+            </div>
+
+            <!-- On Hold -->
+            <div
+                @click="filterBookings('booked')"
+                class="rounded border p-4 transition-all cursor-pointer"
+                :class="activeFilter === 'booked' ? 'border-amber-500 bg-amber-50/40 ring-1 ring-amber-500' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-amber-700">On Hold</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded bg-amber-100 text-amber-700">
+                        <CirclePause class="h-3.5 w-3.5" />
+                    </span>
+                </div>
+                <p class="mt-2 text-2xl font-bold tracking-tight text-amber-950">
+                    {{ bookings?.total_booked || 0 }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-amber-700">Awaiting ticketing</span>
+            </div>
+
+            <!-- Total Canceled -->
+            <div
+                @click="filterBookings('canceled')"
+                class="rounded border p-4 transition-all cursor-pointer"
+                :class="activeFilter === 'canceled' ? 'border-rose-500 bg-rose-50/40 ring-1 ring-rose-500' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-rose-700">Total Canceled</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded bg-rose-100 text-rose-700">
+                        <Ban class="h-3.5 w-3.5" />
+                    </span>
+                </div>
+                <p class="mt-2 text-2xl font-bold tracking-tight text-rose-950">
+                    {{ bookings?.total_canceled || 0 }}
+                </p>
+                <span class="mt-1 block text-[11px] font-medium text-rose-700">Void / canceled flights</span>
+            </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="rounded border border-slate-200 bg-white p-4 shadow-xs">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative w-full sm:w-64">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <input
+                            v-model="searchQuery"
+                            @keyup.enter="fetchBookings"
+                            type="text"
+                            placeholder="Search PNR, agent, customer..."
+                            class="w-full rounded border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
                     </div>
+
                     <DateRangePicker @change="fetchBookings()" heading="Select Date Range" v-model="dateRange" />
 
-                    <Button class="h-10 text-white" @click="fetchBookings">Search</Button>
+                    <button
+                        @click="fetchBookings"
+                        class="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-primary/90 transition cursor-pointer"
+                    >
+                        Search
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <button
+                        @click="filterBookings('all')"
+                        class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                        :class="activeFilter === 'all' ? 'bg-primary text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'"
+                    >
+                        All
+                    </button>
+                    <button
+                        @click="filterBookings('ticketed')"
+                        class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                        :class="activeFilter === 'ticketed' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'"
+                    >
+                        Ticketed
+                    </button>
+                    <button
+                        @click="filterBookings('booked')"
+                        class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                        :class="activeFilter === 'booked' ? 'bg-amber-600 text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'"
+                    >
+                        On Hold
+                    </button>
+                    <button
+                        @click="filterBookings('canceled')"
+                        class="rounded px-2.5 py-1 text-xs font-semibold transition cursor-pointer"
+                        :class="activeFilter === 'canceled' ? 'bg-rose-600 text-white shadow-2xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'"
+                    >
+                        Canceled
+                    </button>
                 </div>
             </div>
+        </div>
 
-            <div class="bg-white dark:bg-gray-800 relative sm:rounded-lg border overflow-hidden">
-                <div class="overflow-x-auto">
-                    <div v-if="isLoading" class="flex items-center gap-2 justify-center bg-white p-24 rounded-lg mt-8">
-                        <Spinner color="#805300" />
-                    </div>
-                    <table v-if="bookings?.bookings?.length > 0"
-                        class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                            <tr>
-                                <th scope="col" class="px-4 py-3">Booking Date</th>
-                                <th scope="col" class="px-4 py-3">Booking ID</th>
-                                <th scope="col" class="px-4 py-3">PNR</th>
-                                <th scope="col" class="px-4 py-3">Agent Email</th>
-                                <th scope="col" class="px-4 py-3">Supplier</th>
-                                <th scope="col" class="px-4 py-3">Route</th>
-                                <th scope="col" class="px-4 py-3">Passenger Name</th>
-                                <th scope="col" class="px-4 py-3">Travel Date</th>
-                                <th scope="col" class="px-4 py-3">Status</th>
-                                <th scope="col" class="px-4 py-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="booking in bookings?.bookings" :key="booking.id"
-                                class="border-b dark:border-gray-700">
-                                <td class="px-4 py-3">
-                                    {{ moment(booking.created_at).format("DD-MMM-YYYY HH:mm") }}
-                                </td>
-                                <td class="px-4 py-3">
-                                    {{ booking?.user?.agent_data?.agent_uid || booking?.user?.customer?.customer_uid }}_{{ booking.id + 1000 }}</td>
-                                <td class="px-4 py-3">
-                                    {{ booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr }}
-                                </td>
-                                <td class="px-4 py-3">{{ booking.agency_email }}</td>
-                                <td class="px-4 py-3">
-                                    <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"
-                                        :key="flightIndex" class="flex gap-2 justify-start items-center">
+        <!-- Table Container -->
+        <div class="rounded border border-slate-200 bg-white shadow-xs overflow-hidden">
+            <div v-if="isLoading" class="flex items-center justify-center p-16">
+                <Spinner color="#2563eb" />
+            </div>
 
-                                        <span class="relative group">
-                                            <img :src="flight?.marketing_carrier?.logo" alt="Carrier Logo"
-                                                class="h-6 w-6" />
-                                            <span v-if="flight?.marketing_carrier?.name"
-                                                class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 rounded bg-primary text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                                                {{ flight?.marketing_carrier?.name }}
-                                            </span>
+            <div v-else-if="bookings?.bookings?.length > 0" class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                    <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">Booking Date</th>
+                            <th scope="col" class="px-4 py-3">Booking ID</th>
+                            <th scope="col" class="px-4 py-3">PNR</th>
+                            <th scope="col" class="px-4 py-3">Agent Email</th>
+                            <th scope="col" class="px-4 py-3">Supplier</th>
+                            <th scope="col" class="px-4 py-3">Route</th>
+                            <th scope="col" class="px-4 py-3">Passenger</th>
+                            <th scope="col" class="px-4 py-3">Travel Date</th>
+                            <th scope="col" class="px-4 py-3">Status</th>
+                            <th scope="col" class="px-4 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                        <tr v-for="booking in bookings?.bookings" :key="booking.id" class="transition-colors hover:bg-slate-50/80">
+                            <!-- Booking Date -->
+                            <td class="whitespace-nowrap px-4 py-3 text-slate-700">
+                                <div class="font-medium text-slate-900">
+                                    {{ moment(booking.created_at).format("DD MMM YYYY") }}
+                                </div>
+                                <div class="text-[11px] text-slate-500">
+                                    {{ moment(booking.created_at).format("HH:mm") }}
+                                </div>
+                            </td>
+
+                            <!-- Booking ID -->
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-800 border border-slate-200">
+                                    {{ booking?.user?.agent_data?.agent_uid || booking?.user?.customer?.customer_uid }}_{{ booking.id + 1000 }}
+                                </span>
+                            </td>
+
+                            <!-- PNR with Copy Action -->
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="rounded border border-primary/30 bg-primary/5 px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                                        {{ booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr }}
+                                    </span>
+                                    <button
+                                        v-if="booking.itinerary_reference || booking.itinerary_ref || booking.pnr"
+                                        @click="copyPnrToClipboard(booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr)"
+                                        class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                                        title="Copy PNR"
+                                    >
+                                        <Check v-if="copiedPnr === (booking.itinerary_reference ?? booking.itinerary_ref ?? booking.pnr)" class="h-3 w-3 text-emerald-600" />
+                                        <Copy v-else class="h-3 w-3" />
+                                    </button>
+                                </div>
+                            </td>
+
+                            <!-- Agent Email -->
+                            <td class="whitespace-nowrap px-4 py-3 text-slate-600">
+                                <span class="max-w-[150px] truncate block" :title="booking.agency_email">
+                                    {{ booking.agency_email || "—" }}
+                                </span>
+                            </td>
+
+                            <!-- Supplier -->
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights?.slice(0, 1)" :key="flightIndex" class="flex items-center gap-1.5">
+                                    <img v-if="flight?.marketing_carrier?.logo" :src="flight?.marketing_carrier?.logo" alt="Carrier Logo" class="h-5 w-5 object-contain" />
+                                    <span class="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                                        {{ flight?.marketing_carrier?.name || parseFlightData(booking?.flight_data)?.provider?.name || 'GDS' }}
+                                    </span>
+                                </div>
+                            </td>
+
+                            <!-- Route -->
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <div v-if="booking?.booking_source == 1">
+                                    <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights?.slice(0, 1)" :key="flightIndex" class="flex items-center gap-1">
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-800 border border-slate-200">
+                                            {{ flight?.from?.iata }}
+                                        </span>
+                                        <ArrowRight class="h-3 w-3 text-slate-400" />
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-800 border border-slate-200">
+                                            {{ flight?.to?.iata }}
                                         </span>
                                     </div>
+                                </div>
+                                <div v-else>
+                                    <span class="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-800">
+                                        Multi-leg
+                                    </span>
+                                </div>
+                            </td>
 
-                                </td>
-                                
+                            <!-- Passenger -->
+                            <td class="whitespace-nowrap px-4 py-3 text-slate-700">
+                                <div v-for="passenger in (booking.pessangers || booking.passengers || []).slice(0, 1)" :key="passenger.id">
+                                    <span class="font-medium text-slate-900">
+                                        {{ passenger.title }} {{ passenger.first_name }} {{ passenger.last_name }}
+                                    </span>
+                                </div>
+                                <div v-if="(booking.pessangers || booking.passengers || []).length > 1" class="text-[10px] text-slate-500">
+                                    +{{ (booking.pessangers || booking.passengers || []).length - 1 }} more
+                                </div>
+                            </td>
 
-                                <td px-4 py-3>
-                                    <div v-if="booking?.booking_source == 1">
-                                        <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"
-                                            :key="flightIndex" class="flex gap-2 justify-start items-center">
-                                            <div class="flex gap-2">
-
-                                                <p>
-                                                    {{ flight?.from?.iata }}
-                                                </p>
-                                                <p>To</p>
-                                                <p>
-
-                                                    {{ flight?.to?.iata }}
-                                                </p>
-                                            </div>
-
-                                        </div>
+                            <!-- Travel Date -->
+                            <td class="whitespace-nowrap px-4 py-3 text-slate-700">
+                                <template v-if="booking?.booking_source == 1">
+                                    <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights?.slice(0, 1)" :key="flightIndex">
+                                        <span class="font-medium text-slate-900">{{ formatDate(flight?.departure_at) }}</span>
                                     </div>
-                                    
-                                </td>
-                                <td>
-                                    <div v-for="passenger in booking.pessangers" :key="passenger.id" class="mb-2">
-                                        <div class="flex">
-                                            <div>
-                                                <p>
-                                                    {{ passenger.title }} {{ passenger.first_name }}
-                                                    {{ passenger.last_name }}
-                                                </p>
-                                            </div>
-                                        </div>
+                                </template>
+                                <template v-else>
+                                    <div v-for="(date, dateIndex) in parseFlightData(booking.flight_data)?.dates?.slice(0, 1)" :key="dateIndex">
+                                        <span class="font-medium text-slate-900">{{ formatDate(date.departureDate) }}</span>
                                     </div>
-                                </td>u
-                                <td px-4 py-3>
-                                    <div v-if="booking?.booking_source == 1">
-                                        <div v-for="(flight, flightIndex) in parseFlightData(booking?.flight_data)?.leg?.flights"
-                                            :key="flightIndex">
-                                            <p class="font-semibold">{{ formatDate(flight?.departure_at) }}</p>
-                                        </div>
-                                    </div>
-                                    <div v-else>
-                                        <p class="font-semibold"
-                                            v-for="(date, dateIndex) in parseFlightData(booking.flight_data,).dates"
-                                            :key="dateIndex">
-                                            {{ formatDate(date.departureDate) }}
-                                            <!-- {{ date.departureLocation }} to
-                                    {{ date.arrivalLocation }} -->
-                                        </p>
-                                    </div>
+                                </template>
+                            </td>
 
-                                </td>
-                                <td class="py-2 px-4">
-                                    {{ booking.status?.toUpperCase() }}{{ booking.is_manually_issued ? ' (manually issued)' : '' }}
-                                </td>
-                                <td class="px-1 py-4">
-                                    <div class="flex space-x-2">
-                                        <Button size="sm" variant="outline" @click="$router.push({
-                                            name: 'AdminBookingsDetails',
-                                            query: {
-                                                booking_id: booking.id,
-                                                pnr: booking?.itinerary_reference ??
-                                                    booking?.itinerary_ref ??
-                                                    booking.pnr,
-                                                agent_id: booking.agent_id,
-                                                booking_source: booking.booking_source,
-                                                flight_provider: parseFlightData(booking?.flight_data)?.provider
-                                                    ?.name || 'N/A',
-                                                flight_mode:  'B2B',
+                            <!-- Status -->
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <span
+                                    class="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wider"
+                                    :class="{
+                                        'bg-emerald-50 text-emerald-700 border border-emerald-200': booking.status === 'ticketed',
+                                        'bg-amber-50 text-amber-700 border border-amber-200': booking.status === 'booked',
+                                        'bg-rose-50 text-rose-700 border border-rose-200': booking.status === 'canceled',
+                                        'bg-slate-100 text-slate-700 border border-slate-200': !['ticketed', 'booked', 'canceled'].includes(booking.status),
+                                    }"
+                                >
+                                    {{ booking.status }}
+                                    <span v-if="booking.is_manually_issued" class="text-[10px] ml-1 opacity-75">(manual)</span>
+                                </span>
+                            </td>
 
-                                            },
-                                        })" class="flex gap-2 text-primary hover:text-primary">
-                                            Details
-                                            <ChevronRight class="w-5 h-5" />
-                                        </Button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div v-else-if="!isLoading" class="flex flex-col items-center justify-center py-12 px-4 w-full">
-                        <img class="h-64 md:h-80 max-w-md w-full object-contain mx-auto"
-                            src="/public/assets/No data.png" alt="No data available">
-                        <p
-                            class="text-gray-600 text-lg mt-6 text-center font-medium bg-gray-50 px-6 py-3 rounded-full shadow-sm border border-gray-100 max-w-md mx-auto">
-                            <span class="inline-block mr-2">🔍</span>
-                            No bookings found for the selected filter
-                            <span class="block text-sm text-gray-400 mt-1 font-normal">
-                                Try selecting a different category
-                            </span>
-                        </p>
-                    </div>
-                </div>
+                            <!-- Action -->
+                            <td class="whitespace-nowrap px-4 py-3 text-right">
+                                <button
+                                    @click="$router.push({
+                                        name: 'AdminBookingsDetails',
+                                        query: {
+                                            booking_id: booking.id,
+                                            pnr: booking?.itinerary_reference ?? booking?.itinerary_ref ?? booking.pnr,
+                                            agent_id: booking.agent_id,
+                                            booking_source: booking.booking_source,
+                                            flight_provider: parseFlightData(booking?.flight_data)?.provider?.name || 'N/A',
+                                            flight_mode: 'B2B',
+                                        },
+                                    })"
+                                    class="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary transition cursor-pointer shadow-2xs"
+                                >
+                                    <span>Details</span>
+                                    <ChevronRight class="h-3.5 w-3.5" />
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else class="p-16 text-center text-xs text-slate-500">
+                <Plane class="mx-auto h-8 w-8 text-slate-300 mb-2 -rotate-45" />
+                <p class="text-sm font-semibold text-slate-800">No bookings found</p>
+                <p class="text-slate-400 mt-1">No bookings match the selected filters or date range.</p>
+                <button
+                    v-if="activeFilter !== 'all' || searchQuery || dateRange.start"
+                    @click="activeFilter = 'all'; searchQuery = ''; dateRange = { start: null, end: null }; fetchBookings();"
+                    class="mt-3 inline-flex items-center rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                    Reset Filters
+                </button>
             </div>
         </div>
     </section>
