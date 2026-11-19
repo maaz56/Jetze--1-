@@ -223,6 +223,27 @@ const moveRoomImage = (room, direction) => {
     ...roomImageIndexes.value,
     [room.booking_code]: nextIndex,
   };
+  preloadAround(images, nextIndex, 1);
+};
+
+// Warm the browser cache for photos the user is likely to open next, so the
+// carousel/lightbox swaps instantly instead of waiting on a full-size download.
+const preloadedImageUrls = new Set();
+const preloadImage = (url) => {
+  if (!url || preloadedImageUrls.has(url)) return;
+  preloadedImageUrls.add(url);
+  const img = new Image();
+  img.decoding = "async";
+  img.referrerPolicy = "no-referrer";
+  img.src = url;
+};
+const preloadAround = (images, index, radius = 2) => {
+  const total = images?.length || 0;
+  if (total < 2) return;
+  for (let step = 1; step <= radius; step++) {
+    preloadImage(images[(index + step) % total]);
+    preloadImage(images[(index - step + total) % total]);
+  }
 };
 
 const markImageLoaded = (imageUrl) => {
@@ -261,6 +282,12 @@ const moveGallery = (direction) => {
   activeGalleryIndex.value =
     (activeGalleryIndex.value + direction + totalImages) % totalImages;
 };
+
+watch([isGalleryOpen, activeGalleryIndex, galleryImages], () => {
+  if (!isGalleryOpen.value) return;
+  preloadImage(galleryImages.value[activeGalleryIndex.value]);
+  preloadAround(galleryImages.value, activeGalleryIndex.value, 2);
+});
 
 const onKeydown = (e) => {
   if (!isGalleryOpen.value) return;
@@ -753,6 +780,8 @@ watch(() => route.fullPath, loadHotelDetails);
                     v-if="roomImage(selectedRoom) && !isImageFailed(roomImage(selectedRoom))"
                     :src="roomImage(selectedRoom)"
                     :alt="formatRoomName(selectedRoom)"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
                     class="h-full w-full object-cover"
                     @error="markImageFailed(roomImage(selectedRoom))"
                   />
@@ -875,12 +904,16 @@ watch(() => route.fullPath, loadHotelDetails);
                   <!-- Card Body: 3-Column Responsive Grid -->
                   <div class="mt-4 grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)_220px] gap-5 items-stretch">
                     <!-- Col 1: Room Photo & Gallery Launcher -->
-                    <div class="relative h-44 w-full md:w-[220px] shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-100 group">
+                    <div class="relative h-44 w-full md:w-[220px] shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-100 group"
+                      @mouseenter="preloadAround(roomImages(room), roomImageIndex(room), 1)">
                       <img
                         v-if="roomImage(room) && !isImageFailed(roomImage(room))"
                         :src="roomImage(room)"
                         :alt="formatRoomName(room)"
-                        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                        decoding="async"
+                        referrerpolicy="no-referrer"
+                        class="h-full w-full object-cover"
                         @error="markImageFailed(roomImage(room))"
                       />
                       <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -1313,6 +1346,8 @@ watch(() => route.fullPath, loadHotelDetails);
           v-if="activeGalleryImage && !isImageFailed(activeGalleryImage)"
           :src="activeGalleryImage"
           :alt="`${galleryTitle || 'Hotel'} photo ${activeGalleryIndex + 1}`"
+          decoding="async"
+          referrerpolicy="no-referrer"
           class="max-h-full max-w-full object-contain"
           :class="{ 'opacity-0': !isImageLoaded(activeGalleryImage) }"
           @load="markImageLoaded(activeGalleryImage)"
@@ -1356,6 +1391,9 @@ watch(() => route.fullPath, loadHotelDetails);
           v-if="!isImageFailed(image)"
           :src="image"
           :alt="`${galleryTitle || 'Hotel'} thumbnail ${index + 1}`"
+          loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
           class="h-full w-full object-cover"
           @error="markImageFailed(image)"
         />

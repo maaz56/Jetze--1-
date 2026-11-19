@@ -653,7 +653,10 @@ class HotelController extends Controller
         // Static HotelDetails only enriches the selected room with images, size
         // and description. It must not block a valid availability result because
         // TBO can return "No Hotels Found" here even when Search has rooms.
-        if ($requestedBookingCode) {
+        // Also fetch when the cached content has no RoomDetails (it was saved
+        // from the search-card call, which asks for IsRoomDetailRequired=false),
+        // otherwise opening a hotel without a booking_code shows no room images.
+        if ($requestedBookingCode || empty($providerHotel['RoomDetails'])) {
             try {
                 $hotelDetailsResponse = $this->tboHotelService->hotelDetails(
                     $hotelCode,

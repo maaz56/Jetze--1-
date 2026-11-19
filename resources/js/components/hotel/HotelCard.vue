@@ -77,14 +77,32 @@ const activeImage = computed(() => {
   return allImages.value[currentImageIndex.value] || allImages.value[0] || null;
 });
 
+// Preload neighbouring photos so arrow clicks swap instantly.
+const preloadedImages = new Set();
+const preloadNeighbours = () => {
+  const list = allImages.value;
+  if (list.length < 2) return;
+  [1, 2, -1].forEach((step) => {
+    const url = list[(currentImageIndex.value + step + list.length) % list.length];
+    if (!url || preloadedImages.has(url)) return;
+    preloadedImages.add(url);
+    const img = new Image();
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+  });
+};
+
 const nextImage = () => {
   if (allImages.value.length < 2) return;
   currentImageIndex.value = (currentImageIndex.value + 1) % allImages.value.length;
+  preloadNeighbours();
 };
 
 const prevImage = () => {
   if (allImages.value.length < 2) return;
   currentImageIndex.value = (currentImageIndex.value - 1 + allImages.value.length) % allImages.value.length;
+  preloadNeighbours();
 };
 
 // Hotel helpers
@@ -253,7 +271,8 @@ const roomImage = (room) => {
             :src="activeImage"
             :alt="hotel.name"
             referrerpolicy="no-referrer"
-            class="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+            decoding="async"
+            class="h-full w-full object-cover"
             @error="failedImages.add(activeImage)"
           />
           
