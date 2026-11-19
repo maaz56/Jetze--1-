@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { Input } from "@/components/ui/input";
 import {
     Command,
@@ -48,8 +49,10 @@ import {
     SAVE_DEPOSIT_DATA,
 } from "@/services/store/actions.type";
 import moment from "moment";
+import apiService from "@/services/store/apiService";
 
 const store = useStore();
+const router = useRouter();
 const agentsDepositData = computed(
     () => store.getters["deposit/depositDataWithAgents"],
 );
@@ -215,6 +218,15 @@ function formatMoney(money, fallbackAmount = null, fallbackCurrency = "AED") {
     return formatAmount(money?.amount ?? fallbackAmount, money?.currency ?? fallbackCurrency);
 }
 
+function openDepositDetails(deposit) {
+    if (!deposit.admin_seen_at) {
+        deposit.admin_seen_at = new Date().toISOString();
+        apiService.markAdminSeen("deposits", deposit.id).catch(() => {});
+    }
+
+    router.push({ name: "DepositDetails", query: { deposit_id: deposit.id } });
+}
+
 onMounted(() => {
     fetchAgentsDeposits();
     userStore.fetchUsers();
@@ -370,7 +382,8 @@ onMounted(() => {
                         </thead>
                         <tbody>
                             <tr v-for="deposit in agentsDepositData.deposits" :key="deposit.id"
-                                class="bg-white border-b hover:bg-gray-50">
+                                class="bg-white border-b hover:bg-gray-50"
+                                :class="{ 'row-unseen': !deposit.admin_seen_at }">
                                 <td class="px-4 py-3 font-medium">
                                     <span class="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 font-semibold text-primary">
                                         {{ deposit.receipt_reference || "_" }}
@@ -405,12 +418,7 @@ onMounted(() => {
                                     {{ deposit.base_money ? formatMoney(deposit.base_money, deposit.aed_amount, 'AED') : "_" }}
                                 </td>
                                 <td class="px-4 py-3 text-center">
-                                    <button @click="
-                                        $router.push({
-                                            name: 'DepositDetails',
-                                            query: { deposit_id: deposit.id },
-                                        })
-                                        " class="hover:text-purple-700">
+                                    <button @click="openDepositDetails(deposit)" class="hover:text-purple-700">
                                         <CircleChevronRight class="w-5 h-5 inline" />
                                     </button>
                                 </td>

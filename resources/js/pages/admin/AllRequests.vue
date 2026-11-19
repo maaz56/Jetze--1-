@@ -63,6 +63,7 @@ async function loadRequests() {
                 bookingId: request.booking_id,
                 customer: request.requester,
                 detail: request.customer_remarks,
+                adminSeenAt: request.admin_seen_at,
             })),
             ...modifyRequests.map((request) => ({
                 key: `modify-${request.id}`,
@@ -74,6 +75,7 @@ async function loadRequests() {
                 bookingId: request.booking_id,
                 customer: request.user,
                 detail: request.message || request.reason,
+                adminSeenAt: request.admin_seen_at,
             })),
         ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } catch (error) {
@@ -106,6 +108,12 @@ const filteredRequests = computed(() => {
 
 function openBooking(request) {
     if (!request.booking) return;
+
+    if (!request.adminSeenAt) {
+        request.adminSeenAt = new Date().toISOString();
+        const type = request.type === "modify" ? "modify_requests" : "booking_requests";
+        apiService.markAdminSeen(type, request.id).catch(() => {});
+    }
 
     router.push({
         name: "AdminCustomerBookingsLayout",
@@ -227,6 +235,7 @@ onMounted(loadRequests);
                             v-for="request in filteredRequests"
                             :key="request.key"
                             class="transition-colors hover:bg-slate-50/80"
+                            :class="{ 'row-unseen': !request.adminSeenAt }"
                         >
                             <!-- Date -->
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">

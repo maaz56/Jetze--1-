@@ -622,6 +622,12 @@ export default {
             params: params,
         });
     },
+    markAdminBookingSeen(bookingId) {
+        return apiClient.post("/admin/bookings/mark-seen", { booking_id: bookingId });
+    },
+    markAdminSeen(type, id) {
+        return apiClient.post("/admin/mark-seen", { type, id });
+    },
 
     // transactions
     getTransaction(params) {

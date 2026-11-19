@@ -19,6 +19,55 @@ class AdminInsightsController extends Controller
     /** Statuses that count as a completed sale. */
     private const SOLD_STATUSES = ['ticketed'];
 
+    /** Admin-review type => table and permission needed to open it. */
+    private const ADMIN_SEEN_TYPES = [
+        'bookings' => ['table' => 'flight_bookings', 'permission' => 'manage-bookings'],
+        'hotel_bookings' => ['table' => 'hotel_bookings', 'permission' => 'view-bookings'],
+        'deposits' => ['table' => 'deposit_data', 'permission' => 'manage-finance'],
+        'booking_requests' => ['table' => 'booking_requests', 'permission' => 'manage-bookings'],
+        'modify_requests' => ['table' => 'modify_requests', 'permission' => 'manage-bookings'],
+    ];
+
+    /** Bookings remain new until an administrator opens their details. */
+    public function markBookingSeen(Request $request)
+    {
+        $data = $request->validate([
+            'booking_id' => ['required', 'integer', 'exists:flight_bookings,id'],
+        ]);
+
+        $this->markSeenRow($request, 'bookings', $data['booking_id']);
+
+        return response()->noContent();
+    }
+
+    public function markSeen(Request $request)
+    {
+        $data = $request->validate([
+            'type' => ['required', 'string', 'in:' . implode(',', array_keys(self::ADMIN_SEEN_TYPES))],
+            'id' => ['required', 'integer'],
+        ]);
+
+        $this->markSeenRow($request, $data['type'], $data['id']);
+
+        return response()->noContent();
+    }
+
+    private function markSeenRow(Request $request, string $type, int $id): void
+    {
+        $config = self::ADMIN_SEEN_TYPES[$type];
+        $user = $request->user();
+        abort_unless(
+            $user && ($user->role === 'admin' || $user->can($config['permission'])),
+            403,
+            'You are not allowed to review this item.'
+        );
+
+        DB::table($config['table'])
+            ->where('id', $id)
+            ->whereNull('admin_seen_at')
+            ->update(['admin_seen_at' => now()]);
+    }
+
     public function overview(Request $request)
     {
         abort_unless($request->user()?->role === 'admin', 403, 'Only admins can view this.');

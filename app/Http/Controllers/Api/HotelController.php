@@ -2561,6 +2561,8 @@ class HotelController extends Controller
         $data['email'] = $booking->email;
         $data['phone_number'] = $booking->phone_number;
         $data['created_at'] = $booking->created_at?->toIso8601String();
+        $data['admin_booking_id'] = $booking->id;
+        $data['admin_seen_at'] = $booking->admin_seen_at?->toIso8601String();
         $data['events'] = $includeDetails
             ? $booking->events
                 ->map(fn (HotelBookingEvent $event) => [

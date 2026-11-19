@@ -161,6 +161,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
 
     Route::get('admin/insights', [\App\Http\Controllers\Api\AdminInsightsController::class, 'overview']);
+    Route::post('admin/bookings/mark-seen', [\App\Http\Controllers\Api\AdminInsightsController::class, 'markBookingSeen']);
+    Route::post('admin/mark-seen', [\App\Http\Controllers\Api\AdminInsightsController::class, 'markSeen']);
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
     Route::delete('/delete-activity-logs', [ActivityLogController::class, 'delete']);
 

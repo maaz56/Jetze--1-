@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useStore } from "vuex";
 import moment from "moment";
 import { useAuthStore } from "@/services/stores/auth";
+import apiService from "@/services/store/apiService";
 
 // UI Components
 import Button from "@/components/ui/button/Button.vue";
@@ -92,6 +93,32 @@ function copyPnrToClipboard(pnr) {
             if (copiedPnr.value === pnr) copiedPnr.value = "";
         }, 2000);
     }
+}
+
+function isUnseen(booking) {
+    return !booking?.admin_seen_at;
+}
+
+function openBookingDetails(booking) {
+    if (isUnseen(booking)) {
+        // Clear the tag immediately, matching the action the admin just took.
+        booking.admin_seen_at = new Date().toISOString();
+        apiService.markAdminBookingSeen(booking.id).catch(() => {
+            // The details page remains usable if this non-critical update fails.
+        });
+    }
+
+    router.push({
+        name: 'AdminBookingsDetails',
+        query: {
+            booking_id: booking.id,
+            pnr: booking?.itinerary_reference ?? booking?.itinerary_ref ?? booking.pnr,
+            agent_id: booking.agent_id,
+            booking_source: booking.booking_source,
+            flight_provider: parseFlightData(booking?.flight_data)?.provider?.name || 'N/A',
+            flight_mode: 'B2B',
+        },
+    });
 }
 
 function fetchBookings() {
@@ -299,7 +326,12 @@ onMounted(() => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 bg-white">
-                        <tr v-for="booking in bookings?.bookings" :key="booking.id" class="transition-colors hover:bg-slate-50/80">
+                        <tr
+                            v-for="booking in bookings?.bookings"
+                            :key="booking.id"
+                            class="transition-colors hover:bg-slate-50/80"
+                            :class="{ 'row-unseen': isUnseen(booking) }"
+                        >
                             <!-- Booking Date -->
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">
                                 <div class="font-medium text-slate-900">
@@ -417,17 +449,7 @@ onMounted(() => {
                             <!-- Action -->
                             <td class="whitespace-nowrap px-4 py-3 text-right">
                                 <button
-                                    @click="$router.push({
-                                        name: 'AdminBookingsDetails',
-                                        query: {
-                                            booking_id: booking.id,
-                                            pnr: booking?.itinerary_reference ?? booking?.itinerary_ref ?? booking.pnr,
-                                            agent_id: booking.agent_id,
-                                            booking_source: booking.booking_source,
-                                            flight_provider: parseFlightData(booking?.flight_data)?.provider?.name || 'N/A',
-                                            flight_mode: 'B2B',
-                                        },
-                                    })"
+                                    @click="openBookingDetails(booking)"
                                     class="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary transition cursor-pointer shadow-2xs"
                                 >
                                     <span>Details</span>

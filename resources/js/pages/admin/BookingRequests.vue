@@ -78,6 +78,13 @@ const errorMessage = (err, fallback) =>
 
 const canReview = (req) => ["pending", "failed"].includes(req.status);
 
+function markSeen(req) {
+    if (!req?.admin_seen_at) {
+        req.admin_seen_at = new Date().toISOString();
+        apiService.markAdminSeen("booking_requests", req.id).catch(() => {});
+    }
+}
+
 async function fetchCounts() {
     try {
         const res = await apiService.fetchBookingRequestCounts({ type: filterType.value });
@@ -135,6 +142,7 @@ function resetFilters() {
 }
 
 function openApproveModal(req) {
+    markSeen(req);
     activeRequest.value = req;
     penaltyAmount.value = 0;
     adminRemarks.value = "";
@@ -142,12 +150,14 @@ function openApproveModal(req) {
 }
 
 function openRejectModal(req) {
+    markSeen(req);
     activeRequest.value = req;
     rejectRemarks.value = "";
     showRejectDialog.value = true;
 }
 
 function openDetailsModal(req) {
+    markSeen(req);
     activeRequest.value = req;
     showDetailsDialog.value = true;
 }
@@ -194,6 +204,7 @@ async function confirmReject() {
 function navigateToBookingDetails(req) {
     const booking = req.booking;
     if (!booking) return;
+    markSeen(req);
     router.push({
         name: "AdminCustomerBookingsLayout",
         query: {
@@ -342,7 +353,13 @@ onMounted(() => {
                                 </div>
                             </td>
                         </tr>
-                        <tr v-else v-for="req in requests" :key="req.id" class="hover:bg-gray-50/60 transition">
+                        <tr
+                            v-else
+                            v-for="req in requests"
+                            :key="req.id"
+                            class="hover:bg-gray-50/60 transition"
+                            :class="{ 'row-unseen': !req.admin_seen_at }"
+                        >
                             <td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
                                 <div>{{ formatRequestDate(req.created_at) }}</div>
                                 <div v-if="req.customer_remarks" class="text-gray-400 italic mt-0.5 truncate max-w-[140px]" :title="req.customer_remarks">

@@ -60,6 +60,17 @@ const statusClass = (value) => ({
   processing: "bg-primary/10 text-primary border border-primary/20",
 }[value] || "bg-slate-100 text-slate-700 border border-slate-200");
 
+const isUnseen = (booking) => !booking?.admin_seen_at;
+
+function openBookingDetails(booking) {
+  if (isUnseen(booking)) {
+    booking.admin_seen_at = new Date().toISOString();
+    apiService.markAdminSeen("hotel_bookings", booking.admin_booking_id).catch(() => {});
+  }
+
+  router.push({ name: "AdminHotelBookingDetails", params: { bookingId: booking.booking_id } });
+}
+
 onMounted(loadBookings);
 </script>
 
@@ -140,7 +151,12 @@ onMounted(loadBookings);
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white text-xs">
-            <tr v-for="booking in bookings" :key="booking.booking_id" class="transition-colors hover:bg-slate-50/80">
+            <tr
+              v-for="booking in bookings"
+              :key="booking.booking_id"
+              class="transition-colors hover:bg-slate-50/80"
+              :class="{ 'row-unseen': isUnseen(booking) }"
+            >
               <!-- Booking Reference -->
               <td class="whitespace-nowrap px-4 py-3">
                 <p class="font-bold text-slate-900 font-mono">{{ booking.booking_reference_id }}</p>
@@ -175,7 +191,7 @@ onMounted(loadBookings);
               <td class="whitespace-nowrap px-4 py-3 text-right">
                 <button
                   class="rounded bg-primary px-3 py-1 text-xs font-semibold text-white shadow-2xs hover:bg-primary/90 transition cursor-pointer"
-                  @click="router.push({ name: 'AdminHotelBookingDetails', params: { bookingId: booking.booking_id } })"
+                  @click="openBookingDetails(booking)"
                 >
                   View Details
                 </button>

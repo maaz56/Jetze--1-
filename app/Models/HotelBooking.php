@@ -44,6 +44,7 @@ class HotelBooking extends Model
         'booking_details_checked_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'paid_at' => 'datetime',
+        'admin_seen_at' => 'datetime',
     ];
 
     public function prebook(): BelongsTo

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useStore } from "vuex";
 import moment from "moment";
 import { FETCH_REQUESTS } from "@/services/store/actions.type";
+import apiService from "@/services/store/apiService";
 
 // Icons
 import {
@@ -113,6 +114,11 @@ const filteredRequests = computed(() => {
 });
 
 function openBookingDetails(request) {
+    if (!request.admin_seen_at) {
+        request.admin_seen_at = new Date().toISOString();
+        apiService.markAdminSeen("modify_requests", request.id).catch(() => {});
+    }
+
     router.push({
         name: "AdminCustomerBookingsLayout",
         query: {
@@ -230,7 +236,10 @@ onMounted(() => {
                             v-for="request in filteredRequests"
                             :key="request.id"
                             class="transition-colors hover:bg-slate-50/80"
-                            :class="{ 'bg-primary/5': String(request.id) === String(props.highlightRequestId) }"
+                            :class="{
+                                'bg-primary/5': String(request.id) === String(props.highlightRequestId),
+                                'row-unseen': !request.admin_seen_at,
+                            }"
                         >
                             <!-- Request Date -->
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">
