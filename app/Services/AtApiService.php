@@ -378,7 +378,12 @@ class AtApiService
                 ]);
 
                 if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
-                    $this->getWebSettings($responseBody['TUI']);
+                    // Remember which providers AT lets us hold so the fare
+                    // transformer can flag holdable fares in the results.
+                    self::rememberSearchHoldProviders(
+                        $responseBody['TUI'],
+                        $this->getWebSettings($responseBody['TUI']),
+                    );
 
                     return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch);
                 }
@@ -927,9 +932,12 @@ private function extractTrips($tripsData): array
         return 'AT_WEB_SETTINGS_' . sha1($normalizedTui);
     }
 
-    public function getWebSettings($tui): ?array
+    /**
+     * @param bool $fresh Always call AT and neither read nor write the cache.
+     */
+    public function getWebSettings($tui, bool $fresh = false): ?array
     {
-        $cacheKey = self::webSettingsCacheKey($tui);
+        $cacheKey = $fresh ? null : self::webSettingsCacheKey($tui);
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
@@ -1025,6 +1033,7 @@ private function extractTrips($tripsData): array
             $responseBody = json_decode($response->getBody(), true);
 
             Log::info('Price Request response: ', $responseBody);
+            $this->rememberPricedHoldability($responseBody);
             $response = $this->getPricer($responseBody, $skipTravelerChecklist);
             return $response;
 
@@ -1314,7 +1323,12 @@ private function extractTrips($tripsData): array
             ?? $cachedValidationResponse['FareType']
             ?? ''
         ));
-        $holdInfo = $params['flight']['leg']['flights'][0]['hold_info'] ?? null;
+        // HoldInfo belongs to the selected fare, not to the leg.
+        $selectedFare = collect(data_get($params, 'flight.leg.flights', []))
+            ->flatMap(fn ($leg) => $leg['fares'] ?? [])
+            ->first(fn ($fare) => in_array($fare['ref_id'] ?? null, (array) ($params['fare_reference'] ?? []), true));
+        $holdInfo = data_get($selectedFare, 'hold_info')
+            ?? ($params['flight']['leg']['flights'][0]['hold_info'] ?? null);
         $bookingTui = $this->resolveActualTui($params['TUI'] ?? '', $cachedValidationResponse);
         $netAmount = $cachedValidationResponse['NetAmount'] ?? $params['NetAmount'] ?? 0;
 
@@ -1423,7 +1437,7 @@ private function extractTrips($tripsData): array
         ];
 
         // AT hold flow: CreateItinerary HB -> StartPay HB, then StartPay HP on confirm.
-        if ($this->isHoldBooking($params['flight'] ?? [], (array) ($params['fare_reference'] ?? []), $fareType)) {
+        if ($this->isHoldBooking($params['flight'] ?? [], (array) ($params['fare_reference'] ?? []), $fareType, $params['TUI'] ?? null)) {
             $payload['BookingType'] = 'HB';
         }
 
@@ -1899,10 +1913,14 @@ private function extractTrips($tripsData): array
         }
     }
     /**
-     * A booking can be held only when AT returned Hold=true for every selected fare.
+     * A booking can be held only when ALL of AT's hold conditions are met:
+     *  1. the fare's provider is listed in WebSettings HoldConfirmEnabledProviders;
+     *  2. the availability fare has Hold=true and a non-empty HoldInfo;
+     *  3. the SmartPricer response (the authoritative price) still reports
+     *     Hold=true with a HoldInfo, when we have it cached for this TUI.
      * DM bookings use a separate multi-trip flow without hold support.
      */
-    public function isHoldBooking(array $flight, array $fareReferences, ?string $fareType = null): bool
+    public function isHoldBooking(array $flight, array $fareReferences, ?string $fareType = null, mixed $tui = null): bool
     {
         $fareType = strtoupper((string) ($fareType ?: data_get($flight, 'provider.fare_type')));
         if ($fareType === 'DM' || empty($fareReferences)) {
@@ -1913,8 +1931,106 @@ private function extractTrips($tripsData): array
             ->flatMap(fn (array $leg) => $leg['fares'] ?? [])
             ->filter(fn (array $fare) => in_array($fare['ref_id'] ?? null, $fareReferences, true));
 
-        return $selectedFares->count() === count($fareReferences)
-            && $selectedFares->every(fn (array $fare) => ($fare['hold'] ?? false) === true);
+        if ($selectedFares->count() !== count($fareReferences)
+            || ! $selectedFares->every(fn (array $fare) => ($fare['hold'] ?? false) === true)) {
+            return false;
+        }
+
+        if ($selectedFares->contains(fn (array $fare) => trim((string) ($fare['hold_info'] ?? '')) === '')) {
+            Log::info('AT hold not used: HoldInfo is missing for the selected fare.');
+            return false;
+        }
+
+        $priced = Cache::get($this->pricedHoldCacheKey($tui));
+        if (is_array($priced) && ($priced['holdable'] ?? true) === false) {
+            Log::info('AT hold not used: SmartPricer returned Hold=false / no HoldInfo.', $priced);
+            return false;
+        }
+
+        $enabled = $this->holdConfirmEnabledProviders($tui);
+        $providers = $selectedFares
+            ->map(fn (array $fare) => strtoupper(trim((string) ($fare['provider'] ?? ''))))
+            ->unique()
+            ->values();
+        if ($providers->isEmpty() || $providers->contains(fn ($code) => $code === '' || ! in_array($code, $enabled, true))) {
+            Log::info('AT hold not used: provider is not in HoldConfirmEnabledProviders.', [
+                'providers' => $providers->all(),
+                'enabled' => $enabled,
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    /** Provider codes AT allows to hold, from WebSettings HoldConfirmEnabledProviders. */
+    public function holdConfirmEnabledProviders(mixed $tui): array
+    {
+        try {
+            $settings = $this->getWebSettings($tui, true); // never cached: hold eligibility must be live
+        } catch (\Throwable $e) {
+            Log::warning('AT WebSettings unavailable for hold check: ' . $e->getMessage());
+            return [];
+        }
+
+        return self::holdProvidersFromSettings($settings);
+    }
+
+    /** Parse HoldConfirmEnabledProviders out of a WebSettings response. */
+    public static function holdProvidersFromSettings(?array $settings): array
+    {
+        $rows = $settings['Settings'] ?? [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (strcasecmp((string) ($row['Key'] ?? ''), 'HoldConfirmEnabledProviders') === 0) {
+                return array_values(array_unique(array_filter(array_map(
+                    fn ($code) => strtoupper(trim($code)),
+                    preg_split('/[\s,;|]+/', (string) ($row['Value'] ?? '')) ?: []
+                ))));
+            }
+        }
+
+        return [];
+    }
+
+    /** Key shared by the search (writer) and the fare transformer (reader). */
+    public static function searchHoldProvidersCacheKey(mixed $tui): ?string
+    {
+        $tui = is_array($tui) ? (string) ($tui[0] ?? '') : (string) $tui;
+        $base = trim(explode('|', $tui)[0]);
+
+        return $base === '' ? null : 'AT_SEARCH_HOLD_PROVIDERS_' . sha1($base);
+    }
+
+    /** Display-only: the booking-time hold check still fetches fresh settings. */
+    public static function rememberSearchHoldProviders(mixed $tui, ?array $settings): void
+    {
+        $key = self::searchHoldProvidersCacheKey($tui);
+        if ($key) {
+            Cache::put($key, self::holdProvidersFromSettings($settings), now()->addHours(2));
+        }
+    }
+
+    private function pricedHoldCacheKey(mixed $tui): string
+    {
+        $tui = is_array($tui) ? (string) ($tui[0] ?? '') : (string) $tui;
+
+        return 'AT_PRICED_HOLD_' . sha1(explode('|', $tui)[0]);
+    }
+
+    /** Remember whether SmartPricer still reports every journey as holdable. */
+    private function rememberPricedHoldability(mixed $priceResponse): void
+    {
+        $tui = $priceResponse['TUI'] ?? null;
+        $journeys = collect($priceResponse['Trips'] ?? [])
+            ->flatMap(fn ($trip) => $trip['Journey'] ?? []);
+        if (! $tui || $journeys->isEmpty()) {
+            return;
+        }
+
+        $holdable = $journeys->every(fn ($journey) => ($journey['Hold'] ?? false) === true
+            && trim((string) ($journey['HoldInfo'] ?? '')) !== '');
+
+        Cache::put($this->pricedHoldCacheKey($tui), ['holdable' => $holdable], now()->addHours(2));
     }
 
     /**

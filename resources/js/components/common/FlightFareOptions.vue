@@ -113,9 +113,14 @@ function fareCount(groups) {
                                     <BadgeX v-else class="h-3.5 w-3.5" />
                                     {{ fare.is_refundable ? "Refundable" : "Non-refundable" }}
                                 </span>
-                                <template v-if="fare.hold === true">
+                                <template v-if="fare.hold_message || fare.hold === true">
                                     <span class="text-slate-300">•</span>
-                                    <span class="text-amber-600">Hold</span>
+                                    <span
+                                        :class="fare.hold === true ? 'text-amber-600' : 'text-slate-400'"
+                                        :title="fare.hold_message"
+                                    >
+                                        {{ fare.hold === true ? (fare.hold_message || "Hold available") : "Instant ticketing only" }}
+                                    </span>
                                 </template>
                             </div>
                         </div>

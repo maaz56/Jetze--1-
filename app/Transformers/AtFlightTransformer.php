@@ -57,6 +57,12 @@ class AtFlightTransformer
         $resultIndexByStreamKey = [];
         $fareType = $this->resolveFareType($flightData, $params);
         $passengerCounts = $this->passengerCounts($params);
+        // Providers AT lets us hold, remembered when the search ran. null =
+        // unknown (settings not cached), which we treat as "not holdable".
+        $holdProviders = Cache::get(
+            \App\Services\AtApiService::searchHoldProvidersCacheKey($flightData['TUIList'] ?? $flightData['TUI'] ?? null) ?? '-'
+        );
+        $holdProviders = is_array($holdProviders) ? $holdProviders : null;
 
         $provider = [
             "name" => "at",
@@ -353,8 +359,9 @@ class AtFlightTransformer
                             $displayCurrency,
                         ),
                         "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
-                        // Only an explicit Hold=true lets AT hold the booking (BookingType HB).
-                        "hold" => ($fare['Hold'] ?? null) === true || strtolower((string) ($fare['Hold'] ?? '')) === 'true',
+                        // A fare is holdable only when AT says Hold=true, gives a
+                        // HoldInfo, and the provider is in HoldConfirmEnabledProviders.
+                        ...$this->holdEligibility($fare, $holdProviders),
                         "fare_policies" => [],
                         "passenger_fares" => [
                             [
@@ -588,6 +595,11 @@ class AtFlightTransformer
                     'is_refundable' => ($onwardFare['is_refundable'] ?? false)
                         && ($returnFare['is_refundable'] ?? false),
                     'hold' => ($onwardFare['hold'] ?? false) && ($returnFare['hold'] ?? false),
+                    'hold_message' => ($onwardFare['hold'] ?? false) && ($returnFare['hold'] ?? false)
+                        ? ($onwardFare['hold_message'] ?? null)
+                        : (! ($onwardFare['hold'] ?? false)
+                            ? ($onwardFare['hold_message'] ?? null)
+                            : ($returnFare['hold_message'] ?? null)),
                     'baggage_policies' => $onwardFare['baggage_policies'] ?? [],
                     'return_baggage_policies' => $returnFare['baggage_policies'] ?? [],
                 ];
@@ -1498,6 +1510,52 @@ class AtFlightTransformer
             $journey['FBC'] ?? '',
             $journey['NetFare'] ?? '',
         ]);
+    }
+
+    /**
+     * Decide whether one fare can be held and explain why not.
+     *
+     * @return array{hold: bool, hold_info: ?string, hold_status: string, hold_message: string}
+     */
+    private function holdEligibility(array $fare, ?array $holdProviders): array
+    {
+        $rawHold = $fare['Hold'] ?? null;
+        $flagged = $rawHold === true || strtolower((string) $rawHold) === 'true';
+        $holdInfo = trim((string) ($fare['HoldInfo'] ?? ''));
+        $provider = strtoupper(trim((string) ($fare['Provider'] ?? '')));
+
+        $reason = match (true) {
+            ! $flagged => 'Hold not available: the airline does not allow holding this fare.',
+            $holdInfo === '' => 'Hold not available: no hold details were returned for this fare.',
+            $holdProviders === null => 'Hold not available: hold settings could not be verified.',
+            $provider === '' || ! in_array($provider, $holdProviders, true)
+                => 'Hold not available: hold is not enabled for this airline source on your account.',
+            default => null,
+        };
+
+        if ($reason !== null) {
+            return [
+                'hold' => false,
+                'hold_info' => $holdInfo !== '' ? $holdInfo : null,
+                'hold_status' => 'unavailable',
+                'hold_message' => $reason . ' Instant ticketing only.',
+            ];
+        }
+
+        // HoldInfo looks like "E|01:00|0|SD|EE"; the second field is the hold time.
+        $time = explode('|', $holdInfo)[1] ?? '';
+        $label = 'Hold available';
+        if (preg_match('/^(\d{1,3}):(\d{2})$/', $time, $m)) {
+            $label .= ' for ' . ((int) $m[1] > 0 ? (int) $m[1] . 'h' : '') . ((int) $m[2] > 0 ? ' ' . (int) $m[2] . 'm' : '');
+            $label = trim($label);
+        }
+
+        return [
+            'hold' => true,
+            'hold_info' => $holdInfo,
+            'hold_status' => 'available',
+            'hold_message' => $label,
+        ];
     }
 
     private function mapFare(array $journey): array

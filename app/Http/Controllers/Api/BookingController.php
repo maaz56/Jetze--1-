@@ -424,7 +424,7 @@ class BookingController extends Controller
                     // Holdable fares were created with BookingType HB; place the
                     // hold now. Non-holdable fares are only saved, and both are
                     // ticketed later by StartPay (HP) on confirm.
-                    if ($service->isHoldBooking($flightData, (array) $fareRefernce, $request->input('fareType'))) {
+                    if ($service->isHoldBooking($flightData, (array) $fareRefernce, $request->input('fareType'), $request->input('TUI'))) {
                         // StartPay must use AT's final CreateItinerary amount. This
                         // includes any locked SSRs and can legitimately be decimal.
                         $holdAmount = $response['NetAmount'] ?? $priceQuote?->provider_amount;

@@ -1755,7 +1755,9 @@ async function confirmBooking() {
             booking_status: "ticketed",
             booking_source: route.query.booking_source,
             flight_provider: route.query.flight_provider,
-            bookingType: flight?.hold_info == null ? "HP" : "HB",
+            // Confirming always tickets the booking (StartPay HP). HB only places
+            // the initial hold when the booking is created.
+            bookingType: "HP",
         });
 
         isConfirmDialogOpen.value = false;
