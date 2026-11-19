@@ -688,6 +688,12 @@ class BookingController extends Controller
         Log::info('Expiry Time: ' . $expiryTime);
         CancelBookingJob::dispatch($flightBooking)->delay($expiryTime);
 
+        // AT omits the CRS PNR right after booking/hold; fetch it in the
+        // background and map it onto the booking once it is available.
+        if ($isAtBooking && filled($flightBooking->transaction_id)) {
+            \App\Jobs\SyncAtBookingPnrJob::dispatch($flightBooking->id)->delay(now()->addSeconds(10));
+        }
+
 
         return response()->json([
             'message' => 'Booking confirmed successfully',
@@ -1073,7 +1079,15 @@ class BookingController extends Controller
                 // `itinerary_ref`. Do not overwrite it each time AT's
                 // RetrieveBooking endpoint is called; only seed an empty
                 // legacy record from the supplier response.
-                if ($crsPnr && blank($booking->itinerary_ref)) {
+                // The booking is created with AT's transaction ID as a
+                // placeholder when CreateItinerary returns no CRSPNR, so
+                // treat that placeholder like an empty value and replace it.
+                $currentRef = trim((string) $booking->itinerary_ref);
+                $placeholderRefs = array_filter(array_merge(
+                    [trim((string) $this->atTransactionId($booking))],
+                    array_map('trim', explode(',', (string) $booking->transaction_id)),
+                ));
+                if ($crsPnr && ($currentRef === '' || in_array($currentRef, $placeholderRefs, true))) {
                     $booking->itinerary_ref = $crsPnr;
                     $booking->pnr = $crsPnr;
                 }
