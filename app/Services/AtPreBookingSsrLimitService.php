@@ -209,16 +209,6 @@ class AtPreBookingSsrLimitService
 
         $tui = data_get($quote->flight_data, 'provider.TUI')
             ?? data_get($quote->provider_pricing_data, 'tui');
-        $cacheKey = AtApiService::webSettingsCacheKey($tui);
-
-        if ($cacheKey) {
-            $settings = $this->settingsMap(Cache::get($cacheKey));
-
-            if ($settings !== []) {
-                return $settings;
-            }
-        }
-
         try {
             return $this->settingsMap($this->atApiService->getWebSettings($tui));
         } catch (\Throwable $exception) {

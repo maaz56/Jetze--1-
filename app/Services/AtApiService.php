@@ -25,7 +25,6 @@ class AtApiService
     private const ACCESS_TOKEN_CACHE_TTL_MINUTES = 10;
     // Signature calls to make when AT answers without a usable token.
     private const ACCESS_TOKEN_MAX_ATTEMPTS = 2;
-    private const WEB_SETTINGS_CACHE_TTL_MINUTES = 60;
     private const HTTP_TIMEOUT_SECONDS = 300;
     private const HTTP_CONNECT_TIMEOUT_SECONDS = 30;
     private const SIGNATURE_HTTP_TIMEOUT_SECONDS = 10;
@@ -917,35 +916,9 @@ private function extractTrips($tripsData): array
 
     return $trips;
 }
-    public static function webSettingsCacheKey(mixed $tui): ?string
+    /** WebSettings are never cached: every call is a live request to AT. */
+    public function getWebSettings($tui): ?array
     {
-        $normalizedTui = is_array($tui)
-            ? (string) ($tui[0] ?? '')
-            : (string) $tui;
-
-        $normalizedTui = trim($normalizedTui);
-
-        if ($normalizedTui === '') {
-            return null;
-        }
-
-        return 'AT_WEB_SETTINGS_' . sha1($normalizedTui);
-    }
-
-    /**
-     * @param bool $fresh Always call AT and neither read nor write the cache.
-     */
-    public function getWebSettings($tui, bool $fresh = false): ?array
-    {
-        $cacheKey = $fresh ? null : self::webSettingsCacheKey($tui);
-
-        if ($cacheKey) {
-            $cached = Cache::get($cacheKey);
-            if (is_array($cached)) {
-                return $cached;
-            }
-        }
-
         $response = $this->client->post($this->signBaseUrl . '/Utils/WebSettings', [
             'json' => [
                 'ClientID' => $this->clientId,
@@ -958,10 +931,6 @@ private function extractTrips($tripsData): array
         ], JSON_PRETTY_PRINT));
         $responseBody = json_decode($response->getBody()->getContents(), true);
         Log::info('GetWebSettings response: ', $responseBody);
-
-        if (is_array($responseBody) && $cacheKey) {
-            Cache::put($cacheKey, $responseBody, now()->addMinutes(self::WEB_SETTINGS_CACHE_TTL_MINUTES));
-        }
 
         return is_array($responseBody) ? $responseBody : null;
     }
@@ -1033,7 +1002,7 @@ private function extractTrips($tripsData): array
             $responseBody = json_decode($response->getBody(), true);
 
             Log::info('Price Request response: ', $responseBody);
-            $this->rememberPricedHoldability($responseBody);
+            $this->rememberPricedHoldability($responseBody, 'smart_pricer');
             $response = $this->getPricer($responseBody, $skipTravelerChecklist);
             return $response;
 
@@ -1246,6 +1215,7 @@ private function extractTrips($tripsData): array
             $responseBody = json_decode($response->getBody(), true);
 
             Log::info('Get Price response: ', $responseBody);
+            $this->rememberPricedHoldability($responseBody, 'get_price');
             if (!isset($responseBody['TUI']) && !$responseBody['TUI']) {
                 Log::warning('Price request did not return TUI. Response: ');
                 return null;
@@ -1914,7 +1884,8 @@ private function extractTrips($tripsData): array
     }
     /**
      * A booking can be held only when ALL of AT's hold conditions are met:
-     *  1. the fare's provider is listed in WebSettings HoldConfirmEnabledProviders;
+     *  1. the fare's provider is listed in WebSettings HoldConfirmEnabledProviders
+     *     (only enforced when AT publishes that setting for this client);
      *  2. the availability fare has Hold=true and a non-empty HoldInfo;
      *  3. the SmartPricer response (the authoritative price) still reports
      *     Hold=true with a HoldInfo, when we have it cached for this TUI.
@@ -1941,9 +1912,15 @@ private function extractTrips($tripsData): array
             return false;
         }
 
+        // SmartPricer and GetPrice are AT's authoritative answers; both must
+        // confirm Hold + HoldInfo. No verdict means the fare was never priced.
         $priced = Cache::get($this->pricedHoldCacheKey($tui));
-        if (is_array($priced) && ($priced['holdable'] ?? true) === false) {
-            Log::info('AT hold not used: SmartPricer returned Hold=false / no HoldInfo.', $priced);
+        if (! is_array($priced) || ! isset($priced['smart_pricer'])) {
+            Log::info('AT hold not used: the fare has no SmartPricer hold verdict.');
+            return false;
+        }
+        if (in_array(false, $priced, true)) {
+            Log::info('AT hold not used: pricing returned Hold=false / no HoldInfo.', $priced);
             return false;
         }
 
@@ -1952,7 +1929,8 @@ private function extractTrips($tripsData): array
             ->map(fn (array $fare) => strtoupper(trim((string) ($fare['provider'] ?? ''))))
             ->unique()
             ->values();
-        if ($providers->isEmpty() || $providers->contains(fn ($code) => $code === '' || ! in_array($code, $enabled, true))) {
+        if ($enabled !== null
+            && ($providers->isEmpty() || $providers->contains(fn ($code) => $code === '' || ! in_array($code, $enabled, true)))) {
             Log::info('AT hold not used: provider is not in HoldConfirmEnabledProviders.', [
                 'providers' => $providers->all(),
                 'enabled' => $enabled,
@@ -1963,21 +1941,25 @@ private function extractTrips($tripsData): array
         return true;
     }
 
-    /** Provider codes AT allows to hold, from WebSettings HoldConfirmEnabledProviders. */
-    public function holdConfirmEnabledProviders(mixed $tui): array
+    /**
+     * Provider codes AT allows to hold, from WebSettings HoldConfirmEnabledProviders.
+     * Returns null when AT does not publish the setting for this client (the live
+     * API client only returns DealVersionNo); callers then rely on Hold + HoldInfo.
+     */
+    public function holdConfirmEnabledProviders(mixed $tui): ?array
     {
         try {
-            $settings = $this->getWebSettings($tui, true); // never cached: hold eligibility must be live
+            $settings = $this->getWebSettings($tui);
         } catch (\Throwable $e) {
             Log::warning('AT WebSettings unavailable for hold check: ' . $e->getMessage());
-            return [];
+            return null;
         }
 
         return self::holdProvidersFromSettings($settings);
     }
 
-    /** Parse HoldConfirmEnabledProviders out of a WebSettings response. */
-    public static function holdProvidersFromSettings(?array $settings): array
+    /** Parse HoldConfirmEnabledProviders from WebSettings; null if the key is absent. */
+    public static function holdProvidersFromSettings(?array $settings): ?array
     {
         $rows = $settings['Settings'] ?? [];
         foreach (is_array($rows) ? $rows : [] as $row) {
@@ -1989,7 +1971,7 @@ private function extractTrips($tripsData): array
             }
         }
 
-        return [];
+        return null;
     }
 
     /** Key shared by the search (writer) and the fare transformer (reader). */
@@ -2006,7 +1988,7 @@ private function extractTrips($tripsData): array
     {
         $key = self::searchHoldProvidersCacheKey($tui);
         if ($key) {
-            Cache::put($key, self::holdProvidersFromSettings($settings), now()->addHours(2));
+            Cache::put($key, ['providers' => self::holdProvidersFromSettings($settings)], now()->addHours(2));
         }
     }
 
@@ -2017,8 +1999,8 @@ private function extractTrips($tripsData): array
         return 'AT_PRICED_HOLD_' . sha1(explode('|', $tui)[0]);
     }
 
-    /** Remember whether SmartPricer still reports every journey as holdable. */
-    private function rememberPricedHoldability(mixed $priceResponse): void
+    /** Remember, per pricing stage, whether every journey is still holdable. */
+    private function rememberPricedHoldability(mixed $priceResponse, string $stage): void
     {
         $tui = $priceResponse['TUI'] ?? null;
         $journeys = collect($priceResponse['Trips'] ?? [])
@@ -2027,10 +2009,19 @@ private function extractTrips($tripsData): array
             return;
         }
 
-        $holdable = $journeys->every(fn ($journey) => ($journey['Hold'] ?? false) === true
-            && trim((string) ($journey['HoldInfo'] ?? '')) !== '');
+        // SmartPricer must positively confirm Hold + HoldInfo. The GetPrice
+        // response does not reliably carry Hold, so it only vetoes when it
+        // explicitly says Hold=false.
+        $holdable = $stage === 'smart_pricer'
+            ? $journeys->every(fn ($journey) => ($journey['Hold'] ?? false) === true
+                && trim((string) ($journey['HoldInfo'] ?? '')) !== '')
+            : ! $journeys->contains(fn ($journey) => ($journey['Hold'] ?? null) === false);
 
-        Cache::put($this->pricedHoldCacheKey($tui), ['holdable' => $holdable], now()->addHours(2));
+        $key = $this->pricedHoldCacheKey($tui);
+        $verdict = Cache::get($key);
+        $verdict = is_array($verdict) ? $verdict : [];
+        $verdict[$stage] = $holdable;
+        Cache::put($key, $verdict, now()->addHours(2));
     }
 
     /**
