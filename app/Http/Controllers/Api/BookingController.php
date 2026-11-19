@@ -1154,6 +1154,31 @@ class BookingController extends Controller
             $atBookingData = json_decode((string) $booking->pnr_response, true);
             $atBookingData = data_get($atBookingData, "bookingDetails") ?: $atBookingData;
             $atApiService = new AtApiService();
+
+            // The pnr_response saved at booking time predates AT assigning the
+            // CRS PNR, so it cannot be cancelled. Re-fetch the live booking
+            // (TUI, CRSPNR, Pax) and use that instead.
+            if (! is_array($atBookingData) || blank($this->atCrsPnr(['bookingDetails' => $atBookingData]))) {
+                $liveData = $atApiService->getBookingDetails(
+                    new Request(['pnr' => $this->atTransactionId($booking) ?? $booking->itinerary_ref])
+                );
+                $liveDetails = $liveData['bookingDetails'] ?? null;
+                if (is_array($liveDetails) && filled($this->atCrsPnr($liveData))) {
+                    $atBookingData = $liveDetails;
+
+                    $currentRef = trim((string) $booking->itinerary_ref);
+                    $transactionIds = array_map('trim', explode(',', (string) $booking->transaction_id));
+                    if ($currentRef === '' || in_array($currentRef, $transactionIds, true)) {
+                        $booking->itinerary_ref = $this->atCrsPnr($liveData);
+                        $booking->pnr = $booking->itinerary_ref;
+                    }
+                    if ($airlinePnr = $this->atAirlinePnr($liveData)) {
+                        $booking->airline_pnr = $airlinePnr;
+                    }
+                    $booking->save();
+                }
+            }
+
             $cancelResult = $atApiService->cancelBooking(
                 is_array($atBookingData) ? $atBookingData : [],
                 (string) $request->input("remarks", "Cancelled via Jetze"),
