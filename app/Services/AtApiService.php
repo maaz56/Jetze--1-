@@ -40,6 +40,8 @@ class AtApiService
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
+    protected $webSettingsUrl;
+    protected $travelChecklistUrl;
     protected $merchantId;
     protected $apiKey;
     protected $clientId;
@@ -65,6 +67,8 @@ class AtApiService
         ]);
         $this->signBaseUrl = config('at.sign_base_url');
         $this->flightBaseUrl = config('at.flight_base_url');
+        $this->webSettingsUrl = config('at.web_settings_url');
+        $this->travelChecklistUrl = config('at.travel_checklist_url');
         $this->merchantId = config('at.merchant_id');
         $this->apiKey = config('at.api_key');
         $this->clientId = config('at.client_id');
@@ -919,7 +923,7 @@ private function extractTrips($tripsData): array
     /** WebSettings are never cached: every call is a live request to AT. */
     public function getWebSettings($tui): ?array
     {
-        $response = $this->client->post($this->signBaseUrl . '/Utils/WebSettings', [
+        $response = $this->client->post($this->webSettingsUrl, [
             'json' => [
                 'ClientID' => $this->clientId,
                 'TUI' => $tui,
@@ -1261,7 +1265,7 @@ private function extractTrips($tripsData): array
             JSON_PRETTY_PRINT
         ));
 
-        $response = $this->client->post($this->flightBaseUrl . '/Utils/GetTravelCheckList', [
+        $response = $this->client->post($this->travelChecklistUrl, [
             'headers' => $headers,
             'body' => json_encode([
                 'ClientID' => $encryptedClientId,
