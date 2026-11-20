@@ -372,6 +372,10 @@ class AtApiService
                 $expressSearchStartedAt = microtime(true);
                 $response = $this->client->send($request);
                 $responseBody = json_decode($response->getBody(), true);
+                Log::info('AT ExpressSearch response.', [
+                    'status' => $response->getStatusCode(),
+                    'response' => $responseBody,
+                ]);
                 Log::info('AT ExpressSearch supplier timing.', [
                     'supplier_ms' => round((microtime(true) - $expressSearchStartedAt) * 1000, 2),
                 ]);
@@ -2386,8 +2390,10 @@ private function extractTrips($tripsData): array
 
                     $response = $this->client->send($request);
                     $responseBody = json_decode($response->getBody(), true);
-                    Log::info('DM flight search response received.', [
+                    Log::info('AT ExpressSearch response.', [
                         'trip_number' => $index + 1,
+                        'status' => $response->getStatusCode(),
+                        'response' => $responseBody,
                         'success' => isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === 'Success',
                     ]);
 
