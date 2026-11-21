@@ -26,7 +26,6 @@ import {
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import Calender from "../common/Calender.vue";
-import NotificationsAlert from "../common/NotificationsAlert.vue";
 import { Button } from "../ui/button";
 import { computed } from "vue";
 
@@ -97,8 +96,6 @@ const testDate = ref(undefined);
                         <div class="hidden md:block">
                             <div class="h-6 sm:h-8 w-[1px] bg-white/30 mx-1 sm:mx-2"></div>
                         </div>
-                        <!-- Radar-style notifications -->
-                        <NotificationsAlert class="text-white" :isAdmin="true"></NotificationsAlert>
                         <router-link :to="{ name: 'Home' }" class="flex items-center">
                             <Button class=" bg-transparent shadow-none">
                                 <PlaneTakeoff class=" text-white" />

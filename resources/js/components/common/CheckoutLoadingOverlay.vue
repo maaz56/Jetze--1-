@@ -2,6 +2,11 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { LoaderCircle, PlaneTakeoff } from "lucide-vue-next";
 
+defineProps({
+    title: { type: String, default: "Preparing your booking" },
+    message: { type: String, default: "We're confirming your selected fare. Please wait a moment." },
+});
+
 const overlay = ref(null);
 let previousFocus;
 let previousOverflow;
@@ -41,8 +46,8 @@ onBeforeUnmount(() => {
                     <LoaderCircle class="absolute inset-0 h-16 w-16 animate-spin text-primary/35" aria-hidden="true" />
                     <PlaneTakeoff class="h-6 w-6" aria-hidden="true" />
                 </div>
-                <h2 class="mt-5 text-lg font-bold text-slate-900">Preparing your booking</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600">We're confirming your selected fare. Please wait a moment.</p>
+                <h2 class="mt-5 text-lg font-bold text-slate-900">{{ title }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">{{ message }}</p>
             </div>
         </div>
     </Teleport>

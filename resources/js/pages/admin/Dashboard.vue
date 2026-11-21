@@ -59,6 +59,7 @@ const depositSearch = ref("");
 const depositFilter = ref("all");
 const copiedPnr = ref("");
 const isRefreshing = ref(false);
+const isDashboardLoading = ref(true);
 
 // Store Getters & Computed State
 const user = computed(() => authStore.user || {});
@@ -224,28 +225,43 @@ function filterDeposits(filter) {
 
 // Data fetching
 function fetchUsers() {
-  userStore.fetchUsers({
+  return userStore.fetchUsers({
     role: "agent",
   });
 }
 
 function fetchBookings() {
-  store.dispatch("flight/" + FETCH_BOOKING_DATA, {
+  return store.dispatch("flight/" + FETCH_BOOKING_DATA, {
     user_role: user.value?.role,
     bookingFilter: activeFilter.value,
   });
 }
 
 function fetchTotalApprovedDepost() {
-  store.dispatch("deposit/" + FETCH_TOTAL_APPROVED_DEPOSIT);
+  return store.dispatch("deposit/" + FETCH_TOTAL_APPROVED_DEPOSIT);
 }
 
 function fetchUserSummary() {
-  store.dispatch("user/" + FETCH_USER_SUMMARY);
+  return store.dispatch("user/" + FETCH_USER_SUMMARY);
 }
 
 function fetchAgentsDeposits() {
-  store.dispatch("deposit/" + FETCH_DEPOSITS_DATA_AGENTS);
+  return store.dispatch("deposit/" + FETCH_DEPOSITS_DATA_AGENTS);
+}
+
+async function loadDashboard() {
+  isDashboardLoading.value = true;
+  try {
+    await Promise.allSettled([
+      fetchBookings(),
+      fetchUserSummary(),
+      fetchTotalApprovedDepost(),
+      fetchAgentsDeposits(),
+      fetchUsers(),
+    ]);
+  } finally {
+    isDashboardLoading.value = false;
+  }
 }
 
 // Refresh all dashboard metrics
@@ -290,17 +306,48 @@ function openDepositDetails(deposit) {
   });
 }
 
-onMounted(() => {
-  fetchBookings();
-  fetchUserSummary();
-  fetchTotalApprovedDepost();
-  fetchAgentsDeposits();
-  fetchUsers();
-});
+onMounted(loadDashboard);
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div v-if="isDashboardLoading" class="space-y-6 animate-pulse" aria-busy="true" aria-label="Loading dashboard">
+    <div class="flex flex-col gap-4 rounded border border-slate-200 bg-white p-5 md:flex-row md:items-center md:justify-between">
+      <div class="space-y-3">
+        <div class="h-7 w-64 rounded bg-slate-200"></div>
+        <div class="h-3 w-48 rounded bg-slate-100"></div>
+      </div>
+      <div class="h-9 w-24 rounded bg-slate-100"></div>
+    </div>
+
+    <div class="h-24 rounded border border-slate-200 bg-slate-100"></div>
+
+    <div class="rounded border border-slate-200 bg-white overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-4">
+        <div class="h-5 w-52 rounded bg-slate-200"></div>
+        <div class="h-8 w-32 rounded bg-slate-200"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 p-5 lg:grid-cols-4">
+        <div v-for="card in 4" :key="`booking-kpi-${card}`" class="h-28 rounded border border-slate-200 bg-slate-50"></div>
+      </div>
+      <div class="grid grid-cols-1 gap-5 border-t border-slate-200 p-5 lg:grid-cols-12">
+        <div class="h-96 rounded border border-slate-200 bg-slate-50 lg:col-span-8 xl:col-span-9"></div>
+        <div class="h-72 rounded border border-slate-200 bg-slate-50 lg:col-span-4 xl:col-span-3"></div>
+      </div>
+    </div>
+
+    <div class="rounded border border-slate-200 bg-white overflow-hidden">
+      <div class="h-16 border-b border-slate-200 bg-slate-50"></div>
+      <div class="grid grid-cols-2 gap-4 p-5 lg:grid-cols-4">
+        <div v-for="card in 4" :key="`deposit-kpi-${card}`" class="h-28 rounded border border-slate-200 bg-slate-50"></div>
+      </div>
+      <div class="grid grid-cols-1 gap-5 border-t border-slate-200 p-5 lg:grid-cols-12">
+        <div class="h-80 rounded border border-slate-200 bg-slate-50 lg:col-span-8 xl:col-span-9"></div>
+        <div class="h-72 rounded border border-slate-200 bg-slate-50 lg:col-span-4 xl:col-span-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="space-y-6">
     <!-- Top Welcome & Quick Actions Bar -->
     <div class="flex flex-col gap-4 rounded border border-slate-200 bg-white p-5 shadow-xs md:flex-row md:items-center md:justify-between">
       <div class="space-y-1">

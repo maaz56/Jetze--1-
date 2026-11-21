@@ -232,24 +232,18 @@ class AtFlightTransformer
                     );
 
                     $baggagePolicies = [];
-                    $baggageText = $fare['Inclusions']['Baggage'] ?? null;
-                    $hasKnownCheckedAllowance = is_string($baggageText)
-                        ? trim($baggageText) !== ''
-                        : $baggageText !== null;
-                    $pieceDescription = strtolower($fare['Inclusions']['PieceDescription'] ?? '');
+                    $baggageText = trim((string) ($fare['Inclusions']['Baggage'] ?? ''));
+                    // AT can send both allowances in one inclusion, for example:
+                    // "1 Piece — 1 BAG UP TO 23KG,1 BAG UP TO 8 KG".
+                    // The first comma-separated value is checked baggage and
+                    // the final value is cabin baggage.
+                    [$checkedBaggageText, $cabinBaggageText] = $this->splitBaggageAllowances($baggageText);
+                    $hasKnownCheckedAllowance = $checkedBaggageText !== '';
 
-                    $pieces = 0;
-                    $weight = null;
-
-                    if ($baggageText) {
-                        if (stripos($baggageText, 'kg') !== false || str_contains($pieceDescription, 'weight')) {
-                            preg_match('/(\d+)/', $baggageText, $matches);
-                            $weight = isset($matches[1]) ? (int) $matches[1] : null;
-                        } elseif (stripos($baggageText, 'piece') !== false || str_contains($pieceDescription, 'piece')) {
-                            preg_match('/(\d+)/', $baggageText, $matches);
-                            $pieces = isset($matches[1]) ? (int) $matches[1] : 0;
-                        }
-                    }
+                    $checkedPieces = $this->baggagePieces($checkedBaggageText);
+                    $checkedWeight = $this->baggageWeight($checkedBaggageText);
+                    $cabinPieces = $this->baggagePieces($cabinBaggageText);
+                    $cabinWeight = $this->baggageWeight($cabinBaggageText);
 
                     $travelerTypes = ['ADT'];
 
@@ -257,17 +251,17 @@ class AtFlightTransformer
                         foreach ($segments as $segment) {
                             $baggagePolicies[] = [
                                 "type" => "carry",
-                                "pieces" => 1,
-                                "weight" => 7,
-                                "description" => '1 handbag 7kg allowed',
+                                "pieces" => $cabinPieces ?: 1,
+                                "weight" => $cabinWeight ?? 7,
+                                "description" => $cabinBaggageText ?: '1 handbag 7kg allowed',
                                 "traveler_type" => $travelerType,
                                 "segment_ref_id" => $segment['ref_id'],
                             ];
                             $baggagePolicies[] = [
                                 "type" => "checkIn",
-                                "pieces" => $pieces,
-                                "weight" => $weight,
-                                "description" => $baggageText ? $fare['Inclusions']['Baggage'] . " allowed" : "check baggage section",
+                                "pieces" => $checkedPieces,
+                                "weight" => $checkedWeight,
+                                "description" => $checkedBaggageText ?: "check baggage section",
                                 // This is intentionally distinct from a zero
                                 // allowance (for example "0 Kg"), which is a
                                 // known result and must not trigger free SSR.
@@ -1582,6 +1576,44 @@ class AtFlightTransformer
             'IsBusStation' => $journey['IsBusStation'] ?? null,
             'Remarks' => $journey['Remarks'] ?? null,
         ];
+    }
+
+    /**
+     * AT occasionally sends checked and cabin allowance in one comma-separated
+     * inclusion. The first part is checked baggage; the last is cabin baggage.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function splitBaggageAllowances(string $baggageText): array
+    {
+        $parts = array_values(array_filter(
+            array_map('trim', explode(',', $baggageText)),
+            static fn (string $part): bool => $part !== '',
+        ));
+
+        if (count($parts) < 2) {
+            return [trim($baggageText), ''];
+        }
+
+        return [$parts[0], $parts[count($parts) - 1]];
+    }
+
+    private function baggagePieces(string $allowance): int
+    {
+        if (preg_match('/(\d+)\s*(?:pc|pcs|piece|bag)\b/i', $allowance, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return 0;
+    }
+
+    private function baggageWeight(string $allowance): ?float
+    {
+        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram)\b/i', $allowance, $matches)) {
+            return (float) $matches[1];
+        }
+
+        return null;
     }
 
     /**

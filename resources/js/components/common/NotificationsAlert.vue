@@ -42,6 +42,8 @@ const fetchedNotifications = computed(() => store.getters['notification/notifica
 const isLoading = computed(() => store.getters['notification/isLoading']);
 
 function fetchNotifications() {
+    if (!props.isAdmin) return;
+
     store.dispatch('notification/fetchNotifications');
 }
 function readNotification(id) {
@@ -93,7 +95,7 @@ function disconnectPusher() {
 function connectPusher(userId) {
     disconnectPusher();
 
-    if (!userId) return;
+    if (!props.isAdmin || !userId) return;
 
     unsubscribeNotifications = subscribeToPrivateChannel(
         `users.${userId}`,
@@ -120,7 +122,12 @@ function handleNotification(data) {
     }
 }
 
-watch(user, (currentUser) => {
+watch([user, () => props.isAdmin], ([currentUser, isAdmin]) => {
+    if (!isAdmin) {
+        disconnectPusher();
+        return;
+    }
+
     fetchNotifications();
     connectPusher(currentUser?.id);
 }, { immediate: true });

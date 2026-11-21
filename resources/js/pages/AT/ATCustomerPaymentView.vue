@@ -1,5 +1,9 @@
 <template>
-  <CheckoutLoadingOverlay v-if="actionLoading" />
+  <CheckoutLoadingOverlay
+    v-if="actionLoading"
+    title="Issuing your e-ticket"
+    message="We are confirming your payment and issuing your ticket. Please do not refresh or close this page."
+  />
 
   <div class="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100/70 to-primary/[0.04] p-3 sm:p-4 lg:p-5">
     <div class="mx-auto max-w-7xl">
@@ -1723,28 +1727,26 @@ async function confirmBooking() {
         return;
     }
 
-    // Recheck immediately before customer confirmation in case another wallet
-    // action changed the balance. Admins are exempt from wallet validation.
-    if (!isAdmin.value) {
-      await fetchAgentLedger();
-    }
-    if (!isAdmin.value && !hasSufficientWalletBalance.value) {
-        isConfirmDialogOpen.value = false;
-        isLowBalanceDialogOpen.value = true;
-        return;
-    }
-
     error.value = '';
     actionLoading.value = true;
-    if (!pnr) {
-        error.value = "No PNR provided.";
-        actionLoading.value = false;
-        return;
-    }
-    const flight = flightData.value?.original?.leg?.flights?.[0]
-        ?? flightData.value?.leg?.flights?.[0];
 
+    // Recheck immediately before customer confirmation in case another wallet
+    // action changed the balance. Admins are exempt from wallet validation.
     try {
+        if (!isAdmin.value) {
+            await fetchAgentLedger();
+        }
+        if (!isAdmin.value && !hasSufficientWalletBalance.value) {
+            isConfirmDialogOpen.value = false;
+            isLowBalanceDialogOpen.value = true;
+            return;
+        }
+
+        if (!pnr) {
+            error.value = "No PNR provided.";
+            return;
+        }
+
         await store.dispatch("flight/" + CONFIRM_BOOKING, {
             pnr: route.query.pnr,
             bookingId: bookingDetails.value[0].id,

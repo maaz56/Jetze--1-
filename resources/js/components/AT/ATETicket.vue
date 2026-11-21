@@ -41,12 +41,6 @@ const fareReferences = computed(() => {
     return Array.isArray(refs) ? refs : [refs];
 });
 
-// Longer itineraries switch print to a tighter layout so they still fit one A4 page.
-const isDense = computed(() => {
-    const segments = flights.value.reduce((total, flight) => total + (flight?.segments?.length || 0), 0);
-    return segments > 2 || (props.booking?.pessangers?.length || 0) > 2;
-});
-
 const companyName = computed(() => props.agent?.company_name || "Jetze Travels");
 const defaultLogoSrc = "/assets/logo.png";
 const logoSrc = computed(() => props.logo || props.agent?.logo || defaultLogoSrc);
@@ -285,7 +279,7 @@ const passengerName = (traveller) =>
 </script>
 
 <template>
-    <main class="et-ticket" :class="{ 'et-ticket--dense': isDense }">
+    <main class="et-ticket">
         <header class="et-head">
             <div class="et-brand">
                 <img :src="logoSrc" :alt="companyName" @error="useDefaultLogo" />
@@ -713,7 +707,9 @@ const passengerName = (traveller) =>
     flex: none;
     align-items: center;
     justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--et-blue) 30%, transparent);
+    /* Keep this in broadly supported HSL syntax: html2canvas cannot render
+       the computed `color(...)` value produced by CSS color-mix(). */
+    border: 1px solid hsl(var(--primary) / .3);
     border-radius: 999px;
     background: #fff;
     color: var(--et-blue);
@@ -1143,6 +1139,165 @@ const passengerName = (traveller) =>
     }
 }
 
+/* The direct PDF download is captured from an off-screen copy of the ticket.
+   Match the compact A4 print layout so it does not export the taller screen
+   version over two pages. */
+.pdf-export .et-ticket {
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    min-height: calc(297mm - 20px - 3mm);
+    /* Lift the exported ticket slightly while retaining the side and bottom edge space. */
+    margin: 6px 10px 10px;
+    box-shadow: none;
+    border-radius: 0;
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+.pdf-export .et-ticket * {
+    font-size: inherit;
+}
+
+.pdf-export .et-ticket,
+.pdf-export .et-ticket * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+}
+
+/* html2canvas places inline text a few pixels lower than the browser's print
+   engine. Lift text only, keeping the cards and table backgrounds stationary. */
+.pdf-export .et-ticket .et-head > *,
+.pdf-export .et-ticket .et-title > *,
+.pdf-export .et-ticket .et-meta > div > *,
+.pdf-export .et-ticket .et-route > *,
+.pdf-export .et-ticket .et-flight > div > *,
+.pdf-export .et-ticket .et-pax > div > *,
+.pdf-export .et-ticket .et-bag > div > *,
+.pdf-export .et-ticket .et-bag-route,
+.pdf-export .et-ticket .et-foot-note,
+.pdf-export .et-ticket .et-empty,
+.pdf-export .et-ticket .et-note > *,
+.pdf-export .et-ticket .et-foot > *,
+.pdf-export .et-ticket .et-fare-sum > div {
+    transform: translateY(-4px);
+}
+
+#print-section.pdf-export .et-ticket .et-fare th,
+#print-section.pdf-export .et-ticket .et-fare td,
+#print-section.pdf-export .et-ticket .et-table th,
+#print-section.pdf-export .et-ticket .et-table td {
+    padding-top: 2px !important;
+    padding-bottom: 10px !important;
+}
+
+.pdf-export .et-ticket .et-head {
+    align-items: center;
+    gap: 20px;
+    padding: 12px 16px;
+    background: var(--et-tint);
+}
+
+.pdf-export .et-ticket .et-brand img { max-height: 38px !important; }
+.pdf-export .et-ticket .et-brand h1 { font-size: 15px; }
+.pdf-export .et-ticket .et-brand p,
+.pdf-export .et-ticket .et-contact { display: none; }
+
+.pdf-export .et-ticket .et-contact-print {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    row-gap: 2px;
+    max-width: 58%;
+    margin: 0;
+    font-size: 10.5px;
+    color: var(--et-muted);
+}
+
+.pdf-export .et-ticket .et-contact-print dt {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.pdf-export .et-ticket .et-contact-print dt::after { content: ":"; }
+.pdf-export .et-ticket .et-contact-print dd { margin: 0; color: var(--et-ink); }
+.pdf-export .et-ticket .et-title { padding: 12px 16px 0; }
+.pdf-export .et-ticket .et-title h2 { font-size: 19px; }
+.pdf-export .et-ticket .et-title p,
+.pdf-export .et-ticket .et-expiry { font-size: 10.5px; }
+.pdf-export .et-ticket .et-badge { font-size: 11px; padding: 4px 10px; }
+
+.pdf-export .et-ticket .et-meta,
+.pdf-export .et-ticket .et-sec,
+.pdf-export .et-ticket .et-note { margin: 12px 16px 0; }
+.pdf-export .et-ticket .et-meta > div { padding: 8px 12px; }
+.pdf-export .et-ticket .et-lbl { font-size: 9.5px; margin-bottom: 1px; }
+.pdf-export .et-ticket .et-val { font-size: 12.5px; }
+.pdf-export .et-ticket .et-sec-h { padding: 7px 12px; font-size: 12px; }
+.pdf-export .et-ticket .et-sec-h svg { width: 14px; height: 14px; }
+.pdf-export .et-ticket .et-route { padding: 8px 12px; }
+.pdf-export .et-ticket .et-route strong { font-size: 12.5px; }
+.pdf-export .et-ticket .et-route span { font-size: 10.5px; }
+.pdf-export .et-ticket .et-layover { padding: 4px 12px; font-size: 10px; }
+.pdf-export .et-ticket .et-flight > div { padding: 10px 12px; }
+.pdf-export .et-ticket .et-flight .et-lbl { margin-bottom: 3px; }
+.pdf-export .et-ticket .et-sub { font-size: 10px; margin-top: 1px; }
+.pdf-export .et-ticket .et-pax > div { padding: 8px 12px; }
+.pdf-export .et-ticket .et-pax .et-val { font-size: 12px; }
+.pdf-export .et-ticket .et-bag > div { padding: 10px 12px; }
+.pdf-export .et-ticket .et-bag h4 { font-size: 10.5px; }
+.pdf-export .et-ticket .et-kg { font-size: 14px; margin: 1px 0; }
+.pdf-export .et-ticket .et-bag ul { font-size: 10.5px; margin-top: 4px; }
+.pdf-export .et-ticket .et-bag li { padding: 2px 0; }
+.pdf-export .et-ticket .et-bag-route,
+.pdf-export .et-ticket .et-sub-h { padding: 6px 12px 0; font-size: 10.5px; }
+.pdf-export .et-ticket .et-foot-note,
+.pdf-export .et-ticket .et-empty { padding: 5px 12px; font-size: 10px; }
+.pdf-export .et-ticket .et-fare,
+.pdf-export .et-ticket .et-table { font-size: 11.5px; }
+.pdf-export .et-ticket .et-fare th,
+.pdf-export .et-ticket .et-fare td,
+.pdf-export .et-ticket .et-table th,
+.pdf-export .et-ticket .et-table td { padding: 6px 12px !important; }
+.pdf-export .et-ticket .et-fare th,
+.pdf-export .et-ticket .et-table th { font-size: 9.5px; }
+.pdf-export .et-ticket .et-fare-sum { padding: 4px 12px; }
+.pdf-export .et-ticket .et-fare-sum > div { padding: 3px 0; font-size: 11.5px; }
+.pdf-export .et-ticket .et-fare-sum .et-tot { margin-top: 3px; padding-top: 6px; }
+.pdf-export .et-ticket .et-fare-sum .et-tot b { font-size: 13px; }
+.pdf-export .et-ticket .et-note { margin-bottom: 12px; padding: 9px 12px; font-size: 10.5px; }
+.pdf-export .et-ticket .et-note h5 { font-size: 11.5px; margin-bottom: 3px; }
+.pdf-export .et-ticket .et-foot { margin-top: auto; padding: 8px 16px; font-size: 10.5px; }
+
+.pdf-export .et-ticket--dense .et-head { padding: 8px 14px; }
+.pdf-export .et-ticket--dense .et-title { padding: 6px 14px 0; }
+.pdf-export .et-ticket--dense .et-meta,
+.pdf-export .et-ticket--dense .et-sec,
+.pdf-export .et-ticket--dense .et-note { margin: 7px 14px 0; }
+.pdf-export .et-ticket--dense .et-meta > div,
+.pdf-export .et-ticket--dense .et-pax > div { padding: 5px 12px; }
+.pdf-export .et-ticket--dense .et-route,
+.pdf-export .et-ticket--dense .et-sec-h { padding: 5px 12px; }
+.pdf-export .et-ticket--dense .et-flight > div,
+.pdf-export .et-ticket--dense .et-bag > div { padding: 6px 12px; }
+.pdf-export .et-ticket--dense .et-flight .et-lbl { margin-bottom: 1px; }
+.pdf-export .et-ticket--dense .et-layover { padding: 2px 12px; }
+.pdf-export .et-ticket--dense .et-fare th,
+.pdf-export .et-ticket--dense .et-fare td,
+.pdf-export .et-ticket--dense .et-table th,
+.pdf-export .et-ticket--dense .et-table td { padding: 4px 12px !important; }
+.pdf-export .et-ticket--dense .et-note { margin-bottom: 8px; padding: 6px 12px; font-size: 9px; line-height: 1.25; }
+.pdf-export .et-ticket--dense { line-height: 1.25; }
+.pdf-export .et-ticket--dense .et-title h2 { font-size: 16px; }
+.pdf-export .et-ticket--dense .et-val { font-size: 11.5px; }
+.pdf-export .et-ticket--dense .et-sub { font-size: 9px; margin-top: 0; }
+.pdf-export .et-ticket--dense .et-kg { font-size: 12px; }
+.pdf-export .et-ticket--dense .et-bag ul,
+.pdf-export .et-ticket--dense .et-foot-note { display: none; }
+.pdf-export .et-ticket--dense .et-bag-route { padding: 4px 12px 0; }
+.pdf-export .et-ticket--dense .et-foot { padding: 5px 14px; }
+
 /* Print fills one A4 sheet (10px page margin): sizes sit between the screen layout and a
    compact one, and the ticket stretches to the page height so the footer sits at the bottom. */
 @media print {
@@ -1164,7 +1319,6 @@ const passengerName = (traveller) =>
     .et-ticket th,
     .et-ticket td {
         border: 0;
-        background: #fff !important;
     }
 
     .et-ticket .et-fare th,
@@ -1196,68 +1350,14 @@ const passengerName = (traveller) =>
         border-radius: 0;
         font-size: 11.5px;
         line-height: 1.35;
-        background: #fff;
-        color: #000;
-
-        /* Black and white, high contrast: every palette colour collapses to black on white. */
-        --et-navy: #000;
-        --et-blue: #000;
-        --et-ink: #000;
-        --et-muted: #222;
-        --et-line: #000;
-        --et-tint: #fff;
-        --et-info: #fff;
-        --et-ok: #000;
-        --et-okbg: #fff;
-        --et-warn: #000;
-        --et-warnbg: #fff;
-        --et-bad: #000;
-        --et-badbg: #fff;
     }
 
-    .et-ticket .et-brand img {
-        filter: grayscale(1) contrast(1.4);
-    }
-
-    /* Filled bars become outlined so nothing relies on a coloured background. */
-    .et-ticket .et-route {
-        background: #fff;
-        color: #000;
-        border-bottom: 1.5px solid #000;
-    }
-
-    .et-ticket .et-route span {
-        color: #000;
-    }
-
-    .et-ticket .et-head,
-    .et-ticket .et-sec-h {
-        border-bottom: 1.5px solid #000;
-    }
-
-    .et-ticket .et-sec-h,
-    .et-ticket .et-lbl,
-    .et-ticket .et-fare th,
-    .et-ticket .et-table th {
-        font-weight: 700;
-    }
-
-    .et-ticket .et-badge {
-        border: 1.5px solid #000;
-        font-weight: 700;
-    }
-
-    .et-ticket .et-layover {
-        border-top: 1px dashed #000;
-        border-bottom: 1px dashed #000;
-    }
-
-    .et-ticket .et-note {
-        border: 1px solid #000;
-    }
-
-    .et-ticket .et-bag li {
-        border-top-color: #000;
+    /* Preserve the on-screen ticket palette in the printed ticket. This shared
+       component is used by both customer and admin booking pages. */
+    .et-ticket,
+    .et-ticket * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     .et-sec,

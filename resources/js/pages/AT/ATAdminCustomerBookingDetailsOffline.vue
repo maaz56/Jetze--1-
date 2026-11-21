@@ -36,7 +36,6 @@ import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "@/services/stores/auth";
-import html2canvas from "html2canvas";
 import apiService from "@/config/axios";
 import { cn, formatAmountWithCurrency, calculateLayoverDetails, calculateFinalPrice } from "@/lib/utils";
 
@@ -56,6 +55,7 @@ import Badge from "@/components/ui/badge/Badge.vue";
 import { SEND_EMAIL } from "../../services/store/actions.type";
 import Label from "@/components/common/Label.vue";
 import ATFlowLoader from "@/components/common/ATFlowLoader.vue";
+import CheckoutLoadingOverlay from "@/components/common/CheckoutLoadingOverlay.vue";
 import { Textarea } from "@/components/ui/textarea";
 
 
@@ -71,6 +71,9 @@ const isBookingDetailsLoading = ref(true);
 const isPnrDetailsLoading = ref(true);
 const isAgentLoading = ref(true);
 const actionLoading = ref(false);
+const isIssuingTicket = ref(false);
+const isDownloading = ref(false);
+const pdfError = ref("");
 const agent_id = route.query.agent_id;
 const error = ref(null);
 const isLoading = computed(() => isBookingDetailsLoading.value );
@@ -787,12 +790,14 @@ async function confirmBooking() {
 
     error.value = '';
     actionLoading.value = true;
-    if (!pnr) {
-        error.value = "No PNR provided.";
-        actionLoading.value = false;
-        return;
-    }
+    isIssuingTicket.value = true;
+
     try {
+        if (!pnr) {
+            error.value = "No PNR provided.";
+            return;
+        }
+
         await store.dispatch("flight/" + CONFIRM_BOOKING, {
             pnr: route.query.pnr,
             bookingId: bookingDetails.value[0].id,
@@ -811,6 +816,7 @@ async function confirmBooking() {
         error.value = err?.response?.data?.message || err?.message || 'Failed to confirm booking';
     } finally {
         actionLoading.value = false;
+        isIssuingTicket.value = false;
     }
 }
 
@@ -942,50 +948,47 @@ const printBooking = () => {
     document.body.removeChild(printContainer);
 };
 
-const downloadPDF = () => {
+const downloadPDF = async () => {
+    if (isDownloading.value) return;
+
     const element = document.getElementById("print-section");
+    if (!element) return;
 
-    // Temporarily make the element visible for PDF generation
-    const a4Width = 210; // A4 width in mm
-    const a4Height = 297; // A4 height in mm
-    const contentWidth = element.scrollWidth; // Content width in pixels
-    const contentHeight = element.scrollHeight; // Content height in pixels
+    pdfError.value = "";
+    isDownloading.value = true;
 
-    // Convert pixels to mm (1px ≈ 0.264583mm)
-    const contentWidthMM = contentWidth * 0.264583;
-    const contentHeightMM = contentHeight * 0.264583;
-
-    // Calculate the scaling factor
-    const scaleWidth = a4Width / contentWidthMM;
-    const scaleHeight = a4Height / contentHeightMM;
-    const scale = Math.min(scaleWidth, scaleHeight);
-
-    // Options for the PDF
-    const options = {
-        margin: 2,
-        filename: `booking_${booking_id}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-            scale: 2,
-            logging: true,
-            useCORS: true,
-            windowWidth: element.scrollWidth,
-            windowHeight: element.scrollHeight,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    };
-
-    // Generate and download the PDF
-    html2pdf()
-        .from(element)
-        .set(options)
-        .save()
-        .then(() => {
-            // Restore the original styles
-            element.style.display = "";
-            element.style.visibility = "";
-            element.style.opacity = "";
-        });
+    try {
+        await html2pdf()
+            .from(element)
+            .set({
+                margin: 0,
+                filename: `booking_${booking_id}.pdf`,
+                image: { type: "jpeg", quality: 0.92 },
+                html2canvas: {
+                    // 1.5 keeps the A4 ticket crisp while rendering far fewer pixels than 2x.
+                    scale: 1.5,
+                    logging: false,
+                    useCORS: true,
+                    backgroundColor: "#ffffff",
+                    windowWidth: element.scrollWidth,
+                    windowHeight: element.scrollHeight,
+                    // Apply the A4 export layout only in html2canvas's cloned DOM.
+                    // The ticket the customer is viewing never changes size or flickers.
+                    onclone: (clonedDocument) => {
+                        clonedDocument
+                            .querySelector(".html2pdf__container #print-section")
+                            ?.classList.add("pdf-export");
+                    },
+                },
+                jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            })
+            .save();
+    } catch (error) {
+        console.error("Unable to create booking PDF", error);
+        pdfError.value = "The PDF could not be created. Please try again.";
+    } finally {
+        isDownloading.value = false;
+    }
 };
 function calculateTaxes(fare) {
     return (
@@ -1041,6 +1044,11 @@ onMounted(async () => {
 
 <template>
     <section>
+        <CheckoutLoadingOverlay
+            v-if="isIssuingTicket"
+            title="Issuing e-ticket"
+            message="We are issuing this customer's ticket. Please do not refresh or close this page."
+        />
         <ATFlowLoader
             v-if="isLoading"
             title="Loading booking details"
@@ -1070,11 +1078,12 @@ onMounted(async () => {
                         <MailIcon class="h-5 w-5 inline-block mr-1" />
                         Email
                     </button> -->
-                    <button @click="downloadPDF"
-                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2">
+                    <button @click="downloadPDF" :disabled="isDownloading"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2 disabled:cursor-wait disabled:opacity-70">
                         <Download class="h-4 w-4" />
-                        Download PDF
+                        {{ isDownloading ? "Preparing PDF..." : "Download PDF" }}
                     </button>
+                    <span v-if="pdfError" class="self-center text-sm text-red-600" role="alert">{{ pdfError }}</span>
                     <button @click="toggleFareInfo"
                         class="px-4 py-2 text-sm font-medium text-white bg-primary/90 rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center gap-2">
                         <EyeOff class="h-4 w-4" />

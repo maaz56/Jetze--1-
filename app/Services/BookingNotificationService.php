@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\BookingConfirmedMail;
 use App\Models\FlightBookings;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class BookingNotificationService
@@ -13,6 +14,20 @@ class BookingNotificationService
     public function ticketed(FlightBookings $booking): void
     {
         if (! config('app.booking_email_notifications', true)) {
+            return;
+        }
+
+        $hasTicketNumber = filled($booking->ticket_number)
+            || $booking->pessangers()
+                ->whereNotNull('ticketNumber')
+                ->where('ticketNumber', '!=', '')
+                ->exists();
+
+        if (! $hasTicketNumber) {
+            Log::info('Ticketed booking email skipped: ticket number is not available yet.', [
+                'booking_id' => $booking->id,
+            ]);
+
             return;
         }
 

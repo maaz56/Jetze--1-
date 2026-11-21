@@ -63,6 +63,9 @@ const store = useStore();
 const user = computed(() => authStore.user);
 const user_id = computed(() => user.value?.id);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
+const canReceiveAdminNotifications = computed(() =>
+    ['admin', 'reservation', 'salesman'].includes(user.value?.role),
+);
 const agentLedger = computed(() => store.getters["ledger/agentLedgerData"]);
 const ledgerBalanceAmount = computed(() => {
     const amount = agentLedger.value?.balance_money?.amount ?? agentLedger.value?.balance;
@@ -455,8 +458,8 @@ onUnmounted(() => {
                             </button>
 
                             <NotificationsAlert
-                                v-if="isAuthenticated"
-                                :is-admin="['admin', 'reservation', 'salesman'].includes(user?.role)"
+                                v-if="isAuthenticated && canReceiveAdminNotifications"
+                                is-admin
                                 :button-class="isTransparent
                                     ? 'h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20'
                                     : 'h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"

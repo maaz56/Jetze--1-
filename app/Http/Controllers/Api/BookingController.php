@@ -48,6 +48,10 @@ class BookingController extends Controller
     /** AT may round its returned fare by up to one AED after CreateItinerary. */
     private const AT_AMOUNT_TOLERANCE = '1.00';
 
+    /** AT can take a few seconds to expose e-ticket numbers after StartPay. */
+    private const AT_TICKET_NUMBER_FETCH_ATTEMPTS = 3;
+    private const AT_TICKET_NUMBER_FETCH_DELAY_SECONDS = 4;
+
     protected $safepayService;
 
     protected $priceQuoteService;
@@ -966,6 +970,154 @@ class BookingController extends Controller
         return is_string($airlinePnr) && trim($airlinePnr) !== '' ? trim($airlinePnr) : null;
     }
 
+    /**
+     * Retrieve AT ticket details after StartPay without ever repeating StartPay.
+     *
+     * AT can acknowledge ticket issuance before its RetrieveBooking response has
+     * TicketInfo available. Each lookup waits four seconds, including the first
+     * one, and stops as soon as at least one e-ticket number is returned.
+     */
+    private function fetchAtTicketDetailsAfterIssuance(
+        AtApiService $atApiService,
+        FlightBookings $booking,
+        array $reservation,
+    ): ?array {
+        $transactionId = $this->atTransactionId($booking)
+            ?? $reservation['TransactionID']
+            ?? null;
+
+        if (! is_scalar($transactionId) || trim((string) $transactionId) === '') {
+            Log::warning('AT ticket number fetch skipped: transaction ID is unavailable.', [
+                'booking_id' => $booking->id,
+                'attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+            ]);
+
+            return null;
+        }
+
+        $lastResponse = null;
+
+        for ($attempt = 1; $attempt <= self::AT_TICKET_NUMBER_FETCH_ATTEMPTS; $attempt++) {
+            Log::info('AT ticket number fetch scheduled.', [
+                'booking_id' => $booking->id,
+                'attempt' => $attempt,
+                'max_attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+                'delay_seconds' => self::AT_TICKET_NUMBER_FETCH_DELAY_SECONDS,
+            ]);
+
+            sleep(self::AT_TICKET_NUMBER_FETCH_DELAY_SECONDS);
+
+            Log::info('AT ticket number fetch started.', [
+                'booking_id' => $booking->id,
+                'attempt' => $attempt,
+                'max_attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+            ]);
+
+            try {
+                $lastResponse = $atApiService->getBookingDetails(
+                    new Request(['pnr' => trim((string) $transactionId)])
+                );
+                $ticketNumbers = $this->atTicketNumbers($lastResponse);
+                $ticketNumberCount = count($ticketNumbers);
+            } catch (\Throwable $exception) {
+                // The ticket is already issued at this point. A lookup problem
+                // must not roll that successful issuance back locally.
+                Log::warning('AT ticket number fetch attempt failed.', [
+                    'booking_id' => $booking->id,
+                    'attempt' => $attempt,
+                    'max_attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+                    'exception' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            if ($ticketNumberCount > 0) {
+                $this->persistAtTicketNumbers($booking, $ticketNumbers);
+
+                Log::info('AT ticket number fetch succeeded.', [
+                    'booking_id' => $booking->id,
+                    'attempt' => $attempt,
+                    'ticket_number_count' => $ticketNumberCount,
+                ]);
+
+                return $lastResponse;
+            }
+
+            Log::warning('AT ticket number is not available yet.', [
+                'booking_id' => $booking->id,
+                'attempt' => $attempt,
+                'max_attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+                'will_retry' => $attempt < self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+            ]);
+        }
+
+        Log::error('AT ticket number fetch exhausted all attempts.', [
+            'booking_id' => $booking->id,
+            'attempts' => self::AT_TICKET_NUMBER_FETCH_ATTEMPTS,
+            'delay_seconds' => self::AT_TICKET_NUMBER_FETCH_DELAY_SECONDS,
+        ]);
+
+        return $lastResponse;
+    }
+
+    /** Return unique, non-empty AT TicketInfo values without logging their contents. */
+    private function atTicketNumbers(mixed $payload): array
+    {
+        $ticketNumbers = [];
+        $collectTicketNumbers = function (mixed $value) use (&$collectTicketNumbers, &$ticketNumbers): void {
+            if (! is_array($value)) {
+                return;
+            }
+
+            foreach ($value as $key => $item) {
+                if (in_array(strtolower((string) $key), ['ticketno', 'ticketnumber', 'ticket_number'], true)
+                    && is_scalar($item)
+                    && trim((string) $item) !== '') {
+                    $ticketNumbers[] = trim((string) $item);
+                }
+
+                $collectTicketNumbers($item);
+            }
+        };
+
+        $collectTicketNumbers($payload);
+
+        return array_values(array_unique($ticketNumbers));
+    }
+
+    /** Count unique, non-empty AT TicketInfo values without logging their contents. */
+    private function atTicketNumberCount(mixed $payload): int
+    {
+        return count($this->atTicketNumbers($payload));
+    }
+
+    /** Store supplier ticket numbers so future ticketed-email checks are reliable. */
+    private function persistAtTicketNumbers(FlightBookings $booking, array $ticketNumbers): bool
+    {
+        if ($ticketNumbers === []) {
+            return false;
+        }
+
+        $booking->ticket_number = implode(', ', $ticketNumbers);
+        $booking->save();
+
+        return true;
+    }
+
+    /** A ticketed email must only be sent once at least one e-ticket number exists. */
+    private function bookingHasTicketNumber(FlightBookings $booking): bool
+    {
+        if (filled($booking->ticket_number)) {
+            return true;
+        }
+
+        return $booking->pessangers()
+            ->whereNotNull('ticketNumber')
+            ->where('ticketNumber', '!=', '')
+            ->exists();
+    }
+
     public function getMyTravellers(Request $request)
     {
         $userId = auth()->id();
@@ -1099,6 +1251,18 @@ class BookingController extends Controller
                 'pnr' => $this->atTransactionId($booking) ?? $request->pnr,
             ]);
             $pnrData = $atApiService->getBookingDetails($atRequest);
+
+            $hadTicketNumber = $booking && $this->bookingHasTicketNumber($booking);
+            $ticketNumbers = $this->atTicketNumbers($pnrData);
+            if ($booking && $this->persistAtTicketNumbers($booking, $ticketNumbers)
+                && ! $hadTicketNumber
+                && strtolower((string) $booking->status) === 'ticketed') {
+                $this->sendBookingStatusMail($booking, 'ticketed');
+                Log::info('Ticketed booking email queued after ticket number became available.', [
+                    'booking_id' => $booking->id,
+                    'ticket_number_count' => count($ticketNumbers),
+                ]);
+            }
 
             $crsPnr = $this->atCrsPnr($pnrData);
             $airlinePnr = $this->atAirlinePnr($pnrData);
@@ -1331,6 +1495,14 @@ class BookingController extends Controller
             return;
         }
 
+        if ($status === 'ticketed' && ! $this->bookingHasTicketNumber($booking)) {
+            Log::info('Ticketed booking email skipped: ticket number is not available yet.', [
+                'booking_id' => $booking->id,
+            ]);
+
+            return;
+        }
+
         $admin = User::where('role', 'admin')->first();
         $flightDataForMail = json_decode($booking->flight_data, true) ?? [];
 
@@ -1497,6 +1669,15 @@ class BookingController extends Controller
 
             // Final step of AT's flow: GetItineraryStatus after StartPay (HP).
             $res['itinerary_status'] = $atApiService->itineraryStatusForReservation($storedReservation, $res);
+
+            // StartPay may complete before AT has populated TicketInfo. Retry
+            // only the read-only RetrieveBooking call; never retry ticket
+            // issuance itself, otherwise a duplicate supplier charge is possible.
+            $res['ticket_details'] = $this->fetchAtTicketDetailsAfterIssuance(
+                $atApiService,
+                $booking,
+                $storedReservation,
+            );
         } elseif ($flightProvider === 'hakimi') {
             // Hakimi has already accepted the supplier booking before this
             // payment screen is reached. Wallet payment only confirms the
@@ -1960,6 +2141,18 @@ class BookingController extends Controller
                 ]);
         }
 
+        if (collect($validated['pessangers'])->contains(
+            fn (array $passenger) => filled($passenger['ticketNumber'] ?? null)
+        )) {
+            $booking = FlightBookings::find($validated['bookingId']);
+            if ($booking) {
+                $this->sendBookingStatusMail($booking, 'ticketed');
+                Log::info('Ticketed booking email queued after manual ticket number entry.', [
+                    'booking_id' => $booking->id,
+                ]);
+            }
+        }
+
         return response()->json([
             'message' => 'Ticket numbers updated successfully',
         ]);
@@ -2000,6 +2193,14 @@ class BookingController extends Controller
                 ? trim($validated['ticket_number'])
                 : null;
             $passenger->save();
+
+            if (filled($passenger->ticketNumber)) {
+                $this->sendBookingStatusMail($booking, 'ticketed');
+                Log::info('Ticketed booking email queued after manual ticket number entry.', [
+                    'booking_id' => $booking->id,
+                    'passenger_id' => $passenger->id,
+                ]);
+            }
         }
 
         return response()->json([
