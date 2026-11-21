@@ -974,16 +974,44 @@ class BookingController extends Controller
             return response()->json(['passengers' => []]);
         }
 
-        // Fetch all passengers for this user, newest first
+        $keyOf = static fn ($first, $last, $doc) => strtolower(trim($first . '|' . $last . '|' . $doc));
+        $seen = [];
+        $unique = [];
+
+        // Travellers saved at checkout / manually come first (most recently used first)
+        // so they are available even when the booking itself failed.
+        $savedTravellers = \App\Models\AgentTraveller::where('agent_id', (string) $userId)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get();
+        foreach ($savedTravellers as $saved) {
+            $key = $keyOf($saved->first_name, $saved->last_name, $saved->document_no);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = [
+                'id' => 'saved-' . $saved->id,
+                'type' => $saved->type,
+                'title' => $saved->title,
+                'first_name' => $saved->first_name,
+                'last_name' => $saved->last_name,
+                'nationality' => $saved->nationality,
+                'document_type' => $saved->doc_type,
+                'document_no' => $saved->document_no,
+                'expiry_date' => $saved->expiry_date,
+                'issue_country' => $saved->issue_country,
+                'gender' => $saved->gender,
+                'dob' => $saved->date_of_birth,
+            ];
+        }
+
+        // Then passengers from previous bookings, newest first, deduplicated.
         $allPassengers = FlightPassenger::where('user_id', $userId)
             ->orderBy('id', 'desc')
             ->get();
-
-        // Deduplicate: keep only the most-recent record per (first_name + last_name + document_no) combo
-        $seen = [];
-        $unique = [];
         foreach ($allPassengers as $passenger) {
-            $key = strtolower(trim($passenger->first_name . '|' . $passenger->last_name . '|' . $passenger->document_no));
+            $key = $keyOf($passenger->first_name, $passenger->last_name, $passenger->document_no);
             if (!isset($seen[$key])) {
                 $seen[$key] = true;
                 $unique[] = $passenger;

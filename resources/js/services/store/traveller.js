@@ -5,6 +5,7 @@ import {
     FETCH_TRAVELLERS,
     FETCH_MY_TRAVELLERS,
     SAVE_TRAVELLER,
+    SAVE_CHECKOUT_TRAVELLERS,
     UPDATE_TRAVELLER,
 } from "./actions.type";
 import {
@@ -98,6 +99,13 @@ const actions = {
         } finally {
             context.commit(NOT_IS_LOADING);
         }
+    },
+
+    // Silent upsert used by checkout; callers decide whether to toast.
+    async [SAVE_CHECKOUT_TRAVELLERS](context, params) {
+        const response = await apiService.saveCheckoutTravellers(params);
+        context.dispatch(FETCH_MY_TRAVELLERS);
+        return response.data;
     },
 
     async [UPDATE_TRAVELLER](context, params) {

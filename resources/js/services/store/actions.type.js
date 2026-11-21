@@ -191,6 +191,7 @@ export const FETCH_TRAVELLER = "fetchTraveler";
 export const FETCH_TRAVELLERS = "fetchTravelers";
 export const FETCH_MY_TRAVELLERS = "fetchMyTravellers";
 export const SAVE_TRAVELLER = "saveTraveler";
+export const SAVE_CHECKOUT_TRAVELLERS = "saveCheckoutTravellers";
 export const UPDATE_TRAVELLER = "updateTraveler";
 export const DELETE_TRAVELLER = "deleteTraveler";
 

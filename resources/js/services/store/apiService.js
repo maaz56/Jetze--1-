@@ -860,6 +860,9 @@ export default {
     saveTraveller(params) {
         return apiClient.post("/save-travellers", params);
     },
+    saveCheckoutTravellers(params) {
+        return apiClient.post("/save-checkout-travellers", params);
+    },
     getTravellers(params) {
         return apiClient.get("/get-travellers", {
             params: params,

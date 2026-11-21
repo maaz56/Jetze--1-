@@ -25,6 +25,8 @@ import {
     FETCH_CUSTOMER_SETTINGS,
     FETCH_AIRPORT_MARGINS,
     UPDATE_BOOKING_AMOUNT,
+    FETCH_MY_TRAVELLERS,
+    SAVE_CHECKOUT_TRAVELLERS,
 } from "@/services/store/actions.type";
 import {
     Dialog,
@@ -989,6 +991,99 @@ const agencyContact = computed(() => ({
 
 const travellers = ref([]);
 const travellerIndex = ref(0);
+
+// Saved travellers (manually saved, saved at checkout, or from past bookings)
+const myTravellers = computed(() => store.getters["traveller/myTravellers"] || []);
+const savedTravellerSelection = ref({});
+const savingTravellerIndex = ref(null);
+
+function getSavedTravellersForSlot(traveller) {
+    return myTravellers.value.filter((saved) => {
+        const type = saved.type || "ADT";
+        if (traveller.type === "ADT") return !["CHD", "CNN", "INF"].includes(type);
+        if (traveller.type === "CNN") return ["CHD", "CNN"].includes(type);
+        return type === traveller.type;
+    });
+}
+
+function savedTravellerLabel(saved) {
+    return [saved.title, saved.first_name, saved.last_name].filter(Boolean).join(" ");
+}
+
+function fillTravellerFromSaved(index, savedId) {
+    const saved = myTravellers.value.find((s) => String(s.id) === String(savedId));
+    const t = travellers.value[index];
+    if (!saved || !t) return;
+    savedTravellerSelection.value[index] = savedId;
+    t.title = saved.title || "";
+    t.firstName = (saved.first_name || "").toUpperCase();
+    t.lastName = (saved.last_name || "").toUpperCase();
+    t.nationality = saved.nationality || "";
+    t.documentType = saved.document_type || "passport";
+    t.documentNo = saved.document_no || "";
+    t.expiryDate = saved.expiry_date || "";
+    t.issueCountry = saved.issue_country || saved.nationality || "";
+    t.gender = saved.gender || "";
+    t.dob = saved.dob || "";
+}
+
+function travellerPayload(t) {
+    return {
+        type: t.type,
+        title: t.title,
+        firstName: t.firstName,
+        lastName: t.lastName,
+        nationality: t.nationality,
+        documentType: t.documentType,
+        documentNo: t.documentNo,
+        expiryDate: t.expiryDate,
+        issueCountry: t.issueCountry,
+        gender: t.gender,
+        dob: t.dob,
+    };
+}
+
+// Only travellers with at least a name can be saved; everything else is optional
+// so a half-filled form is still kept for the next attempt.
+const hasSavableName = (t) => !!(t.firstName?.trim() && t.lastName?.trim());
+
+async function saveTravellerManually(index) {
+    const t = travellers.value[index];
+    if (!user_id.value) {
+        toast.info("Please log in to save travellers.");
+        return;
+    }
+    if (!t || !hasSavableName(t)) {
+        toast.error("Enter first and last name before saving.");
+        return;
+    }
+    savingTravellerIndex.value = index;
+    try {
+        await store.dispatch("traveller/" + SAVE_CHECKOUT_TRAVELLERS, { travellers: [travellerPayload(t)] });
+        toast.success("Traveller saved");
+    } catch (error) {
+        toast.error(error.response?.data?.message || "Could not save traveller.");
+    } finally {
+        savingTravellerIndex.value = null;
+    }
+}
+
+// Runs before the booking request so a failed booking never loses the entered
+// details. Never blocks or fails the booking itself.
+async function saveTravellersBeforeBooking() {
+    if (!user_id.value) return;
+    const savable = travellers.value.filter(hasSavableName).map(travellerPayload);
+    if (!savable.length) return;
+    try {
+        await store.dispatch("traveller/" + SAVE_CHECKOUT_TRAVELLERS, { travellers: savable });
+    } catch (error) {
+        console.warn("Could not save travellers before booking", error);
+    }
+}
+
+watch(user_id, (id) => {
+    if (id) store.dispatch("traveller/" + FETCH_MY_TRAVELLERS);
+}, { immediate: true });
 const taxFees = ref(0);
 const totalTaxFees = ref(0);
 const totalBaseFare = ref(0);
@@ -1818,6 +1913,8 @@ async function saveBooking(type) {
         }
 
         globalError.value = "";
+
+        await saveTravellersBeforeBooking();
 
         const savedMarginBreakdown = getSavedMarginBreakdown();
         if (selectedAtBookingAncillaryItems().length || !localAtAncillarySummary.value) {
@@ -2703,6 +2800,28 @@ watch(flight, () => {
                                             <!-- Personal Details Section -->
                                             <div class="mb-6">
                                                 <h4 class="text-sm font-medium text-gray-900 mb-2">Personal details</h4>
+
+                                                <!-- Saved travellers: autofill, or save the current entry for later -->
+                                                <div v-if="user_id" class="mb-3 flex flex-col gap-2 sm:max-w-md">
+                                                    <div v-if="getSavedTravellersForSlot(traveller).length">
+                                                        <Label class="text-xs text-gray-500">Saved travellers</Label>
+                                                        <select
+                                                            class="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                            :value="savedTravellerSelection[index] || ''"
+                                                            @change="fillTravellerFromSaved(index, $event.target.value)">
+                                                            <option value="" disabled>Select a saved traveller to autofill</option>
+                                                            <option v-for="saved in getSavedTravellersForSlot(traveller)"
+                                                                :key="saved.id" :value="saved.id">
+                                                                {{ savedTravellerLabel(saved) }}{{ saved.document_no ? ` (${saved.document_no})` : '' }}
+                                                            </option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="button" @click="saveTravellerManually(index)"
+                                                        :disabled="savingTravellerIndex === index"
+                                                        class="self-start text-xs font-semibold text-primary hover:underline disabled:opacity-50">
+                                                        {{ savingTravellerIndex === index ? 'Saving...' : 'Save this traveller for later' }}
+                                                    </button>
+                                                </div>
 
                                                 <!-- Passport upload auto-fills the fields below -->
                                                 <input type="file" accept="image/*" ref="passportUpload"

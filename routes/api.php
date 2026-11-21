@@ -295,6 +295,7 @@ Route::middleware(['auth:sanctum', 'log.route'])->group(function () {
     Route::get('get-travellers', [AgentTravellerController::class, 'index']);
     Route::post('save-travellers', [AgentTravellerController::class, 'store']);
     Route::put('update-travellers', [AgentTravellerController::class, 'update']);
+    Route::post('save-checkout-travellers', [AgentTravellerController::class, 'saveFromCheckout']);
     Route::delete('delete-travellers', [AgentTravellerController::class, 'destroy']);
     Route::get('get-my-travellers', [BookingController::class, 'getMyTravellers']);
     Route::post('assign-ticket-number', [BookingController::class, 'assignTicketNumber']);

@@ -52,6 +52,62 @@ class AgentTravellerController extends Controller
         return response()->json($traveller, 201);
     }
 
+    /**
+     * Upsert the travellers entered at checkout so they are available for
+     * autofill even if the booking that follows fails. Matched per user on
+     * name + document number, so re-saving the same person updates them.
+     */
+    public function saveFromCheckout(Request $request)
+    {
+        $data = $request->validate([
+            'travellers' => 'required|array|min:1',
+            'travellers.*.firstName' => 'required|string',
+            'travellers.*.lastName' => 'required|string',
+            'travellers.*.type' => 'nullable|string',
+            'travellers.*.title' => 'nullable|string|max:10',
+            'travellers.*.gender' => 'nullable|string',
+            'travellers.*.dob' => 'nullable|string',
+            'travellers.*.nationality' => 'nullable|string',
+            'travellers.*.documentType' => 'nullable|string',
+            'travellers.*.documentNo' => 'nullable|string',
+            'travellers.*.expiryDate' => 'nullable|string',
+            'travellers.*.issueCountry' => 'nullable|string',
+        ]);
+
+        $agentId = (string) Auth::id();
+        $saved = [];
+
+        foreach ($data['travellers'] as $t) {
+            $firstName = trim($t['firstName']);
+            $lastName = trim($t['lastName']);
+            $documentNo = trim($t['documentNo'] ?? '');
+
+            $traveller = AgentTraveller::updateOrCreate(
+                [
+                    'agent_id' => $agentId,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'document_no' => $documentNo,
+                ],
+                [
+                    'type' => $t['type'] ?? 'ADT',
+                    'gender' => $t['gender'] ?? '',
+                    'title' => $t['title'] ?? '',
+                    'date_of_birth' => $t['dob'] ?? '',
+                    'nationality' => $t['nationality'] ?? '',
+                    'doc_type' => $t['documentType'] ?? 'passport',
+                    'expiry_date' => $t['expiryDate'] ?? '',
+                    'issue_country' => $t['issueCountry'] ?? '',
+                ]
+            );
+            // Bump updated_at so the most recently used traveller lists first.
+            $traveller->touch();
+            $saved[] = $traveller;
+        }
+
+        return response()->json(['saved' => count($saved)], 201);
+    }
+
     public function show(AgentTraveller $agentTraveller)
     {
         return response()->json($agentTraveller);
