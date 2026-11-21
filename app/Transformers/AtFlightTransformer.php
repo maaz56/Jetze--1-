@@ -57,13 +57,6 @@ class AtFlightTransformer
         $resultIndexByStreamKey = [];
         $fareType = $this->resolveFareType($flightData, $params);
         $passengerCounts = $this->passengerCounts($params);
-        // Providers AT lets us hold, remembered when the search ran. null = AT
-        // does not publish the list for this client; Hold + HoldInfo then decide.
-        $cachedHold = Cache::get(
-            \App\Services\AtApiService::searchHoldProvidersCacheKey($flightData['TUIList'] ?? $flightData['TUI'] ?? null) ?? '-'
-        );
-        $holdProviders = is_array($cachedHold) ? ($cachedHold['providers'] ?? null) : null;
-
         $provider = [
             "name" => "at",
             "identifier" => "AT",
@@ -359,9 +352,9 @@ class AtFlightTransformer
                             $displayCurrency,
                         ),
                         "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
-                        // A fare is holdable only when AT says Hold=true, gives a
-                        // HoldInfo, and the provider is in HoldConfirmEnabledProviders.
-                        ...$this->holdEligibility($fare, $holdProviders),
+                        // A fare is holdable only when AT says Hold=true
+                        // and HoldInfo is present.
+                        ...$this->holdEligibility($fare),
                         "fare_policies" => [],
                         "passenger_fares" => [
                             [
@@ -1517,18 +1510,16 @@ class AtFlightTransformer
      *
      * @return array{hold: bool, hold_info: ?string, hold_status: string, hold_message: string}
      */
-    private function holdEligibility(array $fare, ?array $holdProviders): array
+    private function holdEligibility(array $fare): array
     {
         $rawHold = $fare['Hold'] ?? null;
         $flagged = $rawHold === true || strtolower((string) $rawHold) === 'true';
         $holdInfo = trim((string) ($fare['HoldInfo'] ?? ''));
-        $provider = strtoupper(trim((string) ($fare['Provider'] ?? '')));
 
+        // Eligible only when Hold is true AND HoldInfo is present.
         $reason = match (true) {
             ! $flagged => 'Hold not available: the airline does not allow holding this fare.',
             $holdInfo === '' => 'Hold not available: no hold details were returned for this fare.',
-            $holdProviders !== null && ($provider === '' || ! in_array($provider, $holdProviders, true))
-                => 'Hold not available: hold is not enabled for this airline source on your account.',
             default => null,
         };
 
