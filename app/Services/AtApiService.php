@@ -381,7 +381,21 @@ class AtApiService
                 ]);
 
                 if (isset($responseBody['Msg'][0]) && $responseBody['Msg'][0] === "Success") {
-                    return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch);
+                    $webSettings = null;
+
+                    try {
+                        // AT WebSettings are tied to the TUI created by ExpressSearch.
+                        // Load them now so streamed results and saved quotes carry the
+                        // same SSR/ancillary capability settings.
+                        $webSettings = $this->getWebSettings($responseBody['TUI']);
+                    } catch (\Throwable $exception) {
+                        Log::warning('Unable to load AT WebSettings after ExpressSearch.', [
+                            'tui' => $responseBody['TUI'],
+                            'message' => $exception->getMessage(),
+                        ]);
+                    }
+
+                    return $this->getSearchFlightsRes($responseBody['TUI'], $onBatch, $webSettings);
                 }
 
                 Log::warning('Flight search returned non-success message');
@@ -544,7 +558,7 @@ class AtApiService
     }
 
 
-public function getSearchFlightsRes($tui, ?callable $onBatch = null)
+public function getSearchFlightsRes($tui, ?callable $onBatch = null, ?array $webSettings = null)
 {
     $pollingStartedAt = microtime(true);
 
@@ -559,6 +573,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         }
 
         $mockBody['Completed'] = (string) ($mockBody['Completed'] ?? 'true');
+        $mockBody['web_settings'] = $webSettings;
         $page = 1;
         $isComplete = strtolower($mockBody['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
@@ -597,6 +612,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
         $response = $this->client->send($request);
         $supplierMs = round((microtime(true) - $supplierRequestStartedAt) * 1000, 2);
         $body = json_decode($response->getBody(), true);
+        $body['web_settings'] = $webSettings;
         $isComplete = strtolower($body['Completed'] ?? 'false');
         $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
         $this->logGetExpSearchRawPage($page, $body, $pageStatus);
@@ -659,6 +675,7 @@ public function getSearchFlightsRes($tui, ?callable $onBatch = null)
             $response = $this->client->send($request);
             $supplierMs = round((microtime(true) - $supplierRequestStartedAt) * 1000, 2);
             $newBody = json_decode($response->getBody(), true);
+            $newBody['web_settings'] = $webSettings;
             $isComplete = strtolower($newBody['Completed'] ?? 'false');
             $pageStatus = $isComplete === 'true' ? 'complete' : 'incomplete';
             $this->logGetExpSearchRawPage($page, $newBody, $pageStatus);
@@ -913,11 +930,31 @@ private function extractTrips($tripsData): array
 
     return $trips;
 }
-    /** WebSettings are never cached: every call is a live request to AT. */
+    /**
+     * WebSettings are scoped to AT's TUI, so cache a successful response only
+     * for the lifetime of the related quote/search session.
+     */
     public function getWebSettings($tui): ?array
     {
         $webSettingsUrl = $this->signBaseUrl . '/Utils/WebSettings';
-        Log::info('Getting WebSettings from AT.', ['url' => $webSettingsUrl]);
+        $cacheKey = 'at_web_settings_' . hash('sha256', (string) $tui);
+
+        if (Cache::has($cacheKey)) {
+            $webSettings = Cache::get($cacheKey);
+            Log::info('AT WebSettings cache hit.', [
+                'cache_key' => $cacheKey,
+                'tui' => $tui,
+                'web_settings' => $webSettings,
+            ]);
+
+            return is_array($webSettings) ? $webSettings : null;
+        }
+
+        Log::info('AT WebSettings cache miss; requesting from AT.', [
+            'cache_key' => $cacheKey,
+            'tui' => $tui,
+            'url' => $webSettingsUrl,
+        ]);
 
         $response = $this->client->post($webSettingsUrl, [
             'json' => [
@@ -925,12 +962,20 @@ private function extractTrips($tripsData): array
                 'TUI' => $tui,
             ],
         ]);
-        Log::info('getwebSettinfs Request:' . json_encode([
-            'ClientID' => $this->clientId,
-            'TUI' => $tui,
-        ], JSON_PRETTY_PRINT));
         $responseBody = json_decode($response->getBody()->getContents(), true);
-        Log::info('GetWebSettings response: ', $responseBody);
+
+        if (is_array($responseBody)) {
+            Log::info('AT WebSettings response.', [
+                'tui' => $tui,
+                'web_settings' => $responseBody,
+            ]);
+            Cache::put($cacheKey, $responseBody, now()->addMinutes(15));
+            Log::info('AT WebSettings cached.', [
+                'cache_key' => $cacheKey,
+                'tui' => $tui,
+                'web_settings' => $responseBody,
+            ]);
+        }
 
         return is_array($responseBody) ? $responseBody : null;
     }

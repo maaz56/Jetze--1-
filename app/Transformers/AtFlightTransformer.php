@@ -64,6 +64,7 @@ class AtFlightTransformer
             "TUI" => $flightData['TUIList'] ??$flightData['TUI'] ?? null,
             "contentSource" => "AT",
             "fare_type" => $fareType,
+            "web_settings" => $flightData['web_settings'] ?? null,
         ];
 
         foreach ($processed['flights'] ?? [] as $item) {

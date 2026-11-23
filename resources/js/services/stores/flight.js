@@ -129,9 +129,6 @@ export const useFlightStore = defineStore("flight", {
             this.sooperFlights = [];
             this.validationErrors = [];
 
-            const debugId = globalThis.crypto?.randomUUID?.()
-                ?? `at-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
             const previousSearch = { ...params, timestamp: Date.now() };
             localStorage.setItem("previous_search", JSON.stringify(previousSearch));
 
@@ -150,7 +147,6 @@ export const useFlightStore = defineStore("flight", {
                 const headers = {
                     Accept: "text/event-stream",
                     "Content-Type": "application/json",
-                    "X-Search-Debug-ID": debugId,
                 };
 
                 if (xsrfToken) {
