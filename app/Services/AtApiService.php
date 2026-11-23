@@ -944,35 +944,41 @@ private function extractTrips($tripsData): array
             Log::info('AT WebSettings cache hit.', [
                 'cache_key' => $cacheKey,
                 'tui' => $tui,
+                'url' => $webSettingsUrl,
                 'web_settings' => $webSettings,
             ]);
 
             return is_array($webSettings) ? $webSettings : null;
         }
 
+        $webSettingsRequest = [
+            'ClientID' => $this->clientId,
+            'TUI' => $tui,
+        ];
+
         Log::info('AT WebSettings cache miss; requesting from AT.', [
             'cache_key' => $cacheKey,
             'tui' => $tui,
             'url' => $webSettingsUrl,
+            'request' => $webSettingsRequest,
         ]);
 
         $response = $this->client->post($webSettingsUrl, [
-            'json' => [
-                'ClientID' => $this->clientId,
-                'TUI' => $tui,
-            ],
+            'json' => $webSettingsRequest,
         ]);
         $responseBody = json_decode($response->getBody()->getContents(), true);
 
         if (is_array($responseBody)) {
             Log::info('AT WebSettings response.', [
                 'tui' => $tui,
+                'url' => $webSettingsUrl,
                 'web_settings' => $responseBody,
             ]);
             Cache::put($cacheKey, $responseBody, now()->addMinutes(15));
             Log::info('AT WebSettings cached.', [
                 'cache_key' => $cacheKey,
                 'tui' => $tui,
+                'url' => $webSettingsUrl,
                 'web_settings' => $responseBody,
             ]);
         }
