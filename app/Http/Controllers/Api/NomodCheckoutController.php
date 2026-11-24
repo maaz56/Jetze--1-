@@ -189,6 +189,10 @@ class NomodCheckoutController extends Controller
 
     private function ensureBookingCanBePaidBy(FlightBookings $booking, Request $request): void
     {
+        if ($request->user()?->isDemo()) {
+            abort(403, 'Demo accounts cannot issue tickets.');
+        }
+
         if ((int) $booking->agent_id !== (int) $request->user()->id) {
             abort(403, 'You cannot pay for this booking.');
         }

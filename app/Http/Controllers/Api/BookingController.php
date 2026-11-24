@@ -1527,6 +1527,10 @@ class BookingController extends Controller
 
     public function confirmPnr(Request $request)
     {
+        if ($request->user()?->isDemo()) {
+            abort(403, 'Demo accounts cannot issue tickets.');
+        }
+
         Log::info($request);
         $walletPaymentLock = null;
         $flightProvider = strtolower((string) ($request->input('flight_provider') ?? $request->input('booking_source')));

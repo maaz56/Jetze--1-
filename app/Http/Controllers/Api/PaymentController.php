@@ -74,6 +74,10 @@ class PaymentController extends Controller
      */
     public function createIntent(Request $request)
     {
+        if ($request->user()?->isDemo()) {
+            abort(403, 'Demo accounts cannot issue tickets.');
+        }
+
         $request->validate(['booking_id' => ['required', 'integer']]);
 
         $booking = FlightBookings::findOrFail($request->booking_id);
@@ -106,6 +110,10 @@ class PaymentController extends Controller
      */
     public function initializeAbhiPay(Request $request)
     {
+        if ($request->user()?->isDemo()) {
+            abort(403, 'Demo accounts cannot issue tickets.');
+        }
+
         $this->applyLockedBookingMoney($request);
 
         if ($request->paymentMethod === 'abhipay-bank') {

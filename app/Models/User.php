@@ -63,7 +63,14 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_demo' => 'boolean',
         ];
+    }
+
+    /** Demo accounts may browse and book but must never issue a ticket. */
+    public function isDemo(): bool
+    {
+        return (bool) $this->is_demo;
     }
 
     public function customer(){
