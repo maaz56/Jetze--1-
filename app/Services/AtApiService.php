@@ -1784,6 +1784,7 @@ private function extractTrips($tripsData): array
 
     public function atPaymentRequest($params)
     {
+        return;
         $reservation = is_array($params['pnrData'] ?? null) ? $params['pnrData'] : [];
         // Preserve the established wallet-flow contract, where FareType was
         // supplied alongside pnrData by the browser.
