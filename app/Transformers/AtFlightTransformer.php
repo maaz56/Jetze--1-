@@ -349,7 +349,7 @@ class AtFlightTransformer
                         "is_refundable" => $fare['Refundable'] === 'Y'? true : false,
                         // A fare is holdable only when AT says Hold=true
                         // and HoldInfo is present.
-                        ...$this->holdEligibility($fare),
+                        ...$this->holdEligibility($fare, $this->holdEnabledProviders($flightData['web_settings'] ?? null)),
                         "fare_policies" => [],
                         "passenger_fares" => [
                             [
@@ -1501,18 +1501,58 @@ class AtFlightTransformer
     }
 
     /**
+     * Provider codes from AT WebSettings HoldConfirmEnabledProviders, or null
+     * when WebSettings are unavailable.
+     *
+     * @return string[]|null
+     */
+    private function holdEnabledProviders(mixed $webSettings): ?array
+    {
+        if (! is_array($webSettings)) {
+            return null;
+        }
+        $list = $webSettings['Settings'] ?? $webSettings;
+        $value = null;
+        foreach ((array) $list as $key => $setting) {
+            if (is_array($setting) && ($setting['Key'] ?? null) === 'HoldConfirmEnabledProviders') {
+                $value = $setting['Value'] ?? '';
+                break;
+            }
+            if ($key === 'HoldConfirmEnabledProviders') {
+                $value = $setting;
+                break;
+            }
+        }
+        if ($value === null) {
+            return null;
+        }
+        $codes = is_array($value) ? $value : explode(',', (string) $value);
+
+        return array_values(array_filter(array_map(
+            fn ($c) => strtoupper(trim((string) $c)),
+            $codes,
+        ), fn ($c) => $c !== ''));
+    }
+
+    /**
      * Decide whether one fare can be held and explain why not.
      *
      * @return array{hold: bool, hold_info: ?string, hold_status: string, hold_message: string}
      */
-    private function holdEligibility(array $fare): array
+    private function holdEligibility(array $fare, ?array $holdProviders = null): array
     {
+        $providerCode = strtoupper(trim((string) ($fare['Provider'] ?? '')));
         $rawHold = $fare['Hold'] ?? null;
         $flagged = $rawHold === true || strtolower((string) $rawHold) === 'true';
         $holdInfo = trim((string) ($fare['HoldInfo'] ?? ''));
 
-        // Eligible only when Hold is true AND HoldInfo is present.
+        // 1) The provider must be in AT's HoldConfirmEnabledProviders (first priority).
+        // 2) Then the fare itself must have Hold=true AND HoldInfo.
+        // $holdProviders is null only when WebSettings could not be loaded; in that
+        // case fall back to the fare-level flags.
         $reason = match (true) {
+            $holdProviders !== null && ! in_array($providerCode, $holdProviders, true)
+                => 'Hold not available: this airline is not enabled for hold bookings.',
             ! $flagged => 'Hold not available: the airline does not allow holding this fare.',
             $holdInfo === '' => 'Hold not available: no hold details were returned for this fare.',
             default => null,
