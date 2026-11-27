@@ -37,6 +37,7 @@ class AtApiService
     // Start a brand-new search (new TUI) after a short delay before accepting "no flights".
     private const SEARCH_EMPTY_COMPLETE_MAX_RETRIES = 1;
     private const SEARCH_EMPTY_COMPLETE_RETRY_DELAY_SECONDS = 2;
+    private const WEB_SETTINGS_AFTER_EXPRESS_SEARCH_DELAY_SECONDS = 3;
 
     protected $signBaseUrl;
     protected $flightBaseUrl;
@@ -387,6 +388,11 @@ class AtApiService
                         // AT WebSettings are tied to the TUI created by ExpressSearch.
                         // Load them now so streamed results and saved quotes carry the
                         // same SSR/ancillary capability settings.
+                        Log::info('Waiting before requesting AT WebSettings after ExpressSearch.', [
+                            'tui' => $responseBody['TUI'],
+                            'delay_seconds' => self::WEB_SETTINGS_AFTER_EXPRESS_SEARCH_DELAY_SECONDS,
+                        ]);
+                        sleep(self::WEB_SETTINGS_AFTER_EXPRESS_SEARCH_DELAY_SECONDS);
                         $webSettings = $this->getWebSettings($responseBody['TUI']);
                     } catch (\Throwable $exception) {
                         Log::warning('Unable to load AT WebSettings after ExpressSearch.', [
